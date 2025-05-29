@@ -1,0 +1,15 @@
+# Ignore node modules in both backend and web
+Backend/node_modules/
+Website/FFmanagement/node_modules/
+
+# Environment files
+Backend/.env
+Website/FFmanagement/.env
+
+# Logs
+*.log
+npm-debug.log*
+
+# IDE settings
+.vscode/
+.idea/
