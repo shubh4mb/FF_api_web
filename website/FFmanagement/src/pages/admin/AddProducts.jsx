@@ -1,13 +1,14 @@
 // AddProductPage.jsx
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+// import axios from 'axios';
 import { getCategories } from '@/api/categories';
 import { getMerchants } from '@/api/merchants';
 import { addProduct } from '@/api/products';
+import { getBrands } from '@/api/brand';
 export default function AddProductPage() {
   const [formData, setFormData] = useState({
     name: '',
-    brand: '',
+    brandId: '',
     categoryId: '',
     subCategoryId: '',
     subSubCategoryId: '',
@@ -22,6 +23,7 @@ export default function AddProductPage() {
   const [merchants, setMerchants] = useState([]);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
+  const [brands, setBrands] = useState([]);
 
   useEffect(() => {
     // Fetch categories from dummy endpoint or local JSON
@@ -45,9 +47,19 @@ export default function AddProductPage() {
         console.error('Error fetching merchants:', error);
       }
     };
+    const fetchBrands = async () => {
+      try {
+        const res = await getBrands();
+        setBrands(res.brands);
+        console.log(res);
+      } catch (error) {
+        console.error('Error fetching brands:', error);
+      }
+    };
 
     fetchCategories();
     fetchMerchants();
+    fetchBrands();
   }, []);
 
   const handleChange = (e) => {
@@ -67,7 +79,7 @@ export default function AddProductPage() {
         basePrice: parseFloat(formData.basePrice),
       };
       console.log(payload);
-      // await addProduct(payload);
+      // await addProduct(payload); 
       setMessage('Product created successfully!');
       // Redirect or show link to add variants
     } catch (err) {
@@ -90,7 +102,12 @@ export default function AddProductPage() {
       <h2 className="text-2xl font-bold mb-4">Add New Product</h2>
       <form onSubmit={handleSubmit} className="space-y-4">
         <input type="text" name="name" placeholder="Product Name" value={formData.name} onChange={handleChange} className="w-full p-2 border rounded" required />
-        <input type="text" name="brand" placeholder="Brand" value={formData.brand} onChange={handleChange} className="w-full p-2 border rounded" />
+       <select name="brandId" value={formData.brandId} onChange={handleChange} className="w-full p-2 border rounded" required>
+          <option value="">Select Brand</option>
+          {brands.map(brand => (
+            <option key={brand._id} value={brand._id}>{brand.name}</option>
+          ))}
+        </select>
 
         <select name="merchantId" value={formData.merchantId} onChange={handleChange} className="w-full p-2 border rounded" required>
           <option value="">Select Merchant</option>

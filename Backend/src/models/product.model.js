@@ -49,14 +49,18 @@ const variantSchema = new mongoose.Schema({
 
 const productSchema = new mongoose.Schema({
   name: { type: String, required: true },
-  brand: String,
+  brandIdh: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Brand',
+    required: true,
+  },
 
   // 🌟 Category Structure (referencing your Category model)
-  categoryId: {
+ categoryId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Category',
     required: true,
-  },
+  }, 
   subCategoryId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Category',

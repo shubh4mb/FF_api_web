@@ -12,6 +12,7 @@ import MerchantDashboard from '../pages/merchant/MerchantDashboard';
 import AddProduct from '../pages/merchant/AddProduct';``
 import NotFound from '../pages/NotFound';
 import AddMerchants from '../pages/admin/AddMerchants';
+import AddBrand from '../pages/admin/AddBrand';
 // Placeholder components for missing admin pages
 const Settings = () => <div>Settings Page</div>;
 
@@ -29,6 +30,7 @@ const AppRoutes = () => {
           <Route path="add-category" element={<AddCategory />} />
           <Route path="add-products" element={<AddProducts />} />
           <Route path="add-merchant" element={<AddMerchants />} />
+          <Route path="add-brand" element={<AddBrand />} />
         </Route>
 
         {/* Merchant Routes */}
