@@ -4,6 +4,7 @@ import { addProduct } from '../controllers/merchantController/product.controller
 import { addMerchant } from '../controllers/merchantController/merchant.controller.js';
 const router = express.Router();
 
-router.post('/addProduct',upload.fields([{name:'image',maxCount:5}]),handleMulterError,addProduct);
+router.post('/addProduct',addProduct);
+
 router.post('/add',addMerchant)
 export default router;

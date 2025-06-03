@@ -14,7 +14,8 @@ export default function AddProductPage() {
     subSubCategoryId: '',
     gender: 'unisex',
     description: '',
-    basePrice: '',
+    mrp: '',
+    price: '',
     tags: '',
     merchantId: '',
   });
@@ -31,7 +32,7 @@ export default function AddProductPage() {
       try {
        const res = await getCategories();
         setCategories(res.categories);
-        console.log(res);
+        // console.log(res);
         
       } catch (error) {
         console.error('Error fetching categories:', error);
@@ -42,7 +43,7 @@ export default function AddProductPage() {
       try {
         const res = await getMerchants();
         setMerchants(res.merchants);
-        console.log(res);
+        // console.log(res);
       } catch (error) {
         console.error('Error fetching merchants:', error);
       }
@@ -51,7 +52,7 @@ export default function AddProductPage() {
       try {
         const res = await getBrands();
         setBrands(res.brands);
-        console.log(res);
+        // console.log(res);
       } catch (error) {
         console.error('Error fetching brands:', error);
       }
@@ -76,10 +77,11 @@ export default function AddProductPage() {
       const payload = {
         ...formData,
         tags: formData.tags.split(',').map(tag => tag.trim()),
-        basePrice: parseFloat(formData.basePrice),
+        mrp: parseFloat(formData.mrp),
+        price: parseFloat(formData.price),
       };
       console.log(payload);
-      // await addProduct(payload); 
+      await addProduct(payload); 
       setMessage('Product created successfully!');
       // Redirect or show link to add variants
     } catch (err) {
@@ -90,12 +92,30 @@ export default function AddProductPage() {
   };
 
   const renderCategoryOptions = (level) => {
-    return categories
-      .filter(cat => cat.level === level)
-      .map(cat => (
-        <option key={cat._id} value={cat._id}>{cat.name}</option>
-      ));
+    if (level === 0) {
+      // Top-level categories
+      return categories
+        .filter(cat => cat.level === 0)
+        .map(cat => (
+          <option key={cat._id} value={cat._id}>{cat.name}</option>
+        ));
+    } else if (level === 1) {
+      // Sub-categories of selected top-level category
+      return categories
+        .filter(cat => cat.level === 1 && cat.parentId === formData.categoryId)
+        .map(cat => (
+          <option key={cat._id} value={cat._id}>{cat.name}</option>
+        ));
+    } else if (level === 2) {
+      // Sub-sub-categories of selected sub-category
+      return categories
+        .filter(cat => cat.level === 2 && cat.parentId === formData.subCategoryId)
+        .map(cat => (
+          <option key={cat._id} value={cat._id}>{cat.name}</option>
+        ));
+    }
   };
+  
 
   return (
     <div className="max-w-3xl mx-auto p-4">
@@ -141,7 +161,8 @@ export default function AddProductPage() {
         </select>
 
         <textarea name="description" placeholder="Description" value={formData.description} onChange={handleChange} className="w-full p-2 border rounded" rows={4} />
-        <input type="number" name="basePrice" placeholder="Base Price" value={formData.basePrice} onChange={handleChange} className="w-full p-2 border rounded" required />
+        <input type="number" name="mrp" placeholder="MRP" value={formData.mrp} onChange={handleChange} className="w-full p-2 border rounded" required />
+        <input type="number" name="price" placeholder="Price" value={formData.price } onChange={handleChange} className="w-full p-2 border rounded" required />
         <input type="text" name="tags" placeholder="Tags (comma-separated)" value={formData.tags} onChange={handleChange} className="w-full p-2 border rounded" />
 
         <button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded" disabled={loading}>

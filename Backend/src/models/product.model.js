@@ -38,7 +38,6 @@ const variantSchema = new mongoose.Schema({
         required: false
       }
     },
-  price: Number,
   discount: {
     type: Number,
     default: 0,
@@ -49,7 +48,7 @@ const variantSchema = new mongoose.Schema({
 
 const productSchema = new mongoose.Schema({
   name: { type: String, required: true },
-  brandIdh: {
+  brandId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Brand',
     required: true,
@@ -71,7 +70,8 @@ const productSchema = new mongoose.Schema({
   },
   gender: { type: String, enum: ['men', 'women', 'unisex','boys','girls','babies'], default: 'unisex' }, 
   description: String,
-  basePrice: Number, // Original price before discount
+  mrp: Number, // Original price before discount
+  price: Number,
   tags: [String],
 
   variants: [variantSchema], // key for fashion variants (sizes, colors, etc.)
