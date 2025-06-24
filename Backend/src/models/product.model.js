@@ -9,7 +9,6 @@ const variantSchema = new mongoose.Schema({
     {
       size: {
         type: String,
-        enum: ['XS', 'S', 'M', 'L', 'XL', 'XXL']
       },
       stock: {
         type: Number,
@@ -17,6 +16,9 @@ const variantSchema = new mongoose.Schema({
       },    
     }
   ],
+  mrp: Number, // Original price before discount
+
+  price: Number,
   
   images:[ {
     public_id: {
@@ -28,16 +30,6 @@ const variantSchema = new mongoose.Schema({
         required: false
       }
     }], 
-    mainImage: {
-      public_id: {
-        type: String,
-        required: false
-      },
-      url: {
-        type: String,
-        required: false
-      }
-    },
   discount: {
     type: Number,
     default: 0,
@@ -48,6 +40,11 @@ const variantSchema = new mongoose.Schema({
 
 const productSchema = new mongoose.Schema({
   name: { type: String, required: true },
+  merchantId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Merchant',
+    required: true,
+  },
   brandId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Brand',
@@ -69,9 +66,17 @@ const productSchema = new mongoose.Schema({
     ref: 'Category',
   },
   gender: { type: String, enum: ['men', 'women', 'unisex','boys','girls','babies'], default: 'unisex' }, 
+
   description: String,
-  mrp: Number, // Original price before discount
-  price: Number,
+
+
+
+  features: {
+    type: Map,
+    of: String,
+    default: {}
+  },
+  
   tags: [String],
 
   variants: [variantSchema], // key for fashion variants (sizes, colors, etc.)

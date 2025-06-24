@@ -15,7 +15,6 @@ const addressSchema = new mongoose.Schema({
 const userSchema = new mongoose.Schema({
   phoneNumber: {
     type: String,
-    required: true,
     unique: true,
   },
   name: {
@@ -23,6 +22,10 @@ const userSchema = new mongoose.Schema({
     default: '',
   },
   email: {
+    type: String,
+    default: '',
+  },
+  password: {
     type: String,
     default: '',
   },

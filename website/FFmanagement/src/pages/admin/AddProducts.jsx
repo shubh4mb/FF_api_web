@@ -3,8 +3,10 @@ import React, { useState, useEffect } from 'react';
 // import axios from 'axios';
 import { getCategories } from '@/api/categories';
 import { getMerchants } from '@/api/merchants';
-import { addProduct } from '@/api/products';
 import { getBrands } from '@/api/brand';
+import { addBaseProduct } from '@/api/products';
+import DynaminFeature from '@/components/commmon/DynaminFeature';
+
 export default function AddProductPage() {
   const [formData, setFormData] = useState({
     name: '',
@@ -14,8 +16,7 @@ export default function AddProductPage() {
     subSubCategoryId: '',
     gender: 'unisex',
     description: '',
-    mrp: '',
-    price: '',
+    features: {},
     tags: '',
     merchantId: '',
   });
@@ -77,15 +78,13 @@ export default function AddProductPage() {
       const payload = {
         ...formData,
         tags: formData.tags.split(',').map(tag => tag.trim()),
-        mrp: parseFloat(formData.mrp),
-        price: parseFloat(formData.price),
       };
       console.log(payload);
-      await addProduct(payload); 
+      await addBaseProduct(payload); 
       setMessage('Product created successfully!');
       // Redirect or show link to add variants
     } catch (err) {
-      setMessage('Error creating product');
+      setMessage(err.message);
     } finally {
       setLoading(false);
     }
@@ -161,8 +160,15 @@ export default function AddProductPage() {
         </select>
 
         <textarea name="description" placeholder="Description" value={formData.description} onChange={handleChange} className="w-full p-2 border rounded" rows={4} />
-        <input type="number" name="mrp" placeholder="MRP" value={formData.mrp} onChange={handleChange} className="w-full p-2 border rounded" required />
-        <input type="number" name="price" placeholder="Price" value={formData.price } onChange={handleChange} className="w-full p-2 border rounded" required />
+        {/* <input type="number" name="mrp" placeholder="MRP" value={formData.mrp} onChange={handleChange} className="w-full p-2 border rounded" required />
+        <input type="number" name="price" placeholder="Price" value={formData.price } onChange={handleChange} className="w-full p-2 border rounded" required /> */}
+        <DynaminFeature
+        features={formData.features}
+        setFeatures={(updatedFeatures) =>
+          setFormData((prev) => ({ ...prev, features: updatedFeatures }))
+        }
+      />
+
         <input type="text" name="tags" placeholder="Tags (comma-separated)" value={formData.tags} onChange={handleChange} className="w-full p-2 border rounded" />
 
         <button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded" disabled={loading}>
