@@ -19,12 +19,15 @@ export const newArrivals = async (req, res) => {
 
 export const productsDetails = async (req, res) => {
     try {
-        const product = await Product.findById(req.params.id , {isActive:true})
-        .populate('brandId', 'name')
-        .populate('categoryId', 'name')
-        .populate('subCategoryId', 'name')
-        .populate('subSubCategoryId', 'name')
-        .populate('merchantId', 'name');
+        const product = await Product.findOne(
+            { _id: req.params.id, isActive: true }
+          )
+          .populate('brandId', 'name')
+          .populate('categoryId', 'name')
+          .populate('subCategoryId', 'name')
+          .populate('subSubCategoryId', 'name')
+          .populate('merchantId', 'name');
+          
         res.status(200).json(product);
     } catch (error) {
         console.log(error);
