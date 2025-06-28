@@ -36,6 +36,16 @@ const categorySchema = new mongoose.Schema({
         required: false
       }
     },
+    title_banner: {
+      public_id: {
+        type: String,
+        required: false
+      },
+        url: {
+          type: String,
+          required: false
+        }
+      },
 }, { timestamps: true });
 
 export default mongoose.models.Category || mongoose.model("Category", categorySchema);
