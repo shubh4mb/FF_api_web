@@ -81,6 +81,8 @@ const productSchema = new mongoose.Schema({
 
   variants: [variantSchema], // key for fashion variants (sizes, colors, etc.)
 
+  isTriable:{type:Boolean,default:true},
+
   ratings: { type: Number, default: 0 },
   numReviews: { type: Number, default: 0 },
 

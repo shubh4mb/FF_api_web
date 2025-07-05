@@ -4,6 +4,8 @@ import { addMerchant, getMerchants } from '../controllers/adminControllers/merch
 import { addBrand,getBrands } from '../controllers/adminControllers/brand.controllers.js.js';
 import upload , {handleMulterError} from '../middleware/multer.js'
 import { getBaseProducts, getVariants ,getBaseProductById , addVariant} from '../controllers/adminControllers/product.controllers.js';
+import {addTitleBanner} from '../controllers/adminControllers/titleBanner.controllers.js';
+import {addCart} from '../controllers/adminControllers/cart.controllers.js';
 const router = express.Router();
 
 router.post('/addCategory',upload.single('image'),handleMulterError,addCategory);
@@ -21,6 +23,10 @@ router.get('/getBaseProducts',getBaseProducts);
 router.get('/getVariants',getVariants);
 router.get('/getBaseProductById/:productId',getBaseProductById);
 router.post('/addVariant/:productId',upload.array('images'),handleMulterError,addVariant);
+
+router.post('/titleBanner/add',upload.single('image'),handleMulterError,addTitleBanner)
+
+router.post('/cart/add',addCart);
 
 // router.delete('/deleteCategory/:id',deleteCategory);
 

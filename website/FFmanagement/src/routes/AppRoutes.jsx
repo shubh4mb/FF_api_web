@@ -15,6 +15,7 @@ import AddMerchants from '../pages/admin/AddMerchants';
 import AddBrand from '../pages/admin/AddBrand';
 import Products from '../pages/admin/Products';
 import Variants from '../pages/admin/Variants';
+import Title_Banner from '../pages/admin/Title_Banner';
 // Placeholder components for missing admin pages
 const Settings = () => <div>Settings Page</div>;
 
@@ -35,6 +36,7 @@ const AppRoutes = () => {
           <Route path="add-brand" element={<AddBrand />} />
           <Route path="products" element={<Products />} />
           <Route path="variants/:productId" element={<Variants />} />
+          <Route path="add-title-banner" element={<Title_Banner />} />
         </Route>
 
         {/* Merchant Routes */}

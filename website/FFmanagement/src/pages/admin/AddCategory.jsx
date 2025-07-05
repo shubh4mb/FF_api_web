@@ -28,6 +28,8 @@ const [showCropper, setShowCropper] = useState(false);
     const fetchCategories = async () => {
       try {
         const response = await getCategories();
+     
+        
         setAllCategories(response.categories || []);
       } catch (error) {
         console.error("Error fetching categories:", error);

@@ -10,12 +10,16 @@ const cartItemSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     required: true, // Refers to a specific variant (color + size)
   },
+  size: {
+    type: String,
+    required: true,
+  },
   quantity: {
     type: Number,
     required: true,
     min: 1,
   },
-  shopId: {
+  merchantId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Merchant', // For multi-shop cart support
     required: true,

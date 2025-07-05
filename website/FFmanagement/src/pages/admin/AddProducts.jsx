@@ -19,6 +19,8 @@ export default function AddProductPage() {
     features: {},
     tags: '',
     merchantId: '',
+    isTriable:true,
+    isActive:true,
   });
 
   const [categories, setCategories] = useState([]);
@@ -168,6 +170,12 @@ export default function AddProductPage() {
           setFormData((prev) => ({ ...prev, features: updatedFeatures }))
         }
       />
+
+      <input type="checkbox" name="isTriable" value={formData.isTriable} onChange={handleChange} className="w-full p-2 border rounded" />
+      <label htmlFor="isTriable">Trial and Buy Feature</label>
+
+      <input type="checkbox" name="isActive" value={formData.isActive} onChange={handleChange} className="w-full p-2 border rounded" />
+      <label htmlFor="isActive">Is Active</label>
 
         <input type="text" name="tags" placeholder="Tags (comma-separated)" value={formData.tags} onChange={handleChange} className="w-full p-2 border rounded" />
 
