@@ -3,42 +3,9 @@ import Cart from "../../models/cart.model.js";
 export const addCart = async (req, res) => {
   
   console.log(req.body);
-  
 
     try {
       const { productId, variantId, size, quantity, merchantId } = req.body;
-  
-    //   if (!userId || !productId || !variantId || !size || !quantity || !merchantId) {
-    //     return res.status(400).json({ success: false, message: "All fields are required." });
-    //   }
-  
-      // Check if cart already exists for the user
-    //   let cart = await Cart.findOne({ userId });
-  
-    //   if (!cart) {
-    //     // Create new cart with this item
-    //     cart = new Cart({
-    //       userId,
-    //       items: [{ productId, variantId, size, quantity, merchantId }],
-    //     });
-    //   } else {
-    //     // Check if item with same variant and size already exists in the cart
-    //     const existingItem = cart.items.find(
-    //       (item) =>
-    //         item.variantId.toString() === variantId &&
-    //         item.size === size &&
-    //         item.merchantId.toString() === merchantId
-    //     );
-  
-    //     if (existingItem) {
-    //       // Update quantity
-    //       existingItem.quantity += quantity;
-    //     } else {
-    //       // Add new item to cart
-    //       cart.items.push({ productId, variantId, size, quantity, merchantId });
-    //     }
-    //   }
-
     const cart = new Cart({
         items: [{ productId, variantId, size, quantity, merchantId }],
       });
@@ -72,3 +39,26 @@ export const getCart = async (req, res) => {
     res.status(500).json({ success: false, error: error.message });
   }
 };
+
+export const deleteCartItem = async (req, res) => {
+  try {
+    const { itemId } = req.params; // This is the productId
+    console.log('Deleting cart with productId in items:', itemId);
+
+    // Find the cart that has a product with the given productId
+    const cart = await Cart.findOne({ "items.productId": itemId });
+
+    if (!cart) {
+      return res.status(404).json({ success: false, message: "Cart not found with given productId" });
+    }
+    // Delete the whole cart document
+    await Cart.findByIdAndDelete(cart._id);
+
+    return res.status(200).json({ success: true, message: "Cart deleted successfully", deletedCartId: cart._id });
+  } catch (error) {
+    console.error("Error deleting cart:", error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+

@@ -5,7 +5,7 @@ import { addBrand,getBrands } from '../controllers/adminControllers/brand.contro
 import upload , {handleMulterError} from '../middleware/multer.js'
 import { getBaseProducts, getVariants ,getBaseProductById , addVariant} from '../controllers/adminControllers/product.controllers.js';
 import {addTitleBanner} from '../controllers/adminControllers/titleBanner.controllers.js';
-import { addCart, getCart } from '../controllers/adminControllers/cart.controllers.js';
+import { addCart, getCart, deleteCartItem } from '../controllers/adminControllers/cart.controllers.js';
 const router = express.Router();
 
 router.post('/addCategory',upload.single('image'),handleMulterError,addCategory);
@@ -28,6 +28,8 @@ router.post('/titleBanner/add',upload.single('image'),handleMulterError,addTitle
 
 router.post('/cart/add',addCart);
 router.get('/cart', getCart);
+router.delete('/cart/delete/:itemId', deleteCartItem);
+
 
 // router.delete('/deleteCategory/:id',deleteCategory);
 
