@@ -1,6 +1,10 @@
 import Cart from "../../models/cart.model.js";
 
 export const addCart = async (req, res) => {
+  
+  console.log(req.body);
+  
+
     try {
       const { productId, variantId, size, quantity, merchantId } = req.body;
   
@@ -48,3 +52,23 @@ export const addCart = async (req, res) => {
       res.status(500).json({ success: false, error: error.message });
     }
   };
+
+export const getCart = async (req, res) => {
+  try {
+    // Fetch all cart documents and populate product & merchant
+    const carts = await Cart.find().populate("items.productId").populate("items.merchantId");
+
+    // Flatten all items into a single array
+    const allItems = carts.flatMap(cart => cart.items);
+
+    res.status(200).json({
+      success: true,
+      totalCarts: carts.length,
+      totalItems: allItems.length,
+      items: allItems,
+    });
+  } catch (error) {
+    console.error("Error fetching all cart items:", error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
