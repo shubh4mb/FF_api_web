@@ -2,7 +2,13 @@ import axiosInstance from "@/utils/axios.config";
 
 export const addMerchant = async (formData) => {
     try {
-        const response = await axiosInstance.post('/merchant/add', formData);
+        console.log("yes reaching api : ",formData);
+        
+        const response = await axiosInstance.post('/admin/addMerchant', formData,{
+            headers:{
+                'Content-Type': 'multipart/form-data'
+            }
+        });
         return response.data;
     } catch (error) {
         console.log(error)

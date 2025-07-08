@@ -13,7 +13,7 @@ router.get('/getCategories',getCategories);
 router.patch('/updateCategory/:id',upload.single('image'),handleMulterError,updateCategory);   
 
 
-router.post('/addMerchant',addMerchant);
+router.post('/addMerchant',upload.single('logo'),handleMulterError,addMerchant);
 router.get('/getMerchants',getMerchants);
 
 router.post('/brand/add',upload.single('logo'),handleMulterError,addBrand);
