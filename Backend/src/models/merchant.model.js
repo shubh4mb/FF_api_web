@@ -11,6 +11,7 @@ const merchantSchema = new mongoose.Schema({
     public_id: String,
     url: String,
   },
+  category:{type:String},
   address: {
     street: String,
     city: String,

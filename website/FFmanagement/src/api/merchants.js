@@ -25,3 +25,27 @@ export const getMerchants = async () => {
         throw error.response ? error.response.data : new Error('Network Error');
     }
 }
+
+export const updateMerchantById = async (id, formData) => {
+    try {
+        const response = await axiosInstance.patch(`/admin/updateMerchant/${id}`, formData, {
+            headers: {
+                'Content-Type': 'multipart/form-data'
+            }
+        });
+        return response.data;
+    } catch (error) {
+        console.log(error)
+        throw error.response ? error.response.data : new Error('Network Error');
+    }
+}
+
+export const getMerchantById = async (id) => {
+    try {
+        const response = await axiosInstance.get(`/admin/getMerchant/${id}`);
+        return response.data;
+    } catch (error) {
+        console.log(error)
+        throw error.response ? error.response.data : new Error('Network Error');
+    }
+}

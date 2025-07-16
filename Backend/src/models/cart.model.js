@@ -10,6 +10,10 @@ const cartItemSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     required: true, // Refers to a specific variant (color + size)
   },
+  image:{
+    public_id: String,
+    url: String,
+  },
   size: {
     type: String,
     required: true,

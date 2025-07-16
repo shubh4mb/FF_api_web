@@ -5,9 +5,9 @@ export const addCart = async (req, res) => {
   console.log(req.body);
 
     try {
-      const { productId, variantId, size, quantity, merchantId } = req.body;
+      const { productId, variantId, size, quantity, merchantId , image } = req.body;
     const cart = new Cart({
-        items: [{ productId, variantId, size, quantity, merchantId }],
+        items: [{ productId, variantId, size, quantity, merchantId , image }],
       });
   
       cart.updatedAt = new Date();

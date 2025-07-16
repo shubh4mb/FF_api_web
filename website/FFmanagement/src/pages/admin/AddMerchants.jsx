@@ -12,6 +12,7 @@ const AddMerchants = () => {
     phoneNumber: "",
     password: "",
     logo:null,
+    category:"All"
   });
 
     const [previewUrl, setPreviewUrl] = useState(null); // base64 preview
@@ -53,6 +54,7 @@ const AddMerchants = () => {
           email: "",
           phoneNumber: "",
           password: "",
+          category:""
         });
       } else {
         setMessage(`Error: ${res.message || "Something went wrong"}`);
@@ -112,6 +114,20 @@ const AddMerchants = () => {
           className="w-full p-2 border rounded"
           required
         />
+  <select
+  name="category"
+  value={form.category}
+  onChange={handleChange}
+  className="w-full p-2 border rounded"
+  required
+>
+  <option value="">Select Category</option>
+  <option value="All">All</option>
+  <option value="Men">Men</option>
+  <option value="Women">Women</option>
+  <option value="Boys">Boys</option>
+  <option value="Girls">Girls</option>
+</select>
 
         {/* image */}
         <div className="flex flex-col">

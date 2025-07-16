@@ -127,4 +127,24 @@ export const addVariant = async (req, res) => {
   }
 };
 
+export const getFilteredProducts = async (req, res) => {
+    try {
+        const products = await Product.find({
+            categoryId: req.params.categoryId,
+            subCategoryId: req.params.subCategoryId,
+            subSubCategoryId: req.params.subSubCategoryId,
+        })
+        .populate('brandId', 'name') // Only get the 'name' field of the Brand
+        .populate('categoryId', 'name')
+        .populate('subCategoryId', 'name')
+        .populate('subSubCategoryId', 'name')
+        .populate('merchantId', 'name')
+        
+        res.status(200).json(products);
+      } catch (error) {
+        console.log(error);
+        res.status(500).json({ message: '❌ ' + error.message });
+      }
+}
+
     
