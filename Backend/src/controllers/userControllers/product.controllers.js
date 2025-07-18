@@ -168,3 +168,49 @@ const sortMap = {
       res.status(500).json({ error: 'Server error' });
     }
   };
+
+  export const getProductsByMerchantId = async (req, res) => {
+    try {
+      const { merchantId } = req.params;
+         // ✅ Step 1: Fetch products from DB
+    const products = await Product.find({ merchantId: merchantId }).populate([
+      { path: 'brandId', select: 'name' },
+      { path: 'categoryId', select: 'name' },
+      { path: 'subCategoryId', select: 'name' },
+      { path: 'subSubCategoryId', select: 'name' },
+    ]);
+      const modifiedProducts = products.map(product => {
+        const mainVariant = product.variants[0]; // only the first variant
+      
+        return {
+          _id: product._id,
+          name: product.name,
+          brand: product.brandId,
+          merchant: product.merchantId,
+          gender: product.gender,
+          categoryId: product.categoryId,
+          subCategoryId: product.subCategoryId,
+          subSubCategoryId: product.subSubCategoryId,
+      
+          // flattened variant fields
+          variantId: mainVariant._id,
+          price: mainVariant.price,
+          mrp: mainVariant.mrp,
+          stockSizes: mainVariant.sizes,
+          color: mainVariant.color,
+          images: mainVariant.images,
+      
+          ratings: product.ratings,
+          numReviews: product.numReviews,
+          discount: mainVariant.discount || 0,
+      
+          isMainVariant: true // optional flag
+        };
+      });
+      
+      res.json({ products : modifiedProducts });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: 'Server error' });
+    }
+  };

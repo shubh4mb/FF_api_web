@@ -11,6 +11,8 @@ export const productSchema = Joi.object({
   tags: Joi.array().items(Joi.string()).optional(),
   merchantId: Joi.string().hex().length(24).required(),
   features: Joi.object().optional(),
+  isActive: Joi.boolean().default(true),
+  isTriable: Joi.boolean().default(true),
 
   variants: Joi.array().items(
     Joi.object({
