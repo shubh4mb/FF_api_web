@@ -1,5 +1,8 @@
 import bcrypt from 'bcrypt';
 import User from '../../models/user.model.js';
+import jwt from 'jsonwebtoken';
+const secretkey="hehe"
+
 
 export const googleLogin = async (req, res) => {
     try {
@@ -43,3 +46,39 @@ export const signup = async (req, res) => {
       return res.status(500).json({ message: 'Internal Server Error' });
     }
   };
+
+  export const phoneLogin = async (req, res) => {
+    try {
+      const { phoneNumber } = req.body;
+      if (!phoneNumber) {
+        return res.status(400).json({ message: "Phone number is required" });
+      }
+  
+      // Try to find existing user
+      let user = await User.findOne({ phoneNumber });
+  
+      // If not found, create new user
+      if (!user) {
+        user = await User.create({ phoneNumber });
+      }
+  
+      // Generate JWT
+      const token = jwt.sign(
+        { userId: user._id, phoneNumber: user.phoneNumber },
+        secretkey,
+        { expiresIn: "1h" }
+      );
+  
+      // Send response
+      return res.status(200).json({
+        message: "Login successful",
+        user,
+        token,
+      });
+  
+    } catch (error) {
+      console.error("Phone login error:", error);
+      return res.status(500).json({ message: "Internal Server Error" });
+    }
+  };
+  
