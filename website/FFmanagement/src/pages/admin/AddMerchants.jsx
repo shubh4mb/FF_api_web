@@ -125,8 +125,7 @@ const AddMerchants = () => {
   <option value="All">All</option>
   <option value="Men">Men</option>
   <option value="Women">Women</option>
-  <option value="Boys">Boys</option>
-  <option value="Girls">Girls</option>
+  <option value="Kids">Kids</option>
 </select>
 
         {/* image */}

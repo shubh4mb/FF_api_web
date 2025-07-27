@@ -2,6 +2,7 @@ import Cart from "../../models/cart.model.js";
 
 export const addCart = async (req, res) => {
   
+  
   console.log(req.body);
 
     try {
