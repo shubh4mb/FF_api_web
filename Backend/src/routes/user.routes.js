@@ -16,7 +16,7 @@ router.get('/products/:id',productsDetails)
 router.get('/products/merchant/:merchantId',getProductsByMerchantId)
 
 router.post('/cart/add',authMiddleware,addToCart);
-router.get('/cart', authMiddleware, getCart);
+router.get('/cart',authMiddleware, getCart);
 // router.delete('/cart/delete/:itemId', deleteCartItem);
 
 

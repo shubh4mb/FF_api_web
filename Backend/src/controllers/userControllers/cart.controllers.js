@@ -6,6 +6,8 @@ import Product from '../../models/product.model.js';
 
 export const addToCart = async (req, res) => {
     const userId = req.user.userId; // from JWT middleware
+    console.log(userId);
+    
     const { productId, variantId, size, quantity, merchantId, image } = req.body;
   
     if (!productId || !variantId || !size || !quantity || !merchantId) {
@@ -81,13 +83,28 @@ export const addToCart = async (req, res) => {
     }
   };
 
-export const getCart = async (req, res) => {
+  export const getCart = async (req, res) => {
     const userId = req.user.userId;
+    console.log("hitting", userId);
+  
     try {
-      const cart = await Cart.findOne({ userId }).populate("items.productId").populate("items.merchantId");
+      const cart = await Cart.findOne({ userId })
+        .populate("items.productId")
+        .populate("items.merchantId");
+  
+      if (!cart) {
+        // If no cart found, return empty response
+        return res.status(200).json({
+          success: true,
+          totalCarts: 0,
+          totalItems: 0,
+          items: [],
+        });
+      }
+  
       res.status(200).json({
         success: true,
-        totalCarts: cart.length,
+        totalCarts: 1,
         totalItems: cart.items.length,
         items: cart.items,
       });
@@ -96,5 +113,6 @@ export const getCart = async (req, res) => {
       res.status(500).json({ message: "Server error" });
     }
   };
+  
 
   
