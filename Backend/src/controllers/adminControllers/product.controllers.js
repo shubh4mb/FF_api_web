@@ -4,7 +4,6 @@ import { uploadToCloudinary } from '../../config/cloudinary.config.js';
 
 export const getBaseProducts = async (req, res) => {
 
-  
   try {
     const products = await Product.find({})
       .populate('brandId', 'name') // Only get the 'name' field of the Brand
@@ -32,8 +31,6 @@ export const getVariants = async (req, res) => {
 }
 
 export const getBaseProductById = async (req, res) => {
-
-  
     try {
         const product = await Product.findById(req.params.productId)
         .populate('brandId', 'name') // Only get the 'name' field of the Brand

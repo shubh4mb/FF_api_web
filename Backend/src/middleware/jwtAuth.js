@@ -13,8 +13,8 @@ export const authMiddleware = (req, res, next) => {
 
     try {
       const decoded = jwt.verify(token, secretkey);
-      console.log(decoded);
-    //   console.log("hittingggggggg");
+      // console.log(decoded);
+      // console.log("hittingggggggg");
       
       req.user = decoded;
       next();

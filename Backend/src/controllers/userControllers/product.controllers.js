@@ -170,8 +170,11 @@ const sortMap = {
   };
 
   export const getProductsByMerchantId = async (req, res) => {
+      // console.log(req.params,'merchantId');
+
     try {
       const { merchantId } = req.params;
+      
          // ✅ Step 1: Fetch products from DB
     const products = await Product.find({ merchantId: merchantId }).populate([
       { path: 'brandId', select: 'name' },

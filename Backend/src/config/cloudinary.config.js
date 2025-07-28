@@ -19,7 +19,6 @@ export const uploadToCloudinary = (buffer, options = {}) => {
         }
         resolve(result);
       });
-  
       // Convert buffer to a readable stream and pipe to cloudinary
       const readable = new Readable();
       readable._read = () => {};
@@ -29,7 +28,6 @@ export const uploadToCloudinary = (buffer, options = {}) => {
     });
   };
     
-
 export const deleteFromCloudinary = async (public_id) => {
     try {
         const result = await cloudinary.uploader.destroy(public_id);

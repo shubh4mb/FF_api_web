@@ -1,12 +1,13 @@
 import Cart from "../../models/cart.model.js";
 import mongoose from "mongoose";
 import Product from '../../models/product.model.js';
+import { log } from "console";
 
 
 
 export const addToCart = async (req, res) => {
     const userId = req.user.userId; // from JWT middleware
-    console.log(userId);
+    // console.log(userId);
     
     const { productId, variantId, size, quantity, merchantId, image } = req.body;
   
@@ -85,7 +86,7 @@ export const addToCart = async (req, res) => {
 
   export const getCart = async (req, res) => {
     const userId = req.user.userId;
-    console.log("hitting", userId);
+    // console.log("hitting", userId);
   
     try {
       const cart = await Cart.findOne({ userId })
@@ -113,6 +114,32 @@ export const addToCart = async (req, res) => {
       res.status(500).json({ message: "Server error" });
     }
   };
+
+  export const clearCart = async (req, res) => {
+  const userId = req.user.userId;
+  console.log(userId,'logloglog');
+  try {
+    const cart = await Cart.findOne({ userId });
+
+    if (!cart) {
+      return res.status(404).json({ success: false, message: 'Cart not found' });
+    }
+
+    // Clear items array
+    cart.items = [];
+    await cart.save();
+
+    res.status(200).json({ success: true, message: 'Cart cleared' });
+  } catch (error) {
+    console.error('Error clearing cart:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+};
+
+
+  
+
+
   
 
   

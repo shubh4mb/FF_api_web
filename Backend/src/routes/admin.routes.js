@@ -35,6 +35,4 @@ router.get('/cart', getCart);
 router.delete('/cart/delete/:itemId', deleteCartItem);
 
 
-// router.delete('/deleteCategory/:id',deleteCategory);
-
 export default router;
