@@ -56,11 +56,11 @@ export const addToCart = async (req, res) => {
   
         if (existingItem) {
           // ➕ Update quantity
-          existingItem.quantity += quantity;
-  
-          if (existingItem.quantity > sizeObj.stock) {
-            return res.status(400).json({ message: `Only ${sizeObj.stock} items left in stock` });
-          }
+              if ((existingItem.quantity + quantity) > sizeObj.stock) {
+                return res.status(400).json({ message: `Only ${sizeObj.stock} items left in stock` });
+              }
+
+              existingItem.quantity += quantity;
         } else {
           // ➕ Add new item
           cart.items.push({

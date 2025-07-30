@@ -3,8 +3,7 @@ import Cart from "../../models/cart.model.js";
 
 export const addCart = async (req, res) => {
   
-  
-  // console.log(req.body);
+  console.log(req.body);
 
     try {
       const { productId, variantId, size, quantity, merchantId , image } = req.body;
@@ -82,32 +81,4 @@ export const deleteCartItem = async (req, res) => {
     res.status(500).json({ success: false, error: error.message });
   }
 };
-
-// export const clearCart = async (req, res) => {
-//   const userId = req.user.userId; // from JWT middleware
-//   // console.log(userId,'userIduserIduserId');
-  
-//   console.log("Clearing cart for user:", userId);
-
-//   try {
-//     // Check if cart exists for the user
-//     const cart = await Cart.findOne({ userId });
-
-//     if (!cart) {
-//       return res.status(404).json({ message: "Cart not found" });
-//     }
-
-//     // Clear all items
-//     cart.items = [];
-//     cart.updatedAt = new Date();
-
-//     await cart.save();
-
-//     res.status(200).json({ message: "Cart cleared successfully", cart });
-//   } catch (err) {
-//     console.error("Clear cart error:", err);
-//     res.status(500).json({ message: "Server error" });
-//   }
-// };
-
 
