@@ -6,83 +6,84 @@ import { log } from "console";
 
 
 export const addToCart = async (req, res) => {
-    const userId = req.user.userId; // from JWT middleware
-    // console.log(userId);
-    
-    const { productId, variantId, size, quantity, merchantId, image } = req.body;
-  
-    if (!productId || !variantId || !size || !quantity || !merchantId) {
-      return res.status(400).json({ message: "Missing required fields" });
-    }
-  
-    try {
-      // 1. ✅ Validate product and stock
-      const product = await Product.findById(productId);
-      if (!product) return res.status(404).json({ message: "Product not found" });
-  
-      const variant = product.variants.id(variantId);
-      if (!variant) return res.status(404).json({ message: "Variant not found" });
-  
-      const sizeObj = variant.sizes.find(s => s.size === size);
-      if (!sizeObj) return res.status(400).json({ message: "Invalid size selected" });
-  
-      if (sizeObj.stock < quantity) {
-        return res.status(400).json({ message: `Only ${sizeObj.stock} items left in stock` });
-      }
-  
-      // 2. ✅ Check if user already has a cart
-      let cart = await Cart.findOne({ userId });
-  
-      // 3. 🧠 If no cart, create new
-      if (!cart) {
-        cart = new Cart({
-          userId,
-          items: [{
-            productId,
-            variantId,
-            size,
-            quantity,
-            merchantId,
-            image,
-          }],
-        });
-      } else {
-        // 4. 🔁 If cart exists, check if item already present
-        const existingItem = cart.items.find(item =>
-          item.productId.toString() === productId &&
-          item.variantId.toString() === variantId &&
-          item.size === size
-        );
-  
-        if (existingItem) {
-          // ➕ Update quantity
-              if ((existingItem.quantity + quantity) > sizeObj.stock) {
-                return res.status(400).json({ message: `Only ${sizeObj.stock} items left in stock` });
-              }
+  const userId = req.user.userId; // from JWT middleware
+  const { productId, variantId, size, quantity, merchantId, image } = req.body;
 
-              existingItem.quantity += quantity;
-        } else {
-          // ➕ Add new item
-          cart.items.push({
-            productId,
-            variantId,
-            size,
-            quantity,
-            merchantId,
-            image,
-          });
-        }
-  
-        cart.updatedAt = new Date();
-      }
-  
-      await cart.save();
-      res.status(200).json({ message: "Item added to cart", cart });
-    } catch (err) {
-      console.error("Add to cart error:", err);
-      res.status(500).json({ message: "Server error" });
+  if (!productId || !variantId || !size || !quantity || !merchantId) {
+    return res.status(400).json({ message: "Missing required fields" });
+  }
+
+  try {
+    // 1. ✅ Validate product and stock
+    const product = await Product.findById(productId);
+    if (!product) return res.status(404).json({ message: "Product not found" });
+
+    const variant = product.variants.id(variantId);
+    if (!variant) return res.status(404).json({ message: "Variant not found" });
+
+    const sizeObj = variant.sizes.find(s => s.size === size);
+    if (!sizeObj) return res.status(400).json({ message: "Invalid size selected" });
+
+    if (sizeObj.stock < quantity) {
+      return res.status(400).json({ message: `Only ${sizeObj.stock} items left in stock` });
     }
-  };
+
+    // 2. ✅ Check if user already has a cart
+    let cart = await Cart.findOne({ userId });
+
+    // 3. 🧠 If no cart, create new
+    if (!cart) {
+      cart = new Cart({
+        userId,
+        items: [{
+          productId,
+          variantId,
+          size,
+          quantity,
+          stockQuantity: sizeObj.stock,
+          merchantId,
+          image,
+        }],
+      });
+    } else {
+      // 4. 🔁 If cart exists, check if item already present
+      const existingItem = cart.items.find(item =>
+        item.productId.toString() === productId &&
+        item.variantId.toString() === variantId &&
+        item.size === size
+      );
+
+      if (existingItem) {
+        // ➕ Update quantity
+        if ((existingItem.quantity + quantity) > sizeObj.stock) {
+          return res.status(400).json({ message: `Only ${sizeObj.stock} items left in stock` });
+        }
+        existingItem.quantity += quantity;
+        existingItem.stockQuantity = sizeObj.stock; // Update stock info too if it might change
+      } else {
+        // ➕ Add new item
+        cart.items.push({
+          productId,
+          variantId,
+          size,
+          quantity,
+          stockQuantity: sizeObj.stock,
+          merchantId,
+          image,
+        });
+      }
+
+      cart.updatedAt = new Date();
+    }
+
+    await cart.save();
+    res.status(200).json({ message: "Item added to cart", cart });
+  } catch (err) {
+    console.error("Add to cart error:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
 
   export const getCart = async (req, res) => {
     const userId = req.user.userId;

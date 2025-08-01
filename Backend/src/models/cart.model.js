@@ -10,7 +10,7 @@ const cartItemSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     required: true, // Refers to a specific variant (color + size)
   },
-  image:{
+  image: {
     public_id: String,
     url: String,
   },
@@ -22,6 +22,11 @@ const cartItemSchema = new mongoose.Schema({
     type: Number,
     required: true,
     min: 1,
+  },
+  stockQuantity: {
+    type: Number,
+    required: true, // Set to false if you want it to be optional
+    min: 0,     // Default value if not explicitly set
   },
   merchantId: {
     type: mongoose.Schema.Types.ObjectId,
@@ -41,7 +46,7 @@ const cartSchema = new mongoose.Schema({
   updatedAt: { type: Date, default: Date.now },
 });
 
-export default mongoose.models.Cart || mongoose.model("Cart", cartSchema);
+export default mongoose.models.Cart || mongoose.model('Cart', cartSchema);
 
 
 
