@@ -217,5 +217,112 @@ const sortMap = {
       res.status(500).json({ error: 'Server error' });
     }
   };
+  
+export const getYouMayLikeProducts = async (req, res) => {
+  try {
+    const { subSubCategoryId, merchantId, excludeId, limit = 10 } = req.query;
+
+    if (!subSubCategoryId || !mongoose.Types.ObjectId.isValid(subSubCategoryId)) {
+      return res.status(400).json({ message: '❌ Invalid or missing subSubCategoryId' });
+    }
+
+    const subSubId = new mongoose.Types.ObjectId(subSubCategoryId);
+    const merchId = mongoose.Types.ObjectId.isValid(merchantId) ? new mongoose.Types.ObjectId(merchantId) : null;
+    const excludeObjId = mongoose.Types.ObjectId.isValid(excludeId) ? new mongoose.Types.ObjectId(excludeId) : null;
+
+    const matchConditions = {
+      subSubCategoryId: subSubId,
+      isActive: true,
+    };
+
+    if (excludeObjId) {
+      matchConditions._id = { $ne: excludeObjId };
+    }
+
+    const pipeline = [
+      { $match: matchConditions },
+      {
+        $addFields: {
+          priority: {
+            $cond: [
+              { $eq: ['$merchantId', merchId] },
+              0, // same merchant — higher priority
+              1, // other merchants — lower priority
+            ],
+          },
+        },
+      },
+      { $sort: { priority: 1 } },
+      { $limit: parseInt(limit) },
+      {
+        $lookup: {
+          from: 'brands',
+          localField: 'brandId',
+          foreignField: '_id',
+          as: 'brandId',
+        },
+      },
+      {
+        $unwind: { path: '$brandId', preserveNullAndEmptyArrays: true },
+      },
+      {
+        $lookup: {
+          from: 'categories',
+          localField: 'categoryId',
+          foreignField: '_id',
+          as: 'categoryId',
+        },
+      },
+      {
+        $unwind: { path: '$categoryId', preserveNullAndEmptyArrays: true },
+      },
+      {
+        $lookup: {
+          from: 'subcategories',
+          localField: 'subCategoryId',
+          foreignField: '_id',
+          as: 'subCategoryId',
+        },
+      },
+      {
+        $unwind: { path: '$subCategoryId', preserveNullAndEmptyArrays: true },
+      },
+      {
+        $lookup: {
+          from: 'subsubcategories',
+          localField: 'subSubCategoryId',
+          foreignField: '_id',
+          as: 'subSubCategoryId',
+        },
+      },
+      {
+        $unwind: { path: '$subSubCategoryId', preserveNullAndEmptyArrays: true },
+      },
+      {
+        $lookup: {
+          from: 'merchants',
+          localField: 'merchantId',
+          foreignField: '_id',
+          as: 'merchantId',
+        },
+      },
+      {
+        $unwind: { path: '$merchantId', preserveNullAndEmptyArrays: true },
+      },
+    ];
+
+    const products = await Product.aggregate(pipeline);
+
+    res.status(200).json(products);
+  } catch (error) {
+    console.error('❌ Error in prioritized getYouMayLikeProducts:', error);
+    res.status(500).json({ message: '❌ ' + error.message });
+  }
+};
+
+
+
+
+  
 
   

@@ -3,13 +3,12 @@ import mongoose from "mongoose";
 import Product from '../../models/product.model.js';
 import { log } from "console";
 
-
-
 export const addToCart = async (req, res) => {
   const userId = req.user.userId; // from JWT middleware
   const { productId, variantId, size, quantity, merchantId, image } = req.body;
+  console.log(req.body.image.url,'fejihfeneveni');
 
-  if (!productId || !variantId || !size || !quantity || !merchantId) {
+  if (!productId || !variantId || !size || !quantity || !merchantId || !image) {
     return res.status(400).json({ message: "Missing required fields" });
   }
 
@@ -85,36 +84,82 @@ export const addToCart = async (req, res) => {
 };
 
 
-  export const getCart = async (req, res) => {
-    const userId = req.user.userId;
-    // console.log("hitting", userId);
+  // export const getCart = async (req, res) => {
+  //   const userId = req.user.userId;
+  //   console.log("hitting", userId);
   
-    try {
-      const cart = await Cart.findOne({ userId })
-        .populate("items.productId")
-        .populate("items.merchantId");
+  //   try {
+  //     const cart = await Cart.findOne({ userId })
+  //       .populate("items.productId")
+  //       .populate("items.merchantId");
   
-      if (!cart) {
-        // If no cart found, return empty response
-        return res.status(200).json({
-          success: true,
-          totalCarts: 0,
-          totalItems: 0,
-          items: [],
-        });
-      }
-  
-      res.status(200).json({
+  //     if (!cart) {
+  //       // If no cart found, return empty response
+  //       return res.status(200).json({
+  //         success: true,
+  //         totalCarts: 0,
+  //         totalItems: 0,
+  //         items: [],
+  //       });
+  //     }
+  //     res.status(200).json({
+  //       success: true,
+  //       totalCarts: 1,
+  //       totalItems: cart.items.length,
+  //       items: cart.items,
+  //     });
+  //   } catch (err) {
+  //     console.error("Get cart error:", err);
+  //     res.status(500).json({ message: "Server error" });
+  //   }
+  // };
+export const getCart = async (req, res) => {
+  const userId = req.user.userId;
+  console.log("hitting", userId);
+
+  try {
+    const cart = await Cart.findOne({ userId })
+      .populate("items.productId")
+      .populate("items.merchantId");
+
+      console.log(cart,'cartbjcebjcjcenj');
+      
+
+    if (!cart) {
+      return res.status(200).json({
         success: true,
-        totalCarts: 1,
-        totalItems: cart.items.length,
-        items: cart.items,
+        totalCarts: 0,
+        totalItems: 0,
+        items: [],
       });
-    } catch (err) {
-      console.error("Get cart error:", err);
-      res.status(500).json({ message: "Server error" });
     }
-  };
+
+    // 🔁 Attach matching variant data to each item
+    const itemsWithVariant = cart.items.map((item) => {
+      const product = item.productId;
+      const variant = product?.variants?.find(
+        (v) => v._id.toString() === item.variantId.toString()
+      );
+
+      return {
+        ...item.toObject(),
+        price: variant?.price || null,
+        mrp: variant?.mrp || null,
+      };
+    });
+
+    res.status(200).json({
+      success: true,
+      totalCarts: 1,
+      totalItems: itemsWithVariant.length,
+      items: itemsWithVariant,
+    });
+  } catch (err) {
+    console.error("Get cart error:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
 
   export const clearCart = async (req, res) => {
   const userId = req.user.userId;
@@ -136,6 +181,48 @@ export const addToCart = async (req, res) => {
     res.status(500).json({ success: false, message: 'Server error' });
   }
 };
+
+export const updateCartQuantity = async (req, res) => {
+  try {
+    const userId = req.user.userId; // assuming authMiddleware sets this
+    const { cartId, quantity } = req.body;
+
+    console.log('Received data:', { userId, cartId, quantity });
+
+    if (!cartId || typeof quantity !== "number" || quantity < 1) {
+      return res.status(400).json({ success: false, message: 'Missing or invalid cartId or quantity' });
+    }
+
+    // Find the user's cart
+    const cart = await Cart.findOne({ userId });
+    if (!cart) {
+      return res.status(404).json({ success: false, message: 'Cart not found' });
+    }
+
+    // Find item by subdocument ID (cart.items._id)
+    const item = cart.items.id(cartId); // Mongoose shortcut
+
+    if (!item) {
+      return res.status(404).json({ success: false, message: 'Item not found in cart' });
+    }
+
+    // Update quantity
+    item.quantity = quantity;
+    await cart.save();
+
+    // Optionally, also return the updated cart total/value if needed for UI
+    return res.status(200).json({
+      success: true,
+      message: 'Quantity updated',
+      updatedItem: item
+    });
+  } catch (error) {
+    console.error('Error updating cart quantity:', error);
+    return res.status(500).json({ success: false, message: 'Server error' });
+  }
+};
+
+
 
 
   
