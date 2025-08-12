@@ -4,6 +4,7 @@ import {newArrivals,productsDetails,getFilteredProducts , getProductsByMerchantI
 import {phoneLogin} from '../controllers/userControllers/authControllers.js';
 import {addToCart, getCart, clearCart, updateCartQuantity, deleteCartItem} from '../controllers/userControllers/cart.controllers.js';
 import {authMiddleware} from '../middleware/jwtAuth.js';
+import {createOrder} from '../controllers/userControllers/order.controllers.js';
 const router = express.Router();
 
 router.post('/googleLogin',googleLogin);
@@ -21,6 +22,11 @@ router.get('/cart',authMiddleware, getCart);
 router.put('/cart/updatequantity', authMiddleware, updateCartQuantity);
 router.delete('/cart/clear', authMiddleware, clearCart)
 router.delete('/cart/delete/:itemId', deleteCartItem);
+
+router.post('/order/create', authMiddleware, createOrder);
+
+// router.delete('/cart/delete/:itemId', deleteCartItem);
+
 
 
 export default router;

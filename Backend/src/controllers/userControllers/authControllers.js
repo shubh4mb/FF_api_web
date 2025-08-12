@@ -68,6 +68,9 @@ export const signup = async (req, res) => {
         secretkey,
         { expiresIn: "1h" }
       );
+
+      console.log(token,'token');
+      
   
       // Send response
       return res.status(200).json({

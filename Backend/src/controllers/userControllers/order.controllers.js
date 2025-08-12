@@ -64,6 +64,8 @@ import Cart from '../../models/cart.model.js';
 
 
 export const createOrder = async (req, res) => {
+  console.log(req.body,'body');
+  
   try {
     const userId = req.user.userId;
 
@@ -159,5 +161,78 @@ export const createOrder = async (req, res) => {
     return res.status(500).json({ message: 'Internal server error' });
   }
 };
+
+export const updateOrderStatusByMerchant = async (req, res) => {
+  const { orderId } = req.params;
+  const { status } = req.body;
+
+  const allowedStatuses = ['accepted', 'packed'];
+  if (!allowedStatuses.includes(status)) {
+    return res.status(400).json({ message: "Invalid status update" });
+  }
+
+  const order = await Order.findById(orderId);
+  if (!order) return res.status(404).json({ message: "Order not found" });
+
+  if (status === 'accepted' && order.orderStatus !== 'placed') {
+    return res.status(400).json({ message: "Order must be in 'placed' state" });
+  }
+  if (status === 'packed' && order.orderStatus !== 'accepted') {
+    return res.status(400).json({ message: "Order must be in 'accepted' state" });
+  }
+
+  order.orderStatus = status;
+  await order.save();
+  return res.status(200).json({ message: "Order status updated", order });
+};
+
+export const updateDeliveryBoyStatus = async (req, res) => {
+  const { orderId } = req.params;
+  const { status } = req.body;
+
+  const validStatuses = [
+    'en route to pickup',
+    'arrived at pickup',
+    'picked up order',
+    'en route to delivery',
+    'arrived at delivery',
+    'waiting for customer',
+    'customer trying items',
+    'completed try phase',
+    'confirmed return',
+    'confirmed purchase',
+    'delivered'
+  ];
+
+  if (!validStatuses.includes(status)) {
+    return res.status(400).json({ message: "Invalid delivery status" });
+  }
+
+  const order = await Order.findById(orderId);
+  if (!order) return res.status(404).json({ message: "Order not found" });
+
+  // Track delivery history
+  order.deliveryTracking.push({
+    timestamp: new Date(),
+    status,
+  });
+
+  // Update main delivery status
+  order.deliveryBoyStatus = status;
+
+  // Depending on delivery status, update order status too
+  if (status === 'picked up order') order.orderStatus = 'packed';
+  if (status === 'en route to delivery') order.orderStatus = 'out_for_delivery';
+  if (status === 'waiting for customer' || status === 'customer trying items') order.orderStatus = 'try_phase';
+  if (status === 'confirmed return') order.orderStatus = 'returned';
+  if (status === 'confirmed purchase') order.orderStatus = 'confirmed_purchase';
+  if (status === 'delivered') order.orderStatus = 'delivered';
+
+  await order.save();
+  return res.status(200).json({ message: "Delivery status updated", order });
+};
+
+
+
 
 

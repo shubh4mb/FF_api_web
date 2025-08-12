@@ -55,6 +55,11 @@ const productActions = [
     onClick: (row) => console.log("Delete", row),
     className: "text-red-600 hover:underline text-sm",
   },
+  {
+    label:"Matching Products",
+    onClick: (row) => navigate(`/admin/matching-products/${row._id}`),
+    className: "text-blue-600 hover:underline text-sm",
+  },
 ];
   
   const [products, setProducts] = useState([]);
@@ -63,7 +68,7 @@ const productActions = [
     const fetchProducts = async () => {
       try {
         const res = await getBaseProducts();
-        console.log(res);
+        // console.log(res);
         setProducts(res.products);
       } catch (error) {
         console.log(error);
