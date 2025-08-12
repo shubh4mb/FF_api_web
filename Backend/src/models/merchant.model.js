@@ -66,3 +66,5 @@ const merchantSchema = new mongoose.Schema({
 }, { timestamps: true });
 
 export default mongoose.model('Merchant', merchantSchema);
+
+

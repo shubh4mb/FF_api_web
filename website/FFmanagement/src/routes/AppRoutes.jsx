@@ -2,7 +2,6 @@
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import AdminLayout from '../layouts/AdminLayout';
 import MerchantLayout from '../layouts/MerchantLayout';
-
 import Merchants from '../pages/admin/Merchants';
 import AdminDashboard from '../pages/admin/Dashboard';
 import AddCategory from '../pages/admin/AddCategory';

@@ -8,7 +8,7 @@ export default function DynamicSizesInput({ sizes, setSizes }) {
   }, [entries]);
 
   const handleChange = (index, field, value) => {
-    const updated = [...entries];
+    const updated = [...entries];a
     updated[index][field] = field === "stock" ? Number(value) : value;
     setEntries(updated);
   };

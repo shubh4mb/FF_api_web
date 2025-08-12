@@ -53,16 +53,6 @@ const [previewQueue, setPreviewQueue] = useState([]); // for multiple previews
     setVariantForm(product.variants[index]);
   };
 
-  // Call this when image is cropped and uploaded
-// const handleImageCropped = (croppedImage) => {
-//     setVariantForm((prev) => ({
-//       ...prev,
-//       mainImage: croppedImage, // { public_id, url }
-//     }));
-//     setCropperOpen(false);
-//   };
-  
-
   const handleChange = (e) => {
     const { name, value ,type } = e.target;
 
@@ -141,10 +131,6 @@ const [previewQueue, setPreviewQueue] = useState([]); // for multiple previews
     return rest;
   });
 };
-
-
-
-
 
 
 const handleSubmit = async () => {

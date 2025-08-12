@@ -27,16 +27,6 @@ export const getBaseProducts = async () => {
     }
 }
 
-export const getBaseProductById = async (productId) => {
-    try {
-        const response = await axiosInstance.get(`admin/getBaseProductById/${productId}`);
-        return response.data;
-    } catch (error) {
-        console.log(error)
-        throw error.response ? error.response.data : new Error('Network Error');
-    }
-}
-
 export const addVariant = async (productId,variantData) => {
     try {
       const formData = new FormData();
@@ -81,6 +71,14 @@ export const addVariant = async (productId,variantData) => {
   };
   
 
-
+export const getBaseProductById = async (productId) => {
+    try {
+        const response = await axiosInstance.get(`admin/getBaseProductById/${productId}`);
+        return response.data;
+    } catch (error) {
+        console.log(error)
+        throw error.response ? error.response.data : new Error('Network Error');
+    }
+}
 
 

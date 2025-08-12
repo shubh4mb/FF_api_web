@@ -83,36 +83,6 @@ export const addToCart = async (req, res) => {
   }
 };
 
-
-  // export const getCart = async (req, res) => {
-  //   const userId = req.user.userId;
-  //   console.log("hitting", userId);
-  
-  //   try {
-  //     const cart = await Cart.findOne({ userId })
-  //       .populate("items.productId")
-  //       .populate("items.merchantId");
-  
-  //     if (!cart) {
-  //       // If no cart found, return empty response
-  //       return res.status(200).json({
-  //         success: true,
-  //         totalCarts: 0,
-  //         totalItems: 0,
-  //         items: [],
-  //       });
-  //     }
-  //     res.status(200).json({
-  //       success: true,
-  //       totalCarts: 1,
-  //       totalItems: cart.items.length,
-  //       items: cart.items,
-  //     });
-  //   } catch (err) {
-  //     console.error("Get cart error:", err);
-  //     res.status(500).json({ message: "Server error" });
-  //   }
-  // };
 export const getCart = async (req, res) => {
   const userId = req.user.userId;
   console.log("hitting", userId);
@@ -160,8 +130,7 @@ export const getCart = async (req, res) => {
   }
 };
 
-
-  export const clearCart = async (req, res) => {
+export const clearCart = async (req, res) => {
   const userId = req.user.userId;
   console.log(userId,'logloglog');
   try {
@@ -182,6 +151,40 @@ export const getCart = async (req, res) => {
   }
 };
 
+export const deleteCartItem = async (req, res) => {
+  try {
+    const { itemId } = req.params; // cart item id
+
+    console.log(itemId,'itemIditemId');
+    console.log('Deleting cart item with:', { itemId });
+
+      const updatedCart = await Cart.findOneAndUpdate(
+        { "items._id": itemId },      // Filter cart that contains that specific item _id
+        {
+          $pull: { items: { _id: itemId } } // Remove by item _id
+        },
+        { new: true }
+      );
+
+    if (!updatedCart) {
+      return res.status(404).json({
+        success: false,
+        message: "No matching item found in cart.",
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Item removed from cart successfully",
+      updatedCart,
+    });
+
+  } catch (error) {
+    console.error("Error deleting cart item:", error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
 export const updateCartQuantity = async (req, res) => {
   try {
     const userId = req.user.userId; // assuming authMiddleware sets this
@@ -192,7 +195,7 @@ export const updateCartQuantity = async (req, res) => {
     if (!cartId || typeof quantity !== "number" || quantity < 1) {
       return res.status(400).json({ success: false, message: 'Missing or invalid cartId or quantity' });
     }
-
+    
     // Find the user's cart
     const cart = await Cart.findOne({ userId });
     if (!cart) {
@@ -221,6 +224,7 @@ export const updateCartQuantity = async (req, res) => {
     return res.status(500).json({ success: false, message: 'Server error' });
   }
 };
+
 
 
 

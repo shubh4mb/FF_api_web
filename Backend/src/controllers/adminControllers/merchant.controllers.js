@@ -1,6 +1,8 @@
 import Merchant from "../../models/merchant.model.js";
 import { uploadToCloudinary } from "../../config/cloudinary.config.js";
 
+
+
 export const addMerchant = async (req, res) => {
     try {
       console.log("hiii");

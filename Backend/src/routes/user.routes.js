@@ -2,7 +2,7 @@ import express from 'express';
 import { googleLogin ,signup} from '../controllers/userControllers/authControllers.js';
 import {newArrivals,productsDetails,getFilteredProducts , getProductsByMerchantId,getYouMayLikeProducts } from '../controllers/userControllers/product.controllers.js';
 import {phoneLogin} from '../controllers/userControllers/authControllers.js';
-import {addToCart, getCart, clearCart, updateCartQuantity} from '../controllers/userControllers/cart.controllers.js';
+import {addToCart, getCart, clearCart, updateCartQuantity, deleteCartItem} from '../controllers/userControllers/cart.controllers.js';
 import {authMiddleware} from '../middleware/jwtAuth.js';
 const router = express.Router();
 
@@ -20,9 +20,7 @@ router.post('/cart/add',authMiddleware,addToCart);
 router.get('/cart',authMiddleware, getCart);
 router.put('/cart/updatequantity', authMiddleware, updateCartQuantity);
 router.delete('/cart/clear', authMiddleware, clearCart)
-
-// router.delete('/cart/delete/:itemId', deleteCartItem);
-
+router.delete('/cart/delete/:itemId', deleteCartItem);
 
 
 export default router;

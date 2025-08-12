@@ -81,6 +81,13 @@ const productSchema = new mongoose.Schema({
   tags: [String],
 
   variants: [variantSchema], // key for fashion variants (sizes, colors, etc.)
+  //   accessories: [
+  //   {
+  //     type: mongoose.Schema.Types.ObjectId,
+  //     ref: 'Product',
+  //     required: false
+  //   }
+  // ],
 
   isTriable:{type:Boolean,default:true},
 
