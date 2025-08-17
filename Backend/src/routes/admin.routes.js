@@ -3,7 +3,7 @@ import { addCategory, getCategories, updateCategory } from '../controllers/admin
 import { addMerchant, getMerchants , getMerchantById , updateMerchantById} from '../controllers/adminControllers/merchant.controllers.js';
 import { addBrand,getBrands } from '../controllers/adminControllers/brand.controllers.js.js';
 import upload , {handleMulterError} from '../middleware/multer.js'
-import { getBaseProducts, getVariants ,getBaseProductById , addVariant} from '../controllers/adminControllers/product.controllers.js';
+import { getBaseProducts, getVariants ,getBaseProductById , addVariant , getProductsByMerchantId, updateMatchingProducts} from '../controllers/adminControllers/product.controllers.js';
 import {addTitleBanner} from '../controllers/adminControllers/titleBanner.controllers.js';
 import { addCart, getCart} from '../controllers/adminControllers/cart.controllers.js';
 const router = express.Router();
@@ -26,13 +26,16 @@ router.get('/getBaseProducts',getBaseProducts);
 router.get('/getVariants',getVariants);
 router.get('/getBaseProductById/:productId',getBaseProductById);
 router.post('/addVariant/:productId',upload.array('images'),handleMulterError,addVariant);
-
+router.get('/products/merchant/:merchantId', getProductsByMerchantId);
+router.put('/updateMatchingProducts/:productId', updateMatchingProducts);
 
 router.post('/titleBanner/add',upload.single('image'),handleMulterError,addTitleBanner)
 
 router.post('/cart/add',addCart);
 router.get('/cart', getCart);
 // router.put('/cart/updatequantity', updateCartQuantity);
+
+
 
 
 

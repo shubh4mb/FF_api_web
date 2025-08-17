@@ -69,6 +69,26 @@ export const addVariant = async (productId,variantData) => {
       }
     }
   };
+
+  export const getProductsByMerchantId = async (merchantId) => {
+    try {
+        const response = await axiosInstance.get(`/admin/products/merchant/${merchantId}`);
+        return response.data;
+    } catch (error) {
+        console.log(error)
+        throw error.response ? error.response.data : new Error('Network Error');
+    }
+} 
+
+export const updateMatchingProducts = async (productId, matchingProducts) => {
+    try {
+        const response = await axiosInstance.put(`/admin/updateMatchingProducts/${productId}`, { matchingProducts });
+        return response.data;
+    } catch (error) {
+        console.log(error)
+        throw error.response ? error.response.data : new Error('Network Error');
+    }
+}
   
 
 export const getBaseProductById = async (productId) => {

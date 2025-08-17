@@ -69,7 +69,20 @@ const productSchema = new mongoose.Schema({
   gender: { type: String, enum: ['men', 'women', 'unisex','boys','girls','babies'], default: 'unisex' }, 
 
   description: String,
-
+  matchingProducts: [
+    {
+      productId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Product',
+        required: true,
+      },
+      variantId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Variant',
+        required: true,
+      },
+    }
+  ],
 
 
   features: {
