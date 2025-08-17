@@ -110,7 +110,7 @@ export const loginMerchant = async (req, res) => {
     }
 
     const token = jwt.sign(
-      { id: merchant._id },
+      { merchantId: merchant._id },
       jwt_secret,
       { expiresIn: "7d" }
     );

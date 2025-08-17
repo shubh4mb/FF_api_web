@@ -360,9 +360,9 @@ export const handoverOrder = async (req, res) => {
 
 
 export const getOrderForMerchant = async (req, res) => {
-  const { merchantId } = req.params;
+  // const { merchantId } = req.params;
 
-  const orders = await Order.find({ merchantId });
+  const orders = await Order.find({ merchantId: req.merchant.merchantId });
   return res.status(200).json({ orders });
 };
 
