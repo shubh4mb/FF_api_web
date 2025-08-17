@@ -2,6 +2,7 @@ import Order from "../../models/order.model.js";
 import Product from "../../models/product.model.js";
 // controllers/orderController.js
 import Cart from '../../models/cart.model.js';
+import Delivery from '../../models/delivery.model.js';
 
 // export const createOrder = async (req, res) => {
 //   try {
@@ -162,75 +163,227 @@ export const createOrder = async (req, res) => {
   }
 };
 
-export const updateOrderStatusByMerchant = async (req, res) => {
+// export const updateOrderStatusByMerchant = async (req, res) => {
+//   const { orderId } = req.params;
+//   const { status } = req.body;
+
+//   const allowedStatuses = ['accepted', 'packed'];
+//   if (!allowedStatuses.includes(status)) {
+//     return res.status(400).json({ message: "Invalid status update" });
+//   }
+
+//   const order = await Order.findById(orderId);
+//   if (!order) return res.status(404).json({ message: "Order not found" });
+
+//   if (status === 'accepted' && order.orderStatus !== 'placed') {
+//     return res.status(400).json({ message: "Order must be in 'placed' state" });
+//   }
+//   if (status === 'packed' && order.orderStatus !== 'accepted') {
+//     return res.status(400).json({ message: "Order must be in 'accepted' state" });
+//   }
+
+//   order.orderStatus = status;
+//   await order.save();
+//   return res.status(200).json({ message: "Order status updated", order });
+// };
+
+// export const updateDeliveryBoyStatus = async (req, res) => {
+//   const { orderId } = req.params;
+//   const { status } = req.body;
+
+//   const validStatuses = [
+//     'en route to pickup',
+//     'arrived at pickup',
+//     'picked up order',
+//     'en route to delivery',
+//     'arrived at delivery',
+//     'waiting for customer',
+//     'customer trying items',
+//     'completed try phase',
+//     'confirmed return',
+//     'confirmed purchase',
+//     'delivered'
+//   ];
+
+//   if (!validStatuses.includes(status)) {
+//     return res.status(400).json({ message: "Invalid delivery status" });
+//   }
+
+//   const order = await Order.findById(orderId);
+//   if (!order) return res.status(404).json({ message: "Order not found" });
+
+//   // Track delivery history
+//   order.deliveryTracking.push({
+//     timestamp: new Date(),
+//     status,
+//   });
+
+//   // Update main delivery status
+//   order.deliveryBoyStatus = status;
+
+//   // Depending on delivery status, update order status too
+//   if (status === 'picked up order') order.orderStatus = 'packed';
+//   if (status === 'en route to delivery') order.orderStatus = 'out_for_delivery';
+//   if (status === 'waiting for customer' || status === 'customer trying items') order.orderStatus = 'try_phase';
+//   if (status === 'confirmed return') order.orderStatus = 'returned';
+//   if (status === 'confirmed purchase') order.orderStatus = 'confirmed_purchase';
+//   if (status === 'delivered') order.orderStatus = 'delivered';
+
+//   await order.save();
+//   return res.status(200).json({ message: "Delivery status updated", order });
+// };
+
+export const orderRequestForMerchant = async (req, res) => {
   const { orderId } = req.params;
   const { status } = req.body;
 
-  const allowedStatuses = ['accepted', 'packed'];
-  if (!allowedStatuses.includes(status)) {
-    return res.status(400).json({ message: "Invalid status update" });
-  }
-
   const order = await Order.findById(orderId);
   if (!order) return res.status(404).json({ message: "Order not found" });
-
-  if (status === 'accepted' && order.orderStatus !== 'placed') {
-    return res.status(400).json({ message: "Order must be in 'placed' state" });
-  }
-  if (status === 'packed' && order.orderStatus !== 'accepted') {
-    return res.status(400).json({ message: "Order must be in 'accepted' state" });
-  }
-
+  
   order.orderStatus = status;
+  const deliveryBoy = await Delivery.findOne({status:"active"})
+  if(!deliveryBoy){
+    return res.status(404).json({ message: "Delivery boy not found" });
+  }
+
+  order.deliveryBoyId = deliveryBoy._id;
+ 
   await order.save();
   return res.status(200).json({ message: "Order status updated", order });
 };
 
-export const updateDeliveryBoyStatus = async (req, res) => {
-  const { orderId } = req.params;
-  const { status } = req.body;
 
-  const validStatuses = [
-    'en route to pickup',
-    'arrived at pickup',
-    'picked up order',
-    'en route to delivery',
-    'arrived at delivery',
-    'waiting for customer',
-    'customer trying items',
-    'completed try phase',
-    'confirmed return',
-    'confirmed purchase',
-    'delivered'
-  ];
 
-  if (!validStatuses.includes(status)) {
-    return res.status(400).json({ message: "Invalid delivery status" });
+export const orderRequestForDeliveryBoy = async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    const { action, deliveryBoyId } = req.body; // action: 'accept' | 'reject'
+
+    const order = await Order.findById(orderId);
+    if (!order) {
+      return res.status(404).json({ message: "Order not found" });
+    }
+
+    // if (order.deliveryBoy && order.deliveryBoy.toString() !== deliveryBoyId) {
+    //   return res.status(400).json({ message: "This order is already assigned to another delivery boy" });
+    // }
+
+    if (action === "accept") {
+      // Assign delivery boy
+      order.deliveryBoy = deliveryBoyId;
+      order.deliveryBoyStatus = "assigned";
+
+      // Update delivery boy’s availability
+      await DeliveryBoy.findByIdAndUpdate(deliveryBoyId, { status: "busy" });
+
+      await order.save();
+      return res.status(200).json({
+        message: "Order accepted and assigned to delivery boy",
+        order,
+      });
+    }
+
+    if (action === "reject") {
+      order.deliveryBoyStatus = "rejected";
+      await order.save();
+      return res.status(200).json({
+        message: "Order rejected by delivery boy",
+        order,
+      });
+    }
+
+    return res.status(400).json({ message: "Invalid action" });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Server error" });
   }
+};
+
+export const orderPacked = async (req, res) => {
+  const { orderId } = req.params;
 
   const order = await Order.findById(orderId);
   if (!order) return res.status(404).json({ message: "Order not found" });
 
-  // Track delivery history
-  order.deliveryTracking.push({
-    timestamp: new Date(),
-    status,
-  });
-
-  // Update main delivery status
-  order.deliveryBoyStatus = status;
-
-  // Depending on delivery status, update order status too
-  if (status === 'picked up order') order.orderStatus = 'packed';
-  if (status === 'en route to delivery') order.orderStatus = 'out_for_delivery';
-  if (status === 'waiting for customer' || status === 'customer trying items') order.orderStatus = 'try_phase';
-  if (status === 'confirmed return') order.orderStatus = 'returned';
-  if (status === 'confirmed purchase') order.orderStatus = 'confirmed_purchase';
-  if (status === 'delivered') order.orderStatus = 'delivered';
-
+  order.status="packed"
   await order.save();
-  return res.status(200).json({ message: "Delivery status updated", order });
+  return res.status(200).json({ message: "Order packed", order });
 };
+
+export const reachedPickupLocation = async (req, res) => {
+  const { orderId } = req.params;
+
+  const order = await Order.findById(orderId);
+  if (!order) return res.status(404).json({ message: "Order not found" });
+
+  order.deliveryBoyStatus = "arrived at pickup";
+  await order.save();
+  return res.status(200).json({ message: "Delivery boy reached pickup location", order });
+};
+
+export const orderPickedUp = async (req, res) => {
+  const { orderId } = req.params;
+
+  const order = await Order.findById(orderId);
+  if (!order) return res.status(404).json({ message: "Order not found" });
+
+  order.deliveryBoyStatus = "picked & verified order";
+  order.orderStatus = "out_for_delivery";
+  await order.save();
+  return res.status(200).json({ message: "Order picked up", order });
+};
+
+
+export const reachedDeliveryLocation = async (req, res) => {
+  const { orderId } = req.params;
+
+  const order = await Order.findById(orderId);
+  if (!order) return res.status(404).json({ message: "Order not found" });
+
+  order.deliveryBoyStatus = "arrived at delivery";
+  order.orderStatus = "arrived at delivery";
+  await order.save();
+  return res.status(200).json({ message: "Delivery boy reached delivery location", order });
+};
+
+export const handoverOrder = async (req, res) => {
+  const { orderId } = req.params;
+
+  const order = await Order.findById(orderId);
+  if (!order) return res.status(404).json({ message: "Order not found" });
+
+  order.deliveryBoyStatus = "try phase";
+  order.orderStatus = "try phase";
+  await order.save();
+  return res.status(200).json({ message: "Order handover", order });
+};
+
+
+export const getOrderForMerchant = async (req, res) => {
+  const { merchantId } = req.params;
+
+  const orders = await Order.find({ merchantId });
+  return res.status(200).json({ orders });
+};
+
+export const getOrderForDeliveryBoy = async (req, res) => {
+  const { deliveryBoyId } = req.params;
+
+  const orders = await Order.find({ deliveryBoyId });
+  return res.status(200).json({ orders });
+};
+
+export const getOrderForUser = async (req, res) => {
+  const { userId } = req.params;
+
+  const orders = await Order.find({ userId });
+  return res.status(200).json({ orders });
+};
+
+
+
+
+
 
 
 

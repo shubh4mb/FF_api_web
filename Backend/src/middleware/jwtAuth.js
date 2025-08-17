@@ -26,5 +26,22 @@ export const authMiddleware = (req, res, next) => {
     return res.status(401).json({ message: 'No token provided' });
   }
 };
+ 
+export const authMiddlewareMerchant = (req, res, next) => {
+    const authHeader = req.headers.authorization;
+    if (authHeader) {
+        const token = authHeader.split(' ')[1];
+        try {
+            const decoded = jwt.verify(token, secretkey);
+            req.merchant = decoded;
+            next();
+        } catch (err) {
+            console.log(err);
+            return res.status(401).json({ message: 'Invalid token' });
+        }
+    } else {
+        return res.status(401).json({ message: 'No token provided' });
+    }
+}
 
 

@@ -31,6 +31,7 @@ const OrderSchema = new mongoose.Schema({
           'accepted', 
           'packed', 
           'out_for_delivery', 
+          'arrived at delivery',
           'try_phase', 
           'confirmed_purchase', 
           'returned', 
@@ -47,11 +48,11 @@ const OrderSchema = new mongoose.Schema({
           'assigned',                 // Delivery boy assigned
           'en route to pickup',       // On the way to merchant
           'arrived at pickup',        // Reached merchant location
-          'picked up order',          // Order picked
+          'picked & verified order',          // Order picked
           'en route to delivery',     // Going to customer
           'arrived at delivery',      // Reached customer location
-          'waiting for customer',     // Waiting while user tries (Try & Buy)
-          'customer trying items',    // Try phase ongoing
+          // 'waiting for customer',     // Waiting while user tries (Try & Buy)
+          'try phase',    // Try phase ongoing
           'completed try phase',      // Delivery boy marks try phase completed
           'confirmed return',         // Items returned
           'confirmed purchase',       // Customer accepted items

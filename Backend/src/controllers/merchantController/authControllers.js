@@ -2,6 +2,8 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import Merchant from "../../models/merchant.model.js";
 import Brand from "../../models/brand.model.js";
+const jwt_secret="hehe"
+
 
 // REGISTER MERCHANT
 export const registerMerchant = async (req, res) => {
@@ -109,7 +111,7 @@ export const loginMerchant = async (req, res) => {
 
     const token = jwt.sign(
       { id: merchant._id },
-      process.env.JWT_SECRET,
+      jwt_secret,
       { expiresIn: "7d" }
     );
 

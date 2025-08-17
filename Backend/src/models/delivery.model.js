@@ -1,6 +1,6 @@
-const mongoose = require('mongoose');
+import mongoose from "mongoose";
 
-const DeliverySchema = new mongoose.Schema({
+const DeliveryBoySchema = new mongoose.Schema({
   name: {
     type: String,
     required: true,
@@ -49,7 +49,7 @@ const DeliverySchema = new mongoose.Schema({
   },
   status: {
     type: String,
-    enum: ['active', 'inactive', 'suspended'],
+    enum: ['active', 'inactive', 'suspended','busy'],
     default: 'active'
   },
   createdAt: {
@@ -58,4 +58,4 @@ const DeliverySchema = new mongoose.Schema({
   }
 });
 
-module.exports = mongoose.model('DeliveryBoy', DeliveryBoySchema);
+export default mongoose.model("DeliveryBoy", DeliveryBoySchema);
