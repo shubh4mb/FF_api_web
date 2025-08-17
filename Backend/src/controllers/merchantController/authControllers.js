@@ -80,6 +80,8 @@ export const registerMerchant = async (req, res) => {
 
 
 export const loginMerchant = async (req, res) => {
+  // console.log(req.body,'req.body;req.body;req.body;');
+  
   try {
     const { identifier, email, password } = req.body;
     const loginId = identifier || email;
@@ -94,9 +96,6 @@ export const loginMerchant = async (req, res) => {
         { phoneNumber: loginId }
       ]
     });
-
-    // console.log(merchant);
-    
 
     if (!merchant) {
       return res.status(400).json({ message: "Merchant not found" });

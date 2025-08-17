@@ -4,42 +4,7 @@ import Category from '../../models/category.model.js';
 import { productSchema } from '../../utils/validators/product.validator.js';
 import Brand from "../../models/brand.model.js";
 import { uploadToCloudinary } from '../../config/cloudinary.config.js';
-
-// export const addVariant = async (req, res) => {
-
-//   try {
-//     const { productId } = req.params;
-//     // Parse variant data
-//     const variantData = {
-//       size: req.body.size,
-//       color: req.body.color ? JSON.parse(req.body.color) : {},
-//       stock: Number(req.body.stock) || 0,
-//       mrp: Number(req.body.mrp),
-//       price: Number(req.body.price),
-//       discount: Number(req.body.discount) || 0,
-//       // images: store your uploaded image URLs here if you handle uploads
-//     };
-
-//     // Update product with new variant
-//     const updatedProduct = await Product.findByIdAndUpdate(
-//       productId,
-//       { $push: { variants: variantData } },
-//       { new: true }
-//     );
-
-//     if (!updatedProduct) {
-//       return res.status(404).json({ message: 'Product not found' });
-//     }
-
-//     res.status(200).json({
-//       message: 'Variant added successfully',
-//       product: updatedProduct
-//     });
-//   } catch (err) {
-//     console.error('Error adding variant:', err);
-//     res.status(500).json({ message: 'Server error' });
-//   }
-// };
+import { log } from "console";
 
 export const addVariant = async (req, res) => {
   try {
@@ -309,4 +274,121 @@ export const getBaseProductById = async (req, res) => {
 }
 
 
-  
+export const getProductsByMerchantId = async (req, res) => {
+  try {
+    const { merchantId } = req.params;
+    // console.log(merchantId, 'merchantId <<<');
+
+    const products = await Product.find({ merchantId })
+      .populate('brandId', 'name')
+      .populate('categoryId', 'name')
+      .populate('subCategoryId', 'name')
+      .populate('subSubCategoryId', 'name')
+      .populate('merchantId', 'shopName email brandName');
+
+    if (!products || products.length === 0) {
+      return res.status(404).json({ message: 'No products found for this merchant' });
+    }
+
+    // ✅ keep variants intact
+    const transformed = products.map(p => ({
+      id: p._id.toString(), // ⚠️ frontend expects `product.id`, not `_id`
+      name: p.name,
+      merchant: {
+        id: p.merchantId?._id,
+        shopName: p.merchantId?.shopName,
+        email: p.merchantId?.email,
+      },
+      brand: p.brandId?.name || "",
+      category: p.categoryId?.name || "",
+      subCategory: p.subCategoryId?.name || "",
+      subSubCategory: p.subSubCategoryId?.name || "",
+      gender: p.gender,
+      description: p.description,
+      tags: p.tags,
+      isTriable: p.isTriable,
+      ratings: p.ratings,
+      numReviews: p.numReviews,
+      isActive: p.isActive,
+      variants: p.variants,   // ✅ untouched, full array with sizes[]
+      createdAt: p.createdAt,
+      updatedAt: p.updatedAt,
+    }));
+
+    res.status(200).json(transformed);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: '❌ ' + error.message });
+  }
+};
+
+export const uploadProductImage = async (req, res) => {
+
+  try {
+    const { productId, variantIndex } = req.body;
+
+    if (!req.files || req.files.length === 0) {
+      return res.status(400).json({ message: "No images uploaded" });
+    }
+
+    // Upload to cloudinary
+    const uploadedImages = [];
+    for (const file of req.files) {
+      const result = await uploadToCloudinary(file.buffer, "products");
+      uploadedImages.push({
+        public_id: result.public_id,
+        url: result.secure_url,
+      });
+    }
+
+    // ✅ Update product variant images in DB
+    const product = await Product.findById(productId);
+    if (!product) {
+      return res.status(404).json({ message: "Product not found" });
+    }
+
+    // Ensure variant exists
+    if (!product.variants[variantIndex]) {
+      return res.status(400).json({ message: "Invalid variant index" });
+    }
+
+    // Push images into the variant's images array
+    product.variants[variantIndex].images.push(...uploadedImages);
+
+    await product.save();
+
+    return res.status(200).json({
+      message: "✅ Images uploaded successfully",
+      images: product.variants[variantIndex].images,// return updated array
+    });
+
+  } catch (err) {
+    console.error("Error uploading images:", err);
+    res.status(500).json({
+      message: "❌ Internal Server Error",
+      error: err.message,
+    });
+  }
+};
+
+export const deleteImage = async (req, res) => {
+  try {
+    const { imageId } = req.params;
+
+    // Find product containing this image
+    const product = await Product.findOne({ 'variants.images._id': imageId });
+    if (!product) return res.status(404).json({ error: 'Image not found' });
+
+    // Find variant containing the image
+    product.variants.forEach(variant => {
+      variant.images = variant.images.filter(img => img._id.toString() !== imageId);
+    });
+
+    await product.save();
+    res.json({ message: 'Image deleted successfully' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to delete image' });
+  }
+};
+
