@@ -285,6 +285,8 @@ export const getProductsByMerchantId = async (req, res) => {
       .populate('subCategoryId', 'name')
       .populate('subSubCategoryId', 'name')
       .populate('merchantId', 'shopName email brandName');
+      console.log(products,'productsproducts');
+      
 
     if (!products || products.length === 0) {
       return res.status(404).json({ message: 'No products found for this merchant' });
