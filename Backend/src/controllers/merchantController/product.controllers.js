@@ -8,21 +8,16 @@ import { log } from "console";
 
 export const addVariant = async (req, res) => {
   try {
-    console.log("Files received:", req.files);
-
-//     await Product.deleteMany({ variants: [] });
-// console.log("All products with empty variants deleted.");
-
     const productId = req.params.productId;
     const { color, sizes, mrp, price, discount } = req.body;
 
-    // Parse JSON strings safely
+    // Parse JSON safely
     let parsedColor, parsedSizes;
     try {
       parsedColor = JSON.parse(color);
       parsedSizes = JSON.parse(sizes);
     } catch (err) {
-      return res.status(400).json({ message: 'Invalid JSON in color or sizes' });
+      return res.status(400).json({ message: "Invalid JSON in color or sizes" });
     }
 
     // Ensure numeric values are safe
@@ -35,17 +30,14 @@ export const addVariant = async (req, res) => {
     const safePrice = safeNumber(price);
     const safeDiscount = safeNumber(discount);
 
-    // Upload images to Cloudinary (max 5)
+    // Upload images to Cloudinary (limit 5)
     const MAX_IMAGES = 5;
     const uploadedImages = [];
 
     if (req.files && req.files.length > 0) {
-      console.log(req.files);
-      
       const filesToUpload = req.files.slice(0, MAX_IMAGES);
       for (const file of filesToUpload) {
-        const result = await uploadToCloudinary(file.buffer, 'products');
-        console.log("working");
+        const result = await uploadToCloudinary(file.buffer, "products");
         uploadedImages.push({
           public_id: result.public_id,
           url: result.secure_url,
@@ -53,7 +45,7 @@ export const addVariant = async (req, res) => {
       }
     }
 
-    // Construct the new variant object
+    // New variant object
     const newVariant = {
       color: parsedColor,
       sizes: parsedSizes,
@@ -63,30 +55,68 @@ export const addVariant = async (req, res) => {
       images: uploadedImages,
     };
 
-    // Update the product by pushing the variant
+    // Push variant & return populated product
     const updatedProduct = await Product.findByIdAndUpdate(
       productId,
       { $push: { variants: newVariant } },
       { new: true, runValidators: true }
-    );
+    )
+      .populate("brandId", "name") // populate brand name
+      .populate("categoryId", "name") // populate category name
+      .populate("merchantId", "name email"); // populate merchant details
 
     if (!updatedProduct) {
-      return res.status(404).json({ message: 'Product not found' });
+      return res.status(404).json({ message: "Product not found" });
     }
 
     return res.status(200).json({
-      message: 'Variant added successfully',
+      message: "Variant added successfully",
       product: updatedProduct,
     });
   } catch (err) {
-    console.error('Error adding variant:', err);
+    console.error("Error adding variant:", err);
     res.status(500).json({
-      message: 'Internal Server Error',
+      message: "Internal Server Error",
       error: err.message,
     });
   }
 };
+
+export const deleteVariant = async (req, res) => {
+  try {
+    const { productId, variantId } = req.params;
+
+    // Find product and remove variant
+    const updatedProduct = await Product.findByIdAndUpdate(
+      productId,
+      { $pull: { variants: { _id: variantId } } },
+      { new: true }
+    )
+      .populate("brandId", "name")
+      .populate("categoryId", "name")
+      .populate("merchantId", "name email");
+
+    if (!updatedProduct) {
+      return res.status(404).json({ message: "Product not found" });
+    }
+
+    return res.status(200).json({
+      message: "Variant deleted successfully",
+      product: updatedProduct,
+    });
+  } catch (err) {
+    console.error("Error deleting variant:", err);
+    res.status(500).json({
+      message: "Internal Server Error",
+      error: err.message,
+    });
+  }
+};
+
 export const updateVariant = async (req, res) => {
+
+  console.log(req.params.productId,'productIdproductIdproductId');
+  
   try {
     const { productId, variantId } = req.params;
     const { color, sizes, mrp, price, discount } = req.body;
@@ -134,6 +164,48 @@ export const updateVariant = async (req, res) => {
 
   } catch (err) {
     res.status(500).json({ message: "Internal Server Error", error: err.message });
+  }
+};
+
+export const updateStock = async (req, res) => {
+  try {
+    const { productId, variantId, size } = req.params;
+    const { stock } = req.body;
+
+    // validate stock number
+    const safeStock = isNaN(Number(stock)) ? 0 : Number(stock);
+
+    // find product and update stock of the specific size inside sizes array
+    const updatedProduct = await Product.findOneAndUpdate(
+      {
+        _id: productId,
+        "variants._id": variantId,
+        "variants.sizes.size": size, // match size
+      },
+      {
+        $set: { "variants.$.sizes.$[sizeElem].stock": safeStock }
+      },
+      {
+        new: true,
+        arrayFilters: [{ "sizeElem.size": size }] // update correct size object
+      }
+    );
+
+    if (!updatedProduct) {
+      return res.status(404).json({ message: "Product or size not found" });
+    }
+
+    res.json({
+      message: "Stock updated successfully",
+      product: updatedProduct
+    });
+
+  } catch (err) {
+    console.error("Error updating stock:", err);
+    res.status(500).json({
+      message: "Internal Server Error",
+      error: err.message
+    });
   }
 };
 
@@ -394,3 +466,26 @@ export const deleteImage = async (req, res) => {
   }
 };
 
+export const deleteProduct = async (req, res) => {
+  try {
+    const { productId } = req.params;
+
+    // Find and delete product
+    const deletedProduct = await Product.findByIdAndDelete(productId);
+
+    if (!deletedProduct) {
+      return res.status(404).json({ message: "Product not found" });
+    }
+
+    return res.status(200).json({
+      message: "Product deleted successfully",
+      product: deletedProduct
+    });
+  } catch (err) {
+    console.error("Error deleting product:", err);
+    res.status(500).json({
+      message: "Internal Server Error",
+      error: err.message,
+    });
+  }
+};
