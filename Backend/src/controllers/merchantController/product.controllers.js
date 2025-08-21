@@ -169,43 +169,71 @@ export const updateVariant = async (req, res) => {
 
 export const updateStock = async (req, res) => {
   try {
-    const { productId, variantId, size } = req.params;
-    const { stock } = req.body;
+    const { productId, variantId, sizeId } = req.params; // sizeId optional
+    const { size, stock } = req.body; // size name & stock from frontend
 
-    // validate stock number
     const safeStock = isNaN(Number(stock)) ? 0 : Number(stock);
 
-    // find product and update stock of the specific size inside sizes array
-    const updatedProduct = await Product.findOneAndUpdate(
-      {
-        _id: productId,
-        "variants._id": variantId,
-        "variants.sizes.size": size, // match size
-      },
-      {
-        $set: { "variants.$.sizes.$[sizeElem].stock": safeStock }
-      },
-      {
-        new: true,
-        arrayFilters: [{ "sizeElem.size": size }] // update correct size object
-      }
-    );
+    let updatedProduct;
+
+    if (sizeId) {
+      // ✅ Update existing size by _id
+      updatedProduct = await Product.findOneAndUpdate(
+        { _id: productId, "variants._id": variantId, "variants.sizes._id": sizeId },
+        { $set: { "variants.$[v].sizes.$[s].stock": safeStock } },
+        {
+          new: true,
+          arrayFilters: [
+            { "v._id": variantId },
+            { "s._id": sizeId }
+          ]
+        }
+      );
+    } else {
+      // ✅ Add new size
+      updatedProduct = await Product.findOneAndUpdate(
+        { _id: productId, "variants._id": variantId },
+        { $push: { "variants.$.sizes": { size, stock: safeStock } } },
+        { new: true }
+      );
+    }
 
     if (!updatedProduct) {
-      return res.status(404).json({ message: "Product or size not found" });
+      return res.status(404).json({ message: "Product or variant not found" });
     }
 
     res.json({
-      message: "Stock updated successfully",
-      product: updatedProduct
+      message: sizeId ? "Stock updated successfully" : "New size added",
+      product: updatedProduct.variants
     });
-
   } catch (err) {
     console.error("Error updating stock:", err);
-    res.status(500).json({
-      message: "Internal Server Error",
-      error: err.message
+    res.status(500).json({ message: "Internal Server Error", error: err.message });
+  }
+};
+
+export const deleteVariantSizes = async (req, res) => {
+  try {
+    const { productId, variantId, sizeId } = req.params;
+
+    // ✅ Pull a specific size by _id
+    const updatedProduct = await Product.findOneAndUpdate(
+      { _id: productId, "variants._id": variantId },
+      { $pull: { "variants.$.sizes": { _id: sizeId } } },
+      { new: true }
+    );
+
+    if (!updatedProduct) {
+      return res.status(404).json({ message: "Product, variant or size not found" });
+    }
+
+    res.json({
+      message: "Size deleted successfully",
+      product: updatedProduct
     });
+  } catch (err) {
+    console.error("Error deleting size:", err);
+    res.status(500).json({ message: "Internal Server Error", error: err.message });
   }
 };
 
@@ -357,7 +385,7 @@ export const getProductsByMerchantId = async (req, res) => {
       .populate('subCategoryId', 'name')
       .populate('subSubCategoryId', 'name')
       .populate('merchantId', 'shopName email brandName');
-      console.log(products,'productsproducts');
+      // console.log(products,'productsproducts');
       
 
     if (!products || products.length === 0) {
