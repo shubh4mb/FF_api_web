@@ -85,14 +85,14 @@ export const addToCart = async (req, res) => {
 
 export const getCart = async (req, res) => {
   const userId = req.user.userId;
-  console.log("hitting", userId);
+  // console.log("hitting", userId);
 
   try {
     const cart = await Cart.findOne({ userId })
       .populate("items.productId")
       .populate("items.merchantId");
 
-      console.log(cart,'cartbjcebjcjcenj');
+      // console.log(cart,'cartbjcebjcjcenj');
       
 
     if (!cart) {
@@ -132,7 +132,7 @@ export const getCart = async (req, res) => {
 
 export const clearCart = async (req, res) => {
   const userId = req.user.userId;
-  console.log(userId,'logloglog');
+  // console.log(userId,'logloglog');
   try {
     const cart = await Cart.findOne({ userId });
 
