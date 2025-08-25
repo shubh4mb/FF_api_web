@@ -167,7 +167,7 @@ export const updateVariant = async (req, res) => {
   }
 };
 
-export const updateStock = async (req, res) => {
+export const updateSize = async (req, res) => {
   try {
     const { productId, variantId, sizeId } = req.params; // sizeId optional
     const { size, stock } = req.body; // size name & stock from frontend
@@ -211,6 +211,59 @@ export const updateStock = async (req, res) => {
     res.status(500).json({ message: "Internal Server Error", error: err.message });
   }
 };
+
+export const updateSizeCount = async (req, res) => {
+  try {
+    const { productId, variantId, sizeId } = req.params;
+    const { stock } = req.body; // Only need stock from frontend
+
+    // Validate required parameters
+    if (!sizeId) {
+      return res.status(400).json({ 
+        message: "Size ID is required for stock updates" 
+      });
+    }
+
+    const safeStock = isNaN(Number(stock)) ? 0 : Number(stock);
+
+    // ✅ Only update existing size stock by _id
+    const updatedProduct = await Product.findOneAndUpdate(
+      { 
+        _id: productId, 
+        "variants._id": variantId, 
+        "variants.sizes._id": sizeId 
+      },
+      { 
+        $set: { "variants.$[v].sizes.$[s].stock": safeStock } 
+      },
+      {
+        new: true,
+        arrayFilters: [
+          { "v._id": variantId },
+          { "s._id": sizeId }
+        ]
+      }
+    );
+
+    if (!updatedProduct) {
+      return res.status(404).json({ 
+        message: "Product, variant, or size not found" 
+      });
+    }
+
+    res.json({
+      message: "Stock updated successfully",
+      product: updatedProduct.variants
+    });
+  } catch (err) {
+    console.error("Error updating stock:", err);
+    res.status(500).json({ 
+      message: "Internal Server Error", 
+      error: err.message 
+    });
+  }
+};
+
 
 export const deleteVariantSizes = async (req, res) => {
   try {

@@ -1,6 +1,6 @@
 import express from 'express'
 import upload , {handleMulterError} from '../middleware/multer.js'
-import { addBaseProduct , addVariant, getBaseProducts, getVariants,getCategories,updateVariant,updateStock, deleteVariantSizes} from '../controllers/merchantController/product.controllers.js';
+import { addBaseProduct , addVariant, getBaseProducts, getVariants,getCategories,updateVariant,updateSize, deleteVariantSizes, updateSizeCount} from '../controllers/merchantController/product.controllers.js';
 import { deleteVariant ,addBrand, getBrands, getBaseProductById ,  getProductsByMerchantId, uploadProductImage, deleteImage, deleteProduct } from '../controllers/merchantController/product.controllers.js';
 
 import { addMerchant } from '../controllers/merchantController/merchant.controller.js';
@@ -37,16 +37,17 @@ router.post('/addVariant/:productId',upload.array('images'),handleMulterError,ad
 router.delete('/deleteVariant/:productId/:variantId', deleteVariant);
 router.delete("/deleteSizes/:productId/:variantId/:sizeId", deleteVariantSizes);
 router.put("/updateVariant/:productId/:variantId",upload.array("images"),handleMulterError,updateVariant);
-router.put("/updateStock/:productId/:variantId/:sizeId", updateStock);
-router.put("/updateStock/:productId/:variantId", updateStock);
+router.put("/updateStock/:productId/:variantId/:sizeId", updateSize);
+router.put("/updateStock/:productId/:variantId/:sizeId", updateSizeCount);
+router.put("/updateStock/:productId/:variantId", updateSize);
 
 
-router.get('/getOrders',authMiddlewareMerchant,getOrderForMerchant)
+router.get('/getOrders',authMiddlewareMerchant,getOrderForMerchant) 
 
 router.put('/products/:id/details', saveProductDetails);
 
 // router.post('/updateOrderStatus',updateOrderStatus);
-// router.post('orderPacked',authMiddlewareMerchant,orderPacked) 
+// router.post('orderPacked',authMiddlewareMerchant,orderPacked)  
 
 router.post('/add',addMerchant)
 export default router;
