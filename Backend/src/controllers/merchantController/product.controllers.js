@@ -264,6 +264,42 @@ export const updateSizeCount = async (req, res) => {
   }
 };
 
+export const updatePrice = async (req, res) => {
+  try {
+    const { productId, variantId } = req.params;
+    const { mrp, price, discount } = req.body;
+
+    // sanitize values
+    const safeMRP = isNaN(Number(mrp)) ? 0 : Number(mrp);
+    const safePrice = isNaN(Number(price)) ? 0 : Number(price);
+    const safeDiscount = isNaN(Number(discount)) ? 0 : Number(discount);
+
+    const updatedProduct = await Product.findOneAndUpdate(
+      { _id: productId, "variants._id": variantId },
+      {
+        $set: {
+          "variants.$.mrp": safeMRP,
+          "variants.$.price": safePrice,
+          "variants.$.discount": safeDiscount,
+        }
+      },
+      { new: true }
+    );
+
+    if (!updatedProduct) {
+      return res.status(404).json({ message: "Product or variant not found" });
+    }
+
+    res.json({
+      message: "Price updated successfully",
+      variant: updatedProduct.variants.find(v => v._id.toString() === variantId),
+    });
+  } catch (err) {
+    console.error("Error updating price:", err);
+    res.status(500).json({ message: "Internal Server Error", error: err.message });
+  }
+};
+
 
 export const deleteVariantSizes = async (req, res) => {
   try {
