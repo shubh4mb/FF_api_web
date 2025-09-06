@@ -61,9 +61,11 @@ export const addVariant = async (req, res) => {
       { $push: { variants: newVariant } },
       { new: true, runValidators: true }
     )
-      .populate("brandId", "name") // populate brand name
-      .populate("categoryId", "name") // populate category name
-      .populate("merchantId", "name email"); // populate merchant details
+      .populate("brandId", "name") // ✅ brand name
+      .populate("categoryId", "name") // ✅ main category
+      .populate("subCategoryId", "name") // ✅ sub category
+      .populate("subSubCategoryId", "name") // ✅ sub-sub category
+      .populate("merchantId", "name email"); // ✅ merchant details
 
     if (!updatedProduct) {
       return res.status(404).json({ message: "Product not found" });
@@ -81,6 +83,7 @@ export const addVariant = async (req, res) => {
     });
   }
 };
+
 
 export const deleteVariant = async (req, res) => {
   try {
@@ -466,34 +469,40 @@ export const getBaseProductById = async (req, res) => {
 export const getProductsByMerchantId = async (req, res) => {
   try {
     const { merchantId } = req.params;
-    // console.log(merchantId, 'merchantId <<<');
 
     const products = await Product.find({ merchantId })
-      .populate('brandId', 'name')
-      .populate('categoryId', 'name')
-      .populate('subCategoryId', 'name')
-      .populate('subSubCategoryId', 'name')
-      .populate('merchantId', 'shopName email brandName');
-      // console.log(products,'productsproducts');
-      
+      .populate("brandId", "name")
+      .populate("categoryId", "name")
+      .populate("subCategoryId", "name")
+      .populate("subSubCategoryId", "name")
+      .populate("merchantId", "shopName email brandName")
+      .sort({ createdAt: -1 }); // ✅ latest first
 
     if (!products || products.length === 0) {
-      return res.status(404).json({ message: 'No products found for this merchant' });
+      return res.status(404).json({ message: "No products found for this merchant" });
     }
 
-    // ✅ keep variants intact
-    const transformed = products.map(p => ({
-      id: p._id.toString(), // ⚠️ frontend expects `product.id`, not `_id`
+    // 🔄 Transform for frontend
+    const transformed = products.map((p) => ({
+      id: p._id.toString(),
       name: p.name,
+
       merchant: {
-        id: p.merchantId?._id,
-        shopName: p.merchantId?.shopName,
-        email: p.merchantId?.email,
+        id: p.merchantId?._id?.toString(),
+        shopName: p.merchantId?.shopName || "",
+        email: p.merchantId?.email || "",
       },
+
       brand: p.brandId?.name || "",
       category: p.categoryId?.name || "",
       subCategory: p.subCategoryId?.name || "",
       subSubCategory: p.subSubCategoryId?.name || "",
+
+      brandId: p.brandId?._id?.toString() || null,
+      categoryId: p.categoryId?._id?.toString() || null,
+      subCategoryId: p.subCategoryId?._id?.toString() || null,
+      subSubCategoryId: p.subSubCategoryId?._id?.toString() || null,
+
       gender: p.gender,
       description: p.description,
       tags: p.tags,
@@ -501,7 +510,9 @@ export const getProductsByMerchantId = async (req, res) => {
       ratings: p.ratings,
       numReviews: p.numReviews,
       isActive: p.isActive,
-      variants: p.variants,   // ✅ untouched, full array with sizes[]
+
+      variants: p.variants,
+
       createdAt: p.createdAt,
       updatedAt: p.updatedAt,
     }));
@@ -509,9 +520,10 @@ export const getProductsByMerchantId = async (req, res) => {
     res.status(200).json(transformed);
   } catch (error) {
     console.error(error);
-    res.status(500).json({ message: '❌ ' + error.message });
+    res.status(500).json({ message: "❌ " + error.message });
   }
 };
+
 
 export const uploadProductImage = async (req, res) => {
 

@@ -2,81 +2,250 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import Merchant from "../../models/merchant.model.js";
 import Brand from "../../models/brand.model.js";
+import nodemailer from 'nodemailer'; 
+import { uploadToCloudinary } from '../../config/cloudinary.config.js';
 const jwt_secret="hehe"
+const transporter = nodemailer.createTransport({
+  service: "gmail",
+  auth: {
+    user: process.env.EMAIL_USER,   // your gmail address
+    pass: process.env.EMAIL_PASS,   // the app password
+  },
+});
+const generateOtp = () => Math.floor(100000 + Math.random() * 900000).toString();
 
-
-// REGISTER MERCHANT
-export const registerMerchant = async (req, res) => {
+// ✅ Verify OTP
+export const sendEmailOtp = async (req, res) => {
   try {
-    const { shopName, ownerName, email, phoneNumber, password, category } = req.body;
+    const { email } = req.body; 
+    if (!email) return res.status(400).json({ message: 'Email is required' });
 
-    // Check if merchant already exists
-    const existingMerchant = await Merchant.findOne({ email });
-    if (existingMerchant) {
-      return res.status(400).json({ message: "Email already registered" });
+    const otp = generateOtp(); // generate OTP
+    const expiry = Date.now() + 5 * 60 * 1000; // 5 minutes
+
+    // Either create temp merchant or update existing
+    let merchant = await Merchant.findOne({ email });
+    if (!merchant) {
+      merchant = new Merchant({ email, isActive: false}); 
     }
 
-    // Hash password
-    const hashedPassword = await bcrypt.hash(password, 10);
+    // Assign the generated OTP
+    merchant.emailOtp = otp;
+    merchant.emailOtpExpiry = expiry;
+    await merchant.save();
 
-    // Create merchant with dummy data for missing fields
-    const merchant = new Merchant({
-      shopName,
-      shopDescription: "Default shop description",
-      ownerName,
-      email,
-      phoneNumber,
-      password: hashedPassword,
-      logo: {
-        public_id: "default_logo_id",
-        url: "https://via.placeholder.com/150"
-      },
-      category,
-      address: {
-        street: "123 Test Street",
-        city: "Test City",
-        state: "Test State",
-        postalCode: "000000",
-        country: "Test Country"
-      },
-      documents: {
-        gstNumber: "GST123456",
-        gstCertificateUrl: "https://via.placeholder.com/200",
-        shopLogoUrl: "https://via.placeholder.com/150"
-      },
-      bankDetails: {
-        accountHolderName: "Default Holder",
-        accountNumber: "1234567890",
-        ifscCode: "TEST0001",
-        bankName: "Test Bank",
-        upiId: "default@upi",
-        isBankVerified: false
-      },
-      kyc: {
-        gstNumber: "GST123456",
-        gstCertificateUrl: "https://via.placeholder.com/200",
-        panNumber: "PAN123456",
-        panCardUrl: "https://via.placeholder.com/200",
-        businessLicenseUrl: "https://via.placeholder.com/200",
-        isKycVerified: false
-      },
-      operatingHours: {
-        open: "09:00 AM",
-        close: "09:00 PM",
-        daysOpen: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
-      }
+    // Send email 
+    await transporter.sendMail({
+      from: `"FlashFits" <${process.env.EMAIL_USER}>`,
+      to: email,
+      subject: 'Your OTP Code',
+      text: `Your OTP is ${otp}. It will expire in 5 minutes.`,
+    });
+
+    res.status(200).json({ message: 'OTP sent successfully' });
+  } catch (error) {
+    console.error('Error sending OTP:', error);
+    res.status(500).json({ message: 'Failed to send OTP' });
+  }
+};
+export const verifyEmailOtp = async (req, res) => {
+  try {
+    const { email, otp } = req.body;
+    if (!email || !otp) {
+      return res.status(400).json({ message: 'Email and OTP required' });
+    }
+
+    const merchant = await Merchant.findOne({ email });
+    if (!merchant) {
+      return res.status(404).json({ message: 'Merchant not found' });
+    }
+
+    if (merchant.emailOtp !== otp || Date.now() > merchant.emailOtpExpiry) {
+      return res.status(400).json({ message: 'Invalid or expired OTP' });
+    }
+
+    // OTP valid → clear OTP, create/activate merchant record
+    merchant.emailOtp = undefined;
+    merchant.emailOtpExpiry = undefined;
+    await merchant.save();
+
+    res.status(200).json({
+      message: 'Email verified successfully',
+      merchant: { _id: merchant._id, email: merchant.email },
+    });
+  } catch (error) {
+    console.error('OTP verification failed:', error);
+    res.status(500).json({ message: 'OTP verification failed' });
+  }
+};
+// export const registerEmail = async (req, res) => {
+//   try {
+//     const { email } = req.body;
+//     if (!email) return res.status(400).json({ message: "Email is required" });
+
+//     const existingMerchant = await Merchant.findOne({ email });
+//     if (existingMerchant) {
+//       return res.status(400).json({ message: "Email already registered" });
+//     }
+
+//     const merchant = new Merchant({ 
+//       email, 
+//       phoneNumber: false // 👈 force undefined
+//     });
+
+//     await merchant.save();
+
+//     res.status(201).json({
+//       message: "Email registered successfully",
+//       merchant,
+//     });
+//   } catch (error) {
+//     console.error("Error saving email:", error);
+//     res.status(500).json({ message: "Server error", error: error.message });
+//   }
+// };
+
+
+export const registerPhone = async (req, res) => { 
+  try {
+    const { phoneNumber } = req.body;
+    if (!phoneNumber) return res.status(400).json({ message: "Phone number is required" });
+
+    const existingMerchant = await Merchant.findOne({ phoneNumber });
+    if (existingMerchant) {
+      return res.status(400).json({ message: "Phone number already registered" });
+    }
+
+    const merchant = new Merchant({ 
+      phoneNumber, 
+      email: false // 👈 force undefined 
     });
 
     await merchant.save();
 
     res.status(201).json({
-      message: "Merchant registered successfully",
-      merchant
+      message: "Phone number registered successfully",
+      merchant,
     });
-
   } catch (error) {
-    console.error("Error registering merchant:", error);
-    res.status(500).json({ message: error.message });
+    console.error("Error saving phone:", error);
+    res.status(500).json({ message: "Server error", error: error.message });
+  }
+};
+
+
+
+// Update Bank Details// Update Operating Hours// Activate Merchant
+export const getMerchantByEmail = async (req, res) => {
+  try {
+    const { email } = req.params;
+    const merchant = await Merchant.findOne({ email });
+    if (!merchant) return res.status(404).json({ success: false, message: 'Merchant not found' });
+
+    res.json({ success: true, merchant });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  } 
+};
+
+export const updateMerchantShopDetails = async (req, res) => {
+  try {
+    const { merchantId } = req.params;
+
+    const { shopName, shopDescription, category, ownerName } = req.body;
+
+    // Address handling (could come as JSON string)
+    let addressObj;
+    if (req.body.address) {
+      try {
+        addressObj = JSON.parse(req.body.address);
+      } catch {
+        addressObj = {
+          street: req.body["address[street]"] || "",
+          city: req.body["address[city]"] || "",
+          postalCode: req.body["address[postalCode]"] || "",
+        };
+      }
+    }
+
+    // Upload logo if file exists
+    let logo;
+    if (req.file) {
+      const result = await uploadToCloudinary(req.file.buffer, {
+        folder: "merchant_logos",
+        resource_type: "image",
+      });
+
+      logo = {
+        public_id: result.public_id,
+        url: result.secure_url,
+      };
+    }
+
+    // Update merchant
+    const merchant = await Merchant.findByIdAndUpdate(
+      merchantId,
+      {
+        $set: {
+          shopName,
+          shopDescription,
+          category,
+          ownerName,
+          ...(logo && { logo }),
+          ...(addressObj && { address: addressObj }),
+        },
+      },
+      { new: true }
+    );
+
+    if (!merchant) {
+      return res.status(404).json({ success: false, message: "Merchant not found" });
+    }
+
+    res.json({ success: true, merchant });
+  } catch (error) {
+    console.error("Error updating shop details:", error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+export const updateMerchantBankDetails = async (req, res) => {
+  try {
+    const { merchantId } = req.params;
+    const merchant = await Merchant.findByIdAndUpdate(
+      merchantId,
+      { $set: { bankDetails: req.body } },
+      { new: true }
+    );
+    res.json({ success: true, merchant });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+export const updateMerchantOperatingHours = async (req, res) => {
+  try {
+    const { merchantId } = req.params;
+    const merchant = await Merchant.findByIdAndUpdate(
+      merchantId,
+      { $set: { operatingHours: req.body } },
+      { new: true }
+    );
+    res.json({ success: true, merchant });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+export const activateMerchant = async (req, res) => {
+  try {
+    const { merchantId } = req.params;
+    const merchant = await Merchant.findByIdAndUpdate(
+      merchantId,
+      { $set: { isActive: true } },
+      { new: true }
+    );
+    res.json({ success: true, merchant });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
