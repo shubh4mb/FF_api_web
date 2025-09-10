@@ -379,6 +379,7 @@ export const addBaseProduct = async (req, res) => {
 
 export const getCategories = async (req, res) => {
     try {
+      console.log("getting cate............")
       const categories = await Category
     .find({ isActive: true })
       res.status(200).json({ categories });

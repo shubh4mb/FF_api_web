@@ -12,23 +12,13 @@ import {getOrderForMerchant, saveProductDetails} from '../controllers/merchantCo
 import {authMiddlewareMerchant} from '../middleware/jwtAuth.js';
 const router = express.Router();
 
-// router.post("/register-email", registerEmail);
-router.post("/register-phone", registerPhone);
 router.post('/auth/send-email-otp', sendEmailOtp);
 router.post('/auth/verify-email-otp', verifyEmailOtp);
 
-// Onboarding updates
-router.get('/:email', getMerchantByEmail); 
-router.put("/:merchantId/shop-details", upload.single("logo"),handleMulterError,updateMerchantShopDetails);
+router.put("/:merchantId/shop-details", upload.single("logo"),handleMulterError, updateMerchantShopDetails);
 router.put("/:merchantId/bank-details", updateMerchantBankDetails);
 router.put("/:merchantId/operating-hours", updateMerchantOperatingHours);
 router.put("/:merchantId/activate", activateMerchant);
-
-// router.post("/register-basic", upload.single("logo"),  handleMulterError, registerBasicMerchant );
-// router.put('/register-address/:id', registerAddress); // Step 2 - Address
-// router.put('/register-documents/:id', registerDocuments); // Step 3 - Documents
-// router.put('/register-bank/:id', registerBankDetails); // Step 4 - Bank details
-// router.put('/register-review/:id', registerReview); // Step 5 - Final review / submit
 router.post('/login', loginMerchant);
 
 
@@ -44,9 +34,7 @@ router.get('/getBaseProducts',getBaseProducts);
 router.get('/getBaseProductById/:productId',getBaseProductById);
 router.get('/fetchProductsByMerchantId/:merchantId', getProductsByMerchantId);
 router.get('/getVariants',getVariants);
-router.get('/getCategories',getCategories);
-
-
+router.get('/getCategories',getCategories)
 
 router.post("/upload/image",upload.array("images", 5), handleMulterError,uploadProductImage )
 router.delete('/deleteImage/:imageId', deleteImage);

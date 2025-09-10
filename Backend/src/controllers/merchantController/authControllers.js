@@ -14,40 +14,38 @@ const transporter = nodemailer.createTransport({
 });
 const generateOtp = () => Math.floor(100000 + Math.random() * 900000).toString();
 
-// ✅ Verify OTP
 export const sendEmailOtp = async (req, res) => {
   try {
-    const { email } = req.body; 
-    if (!email) return res.status(400).json({ message: 'Email is required' });
+    const { email } = req.body;
+    if (!email) return res.status(400).json({ message: "Email is required" });
 
-    const otp = generateOtp(); // generate OTP
-    const expiry = Date.now() + 5 * 60 * 1000; // 5 minutes
+    const otp = generateOtp();
+    const expiry = Date.now() + 5 * 60 * 1000;
 
-    // Either create temp merchant or update existing
     let merchant = await Merchant.findOne({ email });
     if (!merchant) {
-      merchant = new Merchant({ email, isActive: false}); 
+      merchant = new Merchant({ email, isActive: false });
     }
 
-    // Assign the generated OTP
     merchant.emailOtp = otp;
     merchant.emailOtpExpiry = expiry;
     await merchant.save();
 
-    // Send email 
     await transporter.sendMail({
       from: `"FlashFits" <${process.env.EMAIL_USER}>`,
       to: email,
-      subject: 'Your OTP Code',
-      text: `Your OTP is ${otp}. It will expire in 5 minutes.`,
+      subject: "Your OTP Code",
+      text: `Your OTP is ${otp}. It expires in 5 minutes.`,
     });
 
-    res.status(200).json({ message: 'OTP sent successfully' });
-  } catch (error) {
-    console.error('Error sending OTP:', error);
-    res.status(500).json({ message: 'Failed to send OTP' });
+    res.status(200).json({ message: "OTP sent successfully" });
+  } catch (err) {
+    console.error("Error sending OTP:", err);
+    res.status(500).json({ message: "Failed to send OTP" });
   }
 };
+
+
 export const verifyEmailOtp = async (req, res) => {
   try {
     const { email, otp } = req.body;
@@ -57,7 +55,7 @@ export const verifyEmailOtp = async (req, res) => {
 
     const merchant = await Merchant.findOne({ email });
     if (!merchant) {
-      return res.status(404).json({ message: 'Merchant not found' });
+      return res.status(404).json({ message: 'Merchant not found..........' });
     }
 
     if (merchant.emailOtp !== otp || Date.now() > merchant.emailOtpExpiry) {
@@ -69,15 +67,24 @@ export const verifyEmailOtp = async (req, res) => {
     merchant.emailOtpExpiry = undefined;
     await merchant.save();
 
+    const token = jwt.sign(
+      { id: merchant._id, email: merchant.email }, 
+      process.env.JWT_SECRET, 
+      { expiresIn: "7d" } // token expiry
+    );
+
     res.status(200).json({
-      message: 'Email verified successfully',
+      message: "Email verified successfully",
       merchant: { _id: merchant._id, email: merchant.email },
+      token, // ✅ send token to frontend
     });
   } catch (error) {
     console.error('OTP verification failed:', error);
     res.status(500).json({ message: 'OTP verification failed' });
   }
 };
+
+
 // export const registerEmail = async (req, res) => {
 //   try {
 //     const { email } = req.body;
@@ -140,7 +147,7 @@ export const getMerchantByEmail = async (req, res) => {
   try {
     const { email } = req.params;
     const merchant = await Merchant.findOne({ email });
-    if (!merchant) return res.status(404).json({ success: false, message: 'Merchant not found' });
+    if (!merchant) return res.status(404).json({ success: false, message: 'Merchant not found11------' });
 
     res.json({ success: true, merchant });
   } catch (error) {
@@ -199,7 +206,7 @@ export const updateMerchantShopDetails = async (req, res) => {
     );
 
     if (!merchant) {
-      return res.status(404).json({ success: false, message: "Merchant not found" });
+      return res.status(404).json({ success: false, message: "Merchant not found2" });
     }
 
     res.json({ success: true, merchant });
@@ -269,7 +276,7 @@ export const loginMerchant = async (req, res) => {
     });
 
     if (!merchant) {
-      return res.status(400).json({ message: "Merchant not found" });
+      return res.status(400).json({ message: "Merchant not found3" });
     }
 
     const isMatch = await bcrypt.compare(password, merchant.password);

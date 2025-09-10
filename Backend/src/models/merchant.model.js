@@ -6,7 +6,6 @@ const merchantSchema = new mongoose.Schema(
     shopDescription: { type: String },
     ownerName: { type: String },
     email: { type: String, unique: true, sparse: true },
-    phoneNumber: { type: String, unique: true, sparse: true },
     password: { type: String },
     logo: {
       public_id: String,
