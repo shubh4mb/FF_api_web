@@ -5,6 +5,8 @@ import Cart from '../../models/cart.model.js';
 import Delivery from '../../models/delivery.model.js';
 import { emitOrderUpdate } from "../../sockets/order.socket.js";
 import {notifyMerchant} from "../../sockets/merchant.socket.js";
+import Razorpay from "../../config/RazorPay..js";
+import { io } from "../../../index.js"
 // export const createOrder = async (req, res) => {
 //   try {
 //     const userId = req.user.userId;
@@ -68,96 +70,109 @@ import {notifyMerchant} from "../../sockets/merchant.socket.js";
 export const createOrder = async (req, res) => {
   console.log('dsf fdas  sdfuser');
   console.log(req.body,'body');
+  // const { amount } = req.body;
+  let amount = 1500;
+
   try {
-    const userId = req.user.userId;
+    let order = await Razorpay.orders.create({
+      amount,
+      currency: "INR",
+      receipt: "order_123456",
+    });
+    // console.log(order,'order');
+    // const userId = req.user.userId;
 
     // Step 1: Get user's cart
-    const cart = await Cart.findOne({ userId });
-    if (!cart || cart.items.length === 0) {
-      return res.status(400).json({ message: 'Your cart is empty' });
-    }
+    // const cart = await Cart.findOne({ userId });
+    // if (!cart || cart.items.length === 0) {
+    //   return res.status(400).json({ message: 'Your cart is empty' });
+    // }
 
     // Step 2: Group items by merchantId
-    const groupedByMerchant = {};
-    for (const item of cart.items) {
-      const { merchantId } = item;
-      if (!groupedByMerchant[merchantId]) {
-        groupedByMerchant[merchantId] = [];
-      }
-      groupedByMerchant[merchantId].push(item);
-    }
+    // const groupedByMerchant = {};
+    // for (const item of cart.items) {
+    //   const { merchantId } = item;
+    //   if (!groupedByMerchant[merchantId]) {
+    //     groupedByMerchant[merchantId] = [];
+    //   }
+    //   groupedByMerchant[merchantId].push(item);
+    // }
 
-    const orders = [];
+    // const orders = [];
 
     // Step 3: Create one order per merchant
-    for (const [merchantId, items] of Object.entries(groupedByMerchant)) {
-      let totalAmount = 0;
-      const orderItems = [];
+    // for (const [merchantId, items] of Object.entries(groupedByMerchant)) {
+    //   let totalAmount = 0;
+    //   const orderItems = [];
 
-      for (const item of items) {
-        const product = await Product.findById(item.productId);
-        if (!product) continue;
+    //   for (const item of items) {
+    //     const product = await Product.findById(item.productId);
+    //     if (!product) continue;
 
-        // Find variant price and image
-        const variant = product.variants.id(item.variantId);
-        if (!variant) continue;
+    //     // Find variant price and image
+    //     const variant = product.variants.id(item.variantId);
+    //     if (!variant) continue;
 
-        const price = variant.price;
-        const name = product.name;
-        const image = item.image?.url || variant.images?.[0]?.url || '';
+    //     const price = variant.price;
+    //     const name = product.name;
+    //     const image = item.image?.url || variant.images?.[0]?.url || '';
 
-        totalAmount += price * item.quantity;
+    //     totalAmount += price * item.quantity;
 
-        orderItems.push({
-          productId: item.productId,
-          variantId: item.variantId,
-          name,
-          quantity: item.quantity,
-          price,
-          size: item.size,
-          image,
-          tryStatus: product.isTriable ? 'pending' : 'not-triable'
-        });
-      }
+    //     orderItems.push({
+    //       productId: item.productId,
+    //       variantId: item.variantId,
+    //       name,
+    //       quantity: item.quantity,
+    //       price,
+    //       size: item.size,
+    //       image,
+    //       tryStatus: product.isTriable ? 'pending' : 'not-triable'
+    //     });
+    //   }
 
-    //   // Step 4: Final billing calculation (can adjust logic)
-    //   const tryAndBuyFee = 0; // You may compute based on app settings
-    //   const gst = totalAmount * 0.05; // 5% GST for example
-    //   const deliveryCharge = 0; // You can make this dynamic
-    //   const discount = 0; // Apply coupons if any
-    //   const totalPayable = totalAmount + tryAndBuyFee + gst + deliveryCharge - discount;
+    // //   // Step 4: Final billing calculation (can adjust logic)
+    // //   const tryAndBuyFee = 0; // You may compute based on app settings
+    // //   const gst = totalAmount * 0.05; // 5% GST for example
+    // //   const deliveryCharge = 0; // You can make this dynamic
+    // //   const discount = 0; // Apply coupons if any
+    // //   const totalPayable = totalAmount + tryAndBuyFee + gst + deliveryCharge - discount;
 
-      const newOrder = new Order({
-        userId,
-        merchantId,
-        items: orderItems,
-        totalAmount,
-        finalBilling: {
-          baseAmount: totalAmount,
-          tryAndBuyFee: 0,
-          gst: 0,
-          discount: 0,
-          deliveryCharge: 0,
-          totalPayable: totalAmount,
-        },
-        deliveryLocation: {
-          address: "",
-          coordinates: []
-        }
-      });
+    //   const newOrder = new Order({
+    //     userId,
+    //     merchantId,
+    //     items: orderItems,
+    //     totalAmount,
+    //     finalBilling: {
+    //       baseAmount: totalAmount,
+    //       tryAndBuyFee: 0,
+    //       gst: 0,
+    //       discount: 0,
+    //       deliveryCharge: 0,
+    //       totalPayable: totalAmount,
+    //     },
+    //     deliveryLocation: {
+    //       address: "",
+    //       coordinates: []
+    //     }
+    //   });
 
-      await newOrder.save();
-      orders.push(newOrder);
-    }
+    //   await newOrder.save();
+    //   orders.push(newOrder);
+    // }
 
     // Step 5: Clear cart
-    await Cart.updateOne({ userId }, { $set: { items: [] } });
-
-    notifyMerchant(req.io, orders[0].merchantId, orders[0]);
+    // await Cart.updateOne({ userId }, { $set: { items: [] } });
+    const merchantId="68968720dae2d100b5276134"
+    // console.log(io,'io');
+    
+    notifyMerchant(io, merchantId, order);
+    
+     
 
     return res.status(201).json({
-      message: 'Order(s) placed successfully',
-      orders,
+      message: 'Order(s) placed successfully',  
+      order,
     });
 
   } catch (error) {
@@ -167,25 +182,31 @@ export const createOrder = async (req, res) => {
 };
 
 export const orderRequestForMerchant = async (req, res) => {
+  console.log("orderRequestForMerchant");
   const { orderId } = req.params;
+  console.log(orderId,'orderId');
+  
   const { status } = req.body;
 
-  const order = await Order.findById(orderId);
-  if (!order) return res.status(404).json({ message: "Order not found" });
+  // const order = await Order.findById(orderId);
+  // if (!order) return res.status(404).json({ message: "Order not found" });
   
-  order.orderStatus = status;
-  const deliveryBoy = await Delivery.findOne({status:"active"})
-  if(!deliveryBoy){
-    return res.status(404).json({ message: "Delivery boy not found" });
-  }
+  // order.orderStatus = status;
+  // if(status=="accept"){
+  //   const deliveryBoy = await Delivery.findOne({status:"active"})
+  //   if(!deliveryBoy){
+  //     return res.status(404).json({ message: "Delivery boy not found" });
+  //   }
+  //   order.deliveryBoyId = deliveryBoy._id;
+  //   order.deliveryBoyStatus = "assigned";    
+  // }
+  
+  // await order.save();
 
-  order.deliveryBoyId = deliveryBoy._id;
- 
-  await order.save();
-  return res.status(200).json({ message: "Order status updated", order });
+  emitOrderUpdate(io, orderId, { status });
+  
+  return res.status(200).json({ message: "Order status updated", orderId });
 };
-
-
 
 export const orderRequestForDeliveryBoy = async (req, res) => {
   try {
@@ -265,7 +286,6 @@ export const orderPickedUp = async (req, res) => {
   await order.save();
   return res.status(200).json({ message: "Order picked up", order });
 };
-
 
 export const reachedDeliveryLocation = async (req, res) => {
   const { orderId } = req.params;

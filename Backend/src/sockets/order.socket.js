@@ -1,24 +1,27 @@
-export const registerOrderSockets = (io) => {
-// When client connects
-io.on("connection", (socket) => {
-  console.log("⚡ New client connected:", socket.id);
+export const registerOrderSockets = (io, socket) => {
+  console.log("Registering order sockets for:", socket.id);
 
-  // Client requests to join an order room
   socket.on("joinOrderRoom", (orderId) => {
-    const roomName = `order_${orderId}`;
+    const roomName = orderId;
+    console.log(roomName,"roomName from join");
     socket.join(roomName);
-    console.log(`✅ Socket ${socket.id} joined ${roomName}`);
+    console.log(`✅ Socket ${socket.id} joined room ${roomName}`);
   });
 
-  // Handle disconnect
   socket.on("disconnect", () => {
-    console.log("❌ Client disconnected:", socket.id);
+    console.log(`❌ Socket ${socket.id} disconnected from order handling`);
   });
-});
 };
 
-// Example: when order status changes
+
 export const emitOrderUpdate = (io, orderId, updateData) => {
-  const roomName = `order_${orderId}`;
+  // console.log("emitOrderUpdate");
+  
+  const roomName = orderId;
+  console.log('Emitting to rooms:', io.sockets.adapter.rooms);
+
+  console.log(roomName,"roomName in emit orderupdate");
+  // console.log(io,"io");
+  
   io.to(roomName).emit("orderUpdate", updateData);
 };

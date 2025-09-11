@@ -6,7 +6,7 @@ import { deleteVariant ,addBrand, getBrands, getBaseProductById ,  getProductsBy
 import { addMerchant } from '../controllers/merchantController/merchant.controller.js';
 import { registerMerchant, loginMerchant } from '../controllers/merchantController/authControllers.js';
 
-import {orderPacked} from '../controllers/userControllers/order.controllers.js';
+import {orderPacked,orderRequestForMerchant} from '../controllers/userControllers/order.controllers.js';
 
 import {getOrderForMerchant, saveProductDetails} from '../controllers/merchantController/order.controllers.js';
 import {authMiddlewareMerchant} from '../middleware/jwtAuth.js';
@@ -42,6 +42,7 @@ router.put("/updateStock/:productId/:variantId", updateStock);
 
 
 router.get('/getOrders',authMiddlewareMerchant,getOrderForMerchant)
+router.put('/orderRequestForMerchant/:orderId',authMiddlewareMerchant,orderRequestForMerchant)
 
 router.put('/products/:id/details', saveProductDetails);
 

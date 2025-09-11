@@ -6,6 +6,7 @@ import authRoutes from './routes/auth.routes.js';
 import userRoutes from './routes/user.routes.js';
 import adminRoutes from './routes/admin.routes.js';
 import merchantRoutes from './routes/merchant.routes.js';
+// import {io} from '../index.js';
 const app = express();
 
 const allowedOrigins = ['http://localhost:5173', 'http://localhost:5174'];
@@ -30,6 +31,7 @@ app.get('/ping', (req, res) => {
 });
 
 // Routes
+
 app.use('/api/auth', authRoutes);
 app.use('/api/user', userRoutes);
 app.use('/api/admin', adminRoutes);
