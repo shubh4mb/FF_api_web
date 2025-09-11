@@ -6,7 +6,7 @@ import authRoutes from './routes/auth.routes.js';
 import userRoutes from './routes/user.routes.js';
 import adminRoutes from './routes/admin.routes.js';
 import merchantRoutes from './routes/merchant.routes.js';
-// import {io} from '../index.js';
+import {io} from '../index.js';
 const app = express();
 
 const allowedOrigins = ['http://localhost:5173', 'http://localhost:5174'];
@@ -24,7 +24,13 @@ app.use(cors({
   credentials: true
 }));
 
+
 app.use(express.json()); 
+
+app.use((req, res, next) => {
+  req.io = io;
+  next();
+});
 
 app.get('/ping', (req, res) => {
   res.send('pong');

@@ -7,6 +7,7 @@ import { emitOrderUpdate } from "../../sockets/order.socket.js";
 import {notifyMerchant} from "../../sockets/merchant.socket.js";
 import Razorpay from "../../config/RazorPay..js";
 import { io } from "../../../index.js"
+// import {emitter} from '../../sockets/order.socket.js'
 // export const createOrder = async (req, res) => {
 //   try {
 //     const userId = req.user.userId;
@@ -163,11 +164,11 @@ export const createOrder = async (req, res) => {
 
     // Step 5: Clear cart
     // await Cart.updateOne({ userId }, { $set: { items: [] } });
-    const merchantId="68968720dae2d100b5276134"
+    
     // console.log(io,'io');
-    
+    let merchantId = "68c29d8f4863cd47a369248a"
+    // req.io.emit("newOrder", order); // <-- use req.io here
     notifyMerchant(io, merchantId, order);
-    
      
 
     return res.status(201).json({

@@ -14,6 +14,7 @@ const router = express.Router();
 
 router.post('/auth/send-email-otp', sendEmailOtp);
 router.post('/auth/verify-email-otp', verifyEmailOtp);
+router.get('/:email',getMerchantByEmail)
 
 router.put("/:merchantId/shop-details", upload.single("logo"),handleMulterError, updateMerchantShopDetails);
 router.put("/:merchantId/bank-details", updateMerchantBankDetails);

@@ -3,6 +3,8 @@ import jwt from "jsonwebtoken";
 import Merchant from "../../models/merchant.model.js";
 import Brand from "../../models/brand.model.js";
 import nodemailer from 'nodemailer'; 
+// import dotenv from 'dotenv';
+// dotenv.config();
 import { uploadToCloudinary } from '../../config/cloudinary.config.js';
 const jwt_secret="hehe"
 const transporter = nodemailer.createTransport({
