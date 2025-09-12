@@ -1,8 +1,8 @@
 import Razorpay from 'razorpay';
 
 var instance = new Razorpay({
-  key_id: 'rzp_live_R8O5jc2PSPZFsE',
-  key_secret: 'iHkiKznAKCsn43jd71X8ayWk',
+  key_id: process.env.RAZORPAY_KEY_ID,
+  key_secret: process.env.RAZORPAY_KEY_SECRET,
 });
 
 export default instance;
