@@ -75,105 +75,105 @@ export const createOrder = async (req, res) => {
   let amount = 1500;
 
   try {
-    let order = await Razorpay.orders.create({
+    let razorpayOrder = await Razorpay.orders.create({
       amount,
       currency: "INR",
       receipt: "order_123456",
     });
     // console.log(order,'order');
-    // const userId = req.user.userId;
+    const userId = req.user.userId;
 
     // Step 1: Get user's cart
-    // const cart = await Cart.findOne({ userId });
-    // if (!cart || cart.items.length === 0) {
-    //   return res.status(400).json({ message: 'Your cart is empty' });
-    // }
+    const cart = await Cart.findOne({ userId });
+    if (!cart || cart.items.length === 0) {
+      return res.status(400).json({ message: 'Your cart is empty' });
+    }
 
     // Step 2: Group items by merchantId
-    // const groupedByMerchant = {};
-    // for (const item of cart.items) {
-    //   const { merchantId } = item;
-    //   if (!groupedByMerchant[merchantId]) {
-    //     groupedByMerchant[merchantId] = [];
-    //   }
-    //   groupedByMerchant[merchantId].push(item);
-    // }
+    const groupedByMerchant = {};
+    for (const item of cart.items) {
+      const { merchantId } = item;
+      if (!groupedByMerchant[merchantId]) {
+        groupedByMerchant[merchantId] = [];
+      }
+      groupedByMerchant[merchantId].push(item);
+    }
 
-    // const orders = [];
+    const orders = [];
 
     // Step 3: Create one order per merchant
-    // for (const [merchantId, items] of Object.entries(groupedByMerchant)) {
-    //   let totalAmount = 0;
-    //   const orderItems = [];
+    for (const [merchantId, items] of Object.entries(groupedByMerchant)) {
+      let totalAmount = 0;
+      const orderItems = [];
 
-    //   for (const item of items) {
-    //     const product = await Product.findById(item.productId);
-    //     if (!product) continue;
+      for (const item of items) {
+        const product = await Product.findById(item.productId);
+        if (!product) continue;
 
-    //     // Find variant price and image
-    //     const variant = product.variants.id(item.variantId);
-    //     if (!variant) continue;
+        // Find variant price and image
+        const variant = product.variants.id(item.variantId);
+        if (!variant) continue;
 
-    //     const price = variant.price;
-    //     const name = product.name;
-    //     const image = item.image?.url || variant.images?.[0]?.url || '';
+        const price = variant.price;
+        const name = product.name;
+        const image = item.image?.url || variant.images?.[0]?.url || '';
 
-    //     totalAmount += price * item.quantity;
+        totalAmount += price * item.quantity;
 
-    //     orderItems.push({
-    //       productId: item.productId,
-    //       variantId: item.variantId,
-    //       name,
-    //       quantity: item.quantity,
-    //       price,
-    //       size: item.size,
-    //       image,
-    //       tryStatus: product.isTriable ? 'pending' : 'not-triable'
-    //     });
-    //   }
+        orderItems.push({
+          productId: item.productId,
+          variantId: item.variantId,
+          name,
+          quantity: item.quantity,
+          price,
+          size: item.size,
+          image,
+          tryStatus: product.isTriable ? 'pending' : 'not-triable'
+        });
+      }
 
-    // //   // Step 4: Final billing calculation (can adjust logic)
-    // //   const tryAndBuyFee = 0; // You may compute based on app settings
-    // //   const gst = totalAmount * 0.05; // 5% GST for example
-    // //   const deliveryCharge = 0; // You can make this dynamic
-    // //   const discount = 0; // Apply coupons if any
-    // //   const totalPayable = totalAmount + tryAndBuyFee + gst + deliveryCharge - discount;
+    //   // Step 4: Final billing calculation (can adjust logic)
+      // const tryAndBuyFee = 0; // You may compute based on app settings
+      // const gst = totalAmount * 0.05; // 5% GST for example
+      // const deliveryCharge = 0; // You can make this dynamic
+      // const discount = 0; // Apply coupons if any
+      // const totalPayable = totalAmount + tryAndBuyFee + gst + deliveryCharge - discount;
 
-    //   const newOrder = new Order({
-    //     userId,
-    //     merchantId,
-    //     items: orderItems,
-    //     totalAmount,
-    //     finalBilling: {
-    //       baseAmount: totalAmount,
-    //       tryAndBuyFee: 0,
-    //       gst: 0,
-    //       discount: 0,
-    //       deliveryCharge: 0,
-    //       totalPayable: totalAmount,
-    //     },
-    //     deliveryLocation: {
-    //       address: "",
-    //       coordinates: []
-    //     }
-    //   });
+      const newOrder = new Order({
+        userId,
+        merchantId,
+        items: orderItems,
+        totalAmount,
+        finalBilling: {
+          baseAmount: totalAmount,
+          tryAndBuyFee: 0,
+          gst: 0,
+          discount: 0,
+          deliveryCharge: 0,
+          totalPayable: totalAmount,
+        },
+        deliveryLocation: {
+          address: "",
+          coordinates: []
+        }
+      });
 
-    //   await newOrder.save();
-    //   orders.push(newOrder);
-    // }
+      await newOrder.save();
+      orders.push(newOrder);
+    }
 
     // Step 5: Clear cart
-    // await Cart.updateOne({ userId }, { $set: { items: [] } });
+    await Cart.updateOne({ userId }, { $set: { items: [] } });
     
     // console.log(io,'io');
     let merchantId = "68c29d8f4863cd47a369248a"
     // req.io.emit("newOrder", order); // <-- use req.io here
-    notifyMerchant(io, merchantId, order);
+    notifyMerchant(io, merchantId, razorpayOrder);
      
 
     return res.status(201).json({
       message: 'Order(s) placed successfully',  
-      order,
+      razorpayOrder,
     });
 
   } catch (error) {
@@ -205,6 +205,8 @@ export const orderRequestForMerchant = async (req, res) => {
   // await order.save();
 
   emitOrderUpdate(io, orderId, { status });
+
+
   
   return res.status(200).json({ message: "Order status updated", orderId });
 };

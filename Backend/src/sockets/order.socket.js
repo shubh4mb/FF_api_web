@@ -14,14 +14,10 @@ export const registerOrderSockets = (io, socket) => {
 };
 
 
-export const emitOrderUpdate = (io, orderId, updateData) => {
-  // console.log("emitOrderUpdate");
-  
+export const emitOrderUpdate = (io, orderId , updateData) => {
   const roomName = orderId;
   console.log('Emitting to rooms:', io.sockets.adapter.rooms);
-
   console.log(roomName,"roomName in emit orderupdate");
-  // console.log(io,"io");
-  
-  io.to(roomName).emit("orderUpdate", updateData);
+  io.to(roomName).emit("orderUpdate", orderId);
 };
+
