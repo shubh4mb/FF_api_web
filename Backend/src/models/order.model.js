@@ -37,10 +37,15 @@ const OrderSchema = new mongoose.Schema({
           'returned', 
           'partially_returned',
           'delivered',
-          'cancelled'
+          'cancelled',
+          'rejected'
         ],
         default: 'placed'
       },
+    reason:{
+        type: String,
+        default: null
+    },
     deliveryBoyStatus: {
         type: String,
         enum: [
@@ -86,7 +91,6 @@ const OrderSchema = new mongoose.Schema({
         location: [Number] // optional: live tracking points
       }
     ],
-    createdAt: { type: Date, default: Date.now }
-  });
+  }, { timestamps: true });
 
 export default mongoose.model("Order", OrderSchema);

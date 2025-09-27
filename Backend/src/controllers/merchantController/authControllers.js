@@ -17,6 +17,7 @@ const transporter = nodemailer.createTransport({
 const generateOtp = () => Math.floor(100000 + Math.random() * 900000).toString();
 
 export const sendEmailOtp = async (req, res) => {
+  console.log(req.body);
   try {
     const { email } = req.body;
     if (!email) return res.status(400).json({ message: "Email is required" });
@@ -148,6 +149,8 @@ export const registerPhone = async (req, res) => {
 export const getMerchantByEmail = async (req, res) => {
   try {
     const { email } = req.params;
+    console.log(email,'email');
+    
     const merchant = await Merchant.findOne({ email });
     if (!merchant) return res.status(404).json({ success: false, message: 'Merchant not found11------' });
 

@@ -1,9 +1,14 @@
 // src/sockets/merchant.socket.js
+import Merchant from "../models/merchant.model.js";
 let onlineMerchants={};
 
 export const registerMerchantSockets = (io, socket) => {
-  socket.on("registerMerchant", (merchantId) => {
-    if (!onlineMerchants[merchantId]) onlineMerchants[merchantId] = [];
+  socket.on("registerMerchant", async (merchantId) => {
+    const merchant = await Merchant.findById(merchantId);
+    if (!merchant) return;
+    merchant.isOnline = true;
+    await merchant.save();
+      if (!onlineMerchants[merchantId]) onlineMerchants[merchantId] = [];
 onlineMerchants[merchantId].push(socket.id);
     socket.data.merchantId = merchantId; // store merchantId on socket itself
     console.log(`✅ Merchant ${merchantId} connected with socket ${socket.id}`);

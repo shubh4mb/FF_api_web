@@ -3,6 +3,7 @@ import mongoose from "mongoose";
 const merchantSchema = new mongoose.Schema(
   {
     shopName: { type: String },
+    isOnline:{ type: Boolean, default: false },
     shopDescription: { type: String },
     ownerName: { type: String },
     email: { type: String, unique: true, sparse: true },

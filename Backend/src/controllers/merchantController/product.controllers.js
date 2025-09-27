@@ -468,6 +468,8 @@ export const getBaseProductById = async (req, res) => {
 
 
 export const getProductsByMerchantId = async (req, res) => {
+  console.log("working");
+  
   try {
     const { merchantId } = req.params;
 

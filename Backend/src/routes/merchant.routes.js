@@ -5,18 +5,19 @@ import { deleteVariant ,addBrand, getBrands, getBaseProductById ,  getProductsBy
 
 import { addMerchant } from '../controllers/merchantController/merchant.controller.js';
 import {  loginMerchant ,updateMerchantShopDetails, updateMerchantBankDetails, updateMerchantOperatingHours, activateMerchant, registerPhone, sendEmailOtp, verifyEmailOtp, getMerchantByEmail } from '../controllers/merchantController/authControllers.js';
-
-import {orderPacked,orderRequestForMerchant} from '../controllers/userControllers/order.controllers.js';
-
-import {getOrderForMerchant, saveProductDetails} from '../controllers/merchantController/order.controllers.js';
+import {getAllOrder, saveProductDetails} from '../controllers/merchantController/order.controllers.js';
 import {authMiddlewareMerchant} from '../middleware/jwtAuth.js';
+import {getPlacedOrder,orderRequestForMerchant,orderPacked} from '../controllers/merchantController/order.controllers.js';
+import { getMerchantById  } from '../controllers/merchantController/merchant.controller.js';
+
 const router = express.Router();
 
 router.post('/auth/send-email-otp', sendEmailOtp);
 router.post('/auth/verify-email-otp', verifyEmailOtp);
-router.get('/:email',getMerchantByEmail)
+router.get('/getMerchant',authMiddlewareMerchant,getMerchantById)
+// router.get('/:ema:merchantIdil',getMerchantByEmail)
 
-router.put("/:merchantId/shop-details", upload.single("logo"),handleMulterError, updateMerchantShopDetails);
+router.put("//shop-details", upload.single("logo"),handleMulterError, updateMerchantShopDetails);
 router.put("/:merchantId/bank-details", updateMerchantBankDetails);
 router.put("/:merchantId/operating-hours", updateMerchantOperatingHours);
 router.put("/:merchantId/activate", activateMerchant);
@@ -50,8 +51,10 @@ router.put("/updateStock/:productId/:variantId", updateSize);
 router.put("/updatePrice/:productId/:variantId", updatePrice);
 
 
-router.get('/getOrders',authMiddlewareMerchant,getOrderForMerchant)
+router.get('/getAllOrders',authMiddlewareMerchant,getAllOrder)
 router.put('/orderRequestForMerchant/:orderId',authMiddlewareMerchant,orderRequestForMerchant)
+router.get('/getPlacedOrder',authMiddlewareMerchant,getPlacedOrder)
+router.post('/order/packed/:orderId',authMiddlewareMerchant,orderPacked)
 
 router.put('/products/:id/details', saveProductDetails);
 

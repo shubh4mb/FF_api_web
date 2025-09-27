@@ -1,9 +1,11 @@
+//src/models/deliveryRider.model.js
 import mongoose from "mongoose";
 
-const DeliveryBoySchema = new mongoose.Schema({
+
+const DeliveryRiderSchema = new mongoose.Schema({
   name: {
     type: String,
-    required: true,
+    // required: true,
     trim: true
   },
   phone: {
@@ -13,7 +15,7 @@ const DeliveryBoySchema = new mongoose.Schema({
   },
   password: {
     type: String,
-    required: true
+    // required: true
   },
   isAvailable: {
     type: Boolean,
@@ -52,10 +54,14 @@ const DeliveryBoySchema = new mongoose.Schema({
     enum: ['active', 'inactive', 'suspended','busy'],
     default: 'active'
   },
+  isVerified: {
+    type: Boolean,
+    default: false
+  },
   createdAt: {
     type: Date,
     default: Date.now
   }
 });
 
-export default mongoose.model("DeliveryBoy", DeliveryBoySchema);
+export default mongoose.model("DeliveryRider", DeliveryRiderSchema);

@@ -18,6 +18,11 @@ export const emitOrderUpdate = (io, orderId , updateData) => {
   const roomName = orderId;
   console.log('Emitting to rooms:', io.sockets.adapter.rooms);
   console.log(roomName,"roomName in emit orderupdate");
-  io.to(roomName).emit("orderUpdate", orderId);
+  try {
+    io.to(roomName).emit("orderUpdate", updateData);
+    console.log(`✅ Successfully emitted order update to room ${roomName}`);
+  } catch (error) {
+    console.error(`❌ Error emitting order update to room ${roomName}:`, error);
+  }
 };
 
