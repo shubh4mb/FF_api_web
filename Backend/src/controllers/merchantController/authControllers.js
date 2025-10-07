@@ -141,7 +141,7 @@ export const registerPhone = async (req, res) => {
     console.error("Error saving phone:", error);
     res.status(500).json({ message: "Server error", error: error.message });
   }
-};
+}; 
 
 
 
