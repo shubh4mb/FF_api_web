@@ -1,25 +1,30 @@
-// helper: low-level redis GEOADD via sendCommand (works across redis client versions)
+   import { redisPub } from "../config/redisConfig.js";
+   import {io} from "../index.js";
+
+   // helper: low-level redis GEOADD via sendCommand (works across redis client versions)
 async function geoAdd(key, lng, lat, member) {
     await redisPub.sendCommand(["GEOADD", key, lng.toString(), lat.toString(), member]);
   }
   
   // helper: geo radius search (returns an array of member names)
   async function geoRadius(key, lng, lat, radiusKm, count = 10) {
-    // GEORADIUS key longitude latitude radius km WITHDIST ASC COUNT count
+    // GEOSEARCH key FROMLONLAT <lon> <lat> BYRADIUS <radius> km WITHDIST ASC COUNT <count>
     const reply = await redisPub.sendCommand([
-      "GEORADIUS",
+      "GEOSEARCH",
       key,
-      lng.toString(),
-      lat.toString(),
-      radiusKm.toString(),
-      "km",
+      "FROMLONLAT", lng.toString(), lat.toString(),
+      "BYRADIUS", radiusKm.toString(), "km",
       "WITHDIST",
       "ASC",
-      "COUNT",
-      count.toString()
+      "COUNT", count.toString()
     ]);
-    // reply is like [[member, dist], ...]
-    return (reply || []).map(r => ({ member: r[0], dist: parseFloat(r[1]) }));
+  
+    // reply looks like: [member1, dist1, member2, dist2, ...]
+    const result = [];
+    for (let i = 0; i < reply.length; i += 2) {
+      result.push({ member: reply[i], dist: parseFloat(reply[i + 1]) });
+    }
+    return result;
   }
   
   // helper: set heartbeat (TTL) so offline riders expire
@@ -60,6 +65,7 @@ async function geoAdd(key, lng, lat, member) {
   async function assignNearestRider(pickupLocation, orderId, orderPayload) {
     const GEO_KEY = "riders:geo";
     const { lng, lat } = pickupLocation;
+    console.log("assignNearestRider", lng, lat);  
   
     // 1) find nearby riders within 5 km
     const candidates = await geoRadius(GEO_KEY, lng, lat, 5, 20); // get up to 20 nearest
@@ -110,3 +116,14 @@ async function geoAdd(key, lng, lat, member) {
   
     return null;
   }
+
+  export {
+    geoAdd,
+    geoRadius,
+    setHeartbeat,
+    setRiderMeta,
+    getRiderMeta,
+    acquireLock,
+    releaseLock,
+    assignNearestRider
+  };

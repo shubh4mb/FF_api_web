@@ -1,7 +1,17 @@
+import DeliveryRider from "../models/deliveryRider.model.js";
+import { geoAdd, geoRadius, setHeartbeat, setRiderMeta, getRiderMeta } from "../helperFns/deliveryRiderFns.js";
+
+
 export const registerDeliveryRiderSockets = (io, socket) => {
 
     socket.on("registerRider", async ({ riderId }) => {
         // map socket -> rider room and store socketId in meta
+        const rider = await DeliveryRider.findById(riderId);
+        if (!rider) {
+          return socket.emit("error", "Rider not found");
+        }
+        rider.isAvailable = true;
+        await rider.save();
         socket.join(`riderSocket:${riderId}`);    // join a personal socket room
         socket.join(`rider:${riderId}`);          // alternative room for fallback messages
         await setRiderMeta(riderId, { socketId: socket.id });
@@ -23,6 +33,7 @@ export const registerDeliveryRiderSockets = (io, socket) => {
       // Rider sends location updates frequently
       socket.on("updateLocation", async ({ riderId, lat, lng, orderIdIfAny = null }) => {
         // update GEO
+        console.log("updateLocation", riderId, lat, lng, orderIdIfAny);
         await geoAdd("riders:geo", lng, lat, riderId);
         // update meta heartbeat
         await setHeartbeat(riderId, 120);
