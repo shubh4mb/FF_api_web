@@ -1,6 +1,6 @@
 import DeliveryRider from "../models/deliveryRider.model.js";
 import { geoAdd, geoRadius, setHeartbeat, setRiderMeta, getRiderMeta } from "../helperFns/deliveryRiderFns.js";
-
+import { redisPub } from "../config/redisConfig.js";
 
 export const registerDeliveryRiderSockets = (io, socket) => {
 
@@ -13,15 +13,18 @@ export const registerDeliveryRiderSockets = (io, socket) => {
         rider.isAvailable = true;
         await rider.save();
         socket.join(`riderSocket:${riderId}`);    // join a personal socket room
-        socket.join(`rider:${riderId}`);          // alternative room for fallback messages
-        await setRiderMeta(riderId, { socketId: socket.id });
+        socket.join(`rider:${riderId}`);   
+        // await geoAdd("riders:geo", lng, lat, riderId);       // alternative room for fallback messages
+        await setRiderMeta(riderId, { socketId: socket.id, isOnline: "true", isBusy: "false" });
+        await setHeartbeat(riderId, 120);
         console.log(`Rider ${riderId} registered on socket ${socket.id}`);
       });
     
       // Rider goes online (initial)
       socket.on("riderOnline", async ({ riderId, lat, lng }) => {
         // store in geo
-        await geoAdd("riders:geo", lng, lat, riderId);
+        await geoAdd("riders:geo", lng, lat, `rider:${riderId}`);
+
         // set meta
         await setRiderMeta(riderId, { isOnline: "true", isBusy: "false" , lastSeenAt: Date.now() });
         // heartbeat TTL so stale riders vanish
@@ -35,12 +38,16 @@ export const registerDeliveryRiderSockets = (io, socket) => {
         // update GEO
         console.log("updateLocation", riderId, lat, lng, orderIdIfAny);
         await geoAdd("riders:geo", lng, lat, riderId);
+        // await geoAdd("riders:geo", lng, lat, `rider:${riderId}`);
+
         // update meta heartbeat
         await setHeartbeat(riderId, 120);
         await setRiderMeta(riderId, { lastSeenAt: Date.now() });
     
         // if rider is already assigned and is in an order room, forward update to that room
         const meta = await getRiderMeta(riderId);
+        console.log(meta);
+        
         const assignedOrderId = meta.assignedOrderId || orderIdIfAny;
         if (assignedOrderId) {
           // emit to order room (all participants joined)
@@ -75,9 +82,17 @@ export const registerDeliveryRiderSockets = (io, socket) => {
       });
     
       socket.on("disconnect", async () => {
-        // find rider by socket id (we stored socketId in meta)
-        // naive approach: you might keep a reverse map socketId->riderId in Redis for faster lookup
         console.log("socket disconnected", socket.id);
-        // For production: implement reverse lookup to mark that rider offline when disconnect
-      });
+    
+        // lookup riderId by socketId
+        const keys = await redisPub.keys("rider:*:meta");
+        for (const key of keys) {
+            const meta = await redisPub.hGetAll(key);
+            if (meta.socketId === socket.id) {
+                await setRiderMeta(key.split(":")[1], { isOnline: "false" });
+                break;
+            }
+        }
+    });
+    
 }

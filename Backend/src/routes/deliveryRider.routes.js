@@ -1,7 +1,9 @@
 import express from 'express';
 
-import { register, verifyOTP } from '../controllers/deliveryRiderController/auth.controllers.js';
-
+import { register, verifyOTP, savePersonalDetails ,uploadDocuments,saveBankDetails} from '../controllers/deliveryRiderController/auth.controllers.js';
+import { authMiddlewareRider } from '../middleware/jwtAuth.js';
+import upload from '../middleware/multer.js';
+import { handleMulterError } from '../middleware/multer.js';
 const router=express.Router();
 
 router.post('/register',register);
@@ -9,5 +11,24 @@ router.post("/auth/verify-otp", (req, res, next) => {
     console.log("📩 Incoming request to /auth/verify-otp");
     next();
   }, verifyOTP);
+router.post("/registration/personal-details",authMiddlewareRider, savePersonalDetails);
+// router.post("/registration/upload-documents",authMiddlewareRider,upload.array("documents", 6), uploadDocuments);
+router.post(
+  "/registration/upload-documents",
+  authMiddlewareRider,
+  upload.fields([
+    { name: "aadhaarFront", maxCount: 1 },
+    { name: "aadhaarBack", maxCount: 1 },
+    { name: "licenseFront", maxCount: 1 },
+    { name: "licenseBack", maxCount: 1 },
+    { name: "panFront", maxCount: 1 },
+    { name: "panBack", maxCount: 1 },
+  ]),
+  handleMulterError, // optional error handler
+  uploadDocuments
+);
+
+router.post("/registration/bank-details", authMiddlewareRider, saveBankDetails);
+
 
 export default router;

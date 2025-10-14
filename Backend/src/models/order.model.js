@@ -2,7 +2,7 @@ import mongoose from "mongoose";
 const OrderSchema = new mongoose.Schema({
     userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     merchantId: { type: mongoose.Schema.Types.ObjectId, ref: 'Merchant' },
-    deliveryBoyId: { type: mongoose.Schema.Types.ObjectId, ref: 'DeliveryBoy', default: null },
+    deliveryRiderId: { type: mongoose.Schema.Types.ObjectId, ref: 'DeliveryRider', default: null },
     items: [
       {
         productId: { type: mongoose.Schema.Types.ObjectId, ref: 'Product' },
@@ -46,7 +46,7 @@ const OrderSchema = new mongoose.Schema({
         type: String,
         default: null
     },
-    deliveryBoyStatus: {
+    deliveryRiderStatus: {
         type: String,
         enum: [
           'unassigned',               // Initial state
@@ -80,8 +80,21 @@ const OrderSchema = new mongoose.Schema({
         totalPayable: { type: Number, default: 0 }    // Final amount to be paid
     },
     deliveryLocation: {
-        address: String,
-        coordinates: { type: [Number], index: '2dsphere' } // [longitude, latitude]
+      label: String,
+      houseOrFlat: String,
+      street: String,
+      city: String,
+      state: String,
+      pincode: String,
+      coordinates: {
+        type: [Number], // [longitude, latitude]
+        index: "2dsphere",
+        // required: true
+      }
+    },
+    deliveryDistance:{
+      type: Number,
+      default: 0
     },
     deliveryCharge:{ type: Number, default: 0 },
     deliveryTracking: [

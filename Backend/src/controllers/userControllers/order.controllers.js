@@ -157,38 +157,38 @@ export const createOrder = async (req, res) => {
   }
 };
 
-export const orderRequestForMerchant = async (req, res) => {
-  console.log("orderRequestForMerchant");
-  const { orderId } = req.params;
-  const { status } = req.body;
-  console.log(orderId,'orderId');
-  console.log(req.body);
+// export const orderRequestForMerchant = async (req, res) => {
+//   console.log("orderRequestForMerchant");
+//   const { orderId } = req.params;
+//   const { status } = req.body;
+//   console.log(orderId,'orderId');
+//   console.log(req.body);
   
   
-  console.log(status,'statussss');
+//   console.log(status,'statussss');
   
 
-  const order = await Order.findById(orderId);
-  if (!order) return res.status(404).json({ message: "Order not found" });
+//   const order = await Order.findById(orderId);
+//   if (!order) return res.status(404).json({ message: "Order not found" });
   
-  order[0].orderStatus = status;
-  if(status=="accept"){
-    const deliveryBoy = await Delivery.findOne({status:"active"})
-    if(!deliveryBoy){
-      return res.status(404).json({ message: "Delivery boy not found" });
-    }
-    order.deliveryBoyId = deliveryBoy._id;
-    order.deliveryBoyStatus = "assigned";    
-  }
+//   order[0].orderStatus = status;
+//   if(status=="accept"){
+//     const deliveryBoy = await Delivery.findOne({status:"active"})
+//     if(!deliveryBoy){
+//       return res.status(404).json({ message: "Delivery boy not found" });
+//     }
+//     order.deliveryBoyId = deliveryBoy._id;
+//     order.deliveryBoyStatus = "assigned";    
+//   }
   
-  await order.save();
+//   await order.save();
 
-  emitOrderUpdate(io, orderId, { status });
+//   emitOrderUpdate(io, orderId, { status });
 
 
   
-  return res.status(200).json({ message: "Order status updated", orderId });
-};
+//   return res.status(200).json({ message: "Order status updated", orderId });
+// };
 
 export const orderRequestForDeliveryBoy = async (req, res) => {
   try {
@@ -312,6 +312,18 @@ export const getOrderForUser = async (req, res) => {
   const orders = await Order.find({ userId });
   return res.status(200).json({ orders });
 };
+
+export const getAllOrders = async(req,res)=>{
+  try {
+    console.log(req.user);
+    
+    const userId = req.user.userId
+    const orders = await Order.find({userId})
+    return res.status(200).json({orders})
+  } catch (error) {
+    
+  }
+}
 
 
 

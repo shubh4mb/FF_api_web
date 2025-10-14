@@ -1,67 +1,137 @@
-//src/models/deliveryRider.model.js
 import mongoose from "mongoose";
 
-
 const DeliveryRiderSchema = new mongoose.Schema({
-  name: {
+  fullName: {
     type: String,
     // required: true,
-    trim: true
+    trim: true,
+  },
+  dob: {
+    type: Date,
+    // required: true,
+  },
+  age: {
+    type: Number,
+    // required: true,
+  },
+  gender: {
+    type: String,
+    enum: ["Male", "Female", "Other", "Prefer not to say"],
+  },
+  email: {
+    type: String,
+    // required: true,
+    trim: true,
+    lowercase: true,
   },
   phone: {
     type: String,
     required: true,
-    unique: true
+    unique: true,
   },
-  password: {
+  city: {
     type: String,
-    // required: true
+    // required: true,
   },
+  area: {
+    type: String,
+    // required: true,
+  },
+  pincode: {
+    type: String,
+    // required: true,
+  },
+
+  // ✅ Both sides of documents
+  documents: {
+    aadhaarFront: {
+      public_id: String,
+      url: String,
+    },
+    aadhaarBack: {
+      public_id: String,
+      url: String,
+    },
+    licenseFront: {
+      public_id: String,
+      url: String,
+    },
+    licenseBack: {
+      public_id: String,
+      url: String,
+    },
+    panFront: {
+      public_id: String,
+      url: String,
+    },
+    panBack: {
+      public_id: String,
+      url: String,
+    },
+    // vehicleNumber: {
+    //   public_id: String,
+    //   url: String,
+    // },
+    // vehicleType: {
+    //   type: String,
+    //   enum: ["bike", "scooter", "cycle", "car"],
+    //   default: "bike",
+    // },
+  },
+
+  training: {
+    videoWatched: { type: Boolean, default: false },
+    completedAt: { type: Date, default: null },
+  },
+
+  bankDetails: {
+    accountHolderName: { type: String },
+    bankName: { type: String },
+    accountNumber: { type: String },
+    ifscCode: { type: String },
+  },
+
   isAvailable: {
     type: Boolean,
-    default: true
+    default: true,
   },
-  currentOrderId: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Order',
-    default: null
-  },
-  location: {
-    coordinates: {
-      type: [Number], // [longitude, latitude]
-      index: '2dsphere',
-      default: [0, 0]
-    },
-    updatedAt: {
-      type: Date,
-      default: null
-    }
-  },
-  documents: {
-    aadharNumber: String,
-    licenseNumber: String,
-    profilePhoto: String,
-    licensePhoto: String,
-    vehicleNumber: String,
-    vehicleType: {
-      type: String,
-      enum: ['bike', 'scooter', 'cycle', 'car'],
-      default: 'bike'
-    }
+  isBusy: {
+    type: Boolean,
+    default: false,
   },
   status: {
     type: String,
-    enum: ['active', 'inactive', 'suspended','busy'],
-    default: 'active'
+    enum: ["active", "inactive", "suspended", "busy"],
+    default: "inactive",
   },
   isVerified: {
     type: Boolean,
-    default: false
+    default: false,
+  },
+  onboardingFeePaid: {
+    type: Boolean,
+    default: false,
+  },
+  location: {
+    coordinates: {
+      type: [Number],
+      index: "2dsphere",
+      default: [0, 0],
+    },
+    updatedAt: {
+      type: Date,
+      default: null,
+    },
+  },
+  currentOrderId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "Order",
+    default: null,
   },
   createdAt: {
     type: Date,
-    default: Date.now
-  }
+    default: Date.now,
+  },
 });
 
 export default mongoose.model("DeliveryRider", DeliveryRiderSchema);

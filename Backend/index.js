@@ -49,6 +49,7 @@ io.on('connection', (socket) => {
     registerUserSockets(io, socket);
   } else if (role === "deliveryRider") {
     registerDeliveryRiderSockets(io, socket);
+    console.log(`🔌 New delivery rider socket connection: ${socket.id}`);
   }
 
   // Order socket listeners always active

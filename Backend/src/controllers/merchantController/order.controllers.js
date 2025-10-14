@@ -3,6 +3,7 @@ import Product from "../../models/product.model.js";
 import {emitOrderUpdate} from "../../sockets/order.socket.js";
 import { io } from "../../../index.js"
 import DeliveryRider from "../../models/deliveryRider.model.js";
+import {assignNearestRider} from "../../helperFns/deliveryRiderFns.js"
 
 export const saveProductDetails = async (req, res) => {
   try {
@@ -64,41 +65,72 @@ export const getPlacedOrder = async (req, res) => {
 };
 
 export const orderRequestForMerchant = async (req, res) => {
-  // console.log("orderRequestForMerchant");
-  const { orderId } = req.params;
-  // console.log(orderId,'orderId');
-  
-  const { status } = req.body;
-  // console.log(status);
-  
-  // const { reason } = req.body;
-  // console.log(reason);
+  try {
+    const { orderId } = req.params;
+    const { status } = req.body;
 
-  const order = await Order.findById(orderId);
-  if (!order) return res.status(404).json({ message: "Order not found" });
-  
-  // order.orderStatus = status;
-  if(status=="accept"){
-    order.orderStatus="accepted";
-    // const deliveryBoy = await DeliveryRider.findOne({status:"active"})
-    // if(!deliveryBoy){
-    //   return res.status(404).json({ message: "Delivery boy not found" });
-    // }
-    // order.deliveryBoyId = deliveryBoy._id;
-    // order.deliveryBoyStatus = "assigned";    
+    const order = await Order.findById(orderId);
+    if (!order) return res.status(404).json({ message: "Order not found" });
+
+    if (status === "accept") {
+      order.orderStatus = "accepted";
+
+      // ✅ 1️⃣ Get pickup location from the order (merchant location)
+      // const pickupLocation = {
+      //   lng: order.merchantLocation.coordinates[0],
+      //   lat: order.merchantLocation.coordinates[1],
+      // };
+
+      const pickupLocation = {
+        lng: 76.3244129, // Corrected: longitude
+        lat: 9.9371151   // Corrected: latitude
+      };
+
+      // ✅ 2️⃣ Prepare payload (can contain all order info you want to send to rider)
+      const orderPayload = {
+        orderId: order._id,
+        merchantName: order.merchantName,
+        totalAmount: order.totalAmount,
+        pickupLocation,
+        dropLocation: order.deliveryLocation,
+      };
+
+      // ✅ 3️⃣ Try to assign nearest rider
+      const assigned = await assignNearestRider(pickupLocation, orderPayload.orderId, orderPayload);
+      console.log("Assigned rider:", assigned);
+      
+
+      if (assigned) {
+        order.deliveryRiderId = assigned.riderId;
+        order.deliveryDistance = assigned.distKm;
+        order.deliveryRiderStatus = "assigned";
+
+        console.log(`✅ Rider ${assigned.riderId} assigned for order ${order._id}`);
+      } else {
+        console.log("❌ No available rider found within range");
+        order.deliveryRiderStatus = "unassigned";
+      }
+    }
+
+    if (status === "reject") {
+      order.orderStatus = "rejected";
+      order.reason = req.body.reason || "Merchant rejected the order";
+    }
+
+    await order.save();
+
+    // 🔔 Emit live update to frontend (merchant / user dashboard)
+    emitOrderUpdate(io, orderId, order);
+
+    return res.status(200).json({
+      message: "Order status updated",
+      orderId,
+      order,
+    });
+  } catch (err) {
+    console.error("Error in orderRequestForMerchant:", err);
+    return res.status(500).json({ message: "Internal server error" });
   }
-  
-  if(status=="reject"){
-    order.orderStatus="rejected";
-    order.reason=reason;
-  }
-  await order.save();
-
-  emitOrderUpdate(io, orderId,order);
-
-
-  
-  return res.status(200).json({ message: "Order status updated", orderId });
 };
 
 export const getAllOrder = async (req, res) => {

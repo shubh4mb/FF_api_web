@@ -1,15 +1,16 @@
 import Product from '../../models/product.model.js';
 import mongoose from 'mongoose';
+import{body , validationResult} from 'express-validator'
 
 export const newArrivals = async (req, res) => {
     try {
         const products = await Product.find({
             isActive: true,
             createdAt: {
-                $gte: new Date(new Date().setDate(new Date().getDate() - 30))
+                $gte: new Date(new Date().setDate(new Date().getDate() - 90))
             },
             variants: { $exists: true, $not: { $size: 0 } } // only products with variants
-        });
+        }); 
 
         res.status(200).json(products);
     } catch (error) {
@@ -45,133 +46,161 @@ const sortMap = {
 };
 
 
-  export const getFilteredProducts = async (req, res) => {
-    try {
-      const {
-        priceRange          = [],         // [min,max]
-        selectedCategoryIds = [],         // ObjectId strings
-        selectedColors      = [],         // ['Red','Blue']
-        selectedStores      = [],         // merchant ObjectId strings
-        sortBy              = 'newest',   // string | string[]
-      } = req.body;
-  
-      /* ----------- build initial $match ---------------- */
-      const match = { isActive: true };
-  
-      /* merchant filter */
-      if (selectedStores.length) {
-        const validStoreIds = selectedStores.filter(mongoose.Types.ObjectId.isValid);
-        if (validStoreIds.length) {
-          match.merchantId = {
-            $in: validStoreIds.map(id => new mongoose.Types.ObjectId(id)),
-          };
-        }
+export const getFilteredProducts = async (req, res) => { 
+  try {
+    const {
+      priceRange          = [],         // [min,max]
+      selectedCategoryIds = [],         // ObjectId strings
+      selectedColors      = [],         // ['Red','Blue']
+      selectedStores      = [],         // merchant ObjectId strings
+      sortBy              = 'newest',   // string | string[]
+    } = req.body;
+    
+    console.log('Request body:', req.body);
+
+    /* ----------- build initial $match ---------------- */
+    const match = { isActive: true };
+
+    /* merchant filter - CORRECTED */
+    if (selectedStores?.length > 0) {
+      const merchantObjectIds = selectedStores
+        .filter(id => mongoose.Types.ObjectId.isValid(id)) // Use isValid first
+        .map(id => new mongoose.Types.ObjectId(id));
+    
+      if (merchantObjectIds.length > 0) {
+        match.merchantId = { $in: merchantObjectIds };
+        console.log('Filtering by merchants:', merchantObjectIds);
+      } else {
+        // No valid merchant IDs -> return empty result directly
+        console.log('No valid merchant IDs provided');
+        return res.json({ products: [] });
       }
-  
-      /* category OR‑match across three fields */
-      if (selectedCategoryIds.length) {
-        const validCatIds = selectedCategoryIds.filter(mongoose.Types.ObjectId.isValid);
-        if (validCatIds.length) {
-          const ids = validCatIds.map(id => new mongoose.Types.ObjectId(id));
-          match.$or = [
-            { categoryId:       { $in: ids } },
-            { subCategoryId:    { $in: ids } },
-            { subSubCategoryId: { $in: ids } },
-          ];
-        }
-      }
-  
-      /* ----------------- aggregation pipeline ---------------- */
-      let pipeline = [
-        { $match: match },
-  
-        /* 1️⃣  Unwind variants so each variant acts like its own product  */
-        { $unwind: '$variants' },
-  
-        /* 2️⃣  Variant‑level filters (price, color) */
-        {
-          $match: {
-            ...(priceRange.length === 2 && {
-              'variants.price': { $gte: priceRange[0], $lte: priceRange[1] },
-            }),
-            ...(selectedColors.length && {
-              'variants.color.name': { $in: selectedColors },
-            }),
-          },
-        },
-  
-        /* 3️⃣  Optional lookups (merchant / brand names) */
-        {
-          $lookup: {
-            from: 'merchants',
-            localField: 'merchantId',
-            foreignField: '_id',
-            as: 'merchant',
-            pipeline: [{ $project: { shopName: 1 } }],
-          },
-        },
-        {
-          $lookup: {
-            from: 'brands',
-            localField: 'brandId',
-            foreignField: '_id',
-            as: 'brand',
-            pipeline: [{ $project: { name: 1 } }],
-          },
-        },
-  
-        /* 4️⃣  Keep only lean fields */
-        {
-          $project: {
-            name: 1,
-            merchantId: 1,
-            brandId: 1,
-            categoryId: 1,
-            subCategoryId: 1,
-            subSubCategoryId: 1,
-            gender: 1,
-            ratings: 1,
-            numReviews: 1,
-            isTriable: 1,
-  
-            /* expose single variant fields at top level for convenience */
-            variantId:   '$variants._id',
-            price:       '$variants.price',
-            mrp:         '$variants.mrp',
-            discount:    '$variants.discount',
-            stockSizes:  '$variants.sizes',     // array of sizes + stock
-            color:       '$variants.color',     // { name, hex }
-            images:      '$variants.images',
-  
-            merchant: { $arrayElemAt: ['$merchant.shopName', 0] },
-            brand:    { $arrayElemAt: ['$brand.name', 0] },
-          },
-        },
-      ];
-  
-      /* 5️⃣  Multi‑field sorting */
-      const sortKeys = Array.isArray(sortBy) ? sortBy : [sortBy];
-      let finalSort = {};
-  
-      sortKeys.forEach(key => {
-        if (sortMap[key]) Object.assign(finalSort, sortMap[key]);
-      });
-  
-      if (Object.keys(finalSort).length) pipeline.push({ $sort: finalSort });
-  
-      /* 6️⃣  (optional) pagination -> add $skip and $limit here */
-  
-      const products = await Product.aggregate(pipeline).allowDiskUse(true);
-      res.json({ products });
-    } catch (err) {
-      console.error(err);
-      res.status(500).json({ error: 'Server error' });
     }
-  };
 
-  export const getProductsByMerchantId = async (req, res) => {
+    /* category OR‑match across three fields */
+    if (selectedCategoryIds.length > 0) {
+      const validCatIds = selectedCategoryIds.filter(id => mongoose.Types.ObjectId.isValid(id));
+      if (validCatIds.length > 0) {
+        const categoryObjectIds = validCatIds.map(id => new mongoose.Types.ObjectId(id));
+        match.$or = [
+          { categoryId:       { $in: categoryObjectIds } },
+          { subCategoryId:    { $in: categoryObjectIds } },
+          { subSubCategoryId: { $in: categoryObjectIds } },
+        ];
+        console.log('Filtering by categories:', categoryObjectIds);
+      }
+    }
+
+    console.log('Initial match stage:', JSON.stringify(match, null, 2));
+
+    /* ----------------- aggregation pipeline ---------------- */
+    let pipeline = [
+      { $match: match },
+
+      /* 1️⃣  Unwind variants so each variant acts like its own product  */
+      { $unwind: '$variants' },
+
+      /* 2️⃣  Variant‑level filters (price, color) */
+      {
+        $match: {
+          ...(priceRange.length === 2 && {
+            'variants.price': { $gte: priceRange[0], $lte: priceRange[1] },
+          }),
+          ...(selectedColors.length > 0 && {
+            'variants.color.name': { $in: selectedColors },
+          }),
+        },
+      },
+
+      /* 3️⃣  Optional lookups (merchant / brand names) */
+      {
+        $lookup: {
+          from: 'merchants',
+          localField: 'merchantId',
+          foreignField: '_id',
+          as: 'merchant',
+          pipeline: [{ $project: { shopName: 1 } }],
+        },
+      },
+      {
+        $lookup: {
+          from: 'brands',
+          localField: 'brandId',
+          foreignField: '_id',
+          as: 'brand',
+          pipeline: [{ $project: { name: 1 } }],
+        },
+      },
+
+      /* 4️⃣  Keep only lean fields */
+      {
+        $project: {
+          name: 1,
+          merchantId: 1,
+          brandId: 1,
+          categoryId: 1,
+          subCategoryId: 1,
+          subSubCategoryId: 1,
+          gender: 1,
+          ratings: 1,
+          numReviews: 1,
+          isTriable: 1,
+
+          /* expose single variant fields at top level for convenience */
+          variantId:   '$variants._id',
+          price:       '$variants.price',
+          mrp:         '$variants.mrp',
+          discount:    '$variants.discount',
+          stockSizes:  '$variants.sizes',     // array of sizes + stock
+          color:       '$variants.color',     // { name, hex }
+          images:      '$variants.images',
+
+          merchant: { $arrayElemAt: ['$merchant.shopName', 0] },
+          brand:    { $arrayElemAt: ['$brand.name', 0] },
+        },
+      },
+    ];
+
+    /* 5️⃣  Multi‑field sorting */
+    const sortKeys = Array.isArray(sortBy) ? sortBy : [sortBy];
+    let finalSort = {};
+
+    sortKeys.forEach(key => {
+      if (sortMap[key]) Object.assign(finalSort, sortMap[key]);
+    });
+
+    if (Object.keys(finalSort).length > 0) {
+      pipeline.push({ $sort: finalSort });
+    }
+
+    /* 6️⃣  Execute aggregation */
+    console.log('Executing aggregation pipeline...');
+    const products = await Product.aggregate(pipeline).allowDiskUse(true);
+    
+    console.log(`Found ${products.length} products`);
+    
+    // Log merchant IDs of first few products for debugging
+    // if (products.length > 0) {
+    //   console.log('Sample merchant IDs from results:', 
+    //     products.slice(0, 3).map(p => ({ 
+    //       productName: p.name, 
+    //       merchantId: p.merchantId,
+    //       merchant: p.merchant 
+    //     }))
+    //   );
+    // }
+
+    res.json({ products });
+  } catch (err) {
+    console.error('Error in getFilteredProducts:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+};
+
+export const getProductsByMerchantId = async (req, res) => {
       // console.log(req.params,'merchantId');
-
+  console.log("working");
+  
     try {
       const { merchantId } = req.params;
       
@@ -319,6 +348,153 @@ export const getYouMayLikeProducts = async (req, res) => {
     res.status(500).json({ message: '❌ ' + error.message });
   }
 };
+
+// New: Batch fetch products for multiple merchants
+export const getProductsBatch = async (req, res) => {
+  // Input validation
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({ errors: errors.array() });
+  }
+
+  const { merchantIds } = req.body;
+
+  // Validate ObjectIds
+  const validIds = merchantIds.filter(id => mongoose.Types.ObjectId.isValid(id));
+  if (validIds.length !== merchantIds.length) {
+    return res.status(400).json({ message: 'One or more invalid merchant IDs' });
+  }
+
+  // Limit batch size
+  if (merchantIds.length > 50) {
+    return res.status(400).json({ message: 'Batch size exceeds limit (max 50)' });
+  }
+
+  try {
+    // Fetch products using aggregation
+    const products = await Product.aggregate([
+      // Match active products for the merchant IDs
+      {
+        $match: {
+          merchantId: { $in: merchantIds.map(id => new mongoose.Types.ObjectId(id)) },
+          isActive: true
+        }
+      },
+      // Group by merchantId to apply limit per merchant
+      {
+        $group: {
+          _id: '$merchantId',
+          products: { $push: '$$ROOT' }
+        }
+      },
+      // Limit to 5 products per merchant
+      {
+        $project: {
+          products: { $slice: ['$products', 5] }
+        }
+      },
+      // Unwind to flatten products
+      { $unwind: '$products' },
+      // Project first variant's fields
+      {
+        $project: {
+          _id: '$products._id',
+          name: '$products.name',
+          merchantId: '$products.merchantId',
+          ratings: '$products.ratings',
+          description: '$products.description',
+          gender: '$products.gender',
+          tags: '$products.tags',
+          isTriable: '$products.isTriable',
+          categoryId: '$products.categoryId',
+          subCategoryId: '$products.subCategoryId',
+          subSubCategoryId: '$products.subSubCategoryId',
+          brandId: '$products.brandId',
+          price: { $arrayElemAt: ['$products.variants.price', 0] },
+          mrp: { $arrayElemAt: ['$products.variants.mrp', 0] },
+          discount: { $arrayElemAt: ['$products.variants.discount', 0] },
+          images: { $arrayElemAt: ['$products.variants.images', 0] }
+        }
+      },
+      // Populate category and brand names
+      {
+        $lookup: {
+          from: 'categories',
+          localField: 'categoryId',
+          foreignField: '_id',
+          as: 'categoryId'
+        }
+      },
+      { $unwind: { path: '$categoryId', preserveNullAndEmptyArrays: true } },
+      {
+        $lookup: {
+          from: 'categories',
+          localField: 'subCategoryId',
+          foreignField: '_id',
+          as: 'subCategoryId'
+        }
+      },
+      { $unwind: { path: '$subCategoryId', preserveNullAndEmptyArrays: true } },
+      {
+        $lookup: {
+          from: 'categories',
+          localField: 'subSubCategoryId',
+          foreignField: '_id',
+          as: 'subSubCategoryId'
+        }
+      },
+      { $unwind: { path: '$subSubCategoryId', preserveNullAndEmptyArrays: true } },
+      {
+        $lookup: {
+          from: 'brands',
+          localField: 'brandId',
+          foreignField: '_id',
+          as: 'brandId'
+        }
+      },
+      { $unwind: { path: '$brandId', preserveNullAndEmptyArrays: true } },
+      // Group by merchantId for final output
+      {
+        $group: {
+          _id: '$merchantId',
+          products: {
+            $push: {
+              _id: '$_id',
+              name: '$name',
+              merchantId: '$merchantId',
+              ratings: '$ratings',
+              description: '$description',
+              gender: '$gender',
+              tags: '$tags',
+              isTriable: '$isTriable',
+              price: '$price',
+              mrp: '$mrp',
+              discount: '$discount',
+              images: '$images',
+              categoryId: '$categoryId.name',
+              subCategoryId: '$subCategoryId.name',
+              subSubCategoryId: '$subSubCategoryId.name',
+              brandId: '$brandId.name'
+            }
+          }
+        }
+      }
+    ]);
+
+    // Format as { merchantId1: [products], ... }
+    const productsByMerchant = products.reduce((acc, group) => {
+      acc[group._id.toString()] = group.products;
+      return acc;
+    }, {});
+
+    res.status(200).json(productsByMerchant);
+  } catch (error) {
+    console.error('Error fetching batch products:', error);
+    res.status(500).json({ message: 'Server error fetching batch products' });
+  }
+};
+
+
 
 
 

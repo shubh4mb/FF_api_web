@@ -1,15 +1,17 @@
 import mongoose from 'mongoose';
 
 const addressSchema = new mongoose.Schema({
-  label: String, // Home, Work, etc.
+  label: String,
+  houseOrFlat: String,
   street: String,
   city: String,
   state: String,
   pincode: String,
   coordinates: {
-    lat: Number,
-    lng: Number,
-  },
+    type: [Number], // [longitude, latitude]
+    index: "2dsphere",
+    required: true
+  }
 }, { _id: false });
 
 const userSchema = new mongoose.Schema({
