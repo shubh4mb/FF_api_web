@@ -69,7 +69,7 @@ export const signup = async (req, res) => {
         { expiresIn: "1h" }
       );
 
-      console.log(token,'token');
+      // console.log(token,'token');
       
       const userId=user._id
       // Send response

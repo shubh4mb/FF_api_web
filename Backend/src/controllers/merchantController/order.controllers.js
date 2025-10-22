@@ -4,6 +4,8 @@ import {emitOrderUpdate} from "../../sockets/order.socket.js";
 import { io } from "../../../index.js"
 import DeliveryRider from "../../models/deliveryRider.model.js";
 import {assignNearestRider} from "../../helperFns/deliveryRiderFns.js"
+import {onlineMerchants} from "../../sockets/merchant.socket.js"
+
 
 export const saveProductDetails = async (req, res) => {
   try {
@@ -64,6 +66,8 @@ export const getPlacedOrder = async (req, res) => {
   return res.status(200).json({ orders });
 };
 
+
+
 export const orderRequestForMerchant = async (req, res) => {
   try {
     const { orderId } = req.params;
@@ -74,19 +78,10 @@ export const orderRequestForMerchant = async (req, res) => {
 
     if (status === "accept") {
       order.orderStatus = "accepted";
-
-      // ✅ 1️⃣ Get pickup location from the order (merchant location)
-      // const pickupLocation = {
-      //   lng: order.merchantLocation.coordinates[0],
-      //   lat: order.merchantLocation.coordinates[1],
-      // };
-
       const pickupLocation = {
-        lng: 76.3244129, // Corrected: longitude
-        lat: 9.9371151   // Corrected: latitude
+        lng: 76.3244129,
+        lat: 9.9371151,
       };
-
-      // ✅ 2️⃣ Prepare payload (can contain all order info you want to send to rider)
       const orderPayload = {
         orderId: order._id,
         merchantName: order.merchantName,
@@ -94,22 +89,50 @@ export const orderRequestForMerchant = async (req, res) => {
         pickupLocation,
         dropLocation: order.deliveryLocation,
       };
-
-      // ✅ 3️⃣ Try to assign nearest rider
       const assigned = await assignNearestRider(pickupLocation, orderPayload.orderId, orderPayload);
       console.log("Assigned rider:", assigned);
-      
 
       if (assigned) {
         order.deliveryRiderId = assigned.riderId;
         order.deliveryDistance = assigned.distKm;
         order.deliveryRiderStatus = "assigned";
-
         console.log(`✅ Rider ${assigned.riderId} assigned for order ${order._id}`);
       } else {
         console.log("❌ No available rider found within range");
         order.deliveryRiderStatus = "unassigned";
       }
+
+      // Fix: Use Socket instance for join
+      const merchantSocketIds = onlineMerchants[order.merchantId?.toString()];
+      if (merchantSocketIds && merchantSocketIds.length > 0) {
+        merchantSocketIds.forEach((socketId) => {
+          const socket = io.sockets.sockets.get(socketId);
+          if (socket) {
+            socket.join(orderId); // Correct way to join a room
+            console.log(`Merchant socket ${socketId} joined room ${orderId}`);
+            io.to(socketId).emit("orderUpdate", {
+              orderId,
+              orderStatus: order.orderStatus,
+              deliveryRiderStatus: order.deliveryRiderStatus,
+              merchantId: order.merchantId,
+            });
+            console.log(`📦 Emitted orderUpdate to merchant socket ${socketId}`);
+          } else {
+            console.warn(`Socket ${socketId} not found for merchant ${order.merchantId}`);
+          }
+        });
+      } else {
+        console.log(`No active sockets for merchant ${order.merchantId}`);
+      }
+
+      // Emit to orderId room for other roles
+      io.to(orderId).emit("orderUpdate", {
+        orderId,
+        orderStatus: order.orderStatus,
+        deliveryRiderStatus: order.deliveryRiderStatus,
+        merchantId: order.merchantId,
+      });
+      console.log(`Emitted order update to room ${orderId}`);
     }
 
     if (status === "reject") {
@@ -119,7 +142,6 @@ export const orderRequestForMerchant = async (req, res) => {
 
     await order.save();
 
-    // 🔔 Emit live update to frontend (merchant / user dashboard)
     emitOrderUpdate(io, orderId, order);
 
     return res.status(200).json({

@@ -104,6 +104,10 @@ const OrderSchema = new mongoose.Schema({
         location: [Number] // optional: live tracking points
       }
     ],
+    otp:{
+      type: String,
+      default: null
+    },
   }, { timestamps: true });
 
 export default mongoose.model("Order", OrderSchema);

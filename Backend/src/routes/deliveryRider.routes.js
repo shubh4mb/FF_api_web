@@ -4,6 +4,7 @@ import { register, verifyOTP, savePersonalDetails ,uploadDocuments,saveBankDetai
 import { authMiddlewareRider } from '../middleware/jwtAuth.js';
 import upload from '../middleware/multer.js';
 import { handleMulterError } from '../middleware/multer.js';
+import { acceptOrder ,reachedPickupLocation} from '../controllers/deliveryRiderController/orderController.js';
 const router=express.Router();
 
 router.post('/register',register);
@@ -29,6 +30,8 @@ router.post(
 );
 
 router.post("/registration/bank-details", authMiddlewareRider, saveBankDetails);
+router.post("/order/acceptOrder",authMiddlewareRider,acceptOrder);
+router.post("/order/reachedPickupLocation",authMiddlewareRider,reachedPickupLocation);
 
 
 export default router;

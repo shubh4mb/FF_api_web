@@ -17,6 +17,11 @@ const merchantSchema = new mongoose.Schema(
       street: String,
       city: String,
       postalCode: String,
+      coordinates: {
+        type: [Number], // [longitude, latitude]
+        index: "2dsphere",
+        // required: true
+      }
     },
     documents: {
       gstNumber: String,

@@ -1,3 +1,7 @@
+
+import {onlineMerchants} from "../sockets/merchant.socket.js";
+
+
 export const registerOrderSockets = (io, socket) => {
   console.log("Registering order sockets for:", socket.id);
 
@@ -11,18 +15,33 @@ export const registerOrderSockets = (io, socket) => {
   socket.on("disconnect", () => {
     console.log(`❌ Socket ${socket.id} disconnected from order handling`);
   });
+  
 };
 
 
-export const emitOrderUpdate = (io, orderId , updateData) => {
-  const roomName = orderId;
-  console.log('Emitting to rooms:', io.sockets.adapter.rooms);
-  console.log(roomName,"roomName in emit orderupdate");
-  try {
-    io.to(roomName).emit("orderUpdate", updateData);
-    console.log(`✅ Successfully emitted order update to room ${roomName}`);
-  } catch (error) {
-    console.error(`❌ Error emitting order update to room ${roomName}:`, error);
+export const emitOrderUpdate = (io, orderId, order) => {
+  const merchantSocketIds = onlineMerchants[order.merchantId?.toString()];
+  if (merchantSocketIds && merchantSocketIds.length > 0) {
+    merchantSocketIds.forEach((socketId) => {
+      io.to(socketId).emit("orderUpdate", {
+        orderId,
+        orderStatus: order.orderStatus,
+        deliveryRiderStatus: order.deliveryRiderStatus,
+        merchantId: order.merchantId,
+      });
+      console.log(`📦 Emitted orderUpdate to merchant socket ${socketId}`);
+    });
+  } else {
+    console.log(`No active sockets for merchant ${order.merchantId}`);
   }
+
+  // Emit to orderId room for other roles (e.g., user, rider)
+  io.to(orderId).emit("orderUpdate", {
+    orderId,
+    orderStatus: order.orderStatus,
+    deliveryRiderStatus: order.deliveryRiderStatus,
+    merchantId: order.merchantId,
+  });
+  console.log(`Emitted order update to room ${orderId}`);
 };
 

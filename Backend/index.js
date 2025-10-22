@@ -58,6 +58,18 @@ io.on('connection', (socket) => {
   socket.on('disconnect', () => {
     console.log(`❌ Socket disconnected: ${socket.id}`);
   });
+  socket.on("joinOrderRoom", (orderId) => {
+    socket.join(orderId);
+    console.log(`✅ Socket ${socket.id} joined room ${orderId}`);
+  });
+  socket.on("leaveOrderRoom", (orderId) => {
+    socket.leave(orderId);
+    console.log(`✅ Socket ${socket.id} left room ${orderId}`);
+  });
+  socket.on("orderUpdate", (orderId) => {
+    socket.emit("orderUpdate", orderId);
+    console.log(`✅ Socket ${socket.id} received order update ${orderId}`);
+  });
 });
 
 // Attach io instance to every request

@@ -29,7 +29,7 @@ app.use(cors({
   credentials: true
 }));
 app.use((req, res, next) => {
-  console.log("CORS check →", req.method, req.path);
+  // console.log("CORS check →", req.method, req.path);
   next();
 });
 

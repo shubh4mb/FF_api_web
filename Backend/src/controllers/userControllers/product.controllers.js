@@ -46,73 +46,59 @@ const sortMap = {
 };
 
 
-export const getFilteredProducts = async (req, res) => { 
+export const getFilteredProducts = async (req, res) => {
   try {
     const {
-      priceRange          = [],         // [min,max]
-      selectedCategoryIds = [],         // ObjectId strings
-      selectedColors      = [],         // ['Red','Blue']
-      selectedStores      = [],         // merchant ObjectId strings
-      sortBy              = 'newest',   // string | string[]
+      priceRange = [],
+      selectedCategoryIds = [],
+      selectedColors = [],
+      selectedStores = [],
+      sortBy = 'newest',
+      search = '',
     } = req.body;
-    
+
     console.log('Request body:', req.body);
 
-    /* ----------- build initial $match ---------------- */
+    /* ----------- base match filter ----------- */
     const match = { isActive: true };
 
-    /* merchant filter - CORRECTED */
+    /* ✅ Merchant filter */
     if (selectedStores?.length > 0) {
       const merchantObjectIds = selectedStores
-        .filter(id => mongoose.Types.ObjectId.isValid(id)) // Use isValid first
+        .filter(id => mongoose.Types.ObjectId.isValid(id))
         .map(id => new mongoose.Types.ObjectId(id));
-    
+
       if (merchantObjectIds.length > 0) {
         match.merchantId = { $in: merchantObjectIds };
         console.log('Filtering by merchants:', merchantObjectIds);
       } else {
-        // No valid merchant IDs -> return empty result directly
         console.log('No valid merchant IDs provided');
         return res.json({ products: [] });
       }
     }
 
-    /* category OR‑match across three fields */
+    /* ✅ Category filter */
+    let categoryFilter = null;
     if (selectedCategoryIds.length > 0) {
       const validCatIds = selectedCategoryIds.filter(id => mongoose.Types.ObjectId.isValid(id));
       if (validCatIds.length > 0) {
         const categoryObjectIds = validCatIds.map(id => new mongoose.Types.ObjectId(id));
-        match.$or = [
-          { categoryId:       { $in: categoryObjectIds } },
-          { subCategoryId:    { $in: categoryObjectIds } },
-          { subSubCategoryId: { $in: categoryObjectIds } },
-        ];
+        categoryFilter = {
+          $or: [
+            { categoryId: { $in: categoryObjectIds } },
+            { subCategoryId: { $in: categoryObjectIds } },
+            { subSubCategoryId: { $in: categoryObjectIds } },
+          ],
+        };
         console.log('Filtering by categories:', categoryObjectIds);
       }
     }
-
-    console.log('Initial match stage:', JSON.stringify(match, null, 2));
 
     /* ----------------- aggregation pipeline ---------------- */
     let pipeline = [
       { $match: match },
 
-      /* 1️⃣  Unwind variants so each variant acts like its own product  */
-      { $unwind: '$variants' },
-
-      /* 2️⃣  Variant‑level filters (price, color) */
-      {
-        $match: {
-          ...(priceRange.length === 2 && {
-            'variants.price': { $gte: priceRange[0], $lte: priceRange[1] },
-          }),
-          ...(selectedColors.length > 0 && {
-            'variants.color.name': { $in: selectedColors },
-          }),
-        },
-      },
-
-      /* 3️⃣  Optional lookups (merchant / brand names) */
+      /* 1️⃣ Perform lookups early to access related fields */
       {
         $lookup: {
           from: 'merchants',
@@ -131,8 +117,72 @@ export const getFilteredProducts = async (req, res) => {
           pipeline: [{ $project: { name: 1 } }],
         },
       },
+      {
+        $lookup: {
+          from: 'categories', // Assuming 'categories' is the collection for categoryId
+          localField: 'categoryId',
+          foreignField: '_id',
+          as: 'category',
+          pipeline: [{ $project: { name: 1 } }],
+        },
+      },
+      {
+        $lookup: {
+          from: 'categories', // Assuming same collection for subCategoryId
+          localField: 'subCategoryId',
+          foreignField: '_id',
+          as: 'subCategory',
+          pipeline: [{ $project: { name: 1 } }],
+        },
+      },
+      {
+        $lookup: {
+          from: 'categories', // Assuming same collection for subSubCategoryId
+          localField: 'subSubCategoryId',
+          foreignField: '_id',
+          as: 'subSubCategory',
+          pipeline: [{ $project: { name: 1 } }],
+        },
+      },
 
-      /* 4️⃣  Keep only lean fields */
+      /* 2️⃣ Unwind variants */
+      { $unwind: '$variants' },
+
+      /* 3️⃣ Search filter (including looked-up fields) */
+      ...(search.trim() !== ''
+        ? [
+            {
+              $match: {
+                $or: [
+                  { name: new RegExp(search.trim(), 'i') },
+                  { 'variants.color.name': new RegExp(search.trim(), 'i') },
+                  { 'category.name': new RegExp(search.trim(), 'i') },
+                  { 'subCategory.name': new RegExp(search.trim(), 'i') },
+                  { 'subSubCategory.name': new RegExp(search.trim(), 'i') },
+                  { 'brand.name': new RegExp(search.trim(), 'i') },
+                  { 'merchant.shopName': new RegExp(search.trim(), 'i') },
+                ],
+              },
+            },
+          ]
+        : []),
+
+      /* 4️⃣ Apply category filter */
+      ...(categoryFilter ? [{ $match: categoryFilter }] : []),
+
+      /* 5️⃣ Variant-level filters (price, color) */
+      {
+        $match: {
+          ...(priceRange.length === 2 && {
+            'variants.price': { $gte: priceRange[0], $lte: priceRange[1] },
+          }),
+          ...(selectedColors.length > 0 && {
+            'variants.color.name': { $in: selectedColors },
+          }),
+        },
+      },
+
+      /* 6️⃣ Project essential fields */
       {
         $project: {
           name: 1,
@@ -145,23 +195,32 @@ export const getFilteredProducts = async (req, res) => {
           ratings: 1,
           numReviews: 1,
           isTriable: 1,
-
-          /* expose single variant fields at top level for convenience */
-          variantId:   '$variants._id',
-          price:       '$variants.price',
-          mrp:         '$variants.mrp',
-          discount:    '$variants.discount',
-          stockSizes:  '$variants.sizes',     // array of sizes + stock
-          color:       '$variants.color',     // { name, hex }
-          images:      '$variants.images',
-
+          variantId: '$variants._id',
+          price: '$variants.price',
+          mrp: '$variants.mrp',
+          discount: '$variants.discount',
+          stockSizes: '$variants.sizes',
+          color: '$variants.color',
+          images: '$variants.images',
           merchant: { $arrayElemAt: ['$merchant.shopName', 0] },
-          brand:    { $arrayElemAt: ['$brand.name', 0] },
+          brand: { $arrayElemAt: ['$brand.name', 0] },
+          category: { $arrayElemAt: ['$category.name', 0] },
+          subCategory: { $arrayElemAt: ['$subCategory.name', 0] },
+          subSubCategory: { $arrayElemAt: ['$subSubCategory.name', 0] },
         },
       },
     ];
 
-    /* 5️⃣  Multi‑field sorting */
+    /* 7️⃣ Sorting logic */
+    const sortMap = {
+      newest: { _id: -1 },
+      oldest: { _id: 1 },
+      priceLowToHigh: { price: 1 },
+      priceHighToLow: { price: -1 },
+      discount: { discount: -1 },
+      rating: { ratings: -1 },
+    };
+
     const sortKeys = Array.isArray(sortBy) ? sortBy : [sortBy];
     let finalSort = {};
 
@@ -173,29 +232,180 @@ export const getFilteredProducts = async (req, res) => {
       pipeline.push({ $sort: finalSort });
     }
 
-    /* 6️⃣  Execute aggregation */
+    /* 8️⃣ Execute aggregation */
     console.log('Executing aggregation pipeline...');
     const products = await Product.aggregate(pipeline).allowDiskUse(true);
-    
-    console.log(`Found ${products.length} products`);
-    
-    // Log merchant IDs of first few products for debugging
-    // if (products.length > 0) {
-    //   console.log('Sample merchant IDs from results:', 
-    //     products.slice(0, 3).map(p => ({ 
-    //       productName: p.name, 
-    //       merchantId: p.merchantId,
-    //       merchant: p.merchant 
-    //     }))
-    //   );
-    // }
 
+    console.log(`Found ${products.length} products`);
     res.json({ products });
   } catch (err) {
     console.error('Error in getFilteredProducts:', err);
     res.status(500).json({ error: 'Server error' });
   }
 };
+
+// export const getFilteredProducts = async (req, res) => {
+//   try {
+//     const {
+//       priceRange          = [],         // [min,max]
+//       selectedCategoryIds = [],         // ObjectId strings
+//       selectedColors      = [],         // ['Red','Blue']
+//       selectedStores      = [],         // merchant ObjectId strings
+//       sortBy              = 'newest',   // string | string[]
+//       search              = '',         // keyword for text search
+//     } = req.body;
+
+//     console.log('Request body:', req.body);
+
+//     /* ----------- base match filter ----------- */
+//     const match = { isActive: true };
+
+//     /* ✅ Search filter (by name or color) */
+//     if (search.trim() !== '') {
+//       const searchRegex = new RegExp(search.trim(), 'i'); // case-insensitive
+//       match.$or = [
+//         { name: searchRegex },
+//         { 'variants.color.name': searchRegex },
+//         // {'susubSubCategoryId.name':searchRegex},
+//       ];
+//       console.log('Filtering by search term:', search);
+//     }
+
+//     /* ✅ Merchant filter */
+//     if (selectedStores?.length > 0) {
+//       const merchantObjectIds = selectedStores
+//         .filter(id => mongoose.Types.ObjectId.isValid(id))
+//         .map(id => new mongoose.Types.ObjectId(id));
+
+//       if (merchantObjectIds.length > 0) {
+//         match.merchantId = { $in: merchantObjectIds };
+//         console.log('Filtering by merchants:', merchantObjectIds);
+//       } else {
+//         console.log('No valid merchant IDs provided');
+//         return res.json({ products: [] });
+//       }
+//     }
+
+//     /* ✅ Category filter (OR match across 3 fields) */
+//     if (selectedCategoryIds.length > 0) {
+//       const validCatIds = selectedCategoryIds.filter(id => mongoose.Types.ObjectId.isValid(id));
+//       if (validCatIds.length > 0) {
+//         const categoryObjectIds = validCatIds.map(id => new mongoose.Types.ObjectId(id));
+//         match.$or = match.$or || [];
+//         match.$or.push(
+//           { categoryId:       { $in: categoryObjectIds } },
+//           { subCategoryId:    { $in: categoryObjectIds } },
+//           { subSubCategoryId: { $in: categoryObjectIds } }
+//         );
+//         console.log('Filtering by categories:', categoryObjectIds);
+//       }
+//     }
+
+//     console.log('Initial match stage:', JSON.stringify(match, null, 2));
+
+//     /* ----------------- aggregation pipeline ---------------- */
+//     let pipeline = [
+//       { $match: match },
+
+//       /* 1️⃣  Unwind variants so each variant acts like its own product  */
+//       { $unwind: '$variants' },
+
+//       /* 2️⃣  Variant-level filters (price, color) */
+//       {
+//         $match: {
+//           ...(priceRange.length === 2 && {
+//             'variants.price': { $gte: priceRange[0], $lte: priceRange[1] },
+//           }),
+//           ...(selectedColors.length > 0 && {
+//             'variants.color.name': { $in: selectedColors },
+//           }),
+//         },
+//       },
+
+//       /* 3️⃣  Optional lookups (merchant / brand names) */
+//       {
+//         $lookup: {
+//           from: 'merchants',
+//           localField: 'merchantId',
+//           foreignField: '_id',
+//           as: 'merchant',
+//           pipeline: [{ $project: { shopName: 1 } }],
+//         },
+//       },
+//       {
+//         $lookup: {
+//           from: 'brands',
+//           localField: 'brandId',
+//           foreignField: '_id',
+//           as: 'brand',
+//           pipeline: [{ $project: { name: 1 } }],
+//         },
+//       },
+
+//       /* 4️⃣  Project essential fields */
+//       {
+//         $project: {
+//           name: 1,
+//           merchantId: 1,
+//           brandId: 1,
+//           categoryId: 1,
+//           subCategoryId: 1,
+//           subSubCategoryId: 1,
+//           gender: 1,
+//           ratings: 1,
+//           numReviews: 1,
+//           isTriable: 1,
+
+//           variantId:   '$variants._id',
+//           price:       '$variants.price',
+//           mrp:         '$variants.mrp',
+//           discount:    '$variants.discount',
+//           stockSizes:  '$variants.sizes',
+//           color:       '$variants.color',
+//           images:      '$variants.images',
+
+//           merchant: { $arrayElemAt: ['$merchant.shopName', 0] },
+//           brand:    { $arrayElemAt: ['$brand.name', 0] },
+//         },
+//       },
+//     ];
+
+//     /* 5️⃣  Sorting logic */
+//     const sortMap = {
+//       newest: { _id: -1 },
+//       oldest: { _id: 1 },
+//       priceLowToHigh: { price: 1 },
+//       priceHighToLow: { price: -1 },
+//       discount: { discount: -1 },
+//       rating: { ratings: -1 },
+//     };
+
+//     const sortKeys = Array.isArray(sortBy) ? sortBy : [sortBy];
+//     let finalSort = {};
+
+//     sortKeys.forEach(key => {
+//       if (sortMap[key]) Object.assign(finalSort, sortMap[key]);
+//     });
+
+//     if (Object.keys(finalSort).length > 0) {
+//       pipeline.push({ $sort: finalSort });
+//     }
+
+//     /* 6️⃣  Execute aggregation */
+//     console.log('Executing aggregation pipeline...');
+//     const products = await Product.aggregate(pipeline).allowDiskUse(true);
+
+//     console.log(`Found ${products.length} products`);
+//     res.json({ products });
+
+//   } catch (err) {
+//     console.error('Error in getFilteredProducts:', err);
+//     res.status(500).json({ error: 'Server error' });
+//   }
+// };
+
+
+
 
 export const getProductsByMerchantId = async (req, res) => {
       // console.log(req.params,'merchantId');
@@ -350,7 +560,7 @@ export const getYouMayLikeProducts = async (req, res) => {
 };
 
 // New: Batch fetch products for multiple merchants
-export const getProductsBatch = async (req, res) => {
+export const getProductsBatch = async (req, res) => { 
   // Input validation
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
@@ -493,7 +703,6 @@ export const getProductsBatch = async (req, res) => {
     res.status(500).json({ message: 'Server error fetching batch products' });
   }
 };
-
 
 
 

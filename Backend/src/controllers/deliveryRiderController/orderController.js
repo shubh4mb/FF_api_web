@@ -1,0 +1,145 @@
+import Order from "../../models/order.model.js";
+import deliveryRiderModel from "../../models/deliveryRider.model.js";
+import {redisPub} from "../../config/redisConfig.js";
+import { emitOrderUpdate } from "../../sockets/order.socket.js";
+
+
+// Haversine formula to calculate distance between two points in meters
+const getDistance = (lat1, lon1, lat2, lon2) => {
+  const R = 6371000; // Earth's radius in meters
+  const toRad = (deg) => deg * Math.PI / 180;
+  
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+            Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
+            Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c; // Distance in meters
+};
+
+
+export const acceptOrder = async (req, res) => {
+  try {
+    const { orderId } = req.body;
+    console.log(orderId,"orderId in accept order");
+    
+    const rider = await deliveryRiderModel.findById(req.riderId);
+    console.log(rider,"rider in accept order");
+    
+    if (!rider) {
+      return res.status(404).json({ message: 'Rider not found' });
+    }
+    const order = await Order.findById(orderId);
+    if (!order) {
+      return res.status(404).json({ message: 'Order not found' });
+    }
+    if (order.riderId && order.riderId.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ message: 'Not authorized to accept this order' });
+    }
+
+    order.deliveryRiderStatus = 'assigned';
+    order.deliveryRiderId = rider._id;
+    await order.save();
+
+    // const socketId = await redisPub.hGet(`rider:${rider._id}`, 'socketId');
+    // if (socketId) {
+    //   const socket = req.io.sockets.sockets.get(socketId);
+    //   if (socket) {
+    //     socket.emit("joinOrderRoom", orderId);
+    //     console.log(`Rider ${rider._id} joined room ${orderId}`);
+    //   } else {
+    //     console.warn(`Rider ${rider._id} socket ${socketId} not connected`);
+    //   }
+    // } else {
+    //   console.warn(`No socketId found for rider ${rider._id}`);
+    // }
+
+    emitOrderUpdate(req.io, orderId, {
+      orderId,
+      status: 'accepted',
+      riderId: rider._id,
+      message: 'Order accepted by rider',
+    });
+
+    res.status(200).json({ message: 'Order accepted successfully' });
+  } catch (error) {
+    console.error('Error in acceptOrder:', error);
+    res.status(500).json({ message: `❌ ${error.message}` });
+  }
+};
+
+
+
+export const reachedPickupLocation = async (req, res) => {
+  console.log("hitting reachedPickupLocation");
+  try {
+    const { orderId, latitude, longitude } = req.body;
+    console.log(orderId,latitude,longitude,"orderId, latitude, longitude");
+
+    // Validate request body
+    if (!orderId || latitude == null || longitude == null) {
+      return res.status(400).json({ message: 'orderId, latitude, and longitude are required' });
+    }
+
+    // Validate rider
+    const rider = await deliveryRiderModel.findById(req.riderId);
+    if (!rider) {
+      return res.status(404).json({ message: 'Rider not found' });
+    }
+
+    // Validate order
+    const order = await Order.findById(orderId);
+    if (!order) {
+      return res.status(404).json({ message: 'Order not found' });
+    }
+    if (order.deliveryRiderId?.toString() !== req.riderId.toString()) {
+      console.log(order.deliveryRiderId?.toString(),req.riderId.toString());
+      
+      return res.status(403).json({ message: 'Not authorized for this order' });
+    }
+    const pickupLocation={
+      latitude:9.9675883,
+      longitude:76.2984220
+    };
+    // if (!order.pickupLocation || !order.pickupLocation.latitude || !order.pickupLocation.longitude) {
+    //   console.log(order.pickupLocation,order.pickupLocation.latitude,order.pickupLocation.longitude);
+      
+    //   return res.status(400).json({ message: 'Order pickup location not set' });
+    // }
+
+    // Calculate distance
+    const distance = getDistance(
+      latitude,
+      longitude,
+      pickupLocation.latitude,
+      pickupLocation.longitude
+    );
+
+    // Check if within 50 meters
+    if (distance > 200) {
+      return res.status(400).json({ 
+        message: `Rider is ${distance.toFixed(2)} meters from pickup location, must be within 50 meters` 
+      });
+    }
+
+    // Update order status
+    order.deliveryRiderStatus = 'arrived at pickup';
+    await order.save();
+
+    // Emit order update
+    emitOrderUpdate(req.io, orderId, {
+      orderId,
+      status: 'arrived at pickup',
+      riderId: rider._id,
+      message: 'Rider has reached pickup location',
+      merchantId: order.merchantId,
+    });
+
+
+    res.status(200).json({ message: 'Rider confirmed at pickup location' });
+  } catch (error) {
+    console.error('Error in reachedPickupLocation:', error);
+    res.status(500).json({ message: `❌ ${error.message}` });
+  }
+};

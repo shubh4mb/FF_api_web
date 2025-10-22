@@ -1,6 +1,6 @@
 // src/sockets/merchant.socket.js
 import Merchant from "../models/merchant.model.js";
-let onlineMerchants={};
+export let onlineMerchants={};
 
 export const registerMerchantSockets = (io, socket) => {
   socket.on("registerMerchant", async (merchantId) => {

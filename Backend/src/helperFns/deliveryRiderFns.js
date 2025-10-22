@@ -9,7 +9,7 @@ async function geoAdd(key, lng, lat, member) {
   
   // helper: geo radius search (returns an array of member names)
   async function geoRadius(key, lng, lat, radiusKm, count = 10) {
-    console.log("geoRadius input:", { key, lng, lat, radiusKm, count });
+    // console.log("geoRadius input:", { key, lng, lat, radiusKm, count });
     try {
       const reply = await redisPub.sendCommand([
         "GEOSEARCH",
@@ -20,7 +20,7 @@ async function geoAdd(key, lng, lat, member) {
         "ASC",
         "COUNT", count.toString()
       ]);
-      console.log("geoRadius raw reply:", reply);
+      // console.log("geoRadius raw reply:", reply);
   
       const result = [];
       if (!Array.isArray(reply)) {
@@ -36,7 +36,7 @@ async function geoAdd(key, lng, lat, member) {
           console.warn("geoRadius: Skipping invalid item:", item);
         }
       }
-      console.log("geoRadius parsed result:", result);
+      // console.log("geoRadius parsed result:", result);
       return result;
     } catch (error) {
       console.error("geoRadius error:", error);
@@ -84,7 +84,7 @@ async function geoAdd(key, lng, lat, member) {
     const GEO_KEY = "riders:geo";
     const { lng, lat } = pickupLocation;
   
-    console.log("assignNearestRider input:", { lng, lat, orderId });
+    // console.log("assignNearestRider input:", { lng, lat, orderId });
   
     // 1️⃣ Find nearby riders within 20 km
     const candidates = await geoRadius(GEO_KEY, lng, lat, 20, 20);
@@ -100,7 +100,7 @@ async function geoAdd(key, lng, lat, member) {
         console.log(`Invalid riderId in candidate:`, candidate);
         continue;
       }
-      console.log(`Processing rider ${riderId}, distance: ${candidate.dist} km`);
+      // console.log(`Processing rider ${riderId}, distance: ${candidate.dist} km`);
   
       // 2️⃣ Check rider meta: online & not busy
       const meta = await getRiderMeta(riderId);
@@ -110,11 +110,11 @@ async function geoAdd(key, lng, lat, member) {
         continue;
       }
       if (meta.isOnline !== "true") {
-        console.log(`Rider ${riderId} skipped: Not online (isOnline: ${meta.isOnline})`);
+        // console.log(`Rider ${riderId} skipped: Not online (isOnline: ${meta.isOnline})`);
         continue;
       }
       if (meta.isBusy === "true") {
-        console.log(`Rider ${riderId} skipped: Busy (isBusy: ${meta.isBusy})`);
+        // console.log(`Rider ${riderId} skipped: Busy (isBusy: ${meta.isBusy})`);
         continue;
       }
   

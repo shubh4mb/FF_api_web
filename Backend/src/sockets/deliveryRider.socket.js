@@ -36,7 +36,7 @@ export const registerDeliveryRiderSockets = (io, socket) => {
       // Rider sends location updates frequently
       socket.on("updateLocation", async ({ riderId, lat, lng, orderIdIfAny = null }) => {
         // update GEO
-        console.log("updateLocation", riderId, lat, lng, orderIdIfAny);
+        // console.log("updateLocation", riderId, lat, lng, orderIdIfAny);
         await geoAdd("riders:geo", lng, lat, riderId);
         // await geoAdd("riders:geo", lng, lat, `rider:${riderId}`);
 
@@ -46,7 +46,7 @@ export const registerDeliveryRiderSockets = (io, socket) => {
     
         // if rider is already assigned and is in an order room, forward update to that room
         const meta = await getRiderMeta(riderId);
-        console.log(meta);
+        // console.log(meta);
         
         const assignedOrderId = meta.assignedOrderId || orderIdIfAny;
         if (assignedOrderId) {

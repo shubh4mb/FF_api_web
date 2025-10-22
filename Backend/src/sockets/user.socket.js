@@ -2,7 +2,6 @@
 export const registerUserSockets = (io, socket) => {
     
     
-  
     // Optional: handle user disconnect
     socket.on("disconnect", () => {
       const orderId = socket.data?.orderId;

@@ -139,6 +139,22 @@ export const createOrder = async (req, res) => {
 
     await newOrder.save();
 
+    // Join customer socket to orderId room
+    // const userSocketIds = onlineUsers[userId?.toString()];
+    // if (userSocketIds && userSocketIds.length > 0) {
+    //   userSocketIds.forEach((socketId) => {
+    //     const socket = io.sockets.sockets.get(socketId);
+    //     if (socket) {
+    //       socket.join(order._id.toString());
+    //       console.log(`User socket ${socketId} joined room ${order._id}`);
+    //     } else {
+    //       console.warn(`Socket ${socketId} not found for user ${userId}`);
+    //     }
+    //   });
+    // } else {
+    //   console.log(`No active sockets for user ${userId}`);
+    // }
+
     // Step 4: Clear cart
     // await Cart.updateOne({ userId }, { $set: { items: [] } });
 
