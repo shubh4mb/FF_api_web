@@ -1,6 +1,7 @@
 import DeliveryRider from "../models/deliveryRider.model.js";
 import { geoAdd, geoRadius, setHeartbeat, setRiderMeta, getRiderMeta } from "../helperFns/deliveryRiderFns.js";
-import { redisPub } from "../config/redisConfig.js";
+import { redis, inMemoryIndex } from "../config/redisConfig.js";
+// import { setRiderMeta } from "../helperFns/deliveryRiderFns.js";
 
 export const registerDeliveryRiderSockets = (io, socket) => {
 
@@ -20,43 +21,44 @@ export const registerDeliveryRiderSockets = (io, socket) => {
         console.log(`Rider ${riderId} registered on socket ${socket.id}`);
       });
     
-      // Rider goes online (initial)
-      socket.on("riderOnline", async ({ riderId, lat, lng }) => {
-        // store in geo
-        await geoAdd("riders:geo", lng, lat, `rider:${riderId}`);
-
-        // set meta
-        await setRiderMeta(riderId, { isOnline: "true", isBusy: "false" , lastSeenAt: Date.now() });
-        // heartbeat TTL so stale riders vanish
-        await setHeartbeat(riderId, 120);
-        // inform others (optional)
-        console.log(`Rider ${riderId} is online at ${lat},${lng}`);
-      });
+    
     
       // Rider sends location updates frequently
-      socket.on("updateLocation", async ({ riderId, lat, lng, orderIdIfAny = null }) => {
-        // update GEO
-        // console.log("updateLocation", riderId, lat, lng, orderIdIfAny);
-        await geoAdd("riders:geo", lng, lat, riderId);
-        // await geoAdd("riders:geo", lng, lat, `rider:${riderId}`);
+     // deliveryRider.socket.js
+socket.on("updateLocation", async ({ riderId, lat, lng, orderIdIfAny = null }) => {
+  console.log("updateLocation", riderId, lat, lng, orderIdIfAny);
 
-        // update meta heartbeat
-        await setHeartbeat(riderId, 120);
-        await setRiderMeta(riderId, { lastSeenAt: Date.now() });
-    
-        // if rider is already assigned and is in an order room, forward update to that room
-        const meta = await getRiderMeta(riderId);
-        // console.log(meta);
-        
-        const assignedOrderId = meta.assignedOrderId || orderIdIfAny;
-        if (assignedOrderId) {
-          // emit to order room (all participants joined)
-          io.to(assignedOrderId).emit("riderLocationUpdate", { riderId, lat, lng, ts: Date.now() });
-        }
-    
-        // optionally emit to rider personal room for debugging or monitoring
-        io.to(`riderSocket:${riderId}`).emit("locationAck", { ok: true });
-      });
+  const currentMeta = await getRiderMeta(riderId);
+  const isFirstUpdate = !currentMeta || Object.keys(currentMeta).length === 0;
+
+  const newMeta = {
+    isOnline: "true",
+    isBusy: currentMeta?.isBusy || "false",
+    socketId: socket.id,
+    lastSeenAt: Date.now(),
+  };
+  if (orderIdIfAny) newMeta.assignedOrderId = orderIdIfAny;
+
+  await setRiderMeta(riderId, newMeta);
+
+  // FIX: Pass LNG first, LAT second
+  await geoAdd("riders:geo", lng, lat, riderId);  // ← CORRECT ORDER
+
+  await setHeartbeat(riderId, 120);
+
+  const assignedOrderId = newMeta.assignedOrderId || orderIdIfAny;
+  if (assignedOrderId) {
+    io.to(assignedOrderId).emit("riderLocationUpdate", {
+      riderId, lat, lng, ts: Date.now()
+    });
+  }
+
+  io.to(`riderSocket:${riderId}`).emit("locationAck", { ok: true });
+
+  if (isFirstUpdate) {
+    console.log(`Rider ${riderId} is now ONLINE at ${lng},${lat}`);
+  }
+});
     
       // Rider accepts order
       socket.on("acceptOrder", async ({ riderId, orderId }) => {
@@ -81,18 +83,24 @@ export const registerDeliveryRiderSockets = (io, socket) => {
         console.log(`${role || "client"} joined room ${orderId}`);
       });
     
-      socket.on("disconnect", async () => {
-        console.log("socket disconnected", socket.id);
-    
-        // lookup riderId by socketId
-        const keys = await redisPub.keys("rider:*:meta");
-        for (const key of keys) {
-            const meta = await redisPub.hGetAll(key);
-            if (meta.socketId === socket.id) {
-                await setRiderMeta(key.split(":")[1], { isOnline: "false" });
-                break;
-            }
-        }
-    });
+   socket.on("disconnect", async () => {
+  console.log("Rider disconnected:", socket.id);
+
+  const keys = await redis.keys("rider:*:meta");
+  for (const key of keys) {
+    const meta = await redis.hGetAll(key);
+    if (meta.socketId === socket.id) {
+      const riderId = key.split(":")[1];
+      await setRiderMeta(riderId, {
+        isOnline: "false",
+        isBusy: "false",
+        assignedOrderId: "",
+        socketId: "",
+      });
+      console.log(`Rider ${riderId} marked OFFLINE`);
+      break;
+    }
+  }
+});
     
 }

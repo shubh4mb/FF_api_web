@@ -9,8 +9,8 @@ import { registerMerchantSockets } from './src/sockets/merchant.socket.js';
 import { registerOrderSockets } from './src/sockets/order.socket.js';
 import { registerUserSockets } from './src/sockets/user.socket.js';
 import { registerDeliveryRiderSockets } from './src/sockets/deliveryRider.socket.js';
-import { createAdapter } from '@socket.io/redis-adapter';
-import { redisPub, redisSub } from './src/config/redisConfig.js';
+// import { createAdapter } from '@socket.io/redis-adapter';
+// import { redisPub, redisSub } from './src/config/redisConfig.js';
 // import { createClient } from 'redis';
 dotenv.config();
 
@@ -35,8 +35,8 @@ export const io = new Server(server, {
   },
 });
 
-// Redis adapter for scaling
-io.adapter(createAdapter(redisPub, redisSub));
+// Redis adapter for scaling for multiple instance of server .
+// io.adapter(createAdapter(redisPub, redisSub));
 
 io.on('connection', (socket) => {
   const role = socket.handshake.query.role;

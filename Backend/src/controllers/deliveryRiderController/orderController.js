@@ -1,6 +1,6 @@
 import Order from "../../models/order.model.js";
 import deliveryRiderModel from "../../models/deliveryRider.model.js";
-import {redisPub} from "../../config/redisConfig.js";
+// import {redisPub} from "../../config/redisConfig.js";
 import { emitOrderUpdate } from "../../sockets/order.socket.js";
 
 // Haversine formula to calculate distance between two points in meters

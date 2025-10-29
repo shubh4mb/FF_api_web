@@ -82,13 +82,13 @@ export const orderRequestForMerchant = async (req, res) => {
     if (status === "accept") {
       order.orderStatus = "accepted";
       const pickupLocation = {
-        lng: 76.3244129,
-        lat: 9.9371151,
-      };
+  lat: 9.9371151,
+  lng: 76.3244129,
+};
       const customerLocation={
-        lng: 76.3244129,
-        lat: 9.9371151,
-      }
+  lat: 9.9371151,
+  lng: 76.3244129,
+}
       let deliveryAmount= "100";
       const orderPayload = {
        ...order,

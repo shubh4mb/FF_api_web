@@ -1,193 +1,161 @@
-   import { redisPub } from "../config/redisConfig.js";
-   import {io} from '../../index.js'
-  //  import {io} from "../index.js";
+// src/helperFns/deliveryRiderFns.js
+import { redis, inMemoryIndex } from "../config/redisConfig.js";  // Fixed: Added inMemoryIndex
+import { io } from "../../index.js";  // Assuming io for emit
 
-   // helper: low-level redis GEOADD via sendCommand (works across redis client versions)
+// GEOADD wrapper (unused here, but exported)
 async function geoAdd(key, lng, lat, member) {
-    await redisPub.sendCommand(["GEOADD", key, lng.toString(), lat.toString(), member]);
+  await redis.geoAdd(key, lng, lat, member);
+}
+
+// GEO radius search
+async function geoRadius(key, lng, lat, radiusKm, count = 10) {
+  try {
+    const result = await redis.geoSearch(key, lng, lat, radiusKm, count);
+    console.log("geoSearch raw result:", result); // Debug
+    return Array.isArray(result) ? result : [];
+  } catch (error) {
+    console.error("geoRadius error:", error);
+    return []; 
   }
-  
-  // helper: geo radius search (returns an array of member names)
-  async function geoRadius(key, lng, lat, radiusKm, count = 10) {
-    // console.log("geoRadius input:", { key, lng, lat, radiusKm, count });
-    try {
-      const reply = await redisPub.sendCommand([
-        "GEOSEARCH",
-        key,
-        "FROMLONLAT", lng.toString(), lat.toString(),
-        "BYRADIUS", radiusKm.toString(), "km",
-        "WITHDIST",
-        "ASC",
-        "COUNT", count.toString()
-      ]);
-      // console.log("geoRadius raw reply:", reply);
-  
-      const result = [];
-      if (!Array.isArray(reply)) {
-        console.error("geoRadius: Invalid reply format, expected array, got:", reply);
-        return result;
-      }
-  
-      // Handle nested array: [['member', 'dist'], ...]
-      for (const item of reply) {
-        if (Array.isArray(item) && item.length >= 2 && typeof item[0] === 'string' && typeof item[1] === 'string') {
-          result.push({ member: item[0], dist: parseFloat(item[1]) });
-        } else {
-          console.warn("geoRadius: Skipping invalid item:", item);
-        }
-      }
-      // console.log("geoRadius parsed result:", result);
-      return result;
-    } catch (error) {
-      console.error("geoRadius error:", error);
-      return [];
-    }
+}
+
+// Heartbeat
+async function setHeartbeat(riderId, ttlSec = 120) {
+  await redis.setEx(`rider:heartbeat:${riderId}`, ttlSec, "1");
+}
+
+// Rider meta – with type parsing
+async function setRiderMeta(riderId, obj) {
+  const flat = {};
+  for (const k in obj) {
+    flat[k] = String(obj[k]);
+  } 
+  if (Object.keys(flat).length) {
+    await redis.hSet(`rider:${riderId}:meta`, flat);
+    inMemoryIndex.add(`rider:${riderId}:meta`);  // Now defined
   }
-  
-  // helper: set heartbeat (TTL) so offline riders expire
-  async function setHeartbeat(riderId, ttlSec = 120) {
-    await redisPub.setEx(`rider:heartbeat:${riderId}`, ttlSec, "1");
-  }
-  
-  // helper: set rider meta
-  async function setRiderMeta(riderId, obj) {
-    const flat = [];
-    for (const k in obj) {
-      flat.push(k, String(obj[k]));
-    }
-    if (flat.length) await redisPub.hSet(`rider:${riderId}:meta`, flat);
-  }
-  
-  // helper: get rider meta
-  async function getRiderMeta(riderId) {
-    // console.log("riderMeta", meta)
-    return redisPub.hGetAll(`rider:${riderId}:meta`);
-  }
-  
-  // helper: try acquire simple lock (SET NX PX)
-  async function acquireLock(key, ttlMs = 10000) {
-    const res = await redisPub.set(key, "1", { NX: true, PX: ttlMs });
-    return res === "OK";
-  }
-  
-  // release lock
-  async function releaseLock(key) {
-    await redisPub.del(key);
-  }
-  
-  
-  /** ASSIGNMENT: find nearest rider and notify them
-   * - pickupLocation: { lng, lat }
-   * - orderId, orderPayload
-   */
-  async function assignNearestRider(pickupLocation, orderId, orderPayload) {
-    const GEO_KEY = "riders:geo";
-    const { lng, lat } = pickupLocation;
-  
-    // console.log("assignNearestRider input:", { lng, lat, orderId });
-  
-    // 1️⃣ Find nearby riders within 20 km
-    const candidates = await geoRadius(GEO_KEY, lng, lat, 20, 20);
-    console.log("Candidates:", candidates);
-    if (!candidates.length) {
-      console.log("No candidates found within 20 km");
-      return null;
-    }
-  
-    for (const candidate of candidates) {
-      const riderId = candidate.member;
-      if (typeof riderId !== 'string' || !riderId) {
-        console.log(`Invalid riderId in candidate:`, candidate);
-        continue;
-      }
-      // console.log(`Processing rider ${riderId}, distance: ${candidate.dist} km`);
-  
-      // 2️⃣ Check rider meta: online & not busy
-      const meta = await getRiderMeta(riderId);
-      console.log(`Rider ${riderId} meta:`, meta);
-      if (!meta || Object.keys(meta).length === 0) {
-        console.log(`Rider ${riderId} skipped: No metadata or empty metadata`);
-        continue;
-      }
-      if (meta.isOnline !== "true") {
-        // console.log(`Rider ${riderId} skipped: Not online (isOnline: ${meta.isOnline})`);
-        continue;
-      }
-      if (meta.isBusy === "true") {
-        // console.log(`Rider ${riderId} skipped: Busy (isBusy: ${meta.isBusy})`);
-        continue;
-      }
-  
-      // 3️⃣ Acquire per-order lock to avoid race
-      const lockKey = `lock:assign:${orderId}`;
-      const gotLock = await acquireLock(lockKey, 10000);
-      console.log(`Rider ${riderId} lock attempt for ${lockKey}:`, gotLock);
-      if (!gotLock) {
-        console.log(`Rider ${riderId} skipped: Failed to acquire lock`);
-        continue;
-      }
-  
-      try {
-        // 4️⃣ Double-check rider is still free
-        const freshMeta = await getRiderMeta(riderId);
-        console.log(`Rider ${riderId} fresh meta:`, freshMeta);
-        if (!freshMeta || Object.keys(freshMeta).length === 0) {
-          console.log(`Rider ${riderId} skipped: No fresh metadata or empty`);
-          continue;
-        }
-        if (freshMeta.isBusy === "true") {
-          console.log(`Rider ${riderId} skipped: No longer free (isBusy: ${freshMeta.isBusy})`);
-          continue;
-        }
-  
-        // 5️⃣ Mark rider as busy with this order
-        console.log(`Rider ${riderId} assigning order ${orderId}`);
-        await setRiderMeta(riderId, { isBusy: "true", assignedOrderId: orderId });
-  
-        // 6️⃣ Notify rider via socket
-        const socketRoom = freshMeta.socketId || `rider:${riderId}`;
-        console.log(`Notifying rider ${riderId} in room: ${socketRoom}`);
-        io.to(socketRoom).emit("orderAssigned", { orderId, orderPayload });
-        console.log(`📡 Order ${orderId} assigned to rider ${riderId}`);
-  
-        // 7️⃣ Start a timeout: if rider doesn't accept in 25s, free rider
-        const waitingKey = `assign:waiting:${orderId}:${riderId}`;
-        await redisPub.setEx(waitingKey, 25, "waiting");
-  
-        setTimeout(async () => {
-          const stillWaiting = await redisPub.get(waitingKey);
-          if (stillWaiting) {
-            await redisPub.del(waitingKey);
-            await setRiderMeta(riderId, { isBusy: "false", assignedOrderId: "" });
-            io.to(`rider:${riderId}`).emit("assignmentTimeout", { orderId });
-            console.log(`❌ Rider ${riderId} did not accept order ${orderId} in time`);
-          }
-        }, 25000);
-  
-        // 8️⃣ Return assigned rider info
-        console.log(`Assignment successful for rider ${riderId}`);
-        return { riderId, distKm: candidate.dist };
-      } catch (error) {
-        console.error(`Error assigning rider ${riderId}:`, error);
-        continue;
-      } finally {
-        await releaseLock(lockKey);
-        console.log(`Lock ${lockKey} released`);
-      }
-    }
-  
-    console.log("❌ No available rider found for order", orderId);
+}
+
+async function getRiderMeta(riderId) {
+  const rawMeta = await redis.hGetAll(`rider:${riderId}:meta`);
+  // Parse strings to types (robust for bools/nums)
+  const meta = { ...rawMeta };
+  if (meta.isOnline !== undefined) meta.isOnline = meta.isOnline === 'true';
+  if (meta.isBusy !== undefined) meta.isBusy = meta.isBusy === 'true';
+  if (meta.lastSeenAt !== undefined) meta.lastSeenAt = parseInt(meta.lastSeenAt, 10) || Date.now();
+  if (meta.assignedOrderId !== undefined) meta.assignedOrderId = meta.assignedOrderId || '';
+  console.log(`Parsed meta for ${riderId}:`, meta);  // Temp debug
+  return meta;
+}
+
+// Lock
+async function acquireLock(key, ttlMs = 10000) {
+  const res = await redis.set(key, "1", { NX: true, PX: ttlMs });
+  return res === "OK";
+}
+
+async function releaseLock(key) {
+  await redis.del(key);
+}
+
+// Assign nearest rider – complete with lock/heartbeat
+async function assignNearestRider(pickupLocation, orderId, orderPayload) {
+  const GEO_KEY = "riders:geo";
+  const { lat, lng } = pickupLocation;
+  let assignedRider = null;
+
+  console.log("Searching riders at (lat, lng):", { lat, lng });
+
+  const candidates = await geoRadius(GEO_KEY, lng, lat, 20, 20);
+  console.log("Raw candidates:", candidates);
+
+  if (!candidates?.length) {
+    console.log("No riders in GEO range");
     return null;
   }
-  
 
-  export {
-    geoAdd,
-    geoRadius,
-    setHeartbeat,
-    setRiderMeta,
-    getRiderMeta,
-    acquireLock,
-    releaseLock,
-    assignNearestRider
-  };
+  for (const { member: riderId, dist } of candidates) {
+    console.log(`Checking rider: ${riderId}, dist: ${dist}km`);
+
+    const meta = await getRiderMeta(riderId);
+    console.log(`Meta for ${riderId}:`, meta);  // Keep for now
+
+    if (!meta?.isOnline) {
+      console.log(`Rider ${riderId} offline`);
+      continue;
+    }
+    if (meta.isBusy) {
+      console.log(`Rider ${riderId} busy`);
+      continue;
+    }
+
+    // Heartbeat check: <5min idle
+    const heartbeatKey = `rider:heartbeat:${riderId}`;
+    const heartbeat = await redis.get(heartbeatKey);
+    if (!heartbeat) {
+      console.log(`Rider ${riderId} heartbeat expired`);
+      continue;
+    }
+    const lastSeen = Date.now() - (5 * 60 * 1000);  // 5min threshold
+    if (meta.lastSeenAt < lastSeen) {
+      console.log(`Rider ${riderId} inactive (lastSeen: ${meta.lastSeenAt})`);
+      continue;
+    }
+
+    // Acquire lock for assignment
+    const lockKey = `assign:lock:${orderId}:${riderId}`;
+    if (!(await acquireLock(lockKey))) {
+      console.log(`Rider ${riderId} assignment lock failed (concurrent?)`);
+      continue;
+    }
+
+    try {
+      // Assign: Update meta
+      await setRiderMeta(riderId, { 
+        ...meta, 
+        assignedOrderId: orderId, 
+        isBusy: true,
+        lastSeenAt: Date.now() 
+      });
+      await setHeartbeat(riderId);
+
+      // Emit to rider socket (if socketId in meta)
+      if (meta.socketId) {
+        io.to(meta.socketId).emit('orderAssigned', { orderId, orderPayload });
+      }
+
+      // Emit to merchant (room by merchantId?)
+      // Assuming orderPayload has merchantId; adjust as needed
+      const merchantRoom = orderPayload.merchantId ? `merchant:${orderPayload.merchantId}` : null;
+      if (merchantRoom) {
+        io.to(merchantRoom).emit('riderAssigned', { riderId, orderId });
+      }
+
+      assignedRider = riderId;
+      console.log(`✅ Assigned rider ${riderId} to order ${orderId}`);
+      break;  // First available
+    } catch (err) {
+      console.error(`Assignment error for ${riderId}:`, err);
+    } finally {
+      await releaseLock(lockKey);
+    }
+  }
+
+  if (!assignedRider) {
+    console.log("No available rider found within range");
+  } else {
+    console.log(`Assigned rider: ${assignedRider}`);
+  }
+  return assignedRider;
+}
+
+export {
+  geoAdd,
+  geoRadius,
+  setHeartbeat,
+  setRiderMeta,
+  getRiderMeta,
+  acquireLock,
+  releaseLock,
+  assignNearestRider,
+};
