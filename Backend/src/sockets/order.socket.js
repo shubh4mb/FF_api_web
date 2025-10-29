@@ -22,26 +22,18 @@ export const registerOrderSockets = (io, socket) => {
 export const emitOrderUpdate = (io, orderId, order) => {
   const merchantSocketIds = onlineMerchants[order.merchantId?.toString()];
   if (merchantSocketIds && merchantSocketIds.length > 0) {
+    // console.log(order,"order");
+    
     merchantSocketIds.forEach((socketId) => {
-      io.to(socketId).emit("orderUpdate", {
-        orderId,
-        orderStatus: order.orderStatus,
-        deliveryRiderStatus: order.deliveryRiderStatus,
-        merchantId: order.merchantId,
-      });
-      console.log(`📦 Emitted orderUpdate to merchant socket ${socketId}`);
+      io.to(socketId).emit("orderUpdate", order);
+      // console.log(`📦 Emitted orderUpdate to merchant socket ${socketId}`);
     });
   } else {
     console.log(`No active sockets for merchant ${order.merchantId}`);
   }
 
   // Emit to orderId room for other roles (e.g., user, rider)
-  io.to(orderId).emit("orderUpdate", {
-    orderId,
-    orderStatus: order.orderStatus,
-    deliveryRiderStatus: order.deliveryRiderStatus,
-    merchantId: order.merchantId,
-  });
-  console.log(`Emitted order update to room ${orderId}`);
+  io.to(orderId).emit("orderUpdate", order);
+  // console.log(`Emitted order update to room ${orderId}`);
 };
 

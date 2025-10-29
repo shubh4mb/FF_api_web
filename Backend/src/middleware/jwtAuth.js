@@ -51,13 +51,13 @@ export const authMiddlewareMerchant = (req, res, next) => {
 
 export const authMiddlewareRider=(req,res,next)=>{
     const authHeader=req.headers.authorization;
-    console.log(authHeader,'authHeader');
+    // console.log(authHeader,'authHeader');
     
     if(authHeader){
         const token=authHeader.split(' ')[1];
         try {
             const decoded=jwt.verify(token,process.env.JWT_SECRET);
-            console.log(decoded,'decoded');
+            // console.log(decoded,'decoded');
             
             req.riderId=decoded.id;
             next();

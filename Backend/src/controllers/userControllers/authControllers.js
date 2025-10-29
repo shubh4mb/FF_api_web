@@ -66,7 +66,7 @@ export const signup = async (req, res) => {
       const token = jwt.sign(
         { userId: user._id, phoneNumber: user.phoneNumber },
         process.env.JWT_SECRET,
-        { expiresIn: "1h" }
+        { expiresIn: "30d" } //30 days
       );
 
       // console.log(token,'token');

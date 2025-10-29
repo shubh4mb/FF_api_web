@@ -6,6 +6,9 @@ import DeliveryRider from "../../models/deliveryRider.model.js";
 import {assignNearestRider} from "../../helperFns/deliveryRiderFns.js"
 import {onlineMerchants} from "../../sockets/merchant.socket.js"
 
+const generateOTP = () => {
+  return Math.floor(1000 + Math.random() * 9000);
+}
 
 export const saveProductDetails = async (req, res) => {
   try {
@@ -73,7 +76,7 @@ export const orderRequestForMerchant = async (req, res) => {
     const { orderId } = req.params;
     const { status } = req.body;
 
-    const order = await Order.findById(orderId);
+    const order = await Order.findById(orderId).populate('merchantId', 'shopName');
     if (!order) return res.status(404).json({ message: "Order not found" });
 
     if (status === "accept") {
@@ -82,20 +85,27 @@ export const orderRequestForMerchant = async (req, res) => {
         lng: 76.3244129,
         lat: 9.9371151,
       };
+      const customerLocation={
+        lng: 76.3244129,
+        lat: 9.9371151,
+      }
+      let deliveryAmount= "100";
       const orderPayload = {
-        orderId: order._id,
-        merchantName: order.merchantName,
-        totalAmount: order.totalAmount,
-        pickupLocation,
-        dropLocation: order.deliveryLocation,
+       ...order,
+       pickupLocation,
+       customerLocation,
+       deliveryAmount,
       };
-      const assigned = await assignNearestRider(pickupLocation, orderPayload.orderId, orderPayload);
+
+
+
+      const assigned = await assignNearestRider(pickupLocation, orderId, orderPayload);
       console.log("Assigned rider:", assigned);
 
       if (assigned) {
-        order.deliveryRiderId = assigned.riderId;
+        // order.deliveryRiderId = assigned.riderId;
         order.deliveryDistance = assigned.distKm;
-        order.deliveryRiderStatus = "assigned";
+        // order.deliveryRiderStatus = "assigned";
         console.log(`✅ Rider ${assigned.riderId} assigned for order ${order._id}`);
       } else {
         console.log("❌ No available rider found within range");
@@ -172,14 +182,18 @@ export const orderPacked = async (req, res) => {
     const order = await Order.findById(orderId);
     if (!order) return res.status(404).json({ message: "Order not found" });
     order.orderStatus = "packed";
+    order.otp=generateOTP();
     await order.save();
-    emitOrderUpdate(io, orderId, { status: "packed" });
-    return res.status(200).json({ message: "Order status updated", orderId });
+    emitOrderUpdate(io, orderId, order);
+
+    return res.status(200).json({ message: "Order status updated", order });
 
   } catch (error) {
     return res.status(500).json({ message: "Error updating order status" });
   }
 }
+
+
 
 
 

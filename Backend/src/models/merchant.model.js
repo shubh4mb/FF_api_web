@@ -17,6 +17,8 @@ const merchantSchema = new mongoose.Schema(
       street: String,
       city: String,
       postalCode: String,
+      latitude: Number,
+      longitude: Number,
       coordinates: {
         type: [Number], // [longitude, latitude]
         index: "2dsphere",

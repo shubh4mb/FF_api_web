@@ -32,7 +32,7 @@ const OrderSchema = new mongoose.Schema({
           'packed', 
           'out_for_delivery', 
           'arrived at delivery',
-          'try_phase', 
+          'try phase', 
           'confirmed_purchase', 
           'returned', 
           'partially_returned',
@@ -108,6 +108,10 @@ const OrderSchema = new mongoose.Schema({
       type: String,
       default: null
     },
+    trialPhaseStart: { type: Date, default: null }, // To store trial phase start time
+  trialPhaseEnd: { type: Date, default: null }, // To store trial phase end time
+  trialPhaseDuration: { type: Number, default: 0 }, // To store duration in minutes (or your preferred unit)
+
   }, { timestamps: true });
 
 export default mongoose.model("Order", OrderSchema);
