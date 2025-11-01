@@ -67,16 +67,18 @@ import { io } from "../../../index.js"
 // };
 
 export const createOrder = async (req, res) => {
-  console.log(req.body, 'body');
-  let amount = 1500; // You can calculate this dynamically later
+  console.log(req.body.deliveryCharge, 'body');
+  let amount = req.body.deliveryCharge;
+  
 
   try {
     // Create Razorpay order
-    const razorpayOrder = await Razorpay.orders.create({
-      amount,
-      currency: "INR",
-      receipt: `order_${Date.now()}`,
-    });
+    // const razorpayOrder = await Razorpay.orders.create({
+    //   amount,
+    //   currency: "INR",
+    //   receipt: `order_${Date.now()}`,
+    // });
+console.log("working");
 
     const userId = req.user.userId;
 
@@ -116,6 +118,7 @@ export const createOrder = async (req, res) => {
         tryStatus: product.isTriable ? 'pending' : 'not-triable'
       });
     }
+console.log("working2");
 
     // Step 3: Create order
     const newOrder = new Order({
@@ -160,11 +163,12 @@ export const createOrder = async (req, res) => {
 
     // Step 5: Notify merchant
     notifyMerchant(io, newOrder.merchantId, newOrder);
+console.log("working3");
 
     return res.status(201).json({
       message: 'Order placed successfully',
       order: newOrder,
-      razorpayOrder,
+      // razorpayOrder,
     });
 
   } catch (error) {
@@ -340,6 +344,27 @@ export const getAllOrders = async(req,res)=>{
     
   }
 }
+
+export const initiateReturn = async (req, res) => {
+  try {
+    console.log("initiateReturn");
+    let { orderId } = req.params;
+     orderId = orderId.replace(/^["']|["']$/g, '');
+    console.log(orderId);
+
+    const order = await Order.findById(orderId);
+    if (!order) return res.status(404).json({ message: "Order not found" });
+
+  order.deliveryRiderStatus = "completed try phase";
+  order.orderStatus = "completed try phase";
+  await order.save();
+  emitOrderUpdate(io, orderId, order);
+  return res.status(200).json({ message: "Order handover", order });
+  } catch (error) {
+    console.log(error);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+};
 
 
 

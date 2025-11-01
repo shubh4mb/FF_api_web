@@ -259,3 +259,63 @@ export const endTrialPhase = async (req, res) => {
     return res.status(500).json({ message: "Error ending trial phase" });
   }
 };
+
+export const verifyOtpOnReturn=async(req,res)=>{
+  try {
+    const {orderId,otp}=req.body;
+    console.log(orderId,otp,"orderId,otp");
+    
+    const order=await Order.findById(orderId);
+    if(!order){
+      return res.status(404).json({message:"Order not found"});
+    }
+    if(order.otp!==otp){
+      return res.status(400).json({message:"Invalid OTP"});
+    }
+    console.log(order,"order");
+    
+    order.deliveryRiderStatus="otp-verified-return";
+    
+    const pickupCoordinates={
+      latitude:9.9675883,
+      longitude:76.2984220
+    }
+    await order.save();
+    emitOrderUpdate(req.io,orderId,{order,pickupCoordinates})
+    res.status(200).json({message:"OTP verified successfully"});
+  } catch (error) {
+    console.error("Error in verifyOtpOnReturn:",error);
+    res.status(500).json({message:"❌ " + error.message});
+  }
+} 
+
+export const reachedReturnMerchant = async(req,res)=>{
+  try {
+    const {orderId,latitue,longitude}=req.body;
+    console.log(req.body,"req.body");
+    const order =await Order.findById(orderId);
+    if(!order){
+      return res.status(404).json({message:"Order not found"});
+    }
+    if(order.deliveryRiderId?.toString()!==req.riderId.toString()){
+      return res.status(403).json({message:"Not authorized for this order"});
+    }
+    const merchantLocation={
+      latitude:9.9675883,
+      longitude:76.2984220
+    }
+    const distance=getDistance(latitue,longitude,merchantLocation.latitude,merchantLocation.longitude);
+    if(distance>200){
+      return res.status(400).json({message:"Rider is ${distance.toFixed(2)} meters from merchant location, must be within 50 meters"});
+    }
+    order.deliveryRiderStatus="en route to return";
+    order.orderStatus="en route to return";
+    await order.save();
+    emitOrderUpdate(req.io,orderId,order)
+    res.status(200).json({message:"Rider confirmed at merchant location"});
+    
+  } catch (error) {
+    console.error("Error in reachedReturnMerchant:",error);
+    res.status(500).json({message:"❌ " + error.message});
+  }
+}

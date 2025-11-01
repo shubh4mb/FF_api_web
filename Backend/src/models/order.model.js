@@ -2,6 +2,7 @@ import mongoose from "mongoose";
 const OrderSchema = new mongoose.Schema({
     userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     merchantId: { type: mongoose.Schema.Types.ObjectId, ref: 'Merchant' },
+    
     deliveryRiderId: { type: mongoose.Schema.Types.ObjectId, ref: 'DeliveryRider', default: null },
     items: [
       {
@@ -33,6 +34,9 @@ const OrderSchema = new mongoose.Schema({
           'out_for_delivery', 
           'arrived at delivery',
           'try phase', 
+          'completed try phase',
+          'otp-verified-return',
+          'reached return merchant',
           'confirmed_purchase', 
           'returned', 
           'partially_returned',
@@ -58,7 +62,9 @@ const OrderSchema = new mongoose.Schema({
           'arrived at delivery',      // Reached customer location
           // 'waiting for customer',     // Waiting while user tries (Try & Buy)
           'try phase',    // Try phase ongoing
-          'completed try phase',      // Delivery boy marks try phase completed
+          'completed try phase', 
+          'otp-verified-return',     // Delivery boy marks try phase completed
+          'reached return merchant',
           'confirmed return',         // Items returned
           'confirmed purchase',       // Customer accepted items
           'delivered',                // Final confirmation

@@ -4,7 +4,7 @@ import { register, verifyOTP, savePersonalDetails ,uploadDocuments,saveBankDetai
 import { authMiddlewareRider } from '../middleware/jwtAuth.js';
 import upload from '../middleware/multer.js';
 import { handleMulterError } from '../middleware/multer.js';
-import { acceptOrder ,reachedPickupLocation , verifyOtp,reachedCustomerLocation,handOutProducts,endTrialPhase} from '../controllers/deliveryRiderController/orderController.js';
+import { acceptOrder ,reachedPickupLocation , verifyOtp,reachedCustomerLocation,handOutProducts,endTrialPhase,verifyOtpOnReturn} from '../controllers/deliveryRiderController/orderController.js';
 const router=express.Router();
 
 router.post('/register',register);
@@ -36,6 +36,7 @@ router.post("/order/verifyOtp",authMiddlewareRider,verifyOtp);
 router.post("/order/reachedCustomerLocation",authMiddlewareRider,reachedCustomerLocation);
 router.post("/order/handOutProducts",authMiddlewareRider,handOutProducts);
 router.post("/order/endTrialPhase",authMiddlewareRider,endTrialPhase);
+router.post("/order/returnVerification",authMiddlewareRider,verifyOtpOnReturn);
 
 
 
