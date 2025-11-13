@@ -1,7 +1,8 @@
 import dotenv from 'dotenv';
 // console.log('Current file:', import.meta.url);
 import {Server} from 'socket.io'
- 
+import {matchQueuedOrders} from './src/helperFns/orderFns.js'  // Your matcher (or services/orderMatcher.js if moved)
+
 import connectDB from './src/config/db.js';
 import app from './src/app.js'; 
 import { createServer } from 'http';
@@ -34,6 +35,22 @@ export const io = new Server(server, {
     credentials: true,
   },
 });
+
+// NEW: Override io.emit for global trigger catching (v3/v4 safe—no onAny needed)
+const originalEmit = io.emit.bind(io);  // Save original emit
+io.emit = function(event, ...args) {
+  // Catch matcher triggers before broadcasting (from enqueue, rider pings, etc.)
+  if (event.startsWith('orderQueued:') || event.startsWith('riderAvailable:') || event.startsWith('riderFreed:')) {
+    const zoneId = event.split(':')[1]; // e.g., 'edapally'
+    console.log(`🎯 Triggered matcher for zone ${zoneId} on event ${event}`);
+    
+    // Fire async—non-blocking, updates Mongo statuses + emits to rider Expo/merchant Vite
+    matchQueuedOrders(zoneId).catch(err => console.error('Matcher error:', err));
+  }
+  
+  // Pass to original—keeps your rooms/emits (orderId, merchant:${id}) flowing
+  return originalEmit.call(this, event, ...args);
+};
 
 // Redis adapter for scaling for multiple instance of server .
 // io.adapter(createAdapter(redisPub, redisSub));

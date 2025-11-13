@@ -1,7 +1,7 @@
 import express from 'express'
 import upload , {handleMulterError} from '../middleware/multer.js'
 import { addBaseProduct , addVariant, getBaseProducts, getVariants,getCategories,updateVariant,updateSize, deleteVariantSizes, updateSizeCount} from '../controllers/merchantController/product.controllers.js';
-import { deleteVariant ,addBrand, getBrands, getBaseProductById ,  getProductsByMerchantId, uploadProductImage, deleteImage, deleteProduct, updatePrice} from '../controllers/merchantController/product.controllers.js';
+import { deleteVariant ,addBrand, getBrands, getBaseProductById ,  getProductsByMerchantId, uploadProductImage, deleteImage, deleteProduct, updatePrice,editProduct,editVariant,updateVariantSizeStock,updateMultipleVariantSizes} from '../controllers/merchantController/product.controllers.js';
 
 import { addMerchant } from '../controllers/merchantController/merchant.controller.js';
 import {  loginMerchant ,updateMerchantShopDetails, updateMerchantBankDetails, updateMerchantOperatingHours, activateMerchant, registerPhone, sendEmailOtp, verifyEmailOtp, getMerchantByEmail } from '../controllers/merchantController/authControllers.js';
@@ -44,11 +44,16 @@ router.delete('/deleteImage/:imageId', deleteImage);
 router.post('/addVariant/:productId',upload.array('images'),handleMulterError,addVariant);
 router.delete('/deleteVariant/:productId/:variantId', deleteVariant);
 router.delete("/deleteSizes/:productId/:variantId/:sizeId", deleteVariantSizes);
-router.put("/updateVariant/:productId/:variantId",upload.array("images"),handleMulterError,updateVariant);
+router.patch("/updateVariant/:productId/:variantId",upload.array("images"),handleMulterError,updateVariant);
 router.put("/updateStock/:productId/:variantId/:sizeId", updateSize);
 router.put("/updateStock/:productId/:variantId/:sizeId", updateSizeCount);
 router.put("/updateStock/:productId/:variantId", updateSize);
 router.put("/updatePrice/:productId/:variantId", updatePrice);
+
+router.patch('/editProduct/:id',editProduct)
+// router.patch('/editVariant/:productId/:variantId',editVariant)
+router.patch('/updateVariantSizeStock/:productId/:variantId/:sizeName',updateVariantSizeStock)
+router.patch('/updateMultipleVariantSizes/:productId/:variantId',updateMultipleVariantSizes)
 
 
 router.get('/getAllOrders',authMiddlewareMerchant,getAllOrder)

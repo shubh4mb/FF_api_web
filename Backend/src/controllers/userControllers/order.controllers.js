@@ -68,16 +68,17 @@ import { io } from "../../../index.js"
 
 export const createOrder = async (req, res) => {
   console.log(req.body.deliveryCharge, 'body');
-  let amount = req.body.deliveryCharge;
+  // let amount = req.body.deliveryCharge;
+  let amount = 100;
   
 
   try {
     // Create Razorpay order
-    // const razorpayOrder = await Razorpay.orders.create({
-    //   amount,
-    //   currency: "INR",
-    //   receipt: `order_${Date.now()}`,
-    // });
+    const razorpayOrder = await Razorpay.orders.create({
+      amount,
+      currency: "INR",
+      receipt: `order_${Date.now()}`,
+    });
 console.log("working");
 
     const userId = req.user.userId;
@@ -168,7 +169,7 @@ console.log("working3");
     return res.status(201).json({
       message: 'Order placed successfully',
       order: newOrder,
-      // razorpayOrder,
+      razorpayOrder,
     });
 
   } catch (error) {

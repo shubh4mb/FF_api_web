@@ -3,86 +3,95 @@ import Product from '../../models/product.model.js';
 import Category from '../../models/category.model.js';
 import { productSchema } from '../../utils/validators/product.validator.js';
 import Brand from "../../models/brand.model.js";
-import { uploadToCloudinary } from '../../config/cloudinary.config.js';
+import { uploadToCloudinary , deleteFromCloudinary } from '../../config/cloudinary.config.js';
 import { log } from "console";
 
 export const addVariant = async (req, res) => {
   try {
-    const productId = req.params.productId;
-    const { color, sizes, mrp, price, discount } = req.body;
+    const { productId } = req.params;
 
-    // Parse JSON safely
-    let parsedColor, parsedSizes;
-    try {
-      parsedColor = JSON.parse(color);
-      parsedSizes = JSON.parse(sizes);
-    } catch (err) {
-      return res.status(400).json({ message: "Invalid JSON in color or sizes" });
-    }
+    let { color, sizes, mrp, price, discount } = req.body;
 
-    // Ensure numeric values are safe
-    const safeNumber = (val) => {
-      const num = Number(val);
-      return isNaN(num) ? 0 : num;
-    };
+    // 1. Parse JSON
+    color = JSON.parse(color);
+    sizes = JSON.parse(sizes);
 
-    const safeMrp = safeNumber(mrp);
-    const safePrice = safeNumber(price);
-    const safeDiscount = safeNumber(discount);
+    // This is the array of blobs & cloud images
+    const parsedImages = req.body.images
+      ? JSON.parse(req.body.images)
+      : [];
 
-    // Upload images to Cloudinary (limit 5)
-    const MAX_IMAGES = 5;
-    const uploadedImages = [];
+    // 2. Convert numbers safely
+    const safeNumber = (n) => (isNaN(Number(n)) ? 0 : Number(n));
+    mrp = safeNumber(mrp);
+    price = safeNumber(price);
+    discount = safeNumber(discount);
 
-    if (req.files && req.files.length > 0) {
-      const filesToUpload = req.files.slice(0, MAX_IMAGES);
-      for (const file of filesToUpload) {
-        const result = await uploadToCloudinary(file.buffer, "products");
-        uploadedImages.push({
-          public_id: result.public_id,
-          url: result.secure_url,
+    // 3. Handle images
+    const finalImages = [];
+    let fileIndex = 0; // files come in the same order as blob placeholders
+
+    for (let i = 0; i < parsedImages.length; i++) {
+      const img = parsedImages[i];
+
+      // A. Existing Cloudinary image → keep
+      if (img.url.startsWith("http")) {
+        finalImages.push({
+          public_id: img.public_id,
+          url: img.url,
         });
+        continue;
+      }
+
+      // B. New blob → upload from req.files
+      if (img.url.startsWith("blob")) {
+        const file = req.files[fileIndex];
+        if (file) {
+          const upload = await uploadToCloudinary(file.buffer, "products");
+          finalImages.push({
+            public_id: upload.public_id,
+            url: upload.secure_url,
+          });
+        }
+        fileIndex++;
       }
     }
 
-    // New variant object
+    // 4. Build variant object
     const newVariant = {
-      color: parsedColor,
-      sizes: parsedSizes,
-      mrp: safeMrp,
-      price: safePrice,
-      discount: safeDiscount,
-      images: uploadedImages,
+      color,
+      sizes,
+      mrp,
+      price,
+      discount,
+      images: finalImages,
     };
 
-    // Push variant & return populated product
+    // 5. Save to DB
     const updatedProduct = await Product.findByIdAndUpdate(
       productId,
       { $push: { variants: newVariant } },
-      { new: true, runValidators: true }
-    )
-      .populate("brandId", "name") // ✅ brand name
-      .populate("categoryId", "name") // ✅ main category
-      .populate("subCategoryId", "name") // ✅ sub category
-      .populate("subSubCategoryId", "name") // ✅ sub-sub category
-      .populate("merchantId", "name email"); // ✅ merchant details
+      { new: true }
+    );
 
-    if (!updatedProduct) {
-      return res.status(404).json({ message: "Product not found" });
-    }
-
-    return res.status(200).json({
+    return res.json({
+      success: true,
       message: "Variant added successfully",
+      variant:
+        updatedProduct.variants[updatedProduct.variants.length - 1],
       product: updatedProduct,
     });
   } catch (err) {
     console.error("Error adding variant:", err);
     res.status(500).json({
-      message: "Internal Server Error",
+      success: false,
+      message: "Internal server error",
       error: err.message,
     });
   }
 };
+
+
 
 
 export const deleteVariant = async (req, res) => {
@@ -116,59 +125,211 @@ export const deleteVariant = async (req, res) => {
   }
 };
 
-export const updateVariant = async (req, res) => {
+// export const updateVariant = async (req, res) => {
 
-  console.log(req.params.productId,'productIdproductIdproductId');
+//   console.log(req.params.productId,'productIdproductIdproductId');
   
+//   try {
+//     const { productId, variantId } = req.params;
+//     const { color, sizes, mrp, price, discount } = req.body;
+
+//     let parsedColor = JSON.parse(color);
+//     let parsedSizes = JSON.parse(sizes);
+
+//     const safeNumber = (val) => isNaN(Number(val)) ? 0 : Number(val);
+//     const safeMrp = safeNumber(mrp);
+//     const safePrice = safeNumber(price);
+//     const safeDiscount = safeNumber(discount);
+
+//     const MAX_IMAGES = 5;
+//     const uploadedImages = [];
+
+//     if (req.files?.length > 0) {
+//       const filesToUpload = req.files.slice(0, MAX_IMAGES);
+//       for (const file of filesToUpload) {
+//         const result = await uploadToCloudinary(file.buffer, "products");
+//         uploadedImages.push({ public_id: result.public_id, url: result.secure_url });
+//       }
+//     }
+
+//     const updateData = {
+//       "variants.$.color": parsedColor,
+//       "variants.$.sizes": parsedSizes,
+//       "variants.$.mrp": safeMrp,
+//       "variants.$.price": safePrice,
+//       "variants.$.discount": safeDiscount,
+//     };
+
+//     if (uploadedImages.length > 0) {
+//       updateData["variants.$.images"] = uploadedImages;
+//     }
+
+//     const updatedProduct = await Product.findOneAndUpdate(
+//       { _id: productId, "variants._id": variantId },
+//       { $set: updateData },
+//       { new: true }
+//     );
+
+//     if (!updatedProduct) return res.status(404).json({ message: "Variant not found" });
+
+//     res.json({ message: "Variant updated successfully", product: updatedProduct });
+
+//   } catch (err) {
+//     console.log(err);
+//     res.status(500).json({ message: "Internal Server Error", error: err.message });
+//   }
+// };
+
+
+export const updateVariant = async (req, res) => {
   try {
     const { productId, variantId } = req.params;
-    const { color, sizes, mrp, price, discount } = req.body;
+    const { color, mrp, price, discount, images } = req.body;
 
-    let parsedColor = JSON.parse(color);
-    let parsedSizes = JSON.parse(sizes);
+    console.log("REQ BODY:", req.body);
+    console.log(req.file);
+    console.log(req.files);
+    
+    
+    
+    
 
-    const safeNumber = (val) => isNaN(Number(val)) ? 0 : Number(val);
+    // ----------------------------
+    // 1) Parse incoming values
+    // ----------------------------
+    const parseJSON = (val) => {
+      if (typeof val === "string") {
+        try {
+          return JSON.parse(val);
+        } catch {
+          return val;
+        }
+      }
+      return val;
+    };
+
+    const parsedColor = parseJSON(color);
+    const parsedImages = parseJSON(images) || [];
+
+    const safeNumber = (n) => (isNaN(Number(n)) ? 0 : Number(n));
+
     const safeMrp = safeNumber(mrp);
     const safePrice = safeNumber(price);
     const safeDiscount = safeNumber(discount);
 
-    const MAX_IMAGES = 5;
-    const uploadedImages = [];
+    // ----------------------------
+    // 2) Load Product + Variant
+    // ----------------------------
+    const product = await Product.findOne({
+      _id: productId,
+      "variants._id": variantId,
+    });
 
-    if (req.files?.length > 0) {
-      const filesToUpload = req.files.slice(0, MAX_IMAGES);
-      for (const file of filesToUpload) {
-        const result = await uploadToCloudinary(file.buffer, "products");
-        uploadedImages.push({ public_id: result.public_id, url: result.secure_url });
+    if (!product)
+      return res.status(404).json({ message: "Product or variant not found" });
+
+    const variant = product.variants.id(variantId);
+    const oldImages = variant.images || [];
+
+    // ----------------------------
+    // 3) Identify deleted images
+    // ----------------------------
+    const incomingPublicIDs = parsedImages.map((img) => img.public_id);
+    const deletedImages = oldImages.filter(
+      (old) => !incomingPublicIDs.includes(old.public_id)
+    );
+
+    // ----------------------------
+    // 4) Build new finalImages array
+    // ----------------------------
+const finalImages = [];
+const MAX_IMAGES = 5;
+
+let fileIndex = 0;
+
+for (let i = 0; i < parsedImages.length; i++) {
+  const img = parsedImages[i];
+
+  // If max reached → stop adding but still maintain fileIndex alignment
+  if (finalImages.length >= MAX_IMAGES) {
+    // If it's a blob, still advance fileIndex so next blob doesn't mismatch
+    if (img.url.startsWith("blob")) {
+      fileIndex++;
+    }
+    continue;
+  }
+
+  // A: existing cloud image → keep
+  if (img.url.startsWith("http")) {
+    finalImages.push({
+      public_id: img.public_id,
+      url: img.url,
+    });
+    continue;
+  }
+
+  // B: blob image → upload using fileIndex
+  if (img.url.startsWith("blob")) {
+    const file = req.files?.[fileIndex];
+    if (file) {
+      const upload = await uploadToCloudinary(file.buffer, "products");
+      finalImages.push({
+        public_id: upload.public_id,
+        url: upload.secure_url,
+      });
+    }
+    fileIndex++; // increase only for blob
+  }
+}
+
+    // ----------------------------
+    // 5) Delete old Cloudinary images that were removed
+    // ----------------------------
+    for (const img of deletedImages) {
+      if (img.public_id) {
+        try {
+          await deleteFromCloudinary(img.public_id);
+        } catch (err) {
+          console.warn("Failed to delete image:", img.public_id);
+        }
       }
     }
 
+    // ----------------------------
+    // 6) Prepare update object
+    // ----------------------------
     const updateData = {
       "variants.$.color": parsedColor,
-      "variants.$.sizes": parsedSizes,
       "variants.$.mrp": safeMrp,
       "variants.$.price": safePrice,
       "variants.$.discount": safeDiscount,
+      "variants.$.images": finalImages,
     };
 
-    if (uploadedImages.length > 0) {
-      updateData["variants.$.images"] = uploadedImages;
-    }
-
+    // ----------------------------
+    // 7) Update database
+    // ----------------------------
     const updatedProduct = await Product.findOneAndUpdate(
       { _id: productId, "variants._id": variantId },
       { $set: updateData },
-      { new: true }
+      { new: true, runValidators: true }
     );
 
-    if (!updatedProduct) return res.status(404).json({ message: "Variant not found" });
-
-    res.json({ message: "Variant updated successfully", product: updatedProduct });
-
+    res.status(200).json({
+      success: true,
+      message: "Variant updated successfully.",
+      product: updatedProduct,
+    });
   } catch (err) {
-    res.status(500).json({ message: "Internal Server Error", error: err.message });
+    console.error("Error updating variant:", err);
+    res.status(500).json({
+      message: "Internal Server Error",
+      error: err.message,
+    });
   }
 };
+
+
 
 export const updateSize = async (req, res) => {
   try {
@@ -621,3 +782,185 @@ export const deleteProduct = async (req, res) => {
     });
   }
 };
+
+export const editProduct = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const updateData = req.body;
+    console.log(req.body);
+    console.log(id);
+
+    // Prevent updates to protected fields
+    const restrictedFields = ['_id', 'createdAt', 'updatedAt', 'variants'];
+    restrictedFields.forEach((field) => delete updateData[field]);
+
+    const updatedProduct = await Product.findByIdAndUpdate(
+      id,
+      { $set: updateData },
+      { new: true, runValidators: true }
+    );
+
+    if (!updatedProduct) {
+      console.log(" not fincding producvt");
+      return res.status(404).json({ success: false, message: 'Product not found' });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'Product updated successfully',
+      product: updatedProduct,
+    });
+  } catch (error) {
+    console.error('Error updating product:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error while updating product',
+      error: error.message,
+    });
+  }
+};
+
+export const editVariant = async (req, res) => {
+  try {
+    const { productId, variantId } = req.params;
+    const updateData = req.body;
+    console.log(updateData);
+    console.log(productId);
+    console.log(variantId);
+
+    // Transform body keys -> variants.$.field (so Mongoose knows which variant to update)
+    const updateFields = Object.fromEntries(
+      Object.entries(updateData).map(([key, value]) => [`variants.$.${key}`, value])
+    );
+
+    const updatedProduct = await Product.findOneAndUpdate(
+      { _id: productId, 'variants._id': variantId },
+      { $set: updateFields },
+      { new: true, runValidators: true }
+    );
+
+    if (!updatedProduct) {
+      return res.status(404).json({ success: false, message: 'Variant not found' });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'Variant updated successfully',
+      product: updatedProduct,
+    });
+  } catch (error) {
+    console.error('Error updating variant:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error while updating variant',
+      error: error.message,
+    });
+  }
+};
+
+export const updateVariantSizeStock = async (req, res) => {
+  try {
+    const { productId, variantId, sizeName } = req.params;
+    const { stock } = req.body;
+
+    if (stock === undefined) {
+      return res.status(400).json({ success: false, message: "Stock value is required" });
+    }
+
+    const updatedProduct = await Product.findOneAndUpdate(
+      {
+        _id: productId,
+        "variants._id": variantId,
+      },
+      {
+        $set: {
+          "variants.$[v].sizes.$[s].stock": stock,
+        },
+      },
+      {
+        new: true,
+        arrayFilters: [
+          { "v._id": variantId },
+          { "s.size": sizeName },
+        ],
+        runValidators: true,
+      }
+    );
+
+    if (!updatedProduct) {
+      return res.status(404).json({ success: false, message: "Product or variant not found" });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: `Stock updated for size '${sizeName}' in variant '${variantId}'`,
+      product: updatedProduct,
+    });
+  } catch (error) {
+    console.error("Error updating size stock:", error);
+    res.status(500).json({
+      success: false,
+      message: "Server error while updating stock",
+      error: error.message,
+    });
+  }
+};
+
+export const updateMultipleVariantSizes = async (req, res) => {
+  try {
+    const { productId, variantId } = req.params;
+    const { sizes } = req.body;
+
+    if (!Array.isArray(sizes) || sizes.length === 0) {
+      return res.status(400).json({ success: false, message: "Sizes array is required" });
+    }
+
+    // 1️⃣ Find product and variant
+    const product = await Product.findOne({ _id: productId, "variants._id": variantId });
+    if (!product) {
+      return res.status(404).json({ success: false, message: "Product or variant not found" });
+    }
+
+    const variant = product.variants.id(variantId);
+    if (!variant) {
+      return res.status(404).json({ success: false, message: "Variant not found" });
+    }
+
+    // 2️⃣ Create list of incoming size names (for removal logic)
+    const incomingSizeNames = sizes.map((s) => s.size);
+
+    // 3️⃣ Update or add sizes
+    sizes.forEach(({ size, stock }) => {
+      if (!size || stock === undefined) return; // skip invalid entries
+
+      const existingSize = variant.sizes.find((s) => s.size === size);
+      if (existingSize) {
+        // ✅ Update stock
+        existingSize.stock = stock;
+      } else {
+        // ✅ Add new size
+        variant.sizes.push({ size, stock });
+      }
+    });
+
+    // 4️⃣ Remove sizes that are not in incoming list
+    variant.sizes = variant.sizes.filter((s) => incomingSizeNames.includes(s.size));
+
+    // 5️⃣ Save updated product
+    await product.save();
+
+    res.status(200).json({
+      success: true,
+      message: "Sizes updated successfully (added, updated, and removed as needed)",
+      product,
+    });
+  } catch (error) {
+    console.error("Error updating sizes:", error);
+    res.status(500).json({
+      success: false,
+      message: "Server error while updating sizes",
+      error: error.message,
+    });
+  }
+};
+

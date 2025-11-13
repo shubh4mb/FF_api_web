@@ -29,6 +29,40 @@ export default function CategoryTableHeader() {
     }
     getCategoriesData();
     },[]);
+
+     const CategoryColumns = [
+    { header: "#", accessor: "_index", render: (_, __, i) => i + 1 },
+    { header: "Name", accessor: "name" },
+    { header: "Slug", accessor: "slug" },
+    { header: "Level", accessor: "level" },
+    {
+      header: "Status",
+      accessor: "isActive",
+      render: (value) => (
+        <span className={`px-2 py-1 rounded text-xs ${value ? "bg-green-100 text-green-600" : "bg-red-100 text-red-600"}`}>
+          {value ? "Active" : "Inactive"}
+        </span>
+      ),
+    },
+  ];
+
+  const CategoryActions = [
+    {
+      label: "Edit",
+      onClick: (row) => navigate(`/admin/category/${row._id}`), // 👈 navigate to route
+      className: "text-blue-600 hover:underline text-sm",
+    },
+    {
+      label: "View Products",
+      onClick: (row) => navigate(`/admin/products/merchant/${row._id}`),
+      className: "text-blue-600 hover:underline text-sm",
+    },
+    {
+      label: "Delete",
+      onClick: (row) => console.log("Delete", row),
+      className: "text-red-600 hover:underline text-sm",
+    },
+  ];
     if(loading){
       return <div>Loading...</div>
     }
@@ -75,7 +109,7 @@ export default function CategoryTableHeader() {
       <div className="flex justify-end">
         <Button onClick={()=>{navigate('/admin/add-category')}}>Add Category</Button>
       </div>
-      <Table data={categoriesData}/>
+      <Table data={categoriesData} columns={CategoryColumns} actions={CategoryActions}/>
     </div>
     
   </>

@@ -2,6 +2,8 @@ import DeliveryRider from "../models/deliveryRider.model.js";
 import { geoAdd, geoRadius, setHeartbeat, setRiderMeta, getRiderMeta } from "../helperFns/deliveryRiderFns.js";
 import { redis, inMemoryIndex } from "../config/redisConfig.js";
 // import { setRiderMeta } from "../helperFns/deliveryRiderFns.js";
+import { inferZone } from "../utils/zoneInfer.js";
+import { matchQueuedOrders } from "../helperFns/orderFns.js";
 
 export const registerDeliveryRiderSockets = (io, socket) => {
 

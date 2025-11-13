@@ -25,7 +25,8 @@ app.use(cors({
       callback(new Error("Not allowed by CORS"));
     }
   },
-  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"], // 👈 add OPTIONS
+methods: ["GET", "POST", "PUT", "PATCH","DELETE", "OPTIONS"], // 👈 add OPTIONS
+  allowedHeaders: ["Content-Type", "Authorization","ngrok-skip-browser-warning"],
   credentials: true
 }));
 app.use((req, res, next) => {

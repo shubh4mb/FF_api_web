@@ -2,7 +2,7 @@
 import axios from 'axios';
 
 const axiosInstance = axios.create({
-  baseURL: 'http://192.168.29.230:3000/api/',
+  baseURL: 'https://ff-api-web.onrender.com/api',
   timeout: 10000,
 });
 

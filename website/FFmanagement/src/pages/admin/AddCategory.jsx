@@ -28,7 +28,7 @@ const [showCropper, setShowCropper] = useState(false);
     const fetchCategories = async () => {
       try {
         const response = await getCategories();
-     
+     console.log(response,"dsfdsf")
         
         setAllCategories(response.categories || []);
       } catch (error) {
