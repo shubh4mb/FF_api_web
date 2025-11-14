@@ -7,40 +7,36 @@ import userRoutes from './routes/user.routes.js';
 import adminRoutes from './routes/admin.routes.js';
 import merchantRoutes from './routes/merchant.routes.js';
 import deliveryRiderRoutes from './routes/deliveryRider.routes.js';
-import {io} from '../index.js';
+// import {io} from '../index.js';
 const app = express();
 
 const allowedOrigins = [
   "http://localhost:5173",
   "http://localhost:5174",
-  "https://d560c68770a1.ngrok-free.app"
+  "https://d560c68770a1.ngrok-free.app",
+  "https://ff-api-web.onrender.com"
 ];
 
 app.use(cors({
   origin: (origin, callback) => {
-    if (!origin) return callback(null, true); // allow Postman / curl
-    if (allowedOrigins.includes(origin)) {
-      callback(null, true);
-    } else {
-      callback(new Error("Not allowed by CORS"));
+    if (!origin) return callback(null, true); // allow server-to-server, Render checks, OPTIONS
+    if (allowedOrigins.some(o => origin.startsWith(o))) {
+      return callback(null, true);
     }
+    return callback(new Error("Not allowed by CORS: " + origin));
   },
-methods: ["GET", "POST", "PUT", "PATCH","DELETE", "OPTIONS"], // 👈 add OPTIONS
-  allowedHeaders: ["Content-Type", "Authorization","ngrok-skip-browser-warning"],
-  credentials: true
+  credentials: true,
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization", "ngrok-skip-browser-warning"]
 }));
-app.use((req, res, next) => {
-  // console.log("CORS check →", req.method, req.path);
-  next();
-});
 
 
 app.use(express.json()); 
 
-app.use((req, res, next) => {
-  req.io = io;
-  next();
-});
+// app.use((req, res, next) => {
+//   req.io = io;
+//   next();
+// });
 
 app.get('/ping', (req, res) => {   
   res.send('pong');
