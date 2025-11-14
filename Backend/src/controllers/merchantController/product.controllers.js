@@ -3,18 +3,53 @@ import Product from '../../models/product.model.js';
 import Category from '../../models/category.model.js';
 import { productSchema } from '../../utils/validators/product.validator.js';
 import Brand from "../../models/brand.model.js";
-import { uploadToCloudinary , deleteFromCloudinary } from '../../config/cloudinary.config.js';
+import { uploadToCloudinary, deleteFromCloudinary } from '../../config/cloudinary.config.js';
 import { log } from "console";
 
 export const addVariant = async (req, res) => {
   try {
     const { productId } = req.params;
 
+
     let { color, sizes, mrp, price, discount } = req.body;
+    console.log(req.body);
+    console.log(req.files);
+
 
     // 1. Parse JSON
-    color = JSON.parse(color);
-    sizes = JSON.parse(sizes);
+
+
+    // Safe JSON parser
+    // Safe JSON parser
+    const safeParse = (value) => {
+      if (!value) return value;
+      if (typeof value === "string") {
+        try { return JSON.parse(value); }
+        catch { return value; }
+      }
+      return value;
+    };
+
+    // Fix color
+    color = safeParse(color);
+
+    // Fix sizes
+    let parsedSizes = safeParse(sizes);
+
+    if (!Array.isArray(parsedSizes)) {
+      parsedSizes = [];
+    }
+
+    parsedSizes = parsedSizes.map((s) => ({
+      size: s.size,
+      stock: isNaN(Number(s.stock)) ? 0 : Number(s.stock),
+    }));
+
+    sizes = parsedSizes;
+
+    // Fix images
+
+
 
     // This is the array of blobs & cloud images
     const parsedImages = req.body.images
@@ -94,91 +129,6 @@ export const addVariant = async (req, res) => {
 
 
 
-export const deleteVariant = async (req, res) => {
-  try {
-    const { productId, variantId } = req.params;
-
-    // Find product and remove variant
-    const updatedProduct = await Product.findByIdAndUpdate(
-      productId,
-      { $pull: { variants: { _id: variantId } } },
-      { new: true }
-    )
-      .populate("brandId", "name")
-      .populate("categoryId", "name")
-      .populate("merchantId", "name email");
-
-    if (!updatedProduct) {
-      return res.status(404).json({ message: "Product not found" });
-    }
-
-    return res.status(200).json({
-      message: "Variant deleted successfully",
-      product: updatedProduct,
-    });
-  } catch (err) {
-    console.error("Error deleting variant:", err);
-    res.status(500).json({
-      message: "Internal Server Error",
-      error: err.message,
-    });
-  }
-};
-
-// export const updateVariant = async (req, res) => {
-
-//   console.log(req.params.productId,'productIdproductIdproductId');
-  
-//   try {
-//     const { productId, variantId } = req.params;
-//     const { color, sizes, mrp, price, discount } = req.body;
-
-//     let parsedColor = JSON.parse(color);
-//     let parsedSizes = JSON.parse(sizes);
-
-//     const safeNumber = (val) => isNaN(Number(val)) ? 0 : Number(val);
-//     const safeMrp = safeNumber(mrp);
-//     const safePrice = safeNumber(price);
-//     const safeDiscount = safeNumber(discount);
-
-//     const MAX_IMAGES = 5;
-//     const uploadedImages = [];
-
-//     if (req.files?.length > 0) {
-//       const filesToUpload = req.files.slice(0, MAX_IMAGES);
-//       for (const file of filesToUpload) {
-//         const result = await uploadToCloudinary(file.buffer, "products");
-//         uploadedImages.push({ public_id: result.public_id, url: result.secure_url });
-//       }
-//     }
-
-//     const updateData = {
-//       "variants.$.color": parsedColor,
-//       "variants.$.sizes": parsedSizes,
-//       "variants.$.mrp": safeMrp,
-//       "variants.$.price": safePrice,
-//       "variants.$.discount": safeDiscount,
-//     };
-
-//     if (uploadedImages.length > 0) {
-//       updateData["variants.$.images"] = uploadedImages;
-//     }
-
-//     const updatedProduct = await Product.findOneAndUpdate(
-//       { _id: productId, "variants._id": variantId },
-//       { $set: updateData },
-//       { new: true }
-//     );
-
-//     if (!updatedProduct) return res.status(404).json({ message: "Variant not found" });
-
-//     res.json({ message: "Variant updated successfully", product: updatedProduct });
-
-//   } catch (err) {
-//     console.log(err);
-//     res.status(500).json({ message: "Internal Server Error", error: err.message });
-//   }
-// };
 
 
 export const updateVariant = async (req, res) => {
@@ -189,11 +139,6 @@ export const updateVariant = async (req, res) => {
     console.log("REQ BODY:", req.body);
     console.log(req.file);
     console.log(req.files);
-    
-    
-    
-    
-
     // ----------------------------
     // 1) Parse incoming values
     // ----------------------------
@@ -207,7 +152,6 @@ export const updateVariant = async (req, res) => {
       }
       return val;
     };
-
     const parsedColor = parseJSON(color);
     const parsedImages = parseJSON(images) || [];
 
@@ -242,45 +186,45 @@ export const updateVariant = async (req, res) => {
     // ----------------------------
     // 4) Build new finalImages array
     // ----------------------------
-const finalImages = [];
-const MAX_IMAGES = 5;
+    const finalImages = [];
+    const MAX_IMAGES = 5;
 
-let fileIndex = 0;
+    let fileIndex = 0;
 
-for (let i = 0; i < parsedImages.length; i++) {
-  const img = parsedImages[i];
+    for (let i = 0; i < parsedImages.length; i++) {
+      const img = parsedImages[i];
 
-  // If max reached → stop adding but still maintain fileIndex alignment
-  if (finalImages.length >= MAX_IMAGES) {
-    // If it's a blob, still advance fileIndex so next blob doesn't mismatch
-    if (img.url.startsWith("blob")) {
-      fileIndex++;
+      // If max reached → stop adding but still maintain fileIndex alignment
+      if (finalImages.length >= MAX_IMAGES) {
+        // If it's a blob, still advance fileIndex so next blob doesn't mismatch
+        if (img.url.startsWith("blob")) {
+          fileIndex++;
+        }
+        continue;
+      }
+
+      // A: existing cloud image → keep
+      if (img.url.startsWith("http")) {
+        finalImages.push({
+          public_id: img.public_id,
+          url: img.url,
+        });
+        continue;
+      }
+
+      // B: blob image → upload using fileIndex
+      if (img.url.startsWith("blob")) {
+        const file = req.files?.[fileIndex];
+        if (file) {
+          const upload = await uploadToCloudinary(file.buffer, "products");
+          finalImages.push({
+            public_id: upload.public_id,
+            url: upload.secure_url,
+          });
+        }
+        fileIndex++; // increase only for blob
+      }
     }
-    continue;
-  }
-
-  // A: existing cloud image → keep
-  if (img.url.startsWith("http")) {
-    finalImages.push({
-      public_id: img.public_id,
-      url: img.url,
-    });
-    continue;
-  }
-
-  // B: blob image → upload using fileIndex
-  if (img.url.startsWith("blob")) {
-    const file = req.files?.[fileIndex];
-    if (file) {
-      const upload = await uploadToCloudinary(file.buffer, "products");
-      finalImages.push({
-        public_id: upload.public_id,
-        url: upload.secure_url,
-      });
-    }
-    fileIndex++; // increase only for blob
-  }
-}
 
     // ----------------------------
     // 5) Delete old Cloudinary images that were removed
@@ -383,8 +327,8 @@ export const updateSizeCount = async (req, res) => {
 
     // Validate required parameters
     if (!sizeId) {
-      return res.status(400).json({ 
-        message: "Size ID is required for stock updates" 
+      return res.status(400).json({
+        message: "Size ID is required for stock updates"
       });
     }
 
@@ -392,13 +336,13 @@ export const updateSizeCount = async (req, res) => {
 
     // ✅ Only update existing size stock by _id
     const updatedProduct = await Product.findOneAndUpdate(
-      { 
-        _id: productId, 
-        "variants._id": variantId, 
-        "variants.sizes._id": sizeId 
+      {
+        _id: productId,
+        "variants._id": variantId,
+        "variants.sizes._id": sizeId
       },
-      { 
-        $set: { "variants.$[v].sizes.$[s].stock": safeStock } 
+      {
+        $set: { "variants.$[v].sizes.$[s].stock": safeStock }
       },
       {
         new: true,
@@ -410,8 +354,8 @@ export const updateSizeCount = async (req, res) => {
     );
 
     if (!updatedProduct) {
-      return res.status(404).json({ 
-        message: "Product, variant, or size not found" 
+      return res.status(404).json({
+        message: "Product, variant, or size not found"
       });
     }
 
@@ -421,9 +365,9 @@ export const updateSizeCount = async (req, res) => {
     });
   } catch (err) {
     console.error("Error updating stock:", err);
-    res.status(500).json({ 
-      message: "Internal Server Error", 
-      error: err.message 
+    res.status(500).json({
+      message: "Internal Server Error",
+      error: err.message
     });
   }
 };
@@ -516,39 +460,39 @@ export const addBaseProduct = async (req, res) => {
   }
 };
 
-  export const getVariants = async (req, res) => {
-    try {
-      const products = await Product.find({});
-      res.status(200).json(products);
-    } catch (error) {
-      console.log(error);
-      res.status(500).json({ message: '❌ ' + error.message });
-    }
-  };
+export const getVariants = async (req, res) => {
+  try {
+    const products = await Product.find({});
+    res.status(200).json(products);
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({ message: '❌ ' + error.message });
+  }
+};
 
-  export const getBaseProducts = async (req, res) => {
-    console.log("hi");
-    
-    try {
-      const products = await Product.find({});
-      res.status(200).json(products);
-    } catch (error) {
-      console.log(error);
-      res.status(500).json({ message: '❌ ' + error.message });
-    }
-  };
+export const getBaseProducts = async (req, res) => {
+  console.log("hi");
+
+  try {
+    const products = await Product.find({});
+    res.status(200).json(products);
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({ message: '❌ ' + error.message });
+  }
+};
 
 export const getCategories = async (req, res) => {
-    try {
-      console.log("getting cate............")
-      const categories = await Category
-    .find({ isActive: true })
-      res.status(200).json({ categories });
-    } catch (error) {
-      res.status(500).json({ message: "❌ " + error.message });
-    }
-  };
-  
+  try {
+    console.log("getting cate............")
+    const categories = await Category
+      .find({ isActive: true })
+    res.status(200).json({ categories });
+  } catch (error) {
+    res.status(500).json({ message: "❌ " + error.message });
+  }
+};
+
 export const addBrand = async (req, res) => {
   try {
     const { name, description, createdById, createdByType } = req.body;
@@ -612,25 +556,25 @@ export const getBrands = async (req, res) => {
 };
 
 export const getBaseProductById = async (req, res) => {
-    try {
-        const product = await Product.findById(req.params.productId)
-        .populate('brandId', 'name') // Only get the 'name' field of the Brand
-        .populate('categoryId', 'name')
-        .populate('subCategoryId', 'name')
-        .populate('subSubCategoryId', 'name')
-        .populate('merchantId', 'name')
-        
-        res.status(200).json(product);
-      } catch (error) {
-        console.log(error);
-        res.status(500).json({ message: '❌ ' + error.message });
-      }
+  try {
+    const product = await Product.findById(req.params.productId)
+      .populate('brandId', 'name') // Only get the 'name' field of the Brand
+      .populate('categoryId', 'name')
+      .populate('subCategoryId', 'name')
+      .populate('subSubCategoryId', 'name')
+      .populate('merchantId', 'name')
+
+    res.status(200).json(product);
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({ message: '❌ ' + error.message });
+  }
 }
 
 
 export const getProductsByMerchantId = async (req, res) => {
   console.log("working");
-  
+
   try {
     const { merchantId } = req.params;
 
@@ -763,25 +707,64 @@ export const deleteProduct = async (req, res) => {
   try {
     const { productId } = req.params;
 
-    // Find and delete product
-    const deletedProduct = await Product.findByIdAndDelete(productId);
+    const deleted = await Product.findByIdAndDelete(productId);
 
-    if (!deletedProduct) {
-      return res.status(404).json({ message: "Product not found" });
+    if (!deleted) {
+      return res.status(404).json({
+        success: false,
+        message: "Product not found",
+      });
     }
 
-    return res.status(200).json({
+    return res.json({
+      success: true,
       message: "Product deleted successfully",
-      product: deletedProduct
+      product: deleted,
     });
   } catch (err) {
     console.error("Error deleting product:", err);
-    res.status(500).json({
-      message: "Internal Server Error",
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
       error: err.message,
     });
   }
 };
+
+export const deleteVariant = async (req, res) => {
+  try {
+    const { productId, variantId } = req.params;
+
+    // Pull variant by ID
+    const updatedProduct = await Product.findByIdAndUpdate(
+      productId,
+      { $pull: { variants: { _id: variantId } } },
+      { new: true }
+    );
+
+    if (!updatedProduct) {
+      return res.status(404).json({
+        success: false,
+        message: "Product not found",
+      });
+    }
+
+    return res.json({
+      success: true,
+      message: "Variant deleted successfully",
+      product: updatedProduct,
+      variants: updatedProduct.variants,
+    });
+  } catch (err) {
+    console.error("Error deleting variant:", err);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
+      error: err.message,
+    });
+  }
+};
+
 
 export const editProduct = async (req, res) => {
   try {

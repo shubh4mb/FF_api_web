@@ -31,7 +31,7 @@ export const io = new Server(server, {
       'http://localhost:5174',
       'https://d560c68770a1.ngrok-free.app'
     ],
-    methods: ['GET', 'POST'],
+    methods: ['GET', 'POST','PATCH','PUT','DELETE'],
     credentials: true,
   },
 });
