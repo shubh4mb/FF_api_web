@@ -10,16 +10,10 @@ export const addVariant = async (req, res) => {
   try {
     const { productId } = req.params;
 
-
     let { color, sizes, mrp, price, discount } = req.body;
     console.log(req.body);
     console.log(req.files);
 
-
-    // 1. Parse JSON
-
-
-    // Safe JSON parser
     // Safe JSON parser
     const safeParse = (value) => {
       if (!value) return value;
@@ -27,13 +21,13 @@ export const addVariant = async (req, res) => {
         try { return JSON.parse(value); }
         catch { return value; }
       }
-      return value;
+      return value; // already object or array
     };
 
-    // Fix color
+    // ---- COLOR ----
     color = safeParse(color);
 
-    // Fix sizes
+    // ---- SIZES ----
     let parsedSizes = safeParse(sizes);
 
     if (!Array.isArray(parsedSizes)) {
@@ -47,39 +41,30 @@ export const addVariant = async (req, res) => {
 
     sizes = parsedSizes;
 
-    // Fix images
+    // ---- IMAGES ----
+    let parsedImages = safeParse(req.body.images) || [];
 
-
-
-    // This is the array of blobs & cloud images
-    const parsedImages = req.body.images
-      ? JSON.parse(req.body.images)
-      : [];
-
-    // 2. Convert numbers safely
+    // Convert numbers safely
     const safeNumber = (n) => (isNaN(Number(n)) ? 0 : Number(n));
     mrp = safeNumber(mrp);
     price = safeNumber(price);
     discount = safeNumber(discount);
 
-    // 3. Handle images
+    // Upload and build finalImages
     const finalImages = [];
-    let fileIndex = 0; // files come in the same order as blob placeholders
+    let fileIndex = 0;
 
-    for (let i = 0; i < parsedImages.length; i++) {
-      const img = parsedImages[i];
-
-      // A. Existing Cloudinary image → keep
+    for (let img of parsedImages) {
       if (img.url.startsWith("http")) {
+        // Existing cloudinary image
         finalImages.push({
           public_id: img.public_id,
           url: img.url,
         });
-        continue;
-      }
-
-      // B. New blob → upload from req.files
-      if (img.url.startsWith("blob")) {
+      } 
+        
+      else if (img.url.startsWith("blob")) {
+        // New local file
         const file = req.files[fileIndex];
         if (file) {
           const upload = await uploadToCloudinary(file.buffer, "products");
@@ -92,7 +77,7 @@ export const addVariant = async (req, res) => {
       }
     }
 
-    // 4. Build variant object
+    // Build the variant
     const newVariant = {
       color,
       sizes,
@@ -102,7 +87,7 @@ export const addVariant = async (req, res) => {
       images: finalImages,
     };
 
-    // 5. Save to DB
+    // Save to DB
     const updatedProduct = await Product.findByIdAndUpdate(
       productId,
       { $push: { variants: newVariant } },
@@ -112,10 +97,10 @@ export const addVariant = async (req, res) => {
     return res.json({
       success: true,
       message: "Variant added successfully",
-      variant:
-        updatedProduct.variants[updatedProduct.variants.length - 1],
+      variant: updatedProduct.variants.at(-1),
       product: updatedProduct,
     });
+
   } catch (err) {
     console.error("Error adding variant:", err);
     res.status(500).json({
@@ -125,6 +110,7 @@ export const addVariant = async (req, res) => {
     });
   }
 };
+
 
 
 
