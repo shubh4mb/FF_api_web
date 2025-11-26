@@ -1,11 +1,12 @@
 import express from 'express';
 import { addCategory, getCategories, updateCategory } from '../controllers/adminControllers/category.controllers.js';
 import { addMerchant, getMerchants , getMerchantById , updateMerchantById} from '../controllers/adminControllers/merchant.controllers.js';
-import { addBrand,getBrands } from '../controllers/adminControllers/brand.controllers.js.js';
+import { addBrand,getBrands } from '../controllers/adminControllers/brand.controllers.js';
 import upload , {handleMulterError} from '../middleware/multer.js'
 import { getBaseProducts, getVariants ,getBaseProductById , addVariant , getProductsByMerchantId, updateMatchingProducts} from '../controllers/adminControllers/product.controllers.js';
 import {addTitleBanner} from '../controllers/adminControllers/titleBanner.controllers.js';
 import { addCart, getCart} from '../controllers/adminControllers/cart.controllers.js';
+import {addZone, getAllZones, checkZoneOverlap} from '../controllers/adminControllers/zone.controllers.js';
 const router = express.Router();
 
 router.post('/addCategory',upload.single('image'),handleMulterError,addCategory);
@@ -35,7 +36,9 @@ router.post('/cart/add',addCart);
 router.get('/cart', getCart);
 // router.put('/cart/updatequantity', updateCartQuantity);
 
-
+router.post('/zone/add',addZone);
+router.get('/zone', getAllZones);
+router.post('/zone/check-overlap', checkZoneOverlap);
 
 
 

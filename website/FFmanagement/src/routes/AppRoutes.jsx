@@ -17,6 +17,7 @@ import Variants from '../pages/admin/Variants';
 import EditMerchant from '../pages/admin/EditMerchant';
 import Title_Banner from '../pages/admin/Title_Banner';
 import MatchingProducts from '../pages/admin/MatchingProducts';
+import CreateZone from '../pages/admin/CreateZone';
 // Placeholder components for missing admin pages
 const Settings = () => <div>Settings Page</div>;
 
@@ -40,6 +41,7 @@ const AppRoutes = () => {
           <Route path="variants/:productId" element={<Variants />} />
           <Route path="add-title-banner" element={<Title_Banner />} />
           <Route path="merchants/:merchantId" element={<EditMerchant />} />
+          <Route path="create-zone" element={<CreateZone />} />
         </Route>
 
         {/* Merchant Routes */}

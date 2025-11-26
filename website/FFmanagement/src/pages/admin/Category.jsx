@@ -17,6 +17,8 @@ export default function CategoryTableHeader() {
     const getCategoriesData=async()=>{
       try {
         const response = await getCategories();
+        console.log(response);
+        
         console.log("yes reaching api : ")
         console.log(response.categories);
         setCategoriesData(response.categories);

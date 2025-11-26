@@ -112,6 +112,14 @@ const DeliveryRiderSchema = new mongoose.Schema({
     type: Boolean,
     default: false,
   },
+  zone: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "Zone",
+    required: true,
+  },
+
+  // Optional: denormalize zoneName for fast reads (highly recommended)
+  zoneName: { type: String }, // e.g., "Kochi - Zone A"
   location: {
     coordinates: {
       type: [Number],

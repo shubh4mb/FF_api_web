@@ -7,28 +7,25 @@ import userRoutes from './routes/user.routes.js';
 import adminRoutes from './routes/admin.routes.js';
 import merchantRoutes from './routes/merchant.routes.js';
 import deliveryRiderRoutes from './routes/deliveryRider.routes.js';
+import { allowedOrigins } from './config/cors.js';
 // import {io} from '../index.js';
 const app = express();
 
-const allowedOrigins = [
-  "http://localhost:5173",
-  "http://localhost:5174",
-  "https://d560c68770a1.ngrok-free.app",
-  "https://ff-api-web.onrender.com"
-];
+
 
 app.use(cors({
-  origin: (origin, callback) => {
-    if (!origin) return callback(null, true); // allow server-to-server, Render checks, OPTIONS
-    if (allowedOrigins.some(o => origin.startsWith(o))) {
-      return callback(null, true);
-    }
-    return callback(new Error("Not allowed by CORS: " + origin));
+  origin: function (origin, callback) {
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.includes(origin)) return callback(null, true);
+    return callback(new Error("Blocked by CORS: " + origin));
   },
   credentials: true,
-  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization", "ngrok-skip-browser-warning"]
+  methods: "GET,POST,PUT,PATCH,DELETE,OPTIONS",
+  allowedHeaders: "Content-Type,Authorization,ngrok-skip-browser-warning"
 }));
+
+// app.options("/*", cors());
+
 
 
 app.use(express.json()); 

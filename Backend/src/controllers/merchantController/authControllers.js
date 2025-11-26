@@ -2,7 +2,8 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import Merchant from "../../models/merchant.model.js";
 import Brand from "../../models/brand.model.js";
-import nodemailer from 'nodemailer'; 
+import nodemailer from 'nodemailer';
+import Zone from "../../models/zone.model.js"; 
 // import dotenv from 'dotenv';
 // dotenv.config();
 import { uploadToCloudinary } from '../../config/cloudinary.config.js';
@@ -20,6 +21,7 @@ export const sendEmailOtp = async (req, res) => {
   console.log(req.body);
   try {
     const { email } = req.body;
+
     if (!email) return res.status(400).json({ message: "Email is required" });
 
     const otp = generateOtp();
@@ -29,19 +31,20 @@ export const sendEmailOtp = async (req, res) => {
     if (!merchant) {
       merchant = new Merchant({ email, isActive: false });
     }
-
+//random 10 digits number and save it as phoneNumber field 
+merchant.phoneNumber="123123999"
     merchant.emailOtp = otp;
     merchant.emailOtpExpiry = expiry;
     await merchant.save();
 
-    await transporter.sendMail({
-      from: `"FlashFits" <${process.env.EMAIL_USER}>`,
-      to: email,
-      subject: "Your OTP Code",
-      text: `Your OTP is ${otp}. It expires in 5 minutes.`,
-    });
+    // await transporter.sendMail({
+    //   from: `"FlashFits" <${process.env.EMAIL_USER}>`,
+    //   to: email,
+    //   subject: "Your OTP Code",
+    //   text: `Your OTP is ${otp}. It expires in 5 minutes.`,
+    // });
 
-    res.status(200).json({ message: "OTP sent successfully" });
+    res.status(200).json({ otp,message: "OTP sent successfully" });
   } catch (err) {
     console.error("Error sending OTP:", err);
     res.status(500).json({ message: "Failed to send OTP" });
@@ -163,11 +166,10 @@ export const getMerchantByEmail = async (req, res) => {
 export const updateMerchantShopDetails = async (req, res) => {
   try {
     const { merchantId } = req.params;
+    const { shopName, shopDescription, category, ownerName, latitude, longitude } = req.body;
 
-    const { shopName, shopDescription, category, ownerName } = req.body;
-
-    // Address handling (could come as JSON string)
-    let addressObj;
+    // Parse address (string or form-data)
+    let addressObj = {};
     if (req.body.address) {
       try {
         addressObj = JSON.parse(req.body.address);
@@ -180,21 +182,73 @@ export const updateMerchantShopDetails = async (req, res) => {
       }
     }
 
-    // Upload logo if file exists
+    // Extract coordinates
+    const lat = latitude || addressObj.latitude || req.body["address[latitude]"];
+    const lng = longitude || addressObj.longitude || req.body["address[longitude]"];
+
+    if (!lat || !lng) {
+      return res.status(400).json({
+        success: false,
+        message: "Location (latitude & longitude) is required to update shop details.",
+      });
+    }
+
+    const latNum = parseFloat(lat);
+    const lngNum = parseFloat(lng);
+
+    if (isNaN(latNum) || isNaN(lngNum)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid latitude or longitude values.",
+      });
+    }
+
+    // Build final address with GeoJSON Point
+    const finalAddress = {
+      ...addressObj,
+      latitude: latNum,
+      longitude: lngNum,
+      location: {
+        type: "Point",
+        coordinates: [lngNum, latNum], // [longitude, latitude] — MongoDB standard
+      },
+    };
+
+    // CRITICAL: Check if this point falls inside ANY zone's boundary
+    const zone = await Zone.findOne({
+      boundary: {
+        $geoIntersects: {
+          $geometry: {
+            type: "Point",
+            coordinates: [lngNum, latNum],
+          },
+        },
+      },
+    });
+
+    if (!zone) {
+      return res.status(400).json({
+        success: false,
+        message: "Your shop location is outside our serviceable zones. We currently do not onboard merchants from this area.",
+        // Optional: include hint for admin
+        debug: { lat: latNum, lng: lngNum },
+      });
+    }
+
+    // Upload logo if provided
     let logo;
     if (req.file) {
       const result = await uploadToCloudinary(req.file.buffer, {
         folder: "merchant_logos",
         resource_type: "image",
       });
-
       logo = {
         public_id: result.public_id,
         url: result.secure_url,
       };
     }
 
-    // Update merchant
+    // Now safe to update
     const merchant = await Merchant.findByIdAndUpdate(
       merchantId,
       {
@@ -203,21 +257,34 @@ export const updateMerchantShopDetails = async (req, res) => {
           shopDescription,
           category,
           ownerName,
+          address: finalAddress,
+          zone: zone.zoneName || zone.city, // Save zone name
           ...(logo && { logo }),
-          ...(addressObj && { address: addressObj }),
         },
       },
-      { new: true }
+      { new: true, runValidators: true }
     );
 
     if (!merchant) {
-      return res.status(404).json({ success: false, message: "Merchant not found2" });
+      return res.status(404).json({
+        success: false,
+        message: "Merchant not found",
+      });
     }
 
-    res.json({ success: true, merchant });
+    return res.json({
+      success: true,
+      message: "Shop details updated successfully",
+      merchant,
+      zone: zone.zoneName || zone.city,
+    });
   } catch (error) {
-    console.error("Error updating shop details:", error);
-    res.status(500).json({ success: false, message: error.message });
+    console.error("Error updating merchant shop details:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
+      error: error.message,
+    });
   }
 };
 

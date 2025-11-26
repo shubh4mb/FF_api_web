@@ -1,18 +1,73 @@
 import DeliveryRider from "../../models/deliveryRider.model.js";
 import jwt from "jsonwebtoken";
 import { uploadToCloudinary } from "../../config/cloudinary.config.js";
+import zoneModel from "../../models/zone.model.js";
 // import { JWT_SECRET } from "../../config.js";
 
 export const register = async (req, res) => {
-    try {
-      const { name, email, phone, password } = req.body;
-      const deliveryRider = new DeliveryRider({ name, email, phone, password });
-      await deliveryRider.save();
-      res.status(201).json({ message: "Delivery boy created", deliveryRider });
-    } catch (error) {
-      res.status(400).json({ message: error.message });
+  try {
+    const { name, email, phone, password, zoneId } = req.body;
+
+    // 1. Validate zoneId format
+    if (!mongoose.Types.ObjectId.isValid(zoneId)) {
+      return res.status(400).json({ 
+        success: false,
+        message: "Invalid zone ID format" 
+      });
     }
-  };
+
+    // 2. Check if zone actually exists
+    const zone = await Zone.findById(zoneId);
+    if (!zone) {
+      return res.status(400).json({
+        success: false,
+        message: "Selected zone does not exist or is not available",
+      });
+    }
+
+    // 3. Optional: Check if zone is active
+    // if (!zone.isActive) { ... }
+
+    // 4. Create rider with reference + denormalized name
+    const deliveryRider = new DeliveryRider({
+      name,
+      email,
+      phone,
+      password, // hash it in real app!
+      zone: zone._id,           // ← Only store ObjectId
+      zoneName: zone.zoneName || `${zone.city} Zone`, // ← Fast display
+    });
+
+    await deliveryRider.save();
+
+    // 5. Populate zone if you want to return full info
+    const populatedRider = await DeliveryRider.findById(deliveryRider._id)
+      .populate("zone", "zoneName city state boundary");
+
+    res.status(201).json({
+      success: true,
+      message: "Delivery rider registered successfully",
+      rider: populatedRider,
+    });
+  } catch (error) {
+    console.error("Rider registration error:", error);
+    
+    // Handle duplicate phone/email
+    if (error.code === 11000) {
+      const field = Object.keys(error.keyValue)[0];
+      return res.status(400).json({
+        success: false,
+        message: `This ${field} is already registered`,
+      });
+    }
+
+    res.status(500).json({
+      success: false,
+      message: "Server error",
+      error: error.message,
+    });
+  }
+};
 
 export const verifyOTP = async (req, res) => {
   console.log("working");

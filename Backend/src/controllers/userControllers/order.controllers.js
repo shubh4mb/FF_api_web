@@ -5,7 +5,7 @@ import Cart from '../../models/cart.model.js';
 import Delivery from '../../models/deliveryRider.model.js';
 import { emitOrderUpdate } from "../../sockets/order.socket.js";
 import {notifyMerchant} from "../../sockets/merchant.socket.js";
-import Razorpay from "../../config/RazorPay..js";
+import Razorpay from "../../config/RazorPay.js";
 import { io } from "../../../index.js"
 
 // export const createOrder = async (req, res) => {

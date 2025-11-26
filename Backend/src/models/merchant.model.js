@@ -5,6 +5,7 @@ const merchantSchema = new mongoose.Schema(
     shopName: { type: String },
     isOnline:{ type: Boolean, default: false },
     shopDescription: { type: String },
+    phoneNumber:{type:String},
     ownerName: { type: String },
     email: { type: String, unique: true, sparse: true },
     password: { type: String },
@@ -12,18 +13,25 @@ const merchantSchema = new mongoose.Schema(
       public_id: String,
       url: String,
     },
-    category: { type: String },  
+    category: { type: String },
+    zone:{type:String},  
     address: {
       street: String,
       city: String,
       postalCode: String,
-      latitude: Number,
-      longitude: Number,
-      coordinates: {
-        type: [Number], // [longitude, latitude]
-        index: "2dsphere",
-        // required: true
-      }
+     latitude: { type: Number },      // optional: keep for easy reading
+  longitude: { type: Number },     // optional: keep for easy reading
+  location: {                      // ← Use this for geospatial queries
+    type: {
+      type: String,
+      enum: ['Point'],
+      default: 'Point'
+    },
+    coordinates: {
+      type: [Number],    // [longitude, latitude]  <--- VERY IMPORTANT order!
+      index: '2dsphere'
+    }
+  }
     },
     documents: {
       gstNumber: String,

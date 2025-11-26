@@ -1,3 +1,4 @@
+//index.js
 import dotenv from 'dotenv';
 // console.log('Current file:', import.meta.url);
 import {Server} from 'socket.io'
@@ -13,6 +14,7 @@ import { registerDeliveryRiderSockets } from './src/sockets/deliveryRider.socket
 // import { createAdapter } from '@socket.io/redis-adapter';
 // import { redisPub, redisSub } from './src/config/redisConfig.js';
 // import { createClient } from 'redis';
+import{allowedOrigins} from './src/config/cors.js';
 dotenv.config();
 
 const PORT = process.env.PORT || 5000;
@@ -29,7 +31,9 @@ export const io = new Server(server, {
     origin: [
       'http://localhost:5173',
       'http://localhost:5174',
-      'https://d560c68770a1.ngrok-free.app'
+      'https://d560c68770a1.ngrok-free.app',
+      'https://3990b275d1e2.ngrok-free.app',
+      'https://ff-api-web.onrender.com'
     ],
     methods: ['GET', 'POST','PATCH','PUT','DELETE'],
     credentials: true,

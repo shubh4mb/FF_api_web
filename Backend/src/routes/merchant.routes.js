@@ -17,7 +17,7 @@ router.post('/auth/verify-email-otp', verifyEmailOtp);
 router.get('/getMerchant',authMiddlewareMerchant,getMerchantById)
 // router.get('/:ema:merchantIdil',getMerchantByEmail)
 
-router.put("//shop-details", upload.single("logo"),handleMulterError, updateMerchantShopDetails);
+router.put("/:merchantId/shop-details", upload.single("logo"),handleMulterError, updateMerchantShopDetails);
 router.put("/:merchantId/bank-details", updateMerchantBankDetails);
 router.put("/:merchantId/operating-hours", updateMerchantOperatingHours);
 router.put("/:merchantId/activate", activateMerchant);
