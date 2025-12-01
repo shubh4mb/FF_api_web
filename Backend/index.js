@@ -23,6 +23,7 @@ const PORT = process.env.PORT || 5000;
 connectDB();
 
 // Create HTTP server
+
 const server = createServer(app);
 
 // Setup Socket.IO
@@ -93,11 +94,7 @@ io.on('connection', (socket) => {
   });
 });
 
-// Attach io instance to every request
-app.use((req, res, next) => {
-  req.io = io;
-  next();
-});
+
 
 // Start server
 server.listen(PORT, '0.0.0.0', () => {

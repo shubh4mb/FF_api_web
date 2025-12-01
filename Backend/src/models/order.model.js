@@ -53,6 +53,7 @@ const OrderSchema = new mongoose.Schema({
     deliveryRiderStatus: {
         type: String,
         enum: [
+          'queued',
           'unassigned',               // Initial state
           'assigned',                 // Delivery boy assigned
           'en route to pickup',       // On the way to merchant
@@ -86,16 +87,28 @@ const OrderSchema = new mongoose.Schema({
         totalPayable: { type: Number, default: 0 }    // Final amount to be paid
     },
     deliveryLocation: {
-      label: String,
-      houseOrFlat: String,
-      street: String,
+      name: String,
+      phone: String,
+      addressLine1: String,
+      addressLine2: String,
+      landmark: String,
+      area: String,
       city: String,
       state: String,
       pincode: String,
+      country: String,
+      addressType: String,
+      deliveryInstructions: String,
       coordinates: {
         type: [Number], // [longitude, latitude]
         index: "2dsphere",
         // required: true
+      }
+    },
+    pickupLocation: {
+      coordinates: {
+        type: [Number], // [longitude, latitude] 
+        index: "2dsphere"
       }
     },
     deliveryDistance:{

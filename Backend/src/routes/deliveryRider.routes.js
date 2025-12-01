@@ -1,6 +1,6 @@
 import express from 'express';
 
-import { register, verifyOTP, savePersonalDetails ,uploadDocuments,saveBankDetails} from '../controllers/deliveryRiderController/auth.controllers.js';
+import { register, verifyOTP, savePersonalDetails ,uploadDocuments,saveBankDetails,getRider} from '../controllers/deliveryRiderController/auth.controllers.js';
 import { authMiddlewareRider } from '../middleware/jwtAuth.js';
 import upload from '../middleware/multer.js';
 import { handleMulterError } from '../middleware/multer.js';
@@ -8,6 +8,7 @@ import { acceptOrder ,reachedPickupLocation , verifyOtp,reachedCustomerLocation,
 const router=express.Router();
 
 router.post('/register',register);
+router.get('getRiderById',authMiddlewareRider,getRider)
 router.post("/auth/verify-otp", (req, res, next) => {
     console.log("📩 Incoming request to /auth/verify-otp");
     next();

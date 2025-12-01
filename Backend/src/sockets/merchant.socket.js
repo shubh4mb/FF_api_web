@@ -39,6 +39,8 @@ onlineMerchants[merchantId].push(socket.id);
 
 
 export const notifyMerchant = (io, merchantId, orderData) => {
+  console.log(merchantId,orderData,"asdfsadf");
+  
   const merchantSocketIds = onlineMerchants[merchantId];
   console.log(merchantSocketIds, "notify merchant");
 

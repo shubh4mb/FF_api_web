@@ -933,3 +933,20 @@ export const updateMultipleVariantSizes = async (req, res) => {
   }
 };
 
+export const getAllBrands=async(req,res)=>{
+  try {
+    const brands=await Brand.find({isActive:true})
+    res.status(200).json({
+      success:true,
+      message:"All brands",
+      brands
+    })
+  } catch (error) {
+    res.status(500).json({
+      success:false,
+      message:"Server error while getting brands",
+      error:error.message
+    })
+  }
+}
+

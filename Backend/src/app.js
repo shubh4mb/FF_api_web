@@ -8,7 +8,7 @@ import adminRoutes from './routes/admin.routes.js';
 import merchantRoutes from './routes/merchant.routes.js';
 import deliveryRiderRoutes from './routes/deliveryRider.routes.js';
 import { allowedOrigins } from './config/cors.js';
-// import {io} from '../index.js';
+import {io} from '../index.js';
 const app = express();
 
 
@@ -30,15 +30,15 @@ app.use(cors({
 
 app.use(express.json()); 
 
-// app.use((req, res, next) => {
-//   req.io = io;
-//   next();
-// });
-
-app.get('/ping', (req, res) => {   
-  res.send('pong');
+app.use((req, res, next) => {
+  req.io = io;
+  next();
 });
 
+app.get('/ping', (req, res) => {    
+  res.send('pong');
+});
+ 
 // Routes
 
 app.use('/api/auth', authRoutes);

@@ -13,6 +13,7 @@ const zoneSchema = new mongoose.Schema({
         coordinates: { type: [Number], required: true } // [lng, lat]
     }, 
 })
+
 zoneSchema.index({ boundary: '2dsphere' });
 zoneSchema.index({centerCoordinaties:'2dsphere'})
 

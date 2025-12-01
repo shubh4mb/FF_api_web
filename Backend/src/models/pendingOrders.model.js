@@ -3,7 +3,7 @@ import mongoose from 'mongoose';
 const pendingOrderSchema = new mongoose.Schema({
   orderId: { type: String, required: true, unique: true },
   merchantId: { type: String, required: true },
-  zoneId: { type: String, required: true }, // e.g., 'edapally'
+  zoneName: { type: String, required: true }, // e.g., 'edapally'
   pickupLoc: {
     type: { type: String, enum: ['Point'], default: 'Point' },
     coordinates: { type: [Number], required: true } // [lng, lat]
@@ -18,7 +18,7 @@ const pendingOrderSchema = new mongoose.Schema({
   assignedAt: Date
 }, { timestamps: true });
 
-pendingOrderSchema.index({ zoneId: 1, acceptTimestamp: 1 }); // FIFO per zone
+pendingOrderSchema.index({ zoneName: 1, acceptTimestamp: 1 }); // FIFO per zone
 pendingOrderSchema.index({ pickupLoc: '2dsphere' }); // Geo queries if needed
 
 export default mongoose.model('PendingOrder', pendingOrderSchema);

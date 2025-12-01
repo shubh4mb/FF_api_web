@@ -1,7 +1,7 @@
 import express from 'express'
 import upload , {handleMulterError} from '../middleware/multer.js'
 import { addBaseProduct , addVariant, getBaseProducts, getVariants,getCategories,updateVariant,updateSize, deleteVariantSizes, updateSizeCount} from '../controllers/merchantController/product.controllers.js';
-import { deleteVariant ,addBrand, getBrands, getBaseProductById ,  getProductsByMerchantId, uploadProductImage, deleteImage, deleteProduct, updatePrice,editProduct,editVariant,updateVariantSizeStock,updateMultipleVariantSizes} from '../controllers/merchantController/product.controllers.js';
+import { deleteVariant ,addBrand, getBrands, getBaseProductById ,  getProductsByMerchantId, uploadProductImage, deleteImage, deleteProduct, updatePrice,editProduct,editVariant,updateVariantSizeStock,updateMultipleVariantSizes,getAllBrands} from '../controllers/merchantController/product.controllers.js';
 
 import { addMerchant } from '../controllers/merchantController/merchant.controller.js';
 import {  loginMerchant ,updateMerchantShopDetails, updateMerchantBankDetails, updateMerchantOperatingHours, activateMerchant, registerPhone, sendEmailOtp, verifyEmailOtp, getMerchantByEmail } from '../controllers/merchantController/authControllers.js';
@@ -37,6 +37,7 @@ router.get('/getBaseProductById/:productId',getBaseProductById);
 router.get('/fetchProductsByMerchantId/:merchantId', getProductsByMerchantId);
 router.get('/getVariants',getVariants);
 router.get('/getCategories',getCategories)
+router.get('/brand/getAllBrands',getAllBrands)
 
 router.post("/upload/image",upload.array("images", 5), handleMulterError,uploadProductImage )
 router.delete('/deleteImage/:imageId', deleteImage);

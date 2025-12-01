@@ -34,7 +34,7 @@ export const register = async (req, res) => {
       email,
       phone,
       password, // hash it in real app!
-      zone: zone._id,           // ← Only store ObjectId
+      zone: zone._id,           // ← Only store ObjectId 
       zoneName: zone.zoneName || `${zone.city} Zone`, // ← Fast display
     });
 
@@ -123,8 +123,11 @@ export const logout = async (req, res) => {
 
 export const savePersonalDetails = async (req, res) => {
     try {
-      const { fullName, dob, age, gender, email, city, area, pincode, phone } = req.body;
+      const { fullName, dob, age, gender, email, city, area, pincode, phone , zoneId,zoneName } = req.body;
+      console.log(req.body);
+      
       const riderId = req.riderId;
+      const zoneDoc = await zoneModel.findById(zone);
   
       console.log("📦 Received body:", req.body);
   
@@ -134,6 +137,7 @@ export const savePersonalDetails = async (req, res) => {
   
       // ✅ Find existing rider
       let rider = await DeliveryRider.findById(riderId);
+
   
       if (!rider) {
         // ❗ Rider not found, create new
@@ -144,9 +148,11 @@ export const savePersonalDetails = async (req, res) => {
           gender,
           email,
           city,
-          area,
+          area, 
           pincode,
           phone,
+          zoneId:zoneId,
+          zoneName:zoneName
         });
       } else {
         // ✅ Update existing details
@@ -158,7 +164,7 @@ export const savePersonalDetails = async (req, res) => {
         rider.city = city || rider.city;
         rider.area = area || rider.area;
         rider.pincode = pincode || rider.pincode;
-        rider.phone = phone || rider.phone;
+        rider.phone = phone || rider.phone; 
       }
   
       await rider.save();
@@ -281,4 +287,20 @@ export const saveBankDetails = async (req, res) => {
     }
   };  
 
+  export const getRider = async(req,res)=>{
+    console.log("working");
+    
+    try {
+      console.log(req.riderId);
+      
+      const rider = await DeliveryRider.findById(req.riderId);
+      if (!rider) {
+        return res.status(404).json({ message: "Rider not found" });
+      }
+      res.status(200).json({ rider });
+    } catch (error) {
+      console.error("❌ Error fetching rider:", error);
+      res.status(500).json({ message: "Server error while fetching rider" });
+    }
+  }
   

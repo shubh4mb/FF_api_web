@@ -8,14 +8,17 @@ export async function enqueueOrder(orderData) {
     const { 
       orderId, 
       merchantId, 
+      zoneId,//actually zone Name
       pickupLat, 
       pickupLng, 
       customerLat, 
       customerLng 
     } = orderData;
 
+    
+
     // Infer zone from pickup (shop) loc—e.g., Edapally from lat/lng
-    const zoneId = await inferZone(pickupLat, pickupLng);
+    // const zoneId = await inferZone(pickupLat, pickupLng);
     
     // Build GeoJSON for Mongo (lng first!)
     const pickupLoc = {
@@ -31,7 +34,7 @@ export async function enqueueOrder(orderData) {
     const orderDoc = new PendingOrder({
       orderId,
       merchantId,
-      zoneId,
+      zoneName:zoneId,
       pickupLoc,
       customerLoc
     });
@@ -58,17 +61,18 @@ export const matchQueuedOrders = async (zoneId) => {
   try {
     // Pull top 5 FIFO *only* queued orders in zone (sorted by acceptTimestamp)
     const pendingOrders = await PendingOrder
-      .find({ zoneId, status: 'queued' }) // Filter queued only
+      .find({ zoneName:zoneId, status: 'queued' }) // Filter queued only
       .sort({ acceptTimestamp: 1 }) // Oldest first—FIFO
       .limit(5) // Batch small to keep it snappy
       .lean(); // Fast read, no Mongoose overhead
+    // console.log(pendingOrders, "pendingOrders");
     
     if (pendingOrders.length === 0) {
       console.log(`No queued orders in zone ${zoneId}`);
       return;
     }
 
-    console.log(`🔍 Matching ${pendingOrders.length} queued orders in zone ${zoneId}...`);
+    // console.log(`🔍 Matching ${pendingOrders.length} queued orders in zone ${zoneId}...`);
 
     let assignedCount = 0;
     const assignedOrders = []; // Track successes for emit
@@ -109,12 +113,12 @@ export const matchQueuedOrders = async (zoneId) => {
 
         console.log(`✅ Assigned rider ${assignedRider} to order ${orderId} in ${zoneId}`);
         
-        // Quick emit to merchant/rider (via orderId room as in your route)
-        io.to(orderId).emit('orderAssigned', { 
-          orderId, 
-          riderId: assignedRider, 
-          status: 'assigned' 
-        });
+        // // Quick emit to merchant/rider (via orderId room as in your route)
+        // io.to(orderId).emit('orderAssigned', { 
+        //   orderId, 
+        //   riderId: assignedRider, 
+        //   status: 'assigned' 
+        // });
       } else {
         console.log(`⏳ No rider for order ${orderId} in ${zoneId}—stays queued`);
         // No update—retry on next trigger

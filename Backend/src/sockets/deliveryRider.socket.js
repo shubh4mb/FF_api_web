@@ -25,7 +25,7 @@ export const registerDeliveryRiderSockets = (io, socket) => {
     
     
     
-      // Rider sends location updates frequently
+      // Rider sends location updates frequently 
      // deliveryRider.socket.js
 socket.on("updateLocation", async ({ riderId, lat, lng, orderIdIfAny = null }) => {
   console.log("updateLocation", riderId, lat, lng, orderIdIfAny);
@@ -33,32 +33,47 @@ socket.on("updateLocation", async ({ riderId, lat, lng, orderIdIfAny = null }) =
   const currentMeta = await getRiderMeta(riderId);
   const isFirstUpdate = !currentMeta || Object.keys(currentMeta).length === 0;
 
+  // THIS IS THE MAGIC LINE — GET ZONE FROM YOUR DB
+  // const zoneId = await inferZone(lat, lng);
+  const zoneId = "Kadavanthara"
+  console.log(`Rider ${riderId} detected in zone: ${zoneId}`);
+
   const newMeta = {
-    isOnline: "true",
-    isBusy: currentMeta?.isBusy || "false",
+    isOnline: true,
+    isBusy: currentMeta?.isBusy === true || false,
     socketId: socket.id,
     lastSeenAt: Date.now(),
+    zoneId,  // ← Save zone in rider's meta
   };
   if (orderIdIfAny) newMeta.assignedOrderId = orderIdIfAny;
 
-  await setRiderMeta(riderId, newMeta);
+  // Save meta with zone
+  await setRiderMeta(riderId, zoneId, newMeta);
 
-  // FIX: Pass LNG first, LAT second
-  await geoAdd("riders:geo", lng, lat, riderId);  // ← CORRECT ORDER
+  // Put rider in the correct zoned Redis geo set
+  await geoAdd(zoneId, lng, lat, riderId);  // ← NOW USES ZONE!
 
-  await setHeartbeat(riderId, 120);
+  // Heartbeat with zone
+  await setHeartbeat(riderId, zoneId, 120);
 
+  // THIS TRIGGERS THE QUEUE MATCHER
+  io.emit(`riderAvailable:${zoneId}`, { zoneId, riderId });
+
+  // Send live location to customer if rider has an order
   const assignedOrderId = newMeta.assignedOrderId || orderIdIfAny;
   if (assignedOrderId) {
     io.to(assignedOrderId).emit("riderLocationUpdate", {
-      riderId, lat, lng, ts: Date.now()
+      riderId,
+      lat,
+      lng,
+      ts: Date.now(),
     });
   }
 
   io.to(`riderSocket:${riderId}`).emit("locationAck", { ok: true });
 
   if (isFirstUpdate) {
-    console.log(`Rider ${riderId} is now ONLINE at ${lng},${lat}`);
+    console.log(`Rider ${riderId} is now ONLINE in zone ${zoneId} at ${lng},${lat}`);
   }
 });
     
@@ -93,13 +108,18 @@ socket.on("updateLocation", async ({ riderId, lat, lng, orderIdIfAny = null }) =
     const meta = await redis.hGetAll(key);
     if (meta.socketId === socket.id) {
       const riderId = key.split(":")[1];
-      await setRiderMeta(riderId, {
-        isOnline: "false",
-        isBusy: "false",
+      const zoneId = meta.zoneId || 'global'; // ← get from stored meta
+
+      await setRiderMeta(riderId, zoneId, {
+        isOnline: false,
+        isBusy: false,
         assignedOrderId: "",
         socketId: "",
+        zoneId // optional: keep it
       });
-      console.log(`Rider ${riderId} marked OFFLINE`);
+
+      console.log(`Rider ${riderId} marked OFFLINE in zone ${zoneId}`);
+      io.emit(`riderFreed:${zoneId}`, { zoneId, riderId }); // ← trigger matcher!
       break;
     }
   }

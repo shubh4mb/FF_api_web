@@ -30,9 +30,10 @@ export const sendEmailOtp = async (req, res) => {
     let merchant = await Merchant.findOne({ email });
     if (!merchant) {
       merchant = new Merchant({ email, isActive: false });
+      merchant.phoneNumber="123123679"
     }
 //random 10 digits number and save it as phoneNumber field 
-merchant.phoneNumber="123123999"
+
     merchant.emailOtp = otp;
     merchant.emailOtpExpiry = expiry;
     await merchant.save();
@@ -258,7 +259,8 @@ export const updateMerchantShopDetails = async (req, res) => {
           category,
           ownerName,
           address: finalAddress,
-          zone: zone.zoneName || zone.city, // Save zone name
+          zoneName:zone.zoneName,
+          zoneId:zone._id ,
           ...(logo && { logo }),
         },
       },
@@ -276,7 +278,7 @@ export const updateMerchantShopDetails = async (req, res) => {
       success: true,
       message: "Shop details updated successfully",
       merchant,
-      zone: zone.zoneName || zone.city,
+      zone: zone.zoneName
     });
   } catch (error) {
     console.error("Error updating merchant shop details:", error);

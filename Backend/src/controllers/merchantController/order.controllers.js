@@ -1,11 +1,12 @@
 import Order from "../../models/order.model.js";
 import Product from "../../models/product.model.js";
-import {emitOrderUpdate} from "../../sockets/order.socket.js";
+import { emitOrderUpdate } from "../../sockets/order.socket.js";
 import { io } from "../../../index.js"
 import DeliveryRider from "../../models/deliveryRider.model.js";
-import {assignNearestRider} from "../../helperFns/deliveryRiderFns.js"
-import {onlineMerchants} from "../../sockets/merchant.socket.js"
+import { assignNearestRider } from "../../helperFns/deliveryRiderFns.js"
+import { onlineMerchants } from "../../sockets/merchant.socket.js"
 import { enqueueOrder } from '../../helperFns/orderFns.js'; // Your new helper—add if not
+import Merchant from "../../models/merchant.model.js";
 
 const generateOTP = () => {
   return Math.floor(1000 + Math.random() * 9000);
@@ -18,15 +19,15 @@ export const saveProductDetails = async (req, res) => {
 
     // Validate that at least one field is provided
     if (!name && !description) {
-      return res.status(400).json({ 
-        message: 'At least one of name or description is required' 
+      return res.status(400).json({
+        message: 'At least one of name or description is required'
       });
     }
 
     // Validate name if provided
     if (name !== undefined && (!name || name.trim().length === 0)) {
-      return res.status(400).json({ 
-        message: 'Product name cannot be empty' 
+      return res.status(400).json({
+        message: 'Product name cannot be empty'
       });
     }
 
@@ -41,11 +42,11 @@ export const saveProductDetails = async (req, res) => {
       updateFields,
       { new: true, runValidators: true }
     )
-    .populate('brandId', 'name')
-    .populate('categoryId', 'name')
-    .populate('subCategoryId', 'name')
-    .populate('subSubCategoryId', 'name')
-    .populate('merchantId', 'name');
+      .populate('brandId', 'name')
+      .populate('categoryId', 'name')
+      .populate('subCategoryId', 'name')
+      .populate('subSubCategoryId', 'name')
+      .populate('merchantId', 'name');
 
     if (!updatedProduct) {
       return res.status(404).json({ message: 'Product not found or inactive' });
@@ -65,7 +66,7 @@ export const saveProductDetails = async (req, res) => {
 
 
 export const getPlacedOrder = async (req, res) => {
-  console.log(req.merchantId,'merchantIddddd');
+  console.log(req.merchantId, 'merchantIddddd');
   const orders = await Order.find({ merchantId: req.merchantId, orderStatus: "placed" });
   return res.status(200).json({ orders });
 };
@@ -169,79 +170,80 @@ export const getPlacedOrder = async (req, res) => {
 
 
 export const orderRequestForMerchant = async (req, res) => {
+  let queueResult = null; // ← Declare here, outside any block
+
   try {
     const { orderId } = req.params;
     const { status } = req.body;
 
-    const order = await Order.findById(orderId).populate('merchantId', 'shopName');
+    const order = await Order.findById(orderId).populate('merchantId', 'shopName address');
     if (!order) return res.status(404).json({ message: "Order not found" });
 
     if (status === "accept") {
-      order.orderStatus = "accepted"; // Main order stays "accepted" in your core Orders coll
-      // Don't assign here—queue it instead
+      order.orderStatus = "accepted";
 
-      // Pull locs from order or req.body (your hardcoded for now; make dynamic later)
+      const pickupCoordinates = order.pickupLocation?.coordinates || [76.3244129, 9.9371151];
       const pickupLocation = {
-        lat: order.pickupLat || 9.9371151, // Pull from order doc
-        lng: order.pickupLng || 76.3244129,
+        lat: pickupCoordinates[1] ?? 9.9371151,
+        lng: pickupCoordinates[0] ?? 76.3244129,
       };
-      const customerLocation = {
-        lat: order.customerLat || 9.9371151,
-        lng: order.customerLng || 76.3244129,
-      };
-      const deliveryAmount = order.deliveryAmount || "100";
 
-      // Enqueue for zoned/FIFO matching
-      const queueResult = await enqueueOrder({
+      const customerCoordinates = order.deliveryLocation?.coordinates || [76.3244129, 9.9371151];
+      const customerLocation = {
+        lat: customerCoordinates[1] ?? 9.9371151,
+        lng: customerCoordinates[0] ?? 76.3244129,
+      };
+
+      const merchant = await Merchant.findById(order.merchantId);
+      const zoneId = merchant.zoneName || (await inferZone(pickupLocation.lat, pickupLocation.lng));
+
+      // This will now safely assign to the outer-scoped queueResult
+      queueResult = await enqueueOrder({
         orderId: order._id.toString(),
         merchantId: order.merchantId.toString(),
+        zoneId,
         pickupLat: pickupLocation.lat,
         pickupLng: pickupLocation.lng,
         customerLat: customerLocation.lat,
         customerLng: customerLocation.lng,
       });
 
+      console.log(queueResult, "queueResult");
+
       if (queueResult.success) {
-        order.deliveryRiderStatus = "queued"; // Temp status—updates to "assigned" on match
-        order.queuedZone = queueResult.zoneId; // Optional: Track in main order too
+        order.deliveryRiderStatus = "queued";
+        order.queuedZone = queueResult.zoneId;
         console.log(`✅ Order ${orderId} queued in zone ${queueResult.zoneId}—matcher will assign rider`);
       } else {
         console.log("❌ Queue failed—fallback to unassigned");
         order.deliveryRiderStatus = "unassigned";
       }
 
-      // Your socket emits (keep as-is, but add zone to payload for Vite merchant view)
+      // Now safe to use queueResult here too
+      const emitPayload = {
+        orderId,
+        orderStatus: order.orderStatus,
+        deliveryRiderStatus: order.deliveryRiderStatus,
+        queuedZone: queueResult?.zoneId,
+        merchantId: order.merchantId,
+      };
+
+      // Emit to merchant sockets
       const merchantSocketIds = onlineMerchants[order.merchantId?.toString()];
       if (merchantSocketIds && merchantSocketIds.length > 0) {
         merchantSocketIds.forEach((socketId) => {
           const socket = io.sockets.sockets.get(socketId);
           if (socket) {
             socket.join(orderId);
-            console.log(`Merchant socket ${socketId} joined room ${orderId}`);
-            io.to(socketId).emit("orderUpdate", {
-              orderId,
-              orderStatus: order.orderStatus,
-              deliveryRiderStatus: order.deliveryRiderStatus,
-              queuedZone: queueResult?.zoneId, // New: For merchant dashboard
-              merchantId: order.merchantId,
-            });
-            console.log(`📦 Emitted orderUpdate to merchant socket ${socketId}`);
-          } else {
-            console.warn(`Socket ${socketId} not found for merchant ${order.merchantId}`);
+            io.to(socketId).emit("orderUpdate", emitPayload);
           }
         });
       } else {
-        console.log(`No active sockets for merchant ${order.merchantId}`);
+        console.log(`No active sockets for merchant ${order.merchantId}`, order.merchantId);
       }
 
-      // Emit to room (add zone here too)
-      io.to(orderId).emit("orderUpdate", {
-        orderId,
-        orderStatus: order.orderStatus,
-        deliveryRiderStatus: order.deliveryRiderStatus,
-        queuedZone: queueResult?.zoneId,
-        merchantId: order.merchantId,
-      });
+      // Emit to order room
+      io.to(orderId).emit("orderUpdate", emitPayload);
       console.log(`Emitted order update to room ${orderId}`);
     }
 
@@ -251,29 +253,29 @@ export const orderRequestForMerchant = async (req, res) => {
     }
 
     await order.save();
-
     emitOrderUpdate(io, orderId, order);
 
     return res.status(200).json({
       message: "Order status updated",
       orderId,
       order,
-      queuedZone: status === "accept" ? queueResult?.zoneId : undefined, // For API response
+      queuedZone: status === "accept" && queueResult?.success ? queueResult.zoneId : undefined,
     });
+
   } catch (err) {
     console.error("Error in orderRequestForMerchant:", err);
     return res.status(500).json({ message: "Internal server error" });
   }
 };
 export const getAllOrder = async (req, res) => {
-    try {
-      const orders = await Order.find({ merchantId: req.merchantId }).sort({ createdAt: -1 });
-      console.log(orders.length,'orders length');
-      
-      return res.status(200).json({ orders });
-    } catch (error) {
-      return res.status(500).json({ message: "Error fetching orders" });
-    }
+  try {
+    const orders = await Order.find({ merchantId: req.merchantId }).sort({ createdAt: -1 });
+    console.log(orders.length, 'orders length');
+
+    return res.status(200).json({ orders });
+  } catch (error) {
+    return res.status(500).json({ message: "Error fetching orders" });
+  }
 }
 
 export const orderPacked = async (req, res) => {
@@ -282,7 +284,7 @@ export const orderPacked = async (req, res) => {
     const order = await Order.findById(orderId);
     if (!order) return res.status(404).json({ message: "Order not found" });
     order.orderStatus = "packed";
-    order.otp=generateOTP();
+    order.otp = generateOTP();
     await order.save();
     emitOrderUpdate(io, orderId, order);
 

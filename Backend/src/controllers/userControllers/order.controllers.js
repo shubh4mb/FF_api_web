@@ -3,9 +3,11 @@ import Product from "../../models/product.model.js";
 // controllers/orderController.js
 import Cart from '../../models/cart.model.js';
 import Delivery from '../../models/deliveryRider.model.js';
+import Merchant from '../../models/merchant.model.js';
 import { emitOrderUpdate } from "../../sockets/order.socket.js";
 import {notifyMerchant} from "../../sockets/merchant.socket.js";
 import Razorpay from "../../config/RazorPay.js";
+import Address from "../../models/address.model.js";
 import { io } from "../../../index.js"
 
 // export const createOrder = async (req, res) => {
@@ -67,18 +69,18 @@ import { io } from "../../../index.js"
 // };
 
 export const createOrder = async (req, res) => {
-  console.log(req.body.deliveryCharge, 'body');
+  // console.log(req.body.deliveryCharge, 'body');
   // let amount = req.body.deliveryCharge;
   let amount = 100;
   
 
   try {
     // Create Razorpay order
-    const razorpayOrder = await Razorpay.orders.create({
-      amount,
-      currency: "INR",
-      receipt: `order_${Date.now()}`,
-    });
+    // const razorpayOrder = await Razorpay.orders.create({
+    //   amount,
+    //   currency: "INR",
+    //   receipt: `order_${Date.now()}`,
+    // });
 console.log("working");
 
     const userId = req.user.userId;
@@ -91,6 +93,28 @@ console.log("working");
 
     // Step 2: All items are from the same merchant
     const merchantId = cart.items[0].merchantId;
+
+    // Step 2.1: Get merchant coordinates for pickup
+    const merchant = await Merchant.findById(merchantId);
+    if (!merchant) {
+      return res.status(404).json({ message: 'Merchant not found' });
+    }
+
+    const merchantCoordinates = merchant.address?.location?.coordinates || [];
+
+    // Step 2.2: Get customer's selected delivery address from request body
+    const { addressId } = req.body;
+    if (!addressId) {
+      return res.status(400).json({ message: 'Address ID is required' });
+    }
+
+    // Fetch address details from address schema
+    
+    const deliveryAddress = await Address.findOne({ _id: addressId, user: userId });
+    if (!deliveryAddress) {
+      return res.status(404).json({ message: 'Address not found' });
+    }
+    console.log("working2");
 
     let totalAmount = 0;
     const orderItems = [];
@@ -119,7 +143,6 @@ console.log("working");
         tryStatus: product.isTriable ? 'pending' : 'not-triable'
       });
     }
-console.log("working2");
 
     // Step 3: Create order
     const newOrder = new Order({
@@ -132,12 +155,27 @@ console.log("working2");
         tryAndBuyFee: 0,
         gst: 0,
         discount: 0,
-        deliveryCharge: 0,
-        totalPayable: totalAmount,
+        deliveryCharge: req.body.deliveryCharge || 0,
+        totalPayable: totalAmount + (req.body.deliveryCharge || 0),
       },
       deliveryLocation: {
-        address: "",
-        coordinates: []
+        name: deliveryAddress.name,
+        phone: deliveryAddress.phone,
+        addressLine1: deliveryAddress.addressLine1,
+        addressLine2: deliveryAddress.addressLine2,
+        landmark: deliveryAddress.landmark,
+        area: deliveryAddress.area,
+        city: deliveryAddress.city,
+        state: deliveryAddress.state,
+        pincode: deliveryAddress.pincode,
+        country: deliveryAddress.country,
+        addressType: deliveryAddress.addressType,
+        deliveryInstructions: deliveryAddress.deliveryInstructions,
+        coordinates: deliveryAddress.location.coordinates // Customer's delivery coordinates [lng, lat]
+      },
+      // Store merchant coordinates separately for pickup location
+      pickupLocation: {
+        coordinates: merchantCoordinates // Merchant coordinates [lng, lat]
       }
     });
 
@@ -169,7 +207,7 @@ console.log("working3");
     return res.status(201).json({
       message: 'Order placed successfully',
       order: newOrder,
-      razorpayOrder,
+      // razorpayOrder,
     });
 
   } catch (error) {
@@ -367,6 +405,17 @@ export const initiateReturn = async (req, res) => {
   }
 };
 
+export const getOrderById = async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    const order = await Order.findById(orderId);
+    if (!order) return res.status(404).json({ message: "Order not found" });
+    return res.status(200).json({ order });
+  } catch (error) {
+    console.log(error);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+};
 
 
 

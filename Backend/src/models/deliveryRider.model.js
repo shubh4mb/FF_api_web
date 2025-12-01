@@ -112,10 +112,9 @@ const DeliveryRiderSchema = new mongoose.Schema({
     type: Boolean,
     default: false,
   },
-  zone: {
+  zoneId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: "Zone",
-    required: true,
   },
 
   // Optional: denormalize zoneName for fast reads (highly recommended)

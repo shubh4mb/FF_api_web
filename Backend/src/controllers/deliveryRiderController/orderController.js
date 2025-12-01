@@ -1,5 +1,6 @@
 import Order from "../../models/order.model.js";
 import deliveryRiderModel from "../../models/deliveryRider.model.js";
+import PendingOrder from "../../models/pendingOrders.model.js";
 // import {redisPub} from "../../config/redisConfig.js";
 import { emitOrderUpdate } from "../../sockets/order.socket.js";
 
@@ -53,6 +54,7 @@ export const acceptOrder = async (req, res) => {
     // } else {
     //   console.warn(`No socketId found for rider ${rider._id}`);
     // }
+console.log(req.io,"ioioioiooioio");
 
     emitOrderUpdate(req.io, orderId, order);
 
@@ -118,6 +120,7 @@ export const reachedPickupLocation = async (req, res) => {
     // Update order status
     order.deliveryRiderStatus = 'arrived at pickup';
     await order.save();
+    await PendingOrder.findOneAndDelete({ orderId: orderId });
 
     // Emit order update
     emitOrderUpdate(req.io, orderId, order);
@@ -133,7 +136,7 @@ export const reachedPickupLocation = async (req, res) => {
 export const verifyOtp = async (req,res)=>{
     try {
         const {orderId,otp}=req.body;
-        // console.log(orderId,otp,"orderId,otp");
+        console.log(orderId,otp,"orderId,otp");
         
         const order=await Order.findById(orderId);
         if(!order){
