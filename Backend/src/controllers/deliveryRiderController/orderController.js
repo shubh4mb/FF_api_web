@@ -21,47 +21,97 @@ const getDistance = (lat1, lon1, lat2, lon2) => {
 export const acceptOrder = async (req, res) => {
   try {
     const { orderId } = req.body;
-    console.log(orderId,"orderId in accept order");
-    
+
     const rider = await deliveryRiderModel.findById(req.riderId);
-    // console.log(rider,"rider in accept order");
-    
     if (!rider) {
-      console.log("Rider not found");
       return res.status(404).json({ message: 'Rider not found' });
     }
-    const order = await Order.findById(orderId);
+
+    const order = await Order.findById(orderId)
+      .populate('items.productId')
+      .populate('merchantId');
+
     if (!order) {
       return res.status(404).json({ message: 'Order not found' });
     }
-    if (order.riderId && order.riderId.toString() !== req.user._id.toString()) {
-      return res.status(403).json({ message: 'Not authorized to accept this order' });
+
+    // Prevent other riders from accepting
+    if (order.deliveryRiderId && order.deliveryRiderId.toString() !== rider._id.toString()) {
+      return res.status(403).json({ message: 'Order already assigned to another rider' });
     }
 
-    order.deliveryRiderStatus = 'assigned';
+    // === CALCULATE DELIVERY CHARGE LOGIC ===
+    let deliveryCharge = 0;
+
+    // Check if any item is Try & Buy (has tryStatus field and not 'not-triable')
+    const hasTryAndBuyItem = order.items.some(item => 
+      item.tryStatus && item.tryStatus !== 'not-triable'
+    );
+
+    if (hasTryAndBuyItem) {
+      // Try & Buy: One way delivery + return trip
+      deliveryCharge = 15; // ₹10 (to customer) + ₹5 (return pickup)
+    } else {
+      // Regular delivery (one way only)
+      deliveryCharge = 10; // ₹10 one way
+    }
+
+    // Optional: Add distance-based charge later (if deliveryDistance exists)
+    // Example: deliveryCharge += order.deliveryDistance * 2; // ₹2 per km extra
+
+    // Update order fields
     order.deliveryRiderId = rider._id;
+    order.deliveryRiderStatus = 'assigned';
+    order.deliveryCharge = deliveryCharge;
+    
+    // Save rider details
+    order.deliveryRiderDetails = {
+      name: rider.fullName,
+      phone: rider.phone
+    };
+
+    // Update final billing 
+    const subtotal = order.items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+
+    order.finalBilling = {
+      baseAmount: subtotal,
+      tryAndBuyFee: hasTryAndBuyItem ? 50 : 0, // optional extra fee
+      gst: Math.round(subtotal * 0.18), // 18% GST example
+      discount: 0, 
+      deliveryCharge: deliveryCharge,
+      
+      totalPayable: subtotal + 
+                    (hasTryAndBuyItem ? 50 : 0) + 
+                    Math.round(subtotal * 0.18) + 
+                    deliveryCharge
+    };
+
+    // Also update top-level deliveryCharge (for consistency)
+    order.totalAmount = order.finalBilling.totalPayable;
+
     await order.save();
 
-    // const socketId = await redisPub.hGet(`rider:${rider._id}`, 'socketId');
-    // if (socketId) {
-    //   const socket = req.io.sockets.sockets.get(socketId);
-    //   if (socket) {
-    //     socket.emit("joinOrderRoom", orderId);
-    //     console.log(`Rider ${rider._id} joined room ${orderId}`);
-    //   } else {
-    //     console.warn(`Rider ${rider._id} socket ${socketId} not connected`);
-    //   }
-    // } else {
-    //   console.warn(`No socketId found for rider ${rider._id}`);
-    // }
-console.log(req.io,"ioioioiooioio");
+    // Update rider's current order
+    rider.currentOrderId = orderId;
+    await rider.save();
 
+    // Emit real-time update
     emitOrderUpdate(req.io, orderId, order);
 
-    res.status(200).json({ message: 'Order accepted successfully' });
+    return res.status(200).json({
+      message: 'Order accepted successfully',
+      order: {
+        _id: order._id,
+        deliveryCharge,
+        totalAmount: order.totalAmount,
+        finalBilling: order.finalBilling,
+        hasTryAndBuyItem
+      }
+    });
+
   } catch (error) {
     console.error('Error in acceptOrder:', error);
-    res.status(500).json({ message: `❌ ${error.message}` });
+    return res.status(500).json({ message: error.message });
   }
 };
 
@@ -111,11 +161,11 @@ export const reachedPickupLocation = async (req, res) => {
     );
 
     // Check if within 50 meters
-    if (distance > 200) {
-      return res.status(400).json({ 
-        message: `Rider is ${distance.toFixed(2)} meters from pickup location, must be within 50 meters` 
-      });
-    }
+    // if (distance > 200) {
+    //   return res.status(400).json({ 
+    //     message: `Rider is ${distance.toFixed(2)} meters from pickup location, must be within 50 meters` 
+    //   });
+    // }
 
     // Update order status
     order.deliveryRiderStatus = 'arrived at pickup';
@@ -161,7 +211,7 @@ export const verifyOtp = async (req,res)=>{
 export const reachedCustomerLocation= async(req,res)=>{
   try {
     const {orderId,latitude,longitude}=req.body;
-    console.log(req.body,"req.body");
+    console.log(req.body,"req.bodyhhhhhh");
     
     console.log(orderId,latitude,longitude,"orderId,latitude,longitude");
     
@@ -169,7 +219,12 @@ export const reachedCustomerLocation= async(req,res)=>{
     if(!order){
       return res.status(404).json({message:"Order not found"});
     }
+    console.log(order,"ssssss");
+    
+    console.log(order.deliveryRiderId,req.riderId,"asdfasdf");
+    
     if(order.deliveryRiderId?.toString()!==req.riderId.toString()){
+
       return res.status(403).json({message:"Not authorized for this order"});
     }
     const customerLocation={
@@ -177,9 +232,9 @@ export const reachedCustomerLocation= async(req,res)=>{
       longitude:76.2984220
     };
     const distance=getDistance(latitude,longitude,customerLocation.latitude,customerLocation.longitude);
-    if(distance>200){
-      return res.status(400).json({message:"Rider is ${distance.toFixed(2)} meters from customer location, must be within 50 meters"});
-    }
+    // if(distance>200){
+    //   return res.status(400).json({message:"Rider is ${distance.toFixed(2)} meters from customer location, must be within 50 meters"});
+    // }
     order.deliveryRiderStatus="arrived at delivery";
     order.orderStatus="arrived at delivery";
     

@@ -2,8 +2,28 @@ import mongoose from "mongoose";
 const OrderSchema = new mongoose.Schema({
     userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     merchantId: { type: mongoose.Schema.Types.ObjectId, ref: 'Merchant' },
+    merchantDetails:{
+      name:{
+        type:String,
+        default:null
+      },
+      phone:{
+        type:String,
+        default:null
+      },
+    },
     
     deliveryRiderId: { type: mongoose.Schema.Types.ObjectId, ref: 'DeliveryRider', default: null },
+    deliveryRiderDetails:{
+      name:{
+        type:String,
+        default:null
+      },
+      phone:{
+        type:String,
+        default:null
+      },
+      },
     items: [
       {
         productId: { type: mongoose.Schema.Types.ObjectId, ref: 'Product' },
@@ -42,10 +62,23 @@ const OrderSchema = new mongoose.Schema({
           'partially_returned',
           'delivered',
           'cancelled',
-          'rejected'
+           'completed', 
+          'rejected',
+          'completed'
         ],
         default: 'placed'
       },
+    customerDeliveryStatus:{
+      type: String,
+      enum: [
+        'trial_phase_ended',
+        'completed',
+        'cancelled',
+        'rejected',
+        'placed'
+      ],
+      default: 'placed'
+    },
     reason:{
         type: String,
         default: null
@@ -68,7 +101,8 @@ const OrderSchema = new mongoose.Schema({
           'reached return merchant',
           'confirmed return',         // Items returned
           'confirmed purchase',       // Customer accepted items
-          'delivered',                // Final confirmation
+          'delivered', 
+          'completed',               // Final confirmation
           'cancelled',                // Cancelled for any reason
         ],
         default: 'unassigned'
@@ -115,6 +149,10 @@ const OrderSchema = new mongoose.Schema({
       type: Number,
       default: 0
     },
+    estimatedTime:{
+      type: Number,
+      default: 0
+    },
     deliveryCharge:{ type: Number, default: 0 },
     deliveryTracking: [
       {
@@ -123,6 +161,7 @@ const OrderSchema = new mongoose.Schema({
         location: [Number] // optional: live tracking points
       }
     ],
+    returnCharge:{ type: Number, default: 0 },
     otp:{
       type: String,
       default: null
@@ -130,6 +169,8 @@ const OrderSchema = new mongoose.Schema({
     trialPhaseStart: { type: Date, default: null }, // To store trial phase start time
   trialPhaseEnd: { type: Date, default: null }, // To store trial phase end time
   trialPhaseDuration: { type: Number, default: 0 }, // To store duration in minutes (or your preferred unit)
+  razorpayOrderId: { type: String },
+  razorpayPaymentId: { type: String },
 
   }, { timestamps: true });
 

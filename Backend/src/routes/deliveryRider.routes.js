@@ -8,7 +8,7 @@ import { acceptOrder ,reachedPickupLocation , verifyOtp,reachedCustomerLocation,
 const router=express.Router();
 
 router.post('/register',register);
-router.get('getRiderById',authMiddlewareRider,getRider)
+router.get('/getRiderById',authMiddlewareRider,getRider)
 router.post("/auth/verify-otp", (req, res, next) => {
     console.log("📩 Incoming request to /auth/verify-otp");
     next();

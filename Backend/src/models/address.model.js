@@ -30,12 +30,7 @@ const addressSchema = new mongoose.Schema(
     landmark: {
       type: String
     },
-
-    area: {
-      type: String,
-      required: true
-    },
-
+    
     city: {
       type: String,
       required: true

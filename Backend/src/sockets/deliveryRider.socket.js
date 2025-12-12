@@ -51,7 +51,9 @@ socket.on("updateLocation", async ({ riderId, lat, lng, orderIdIfAny = null }) =
   await setRiderMeta(riderId, zoneId, newMeta);
 
   // Put rider in the correct zoned Redis geo set
-  await geoAdd(zoneId, lng, lat, riderId);  // ← NOW USES ZONE!
+ if (!newMeta.isBusy && newMeta.isOnline) {
+    await geoAdd(zoneId, lng, lat, riderId);
+  }
 
   // Heartbeat with zone
   await setHeartbeat(riderId, zoneId, 120);

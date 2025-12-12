@@ -92,14 +92,14 @@ export const getAllAddresses = async (req, res) => {
   try {
     const userId = req.user.userId;
 
-    console.log(userId);
+    console.log(userId,"asdsadas");
     
 
     const addresses = await Address.find({ user: userId }).sort({
       isDefault: -1,
       createdAt: -1
     });
-    console.log(addresses);
+    console.log(addresses,"sss");
     
 
     return res.status(200).json({

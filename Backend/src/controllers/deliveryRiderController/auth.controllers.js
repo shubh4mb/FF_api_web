@@ -288,12 +288,13 @@ export const saveBankDetails = async (req, res) => {
   };  
 
   export const getRider = async(req,res)=>{
-    console.log("working");
+    console.log("working kdsnf ds anfj jf aj n");
     
     try {
       console.log(req.riderId);
       
       const rider = await DeliveryRider.findById(req.riderId);
+      
       if (!rider) {
         return res.status(404).json({ message: "Rider not found" });
       }
