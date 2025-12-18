@@ -333,13 +333,14 @@ export const verifyOtpOnReturn=async(req,res)=>{
     console.log(order,"order");
     
     order.deliveryRiderStatus="otp-verified-return";
+    order.orderStatus="otp-verified-return"
     
     const pickupCoordinates={
       latitude:9.9675883,
       longitude:76.2984220
     }
     await order.save();
-    emitOrderUpdate(req.io,orderId,{order,pickupCoordinates})
+    emitOrderUpdate(req.io,orderId,order)
     res.status(200).json({message:"OTP verified successfully"});
   } catch (error) {
     console.error("Error in verifyOtpOnReturn:",error);

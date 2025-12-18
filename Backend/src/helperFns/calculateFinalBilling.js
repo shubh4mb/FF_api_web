@@ -28,7 +28,15 @@ export function calculateFinalBilling({
 
   // === STEP 3: Return logic ===
   const returnedItemsCount = orderItems.filter(i => i.tryStatus === "returned").length;
-  const allItemsKept = returnedItemsCount === 0;
+  const totalItemsCount = orderItems.length;
+  const allItemsKept = returnedItemsCount === 0 && totalItemsCount > 0;
+
+  // Debug logging
+  console.log("=== Billing Debug ===");
+  console.log("All order items:", orderItems.map(i => ({ id: i._id, tryStatus: i.tryStatus })));
+  console.log("Returned items count:", returnedItemsCount);
+  console.log("Total items count:", totalItemsCount);
+  console.log("All items kept:", allItemsKept);
 
   // Deduction only if all items are kept
   const returnChargeDeduction = allItemsKept ? returnCharge : 0;

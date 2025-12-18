@@ -11,7 +11,7 @@ import {
   addToWishlist,
   removeFromWishlist,
   getMyWishlist,
-  
+  getMyWishlistIds,
 } from '../controllers/userControllers/wishlist.controllers.js';
 const router = express.Router();
 
@@ -45,9 +45,11 @@ router.delete('/cart/delete/:itemId', deleteCartItem);
 // Add product to wishlist
 router.post('/wishlist/add',authMiddleware, addToWishlist);
 // Remove product from wishlist
-router.delete('/wishlist/delete/:wishlistItemId', authMiddleware,removeFromWishlist);
+  router.delete('/wishlist/delete/:wishlistItemId', authMiddleware,removeFromWishlist);
 // Get current user's full wishlist
 router.get('/wishlist/my', authMiddleware,getMyWishlist);
+
+router.get('/wishlist/ids', authMiddleware, getMyWishlistIds);
 // Check if a product is already in wishlist (for heart icon)
 // router.get('/wishlist/check/:productId',authMiddleware, isProductInWishlist);
 

@@ -2,7 +2,7 @@ import Order from "../../models/order.model.js";
 import Product from "../../models/product.model.js";
 // controllers/orderController.js
 import Cart from '../../models/cart.model.js';
-import Delivery from '../../models/deliveryRider.model.js';
+import DeliveryRider from '../../models/deliveryRider.model.js';
 import Merchant from '../../models/merchant.model.js';
 import { emitOrderUpdate } from "../../sockets/order.socket.js";
 import {notifyMerchant} from "../../sockets/merchant.socket.js";
@@ -299,26 +299,30 @@ export const createRazorpayOrder = async (req, res) => {
     const orderItems = [];
 
     for (const item of cart.items) {
-      const product = item.productId;
-      if (!product) continue;
+  const product = item.productId;
+  if (!product) continue;
 
-      const variant = product.variants.id(item.variantId);
-      if (!variant) continue;
+  const variant = product.variants.id(item.variantId);
+  if (!variant) continue;
 
-      const price = variant.price;
-      totalAmount += price * item.quantity;
+  const price = variant.price;
 
-      orderItems.push({
-        productId: item.productId,
-        variantId: item.variantId,
-        name: product.name,
-        quantity: item.quantity,
-        price,
-        size: item.size,
-        image: item.image?.url || "",
-        tryStatus: product.isTriable ? "pending" : "not-triable",
-      });
-    }
+  for (let i = 0; i < item.quantity; i++) {
+    totalAmount += price;
+
+    orderItems.push({
+      productId: item.productId,
+      variantId: item.variantId,
+      name: product.name,
+      quantity: 1, // 🔥 ALWAYS 1
+      price,
+      size: item.size,
+      image: item.image?.url || "",
+      tryStatus: product.isTriable ? "pending" : "not-triable",
+    });
+  }
+}
+
 
     // === FINAL PAYABLE ===
     const finalPayable = totalAmount + deliveryCharge;
@@ -737,6 +741,8 @@ export const createFinalPaymentRazorpayOrder = async (req, res) => {
     const { orderId } = req.params;
     const userId = req.user.userId;
     const { items } = req.body;
+    console.log(req.body);
+    
 
     if (!items || !Array.isArray(items) || items.length === 0) {
       return res.status(400).json({ message: "Items array with tryStatus is required" });
@@ -759,7 +765,7 @@ export const createFinalPaymentRazorpayOrder = async (req, res) => {
       if (payloadItem.tryStatus === "keep") {
         orderItem.tryStatus = "accepted";
         orderItem.returnReason = null;
-      } else if (payloadItem.tryStatus === "return") {
+      } else if (payloadItem.tryStatus === "return" || payloadItem.tryStatus === "returned") {
         orderItem.tryStatus = "returned";
         orderItem.returnReason = payloadItem.returnReason || "Not liked";
       }
@@ -771,7 +777,32 @@ export const createFinalPaymentRazorpayOrder = async (req, res) => {
     );
 
     if (acceptedItems.length === 0) {
-      return res.status(400).json({ message: "No items selected for purchase" });
+      console.log(acceptedItems,"wwwwwqqqqq");
+      
+      // All items returned - no payment needed
+      order.orderStatus = "completed try phase";
+
+      order.customerDeliveryStatus ='trial_phase_ended';
+      order.deliveryRiderStatus = "completed try phase";
+      
+      // Clear rider's currentOrderId since order is completed
+      // if (order.deliveryRiderId) {
+      //   await DeliveryRider.findByIdAndUpdate(
+      //     order.deliveryRiderId,
+      //     { currentOrderId: null }
+      //   );
+      // }
+      
+      await order.save();
+      emitOrderUpdate(io, orderId, order)
+      
+      return res.status(200).json({
+        success: true,
+        message: "All items returned. No payment required.",
+        orderId: order._id,
+        order:order,
+        requiresPayment: false,
+      });
     }
 
     // === STEP 2: Use Helper Function for Billing Calculation ===
@@ -781,6 +812,9 @@ export const createFinalPaymentRazorpayOrder = async (req, res) => {
       trialPhaseStart: order.trialPhaseStart,
       trialPhaseEnd: order.trialPhaseEnd,
     });
+
+    console.log(billing,"sdfdfs");
+    
 
     // === STEP 3: Save billing into DB ===
     order.finalBilling = {
@@ -865,13 +899,14 @@ export const verifyFinalPayment = async (req, res) => {
       order.orderStatus = "completed";
       order.customerDeliveryStatus = "completed";
       order.deliveryRiderStatus = "completed";
-          // Clear rider's currentOrderId since order is completed
-    // if (order.deliveryRiderId) {
-    //   await deliveryRiderModel.findByIdAndUpdate(
-    //     order.deliveryRiderId,
-    //     { currentOrderId: null }
-    //   );
-    // }
+      
+      // Clear rider's currentOrderId since order is completed
+      if (order.deliveryRiderId) {
+        await DeliveryRider.findByIdAndUpdate(
+          order.deliveryRiderId,
+          { currentOrderId: null }
+        );
+      }
     } else {
       // Some items were returned - trial phase ended with partial purchase
       order.orderStatus = "completed try phase";
@@ -882,7 +917,7 @@ export const verifyFinalPayment = async (req, res) => {
     await order.save();
 
 
-
+     emitOrderUpdate(io, orderId, order);
     // Optional: Trigger notifications, invoice, etc.
 
     return res.status(200).json({

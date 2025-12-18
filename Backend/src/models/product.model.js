@@ -34,8 +34,8 @@ const variantSchema = new mongoose.Schema({
   discount: {
     type: Number,
     default: 0,
-  },
-});
+  }
+}, { _id: true }); // IMPORTANT
 
 
 
@@ -59,6 +59,7 @@ const productSchema = new mongoose.Schema({
     required: true,
   }, 
   subCategoryId: {
+    
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Category',
   },
