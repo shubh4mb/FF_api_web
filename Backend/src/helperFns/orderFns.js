@@ -1,6 +1,7 @@
 import PendingOrder from '../models/pendingOrders.model.js'; // Your schema from before
 import { inferZone } from '../utils/zoneInfer.js'; // Zone mapper (Nominatim or static)
-import { io } from '../../index.js'; // Your Socket.io instance
+import { getIO } from "../config/socket.js";
+
 import {assignNearestRider} from '../helperFns/deliveryRiderFns.js';
 
 export async function enqueueOrder(orderData) {
@@ -44,6 +45,7 @@ export async function enqueueOrder(orderData) {
     console.log(`✅ Enqueued ${orderId} in zone ${zoneId} (pickup: ${pickupLat}, ${pickupLng})`);
 
     // Trigger matcher for this zone (Socket.io emit—your rider events will hook this)
+    const io = getIO();
     io.emit(`orderQueued:${zoneId}`, { zoneId, orderId });
 
     return { 
@@ -129,6 +131,7 @@ export const matchQueuedOrders = async (zoneId) => {
 
     // Optional: Zone-wide emit for admin Vite dashboard (e.g., queue depth update)
     if (assignedOrders.length > 0) {
+      const io = getIO();
       io.to(`zone:${zoneId}`).emit('zoneOrdersUpdated', { 
         zoneId, 
         assigned: assignedOrders,

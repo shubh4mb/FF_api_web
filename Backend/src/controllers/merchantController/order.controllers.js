@@ -1,7 +1,9 @@
 import Order from "../../models/order.model.js";
 import Product from "../../models/product.model.js";
 import { emitOrderUpdate } from "../../sockets/order.socket.js";
-import { io } from "../../../index.js"
+import { getIO } from "../../config/socket.js";
+
+
 import DeliveryRider from "../../models/deliveryRider.model.js";
 import { assignNearestRider } from "../../helperFns/deliveryRiderFns.js"
 import { onlineMerchants } from "../../sockets/merchant.socket.js"
@@ -64,112 +66,16 @@ export const saveProductDetails = async (req, res) => {
 };
 
 
-
 export const getPlacedOrder = async (req, res) => {
+  const io = getIO();
   console.log(req.merchantId, 'merchantIddddd');
   const orders = await Order.find({ merchantId: req.merchantId, orderStatus: "placed" });
   return res.status(200).json({ orders });
 };
 
 
-
-// export const orderRequestForMerchant = async (req, res) => {
-//   try {
-//     const { orderId } = req.params;
-//     const { status } = req.body;
-
-//     const order = await Order.findById(orderId).populate('merchantId', 'shopName');
-//     if (!order) return res.status(404).json({ message: "Order not found" });
-
-//     if (status === "accept") {
-//       order.orderStatus = "accepted";
-//       const pickupLocation = {
-//   lat: 9.9371151,
-//   lng: 76.3244129,
-// };
-//       const customerLocation={
-//   lat: 9.9371151,
-//   lng: 76.3244129,
-// }
-//       let deliveryAmount= "100";
-//       const orderPayload = {
-//        ...order,
-//        pickupLocation,
-//        customerLocation,
-//        deliveryAmount,
-//       };
-
-
-
-//       const assigned = await assignNearestRider(pickupLocation, orderId, orderPayload);
-//       console.log("Assigned rider:", assigned);
-
-//       if (assigned) {
-//         // order.deliveryRiderId = assigned.riderId;
-//         order.deliveryDistance = assigned.distKm;
-//         // order.deliveryRiderStatus = "assigned";
-//         console.log(`✅ Rider ${assigned.riderId} assigned for order ${order._id}`);
-//       } else {
-//         console.log("❌ No available rider found within range");
-//         order.deliveryRiderStatus = "unassigned";
-//       }
-
-//       // Fix: Use Socket instance for join
-//       const merchantSocketIds = onlineMerchants[order.merchantId?.toString()];
-//       if (merchantSocketIds && merchantSocketIds.length > 0) {
-//         merchantSocketIds.forEach((socketId) => {
-//           const socket = io.sockets.sockets.get(socketId);
-//           if (socket) {
-//             socket.join(orderId); // Correct way to join a room
-//             console.log(`Merchant socket ${socketId} joined room ${orderId}`);
-//             io.to(socketId).emit("orderUpdate", {
-//               orderId,
-//               orderStatus: order.orderStatus,
-//               deliveryRiderStatus: order.deliveryRiderStatus,
-//               merchantId: order.merchantId,
-//             });
-//             console.log(`📦 Emitted orderUpdate to merchant socket ${socketId}`);
-//           } else {
-//             console.warn(`Socket ${socketId} not found for merchant ${order.merchantId}`);
-//           }
-//         });
-//       } else {
-//         console.log(`No active sockets for merchant ${order.merchantId}`);
-//       }
-
-//       // Emit to orderId room for other roles
-//       io.to(orderId).emit("orderUpdate", {
-//         orderId,
-//         orderStatus: order.orderStatus,
-//         deliveryRiderStatus: order.deliveryRiderStatus,
-//         merchantId: order.merchantId,
-//       });
-//       console.log(`Emitted order update to room ${orderId}`);
-//     }
-
-//     if (status === "reject") {
-//       order.orderStatus = "rejected";
-//       order.reason = req.body.reason || "Merchant rejected the order";
-//     }
-
-//     await order.save();
-
-//     emitOrderUpdate(io, orderId, order);
-
-//     return res.status(200).json({
-//       message: "Order status updated",
-//       orderId,
-//       order,
-//     });
-//   } catch (err) {
-//     console.error("Error in orderRequestForMerchant:", err);
-//     return res.status(500).json({ message: "Internal server error" });
-//   }
-// };
-
-
-
 export const orderRequestForMerchant = async (req, res) => {
+  const io = getIO();
   let queueResult = null; // ← Declare here, outside any block
 
   try {
@@ -279,6 +185,7 @@ export const getAllOrder = async (req, res) => {
 }
 
 export const orderPacked = async (req, res) => {
+  const io = getIO();
   const { orderId } = req.params;
   try {
     const order = await Order.findById(orderId);

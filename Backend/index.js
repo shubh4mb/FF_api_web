@@ -1,69 +1,63 @@
-//index.js
+// index.js
 import dotenv from 'dotenv';
-// console.log('Current file:', import.meta.url);
-import {Server} from 'socket.io'
-import {matchQueuedOrders} from './src/helperFns/orderFns.js'  // Your matcher (or services/orderMatcher.js if moved)
+dotenv.config();
+
+import { createServer } from 'http';
+import { Server } from 'socket.io';
 
 import connectDB from './src/config/db.js';
-import app from './src/app.js'; 
-import { createServer } from 'http';
+import app from './src/app.js';
+
+import { allowedOrigins } from './src/config/cors.js';
+import { setIO } from './src/config/socket.js';
+
+import { matchQueuedOrders } from './src/helperFns/orderFns.js';
 import { registerMerchantSockets } from './src/sockets/merchant.socket.js';
 import { registerOrderSockets } from './src/sockets/order.socket.js';
 import { registerUserSockets } from './src/sockets/user.socket.js';
 import { registerDeliveryRiderSockets } from './src/sockets/deliveryRider.socket.js';
-// import { createAdapter } from '@socket.io/redis-adapter';
-// import { redisPub, redisSub } from './src/config/redisConfig.js';
-// import { createClient } from 'redis';
-import{allowedOrigins} from './src/config/cors.js';
-dotenv.config();
 
 const PORT = process.env.PORT || 5000;
 
-// Connect to MongoDB
+// Connect DB
 connectDB();
 
 // Create HTTP server
-
 const server = createServer(app);
 
-// Setup Socket.IO
-export const io = new Server(server, {
+// Create Socket.IO
+const io = new Server(server, {
   cors: {
-    origin: [
-      'http://localhost:5173',
-      'http://localhost:5174',
-      'https://d560c68770a1.ngrok-free.app',
-      'https://3990b275d1e2.ngrok-free.app',
-      'https://ff-api-web.onrender.com'
-    ],
-    methods: ['GET', 'POST','PATCH','PUT','DELETE'],
+    origin: allowedOrigins,
+    methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE'],
     credentials: true,
   },
 });
 
-// NEW: Override io.emit for global trigger catching (v3/v4 safe—no onAny needed)
-const originalEmit = io.emit.bind(io);  // Save original emit
-io.emit = function(event, ...args) {
-  // Catch matcher triggers before broadcasting (from enqueue, rider pings, etc.)
-  if (event.startsWith('orderQueued:') || event.startsWith('riderAvailable:') || event.startsWith('riderFreed:')) {
-    const zoneId = event.split(':')[1]; // e.g., 'edapally'
-    console.log(`🎯 Triggered matcher for zone ${zoneId} on event ${event}`);
-    
-    // Fire async—non-blocking, updates Mongo statuses + emits to rider Expo/merchant Vite
-    matchQueuedOrders(zoneId).catch(err => console.error('Matcher error:', err));
+// 🔥 Make io globally accessible (NO circular import)
+setIO(io);
+
+// ---- GLOBAL EMIT HOOK (your matcher logic preserved) ----
+const originalEmit = io.emit.bind(io);
+
+io.emit = function (event, ...args) {
+  if (
+    event.startsWith('orderQueued:') ||
+    event.startsWith('riderAvailable:') ||
+    event.startsWith('riderFreed:')
+  ) {
+    const zoneId = event.split(':')[1];
+    console.log(`🎯 Matcher triggered for zone ${zoneId}`);
+    matchQueuedOrders(zoneId).catch(console.error);
   }
-  
-  // Pass to original—keeps your rooms/emits (orderId, merchant:${id}) flowing
-  return originalEmit.call(this, event, ...args);
+
+  return originalEmit(event, ...args);
 };
 
-// Redis adapter for scaling for multiple instance of server .
-// io.adapter(createAdapter(redisPub, redisSub));
-
+// ---- SOCKET CONNECTIONS ----
 io.on('connection', (socket) => {
   const role = socket.handshake.query.role;
-
-  console.log(`🔌 New socket connection: ${socket.id}, role: ${role}`);
+  console.log(`🔌 Socket connected: ${socket.id}, role: ${role}`);
 
   if (role === "merchant") {
     registerMerchantSockets(io, socket);
@@ -71,32 +65,19 @@ io.on('connection', (socket) => {
     registerUserSockets(io, socket);
   } else if (role === "deliveryRider") {
     registerDeliveryRiderSockets(io, socket);
-    console.log(`🔌 New delivery rider socket connection: ${socket.id}`);
   }
 
-  // Order socket listeners always active
   registerOrderSockets(io, socket);
 
   socket.on('disconnect', () => {
     console.log(`❌ Socket disconnected: ${socket.id}`);
   });
-  socket.on("joinOrderRoom", (orderId) => {
-    socket.join(orderId);
-    console.log(`✅ Socket ${socket.id} joined room ${orderId}`);
-  });
-  socket.on("leaveOrderRoom", (orderId) => {
-    socket.leave(orderId);
-    console.log(`✅ Socket ${socket.id} left room ${orderId}`);
-  });
-  socket.on("orderUpdate", (orderId) => {
-    socket.emit("orderUpdate", orderId);
-    console.log(`✅ Socket ${socket.id} received order update ${orderId}`);
-  });
+
+  socket.on("joinOrderRoom", (orderId) => socket.join(orderId));
+  socket.on("leaveOrderRoom", (orderId) => socket.leave(orderId));
 });
 
-
-
-// Start server
+// Start server (Render compatible)
 server.listen(PORT, '0.0.0.0', () => {
-  console.log(`✅ Server running at http://0.0.0.0:${PORT}`);
+  console.log(`✅ Server running on port ${PORT}`);
 });

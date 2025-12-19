@@ -1,6 +1,7 @@
 // src/helperFns/deliveryRiderFns.js
 import { redis, inMemoryIndex } from "../config/redisConfig.js";  // Fixed: Added inMemoryIndex
-import { io } from "../../index.js";  // Assuming io for emit
+import { getIO } from "../config/socket.js";
+
 import Order from "../models/order.model.js";
 
 // GEOADD wrapper – UPDATED for zone
@@ -131,43 +132,44 @@ async function assignNearestRider(zoneId = 'global', pickupLocation, orderId, or
 
       // Emits unchanged—your socketId/merchant rooms work as-is
       // Inside assignNearestRider — after successful assignment
-if (meta.socketId) {
-  // Fetch the FULL order from your main Order collection
-  const fullOrder = await Order.findById(orderId)
-    .populate('merchantId', 'shopName address')
-    .lean();
-    console.log(fullOrder,orderId, "fullOrder");
+      if (meta.socketId) {
+        // Fetch the FULL order from your main Order collection
+        const fullOrder = await Order.findById(orderId)
+          .populate('merchantId', 'shopName address')
+          .lean();
+        console.log(fullOrder, orderId, "fullOrder");
 
-  if (fullOrder) {
-    // This matches EXACTLY what your frontend expects
-    const riderPayload = {
-      _id: fullOrder._id,
-      orderId: fullOrder._id.toString(),
-      pickupLocation: fullOrder.pickupLocation,
-      deliveryLocation: fullOrder.deliveryLocation,
-      address: fullOrder.deliveryLocation?.addressLine1 || fullOrder.deliveryLocation?.street || "No address",
-      merchantId: fullOrder.merchantId,
-      items: fullOrder.items,
-      deliveryCharge: fullOrder.finalBilling?.deliveryCharge || 0,
-      totalAmount: fullOrder.finalBilling?.totalPayable || fullOrder.totalAmount,
-      deliveryAmount: fullOrder.deliveryCharge || 100,
-      customerLocation: fullOrder.deliveryLocation?.coordinates
-        ? {
-            lat: fullOrder.deliveryLocation.coordinates[1],
-            lng: fullOrder.deliveryLocation.coordinates[0]
-          }
-        : null,
-      cutomerAddress: fullOrder.deliveryLocation?.addressLine1 || "No address",
-    };
-    
+        if (fullOrder) {
+          // This matches EXACTLY what your frontend expects
+          const riderPayload = {
+            _id: fullOrder._id,
+            orderId: fullOrder._id.toString(),
+            pickupLocation: fullOrder.pickupLocation,
+            deliveryLocation: fullOrder.deliveryLocation,
+            address: fullOrder.deliveryLocation?.addressLine1 || fullOrder.deliveryLocation?.street || "No address",
+            merchantId: fullOrder.merchantId,
+            items: fullOrder.items,
+            deliveryCharge: fullOrder.finalBilling?.deliveryCharge || 0,
+            totalAmount: fullOrder.finalBilling?.totalPayable || fullOrder.totalAmount,
+            deliveryAmount: fullOrder.deliveryCharge || 100,
+            customerLocation: fullOrder.deliveryLocation?.coordinates
+              ? {
+                lat: fullOrder.deliveryLocation.coordinates[1],
+                lng: fullOrder.deliveryLocation.coordinates[0]
+              }
+              : null,
+            cutomerAddress: fullOrder.deliveryLocation?.addressLine1 || "No address",
+          };
 
-    io.to(meta.socketId).emit('orderAssigned',{orderId,orderPayload:riderPayload});
-    console.log("Sent full order to rider:", riderPayload.orderId);
-  }
-}
+          const io = getIO();
+          io.to(meta.socketId).emit('orderAssigned', { orderId, orderPayload: riderPayload });
+          console.log("Sent full order to rider:", riderPayload.orderId);
+        }
+      }
 
       const merchantRoom = orderPayload.merchantId ? `merchant:${orderPayload.merchantId}` : null;
       if (merchantRoom) {
+        const io = getIO();
         io.to(merchantRoom).emit('riderAssigned', { riderId, orderId });
       }
 

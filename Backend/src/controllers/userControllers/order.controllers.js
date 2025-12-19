@@ -8,7 +8,8 @@ import { emitOrderUpdate } from "../../sockets/order.socket.js";
 import {notifyMerchant} from "../../sockets/merchant.socket.js";
 import Razorpay from "../../config/RazorPay.js";
 import Address from "../../models/address.model.js";
-import { io } from "../../../index.js"
+import { getIO } from "../../config/socket.js";
+
 import {calculateDeliveryCharge} from "../../helperFns/deliveryChargeFns.js";
 import razorpay from '../../config/RazorPay.js'
 import crypto from 'crypto';
@@ -441,6 +442,7 @@ export const verifyPayment = async (req, res) => {
     // await Cart.updateOne({ userId: req.user.userId }, { $set: { items: [] } });
 
     // === Notify merchant (your existing function) ===
+    const io = getIO();
     notifyMerchant(io, order.merchantId, order); // assuming io is available or pass via req
 
     return res.status(200).json({
@@ -704,6 +706,7 @@ export const initiateReturn = async (req, res) => {
     order.trialPhaseEnd = new Date();
     await order.save();
     // Emit real-time update (assuming you have socket.io set up)
+    const io = getIO();
     emitOrderUpdate(io, orderId, order);
 
     return res.status(200).json({
@@ -794,6 +797,7 @@ export const createFinalPaymentRazorpayOrder = async (req, res) => {
       // }
       
       await order.save();
+      const io = getIO();
       emitOrderUpdate(io, orderId, order)
       
       return res.status(200).json({
@@ -917,6 +921,7 @@ export const verifyFinalPayment = async (req, res) => {
     await order.save();
 
 
+     const io = getIO();
      emitOrderUpdate(io, orderId, order);
     // Optional: Trigger notifications, invoice, etc.
 
