@@ -12,9 +12,14 @@ const zoneSchema = new mongoose.Schema({
         type: { type: String, enum: ['Point'], default: 'Point' },
         coordinates: { type: [Number], required: true } // [lng, lat]
     }, 
+    deliveryBoundary: {
+  type: { type: String, enum: ['Polygon'], required: true },
+  coordinates: { type: [[[Number]]] },
+}
+
 })
 
 zoneSchema.index({ boundary: '2dsphere' });
 zoneSchema.index({centerCoordinaties:'2dsphere'})
-
+zoneSchema.index({deliveryBoundary:'2dsphere'})
 export default mongoose.model("Zone", zoneSchema);

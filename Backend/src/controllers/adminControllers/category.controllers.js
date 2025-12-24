@@ -88,5 +88,16 @@ export const getCategories = async (req, res) => {
   }
 };
 
+export const getCategoryById=async(req,res)=>{
+  try{
+    console.log("yes reaching controller : ",req.params.id)
+    const category = await Category.findById(req.params.id);
+    res.status(200).json({ category });
+  }catch(error){
+    res.status(500).json({ message: "❌ " + error.message });
+  }
+}
 
+
+  
   

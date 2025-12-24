@@ -14,11 +14,13 @@ import {
   getMyWishlistIds,
 } from '../controllers/userControllers/wishlist.controllers.js';
 const router = express.Router();
+import { checkDeliveryAvailability } from '../controllers/adminControllers/zone.controllers.js';
 
 
 router.post('/googleLogin',googleLogin);
 router.post('/signup',signup);
 router.post('/phoneLogin',phoneLogin)
+router.post('/checkDeliveryAvailability', checkDeliveryAvailability);
 
 router.get('/products/newArrivals',newArrivals)
 router.post('/products/filtered',getFilteredProducts)

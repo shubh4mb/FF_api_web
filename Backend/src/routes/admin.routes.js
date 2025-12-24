@@ -1,5 +1,5 @@
 import express from 'express';
-import { addCategory, getCategories, updateCategory } from '../controllers/adminControllers/category.controllers.js';
+import { addCategory, getCategories, updateCategory ,   getCategoryById} from '../controllers/adminControllers/category.controllers.js';
 import { addMerchant, getMerchants , getMerchantById , updateMerchantById} from '../controllers/adminControllers/merchant.controllers.js';
 import { addBrand,getBrands } from '../controllers/adminControllers/brand.controllers.js';
 import upload , {handleMulterError} from '../middleware/multer.js'
@@ -11,6 +11,7 @@ const router = express.Router();
 
 router.post('/addCategory',upload.single('image'),handleMulterError,addCategory);
 router.get('/getCategories',getCategories);
+router.get('/getCategoryById/:id',getCategoryById);
 router.patch('/updateCategory/:id',upload.single('image'),handleMulterError,updateCategory);   
 
 

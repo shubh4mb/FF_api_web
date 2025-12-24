@@ -30,3 +30,25 @@ export const getCategories = async () => {
     throw error.response ? error.response.data : new Error('Network Error');
   }
 };
+
+export const getCategoryById = async (categoryId)=>{
+  try{
+    const response = await axiosInstance.get(`/admin/getCategoryById/${categoryId}`);
+    return response.data;
+  }catch(error){
+    console.log(error)
+    throw error.response ? error.response.data : new Error('Network Error');
+  }
+}
+
+export const updateCategory =async(categoryData)=>{
+  try{
+    const response = await axiosInstance.put(`/admin/updateCategory/${categoryData._id}`,categoryData);
+    return response.data;
+  }catch(error){
+    console.log(error)
+    throw error.response ? error.response.data : new Error('Network Error');
+  }
+}
+
+

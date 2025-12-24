@@ -18,6 +18,8 @@ import EditMerchant from '../pages/admin/EditMerchant';
 import Title_Banner from '../pages/admin/Title_Banner';
 import MatchingProducts from '../pages/admin/MatchingProducts';
 import CreateZone from '../pages/admin/CreateZone';
+
+import EditCategory from '../pages/admin/EditCategory';
 // Placeholder components for missing admin pages
 const Settings = () => <div>Settings Page</div>;
 
@@ -33,6 +35,7 @@ const AppRoutes = () => {
           <Route path="merchants" element={<Merchants />} />
           <Route path="settings" element={<Settings />} />
           <Route path="add-category" element={<AddCategory />} />
+          <Route path="edit-category/:categoryId" element={<EditCategory />} />
           <Route path="add-products" element={<AddProducts />} />
           <Route path="matching-products/:productId" element={<MatchingProducts />} />
           <Route path="add-merchant" element={<AddMerchants />} />

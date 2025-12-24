@@ -51,7 +51,8 @@ export default function CategoryTableHeader() {
   const CategoryActions = [
     {
       label: "Edit",
-      onClick: (row) => navigate(`/admin/category/${row._id}`), // 👈 navigate to route
+      // onClick: (row) => navigate(`/admin/category/${row._id}`), // 👈 navigate to route
+      onClick: (row) => navigate(`/admin/edit-category/${row._id}`), // 👈 navigate to route
       className: "text-blue-600 hover:underline text-sm",
     },
     {

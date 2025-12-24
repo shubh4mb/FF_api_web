@@ -1,4 +1,5 @@
 import Zone from "../../models/zone.model.js";
+import * as turf from "@turf/turf";
 /**
  * CREATE ZONE
  * @route POST /api/zones
@@ -7,11 +8,21 @@ export const addZone = async (req, res) => {
   try {
     const { zoneName, city, state, boundary, centerCoordinaties } = req.body;
 
+    // 1️⃣ Convert to Turf polygon
+    const turfPolygon = turf.polygon(boundary.coordinates);
+
+    // 2️⃣ Buffer by 3km from boundary
+    const bufferedPolygon = turf.buffer(turfPolygon, 3, {
+      units: "kilometers",
+    });
+
+    // 3️⃣ Store both boundaries
     const zone = await Zone.create({
       zoneName,
       city,
       state,
-      boundary,
+      boundary,                         // original
+      deliveryBoundary: bufferedPolygon.geometry, // 🔥 new
       centerCoordinaties,
     });
 
@@ -20,6 +31,7 @@ export const addZone = async (req, res) => {
       message: "Zone created successfully",
       data: zone,
     });
+
   } catch (error) {
     console.error("Create Zone Error:", error);
     res.status(500).json({
@@ -29,7 +41,6 @@ export const addZone = async (req, res) => {
     });
   }
 };
-
 /**
  * GET ALL ZONES
  * @route GET /api/zones
@@ -194,6 +205,63 @@ export const checkZoneOverlap = async (req, res) => {
       success: false,
       message: "Failed to check zone overlap",
       error: error.message
+    });
+  }
+};
+
+export const checkDeliveryAvailability = async (req, res) => {
+  try {
+    const { lng, lat } = req.body;
+
+    // 1️⃣ Validate input
+    if (
+      lng === undefined ||
+      lat === undefined ||
+      isNaN(lng) ||
+      isNaN(lat)
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Valid longitude and latitude are required",
+      });
+    }
+
+    const userPoint = {
+      type: "Point",
+      coordinates: [Number(lng), Number(lat)], // [lng, lat]
+    };
+
+    // 2️⃣ Check delivery boundary
+    const zone = await Zone.findOne({
+      deliveryBoundary: {
+        $geoIntersects: {
+          $geometry: userPoint,
+        },
+      },
+    }).select("zoneName city state");
+
+    // 3️⃣ Not serviceable
+    if (!zone) {
+      return res.status(403).json({
+        success: false,
+        serviceable: false,
+        message: "Delivery not available in your area",
+      });
+    }
+
+    // 4️⃣ Serviceable
+    return res.status(200).json({
+      success: true,
+      serviceable: true,
+      message: "Delivery available",
+      zone,
+    });
+
+  } catch (error) {
+    console.error("Check Delivery Availability Error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to check delivery availability",
     });
   }
 };
