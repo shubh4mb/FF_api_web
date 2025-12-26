@@ -38,7 +38,7 @@ router.post(
 
 router.post('/cart/add',authMiddleware,addToCart);
 router.get('/cartCount',authMiddleware, getCartCount);
-router.get('/cart/:addressId',authMiddleware, getCart);
+router.get('/cart/',authMiddleware, getCart);
 
 router.put('/cart/updatequantity', authMiddleware, updateCartQuantity);
 router.delete('/cart/clear', authMiddleware, clearCart)

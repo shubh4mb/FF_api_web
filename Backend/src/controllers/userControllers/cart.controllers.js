@@ -133,13 +133,97 @@ export const getCartCount = async (req, res) => {
   }
 };
 
+// export const getCart = async (req, res) => {
+//   const userId = req.user.userId;
+//   // console.log(req.body);
+  
+//   const { addressId } = req.params;
+//   console.log(addressId,"fsdfjskdfjskd");
+  
+
+//   try {
+//     // 1️⃣ Fetch cart
+//     const cart = await Cart.findOne({ userId })
+//       .populate("items.productId")
+//       .populate("items.merchantId");
+
+//     if (!cart) {
+//       return res.status(200).json({
+//         success: true,
+//         totalItems: 0,
+//         items: [],
+//         deliveryDetails: null,
+//       });
+//     }
+
+//     // 2️⃣ Fetch delivery address
+//     let selectedAddress = null;
+//     if (addressId) {
+//       selectedAddress = await Address.findById(addressId);
+//     }
+
+//     if (!selectedAddress) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Select a valid address",
+//       });
+//     }
+
+//     const userLat = selectedAddress.location.coordinates[1];
+//     const userLng = selectedAddress.location.coordinates[0];
+
+//     // 3️⃣ Build items with variant price + merchant delivery charge
+//     let merchantDeliveryMap = {}; // group by merchant
+
+//     const itemsWithVariant = cart.items.map((item) => {
+//       const product = item.productId;
+//       const merchant = item.merchantId;
+
+//       const variant = product?.variants?.find(
+//         (v) => v._id.toString() === item.variantId.toString()
+//       );
+
+//       // If merchant not calculated yet, compute distance & charge using helper
+//       if (!merchantDeliveryMap[merchant._id]) {
+//         const userCoords = [userLng, userLat]; // [longitude, latitude]
+//         const merchantCoords = [merchant.address.location.coordinates[0], merchant.address.location.coordinates[1]];
+
+//         const { distanceKm, deliveryCharge } = calculateDeliveryCharge(userCoords, merchantCoords);
+
+//         merchantDeliveryMap[merchant._id] = {
+//           merchantId: merchant._id,
+//           shopName: merchant.shopName, 
+//           distanceKm,
+//           deliveryCharge,
+//         };
+//       }
+
+//       return {
+//         ...item.toObject(),
+//         price: variant?.price || null,
+//         mrp: variant?.mrp || null,
+//         merchantDelivery: merchantDeliveryMap[merchant._id],
+//       };
+//     });
+
+//     // 4️⃣ Response
+//     res.status(200).json({
+//       success: true,
+//       totalItems: itemsWithVariant.length,
+//       items: itemsWithVariant,
+//       deliveryDetails: Object.values(merchantDeliveryMap), // list of merchants & charges
+//       address: selectedAddress,
+//     });
+//   } catch (err) {
+//     console.error("Get cart error:", err);
+//     res.status(500).json({ message: "Server error" });
+//   }
+// };
+
 export const getCart = async (req, res) => {
   const userId = req.user.userId;
-  // console.log(req.body);
-  
-  const { addressId } = req.params;
-  console.log(addressId,"fsdfjskdfjskd");
-  
+  const { addressId , serviceable } = req.params;
+
 
   try {
     // 1️⃣ Fetch cart
@@ -156,16 +240,38 @@ export const getCart = async (req, res) => {
       });
     }
 
-    // 2️⃣ Fetch delivery address
-    let selectedAddress = null;
-    if (addressId) {
-      selectedAddress = await Address.findById(addressId);
+    // If no addressId provided, return just the cart items without delivery calculations
+    if (!addressId && !serviceable) {
+      const itemsWithVariant = cart.items.map((item) => {
+        const product = item.productId;
+        const variant = product?.variants?.find(
+          (v) => v._id.toString() === item.variantId.toString()
+        );
+
+        return {
+          ...item.toObject(),
+          price: variant?.price || null,
+          mrp: variant?.mrp || null,
+          merchantDelivery: null, // No delivery info available
+        };
+      });
+
+      return res.status(200).json({
+        success: true,
+        totalItems: itemsWithVariant.length,
+        items: itemsWithVariant,
+        deliveryDetails: null,
+        address: null,
+        serviceable
+      });
     }
 
+    // 2️⃣ Fetch delivery address (only if addressId is provided)
+    const selectedAddress = await Address.findById(addressId);
     if (!selectedAddress) {
       return res.status(400).json({
         success: false,
-        message: "Select a valid address",
+        message: "Selected address not found",
       });
     }
 
@@ -173,7 +279,7 @@ export const getCart = async (req, res) => {
     const userLng = selectedAddress.location.coordinates[0];
 
     // 3️⃣ Build items with variant price + merchant delivery charge
-    let merchantDeliveryMap = {}; // group by merchant
+    let merchantDeliveryMap = {};
 
     const itemsWithVariant = cart.items.map((item) => {
       const product = item.productId;
@@ -183,9 +289,8 @@ export const getCart = async (req, res) => {
         (v) => v._id.toString() === item.variantId.toString()
       );
 
-      // If merchant not calculated yet, compute distance & charge using helper
       if (!merchantDeliveryMap[merchant._id]) {
-        const userCoords = [userLng, userLat]; // [longitude, latitude]
+        const userCoords = [userLng, userLat];
         const merchantCoords = [merchant.address.location.coordinates[0], merchant.address.location.coordinates[1]];
 
         const { distanceKm, deliveryCharge } = calculateDeliveryCharge(userCoords, merchantCoords);
@@ -211,15 +316,18 @@ export const getCart = async (req, res) => {
       success: true,
       totalItems: itemsWithVariant.length,
       items: itemsWithVariant,
-      deliveryDetails: Object.values(merchantDeliveryMap), // list of merchants & charges
+      deliveryDetails: Object.values(merchantDeliveryMap),
       address: selectedAddress,
+      serviceable
     });
   } catch (err) {
     console.error("Get cart error:", err);
-    res.status(500).json({ message: "Server error" });
+    res.status(500).json({ 
+      success: false,
+      message: "Server error" 
+    });
   }
 };
-
 
 export const clearCart = async (req, res) => {
   const userId = req.user.userId;
