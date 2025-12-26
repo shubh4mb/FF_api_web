@@ -222,7 +222,9 @@ export const getCartCount = async (req, res) => {
 
 export const getCart = async (req, res) => {
   const userId = req.user.userId;
-  const { addressId , serviceable } = req.params;
+  const { addressId , serviceable } = req.body;
+  console.log(addressId,serviceable,"asdasdasd");
+  
 
 
   try {
