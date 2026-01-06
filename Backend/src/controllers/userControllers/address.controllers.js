@@ -99,7 +99,7 @@ export const getAllAddresses = async (req, res) => {
       isDefault: -1,
       createdAt: -1
     });
-    console.log(addresses,"sss");
+    // console.log(addresses,"sss");
     
 
     return res.status(200).json({

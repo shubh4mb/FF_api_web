@@ -14,6 +14,7 @@ import {calculateDeliveryCharge} from "../../helperFns/deliveryChargeFns.js";
 import razorpay from '../../config/RazorPay.js'
 import crypto from 'crypto';
 import { calculateFinalBilling } from "../../helperFns/calculateFinalBilling.js";
+import mongoose from 'mongoose';
 
 // export const createOrder = async (req, res) => {
 //   try {
@@ -407,53 +408,132 @@ export const createRazorpayOrder = async (req, res) => {
 
 // 2. Verify Payment & Confirm Order
 export const verifyPayment = async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
   try {
     const {
       razorpay_order_id,
       razorpay_payment_id,
       razorpay_signature,
-      orderId // your internal pending order ID
+      orderId, // internal pending order ID
     } = req.body;
 
-    // === STEP 1: Verify Signature ===
-    const sign = razorpay_order_id + "|" + razorpay_payment_id;
+    /* =======================
+       STEP 1: VERIFY SIGNATURE
+    ======================== */
+    const sign = `${razorpay_order_id}|${razorpay_payment_id}`;
     const expectedSign = crypto
-      .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET)
+      .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
       .update(sign)
-      .digest('hex');
+      .digest("hex");
 
     if (expectedSign !== razorpay_signature) {
-      return res.status(400).json({ success: false, message: 'Invalid signature' });
+      return res.status(400).json({
+        success: false,
+        message: "Invalid payment signature",
+      });
     }
 
-    // === STEP 2: Payment is Genuine → Confirm Order ===
-    const order = await Order.findById(orderId);
+    /* =======================
+       STEP 2: FETCH ORDER
+    ======================== */
+    const order = await Order.findById(orderId).session(session);
+
     if (!order || order.razorpayOrderId !== razorpay_order_id) {
-      return res.status(400).json({ message: 'Order not found' });
+      return res.status(404).json({
+        success: false,
+        message: "Order not found",
+      });
     }
 
-    // Update order
+    if (order.paymentStatus === "paid") {
+      return res.status(200).json({
+        success: true,
+        message: "Payment already verified",
+        orderId: order._id,
+      });
+    }
+
+    /* =======================
+       STEP 3: UPDATE ORDER
+    ======================== */
     order.razorpayPaymentId = razorpay_payment_id;
-    // order.paymentStatus = 'paid';
-    order.status = 'confirmed';
-    await order.save();
+    order.paymentStatus = "paid";
+    order.orderStatus = "confirmed_purchase"; // adjust if needed
+    await order.save({ session });
 
-    // === Clear user's cart ===
-    // await Cart.updateOne({ userId: req.user.userId }, { $set: { items: [] } });
+    /* =======================
+       STEP 4: UPDATE STOCK (VARIANT + SIZE)
+    ======================== */
+    for (const item of order.items) {
+      const stockUpdate = await Product.updateOne(
+        {
+          _id: item.productId,
+          "variants._id": item.variantId,
+        },
+        {
+          $inc: {
+            "variants.$[variant].sizes.$[size].stock": -item.quantity,
+          },
+        },
+        {
+          arrayFilters: [
+            { "variant._id": item.variantId },
+            { "size.size": item.size },
+          ],
+          session,
+        }
+      );
 
-    // === Notify merchant (your existing function) ===
-    const io = getIO();
-    notifyMerchant(io, order.merchantId, order); // assuming io is available or pass via req
+      if (stockUpdate.modifiedCount === 0) {
+        throw new Error(
+          `Stock update failed for product ${item.productId}`
+        );
+      }
+    }
+
+    /* =======================
+       STEP 5: CLEAR USER CART
+    ======================== */
+    await Cart.updateOne(
+      { userId: order.userId },
+      { $set: { items: [] } },
+      { session }
+    );
+
+    /* =======================
+       STEP 6: COMMIT TRANSACTION
+    ======================== */
+    await session.commitTransaction();
+    session.endSession();
+
+    /* =======================
+       STEP 7: SOCKET NOTIFY MERCHANT
+    ======================== */
+    try {
+      const io = getIO();
+      notifyMerchant(io, order.merchantId, order);
+    } catch (socketErr) {
+      console.error("Socket notify error:", socketErr);
+    }
 
     return res.status(200).json({
       success: true,
-      message: 'Payment verified & order confirmed',
-      orderId: order._id
+      message: "Payment verified & order confirmed",
+      orderId: order._id,
     });
 
   } catch (error) {
-    console.error('Verify Payment Error:', error);
-    return res.status(500).json({ message: 'Server error' });
+    await session.abortTransaction();
+    session.endSession();
+
+    console.error("Verify Payment Error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Payment verification failed",
+    });
   }
 };
 

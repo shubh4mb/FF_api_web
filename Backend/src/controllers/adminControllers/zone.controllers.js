@@ -239,11 +239,13 @@ export const checkDeliveryAvailability = async (req, res) => {
         },
       },
     }).select("zoneName city state");
+    console.log("zone avail,",zone);
+    
 
     // 3️⃣ Not serviceable
     if (!zone) {
-      return res.status(403).json({
-        success: false,
+      return res.status(200).json({
+        success: true,
         serviceable: false,
         message: "Delivery not available in your area",
       });
