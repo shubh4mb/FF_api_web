@@ -6,7 +6,6 @@ import { getIO } from "../../config/socket.js";
 
 import DeliveryRider from "../../models/deliveryRider.model.js";
 import { assignNearestRider } from "../../helperFns/deliveryRiderFns.js"
-import { onlineMerchants } from "../../sockets/merchant.socket.js"
 import { enqueueOrder } from '../../helperFns/orderFns.js'; // Your new helper—add if not
 import Merchant from "../../models/merchant.model.js";
 
