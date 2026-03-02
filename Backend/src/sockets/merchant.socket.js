@@ -1,6 +1,6 @@
 // src/sockets/merchant.socket.js
 import Merchant from "../models/merchant.model.js";
-export let onlineMerchants={};
+import { setMerchantMeta, getMerchantMeta } from "../helperFns/merchantFns.js";
 
 export const registerMerchantSockets = (io, socket) => {
   socket.on("registerMerchant", async (merchantId) => {
@@ -8,57 +8,50 @@ export const registerMerchantSockets = (io, socket) => {
     if (!merchant) return;
     merchant.isOnline = true;
     await merchant.save();
-      if (!onlineMerchants[merchantId]) onlineMerchants[merchantId] = [];
-onlineMerchants[merchantId].push(socket.id);
+
+    // Join a Socket.io room specific to this merchant
+    socket.join(`merchant:${merchantId}`);
     socket.data.merchantId = merchantId; // store merchantId on socket itself
-    console.log(`✅ Merchant ${merchantId} connected with socket ${socket.id}`);
+
+    // Update Redis State
+    await setMerchantMeta(merchantId, { isOnline: "true", lastSeenAt: Date.now() });
+
+    console.log(`✅ Merchant ${merchantId} connected with socket ${socket.id} to room merchant:${merchantId}`);
   });
 
-  socket.on("disconnect", () => {
+  socket.on("disconnect", async () => {
     const merchantId = socket.data.merchantId;
 
-    if (merchantId && onlineMerchants[merchantId]) {
-      // remove this socket only
-      onlineMerchants[merchantId] = onlineMerchants[merchantId].filter(
-        (id) => id !== socket.id
-      );
+    if (merchantId) {
+      // Check if there are any remaining sockets in the merchant's room
+      const remainingSockets = await io.in(`merchant:${merchantId}`).fetchSockets();
 
-      if (onlineMerchants[merchantId].length === 0) {
-        // no more active sockets for this merchant
-        delete onlineMerchants[merchantId];
+      if (remainingSockets.length === 0) {
+        // no more active sockets for this merchant in the entire cluster
+        await setMerchantMeta(merchantId, { isOnline: "false", lastSeenAt: Date.now() });
         console.log(`❌ Merchant ${merchantId} fully disconnected`);
+        Merchant.findByIdAndUpdate(merchantId, { isOnline: false }).catch(console.error);
       } else {
         console.log(
           `⚠️ Merchant ${merchantId} disconnected socket ${socket.id}, remaining sockets:`,
-          onlineMerchants[merchantId]
+          remainingSockets.map(s => s.id)
         );
       }
     }
   });
 };
 
+export const notifyMerchant = async (io, merchantId, orderData) => {
+  console.log(merchantId, orderData, "asdfsadf");
 
-export const notifyMerchant = (io, merchantId, orderData) => {
-  console.log(merchantId,orderData,"asdfsadf");
-  
-  const merchantSocketIds = onlineMerchants[merchantId];
-  console.log(merchantSocketIds, "notify merchant");
+  const meta = await getMerchantMeta(merchantId);
 
-  if (merchantSocketIds && merchantSocketIds.length > 0) {
-    merchantSocketIds.forEach((socketId) => {
-      io.to(socketId).emit("newOrder", orderData);
-    });
-    console.log(`📩 Sent newOrder to Merchant ${merchantId}`);
+  if (meta && meta.isOnline) {
+    io.to(`merchant:${merchantId}`).emit("newOrder", orderData);
+    console.log(`📩 Sent newOrder to Merchant ${merchantId} room`);
   } else {
     console.log(
       `⚠️ Merchant ${merchantId} is offline, maybe send push notification`
     );
   }
 };
-
-
-
-
-
-
-  

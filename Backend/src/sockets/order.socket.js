@@ -1,13 +1,11 @@
-
-import {onlineMerchants} from "../sockets/merchant.socket.js";
-
+import { getMerchantMeta } from "../helperFns/merchantFns.js";
 
 export const registerOrderSockets = (io, socket) => {
   console.log("Registering order sockets for:", socket.id);
 
   socket.on("joinOrderRoom", (orderId) => {
     const roomName = orderId;
-    console.log(roomName,"roomName from join");
+    console.log(roomName, "roomName from join");
     socket.join(roomName);
     console.log(`✅ Socket ${socket.id} joined room ${roomName}`);
   });
@@ -15,29 +13,24 @@ export const registerOrderSockets = (io, socket) => {
   socket.on("disconnect", () => {
     console.log(`❌ Socket ${socket.id} disconnected from order handling`);
   });
-  
+
 };
 
 
-export const emitOrderUpdate = (io, orderId, order) => {
-  console.log(orderId,"asdasdasdas nn");
-  
-  const merchantSocketIds = onlineMerchants[order.merchantId?.toString()];
-  console.log(merchantSocketIds,"SAdsad");
-  
-  if (merchantSocketIds && merchantSocketIds.length > 0) {
-    // console.log(order,"order");
-    
-    merchantSocketIds.forEach((socketId) => {
-      console.log(socketId,"socketId");
-      
-      io.to(socketId).emit("orderUpdate", order);
-      // console.log(`📦 Emitted orderUpdate to merchant socket ${socketId}`);
-    });
-  } else {
-    console.log(`No active sockets for merchant ${order.merchantId}`);
+export const emitOrderUpdate = async (io, orderId, order) => {
+  console.log(orderId, "asdasdasdas nn");
+
+  const merchantId = order.merchantId?.toString();
+  if (merchantId) {
+    const meta = await getMerchantMeta(merchantId);
+    if (meta && meta.isOnline) {
+      io.to(`merchant:${merchantId}`).emit("orderUpdate", order);
+    } else {
+      console.log(`Merchant ${merchantId} is offline`);
+    }
   }
-console.log("sdajfsdajf dasf");
+
+  console.log("sdajfsdajf dasf");
 
   // Emit to orderId room for other roles (e.g., user, rider)
   io.to(orderId).emit("orderUpdate", order);

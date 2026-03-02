@@ -111,12 +111,6 @@ export const addVariant = async (req, res) => {
   }
 };
 
-
-
-
-
-
-
 export const updateVariant = async (req, res) => {
   try {
     const { productId, variantId } = req.params;
@@ -258,8 +252,6 @@ export const updateVariant = async (req, res) => {
     });
   }
 };
-
-
 
 export const updateSize = async (req, res) => {
   try {

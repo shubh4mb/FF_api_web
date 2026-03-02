@@ -19,7 +19,7 @@ async function geoRadius(zoneId = 'global', lng, lat, radiusKm, count = 10) {  /
     return Array.isArray(result) ? result : [];
   } catch (error) {
     console.error("geoRadius error:", error);
-    return []; 
+    return [];
   }
 }
 
@@ -34,7 +34,7 @@ async function setRiderMeta(riderId, zoneId = 'global', obj) {  // NEW: zoneId p
   const flat = { zoneId, ...obj };  // NEW: Bake zone into meta
   for (const k in flat) {
     flat[k] = String(flat[k]);
-  } 
+  }
   if (Object.keys(flat).length) {
     await redis.hSet(`rider:${riderId}:meta`, flat);
     inMemoryIndex.add(`rider:${riderId}:meta`);
@@ -95,6 +95,8 @@ async function assignNearestRider(zoneId = 'global', pickupLocation, orderId, or
       console.log(`Rider ${riderId} busy`);
       continue;
     }
+    if (meta.assignedOrderId) continue;
+
     if (meta.zoneId !== zoneId) {  // NEW: Zone match check—skip if rider in wrong zone (e.g., Kaloor for Edapally order)
       console.log(`Rider ${riderId} in wrong zone (${meta.zoneId} != ${zoneId})`);
       continue;
@@ -114,19 +116,19 @@ async function assignNearestRider(zoneId = 'global', pickupLocation, orderId, or
     }
 
     // Acquire lock: Pass prefixed key + zone
-    const lockKey = `assign:lock:${orderId}:${riderId}`;  // Keep base, but acquire passes zone
+    const lockKey = `assign:lock:${orderId}`;  // GLOBAL ORDER LOCK, NOT RIDER LOCK
     if (!(await acquireLock(lockKey, zoneId))) {  // UPDATED: Pass zoneId
-      console.log(`Rider ${riderId} assignment lock failed (concurrent?)`);
-      continue;
+      console.log(`Order ${orderId} assignment lock failed (another matcher is handling it?)`);
+      return null;
     }
 
     try {
       // Assign: Update meta, pass zoneId
       await setRiderMeta(riderId, zoneId, {  // UPDATED: Pass zoneId
-        ...meta, 
-        assignedOrderId: orderId, 
+        ...meta,
+        assignedOrderId: orderId,
         isBusy: true,
-        lastSeenAt: Date.now() 
+        lastSeenAt: Date.now()
       });
       await setHeartbeat(riderId, zoneId);  // UPDATED: Pass zoneId
 

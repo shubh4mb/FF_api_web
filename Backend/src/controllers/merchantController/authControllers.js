@@ -147,8 +147,6 @@ export const registerPhone = async (req, res) => {
   }
 }; 
 
-
-
 // Update Bank Details// Update Operating Hours// Activate Merchant
 export const getMerchantByEmail = async (req, res) => {
   try {
@@ -303,6 +301,7 @@ export const updateMerchantBankDetails = async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 };
+
 export const updateMerchantOperatingHours = async (req, res) => {
   try {
     const { merchantId } = req.params;
@@ -316,6 +315,7 @@ export const updateMerchantOperatingHours = async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 };
+
 export const activateMerchant = async (req, res) => {
   try {
     const { merchantId } = req.params;

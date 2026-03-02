@@ -134,21 +134,14 @@ export const orderRequestForMerchant = async (req, res) => {
         merchantId: order.merchantId,
       };
 
-      // Emit to merchant sockets
-      const merchantSocketIds = onlineMerchants[order.merchantId?.toString()];
-      if (merchantSocketIds && merchantSocketIds.length > 0) {
-        merchantSocketIds.forEach((socketId) => {
-          const socket = io.sockets.sockets.get(socketId);
-          if (socket) {
-            socket.join(orderId);
-            io.to(socketId).emit("orderUpdate", emitPayload);
-          }
-        });
-      } else {
-        console.log(`No active sockets for merchant ${order.merchantId}`, order.merchantId);
-      }
+      // Make merchant's sockets join the order room
+      io.in(`merchant:${order.merchantId}`).socketsJoin(orderId);
+      console.log(`Instructed all sockets in room merchant:${order.merchantId} to join order room ${orderId}`);
 
-      // Emit to order room
+      // Emit to merchant sockets directly via room
+      io.to(`merchant:${order.merchantId}`).emit("orderUpdate", emitPayload);
+
+      // Emit to order room (which the merchant now joined)
       io.to(orderId).emit("orderUpdate", emitPayload);
       console.log(`Emitted order update to room ${orderId}`);
     }
