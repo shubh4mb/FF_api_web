@@ -18,7 +18,7 @@ const pendingOrderSchema = new mongoose.Schema({
   assignedAt: Date
 }, { timestamps: true });
 
-pendingOrderSchema.index({ zoneName: 1, acceptTimestamp: 1 }); // FIFO per zone
+pendingOrderSchema.index({ zoneName: 1, status: 1, acceptTimestamp: 1 }); // match pattern: { zoneName, status: 'queued' }.sort(acceptTimestamp)
 pendingOrderSchema.index({ pickupLoc: '2dsphere' }); // Geo queries if needed
 
 export default mongoose.model('PendingOrder', pendingOrderSchema);

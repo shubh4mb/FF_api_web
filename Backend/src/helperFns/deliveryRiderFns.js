@@ -1,8 +1,9 @@
 // src/helperFns/deliveryRiderFns.js
-import { redis, inMemoryIndex } from "../config/redisConfig.js";  // Fixed: Added inMemoryIndex
+import { redis, inMemoryIndex } from "../config/redisConfig.js";
 import { getIO } from "../config/socket.js";
-
 import Order from "../models/order.model.js";
+import { startRiderTimeout } from "./riderTimeoutHelper.js";
+import { notifyOrderEvent } from "./notificationHelper.js";
 
 // GEOADD wrapper – UPDATED for zone
 async function geoAdd(zoneId = 'global', lng, lat, member) {  // NEW: zoneId param, default 'global'
@@ -176,19 +177,27 @@ async function assignNearestRider(zoneId = 'global', pickupLocation, orderId, or
       }
 
       assignedRider = riderId;
-      console.log(`✅ Assigned rider ${riderId} to order ${orderId} in ${zoneId}`);  // UPDATED: Log zone
+      console.log(`✅ Assigned rider ${riderId} to order ${orderId} in ${zoneId}`);
+
+      // Start 2-minute timeout — auto re-queue if rider doesn't accept
+      startRiderTimeout(orderId, riderId, zoneId);
+
+      // 📱 Rider notification: "New delivery request"
+      notifyOrderEvent("rider", "new_order_request", {
+        riderId,
+        orderId,
+      });
+
       break;
     } catch (err) {
       console.error(`Assignment error for ${riderId}:`, err);
     } finally {
-      await releaseLock(lockKey, zoneId);  // UPDATED: Pass zoneId
+      await releaseLock(lockKey, zoneId);
     }
   }
 
   if (!assignedRider) {
-    console.log(`No available rider found within range in ${zoneId}`);  // UPDATED: Log zone
-  } else {
-    console.log(`Assigned rider: ${assignedRider}`);
+    console.log(`No available rider found within range in ${zoneId}`);
   }
   return assignedRider;
 }

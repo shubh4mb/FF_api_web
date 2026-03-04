@@ -4,17 +4,23 @@ import otpGenerator from 'otp-generator';
 import User from '../models/user.model.js';
 import OTPModel from '../models/otp.model.js'; // Store OTP records temporarily
 import jwt from 'jsonwebtoken';
-
+import { asyncHandler } from '../utils/asyncHandler.js';
+import { ApiError } from '../utils/ApiError.js';
+import { ApiResponse } from '../utils/ApiResponse.js';
 // Twilio client setup
 const client = new twilio(process.env.TWILIO_SID, process.env.TWILIO_AUTH_TOKEN);
 
 // Send OTP to user phone number
-const sendOTP = async (req, res) => {
+const sendOTP = asyncHandler(async (req, res) => {
   const { phoneNumber } = req.body;
 
+  if (!phoneNumber) {
+    throw new ApiError(400, "Phone number is required");
+  }
+
   let user = await User.findOne({ phoneNumber });
-  if(user){
-    return res.status(400).json({ message: 'User already exists' });
+  if (user) {
+    throw new ApiError(400, "User already exists");
   }
 
   // Generate OTP (6 digits)
@@ -35,30 +41,34 @@ const sendOTP = async (req, res) => {
       to: phoneNumber,
       from: process.env.TWILIO_PHONE_NUMBER, // Your Twilio number
     });
-    res.status(200).json({ message: 'OTP sent successfully' });
+    return res.status(200).json(new ApiResponse(200, {}, "OTP sent successfully"));
   } catch (error) {
     console.error('Error sending OTP:', error);
-    res.status(500).json({ message: 'Failed to send OTP' });
+    throw new ApiError(500, "Failed to send OTP", [error.message]);
   }
-};
+});
 
 // Verify OTP and authenticate user
-const verifyOTP = async (req, res) => {
+const verifyOTP = asyncHandler(async (req, res) => {
   const { phoneNumber, otp } = req.body;
+
+  if (!phoneNumber || !otp) {
+    throw new ApiError(400, "Phone number and OTP are required");
+  }
 
   // Find the OTP record for the user
   const otpRecord = await OTPModel.findOne({ phoneNumber });
 
   if (!otpRecord) {
-    return res.status(400).json({ message: 'OTP not sent or expired' });
+    throw new ApiError(400, "OTP not sent or expired");
   }
 
   // Check if OTP is valid and not expired
   if (otpRecord.otp !== otp) {
-    return res.status(400).json({ message: 'Invalid OTP' });
+    throw new ApiError(400, "Invalid OTP");
   }
   if (otpRecord.expiresAt < Date.now()) {
-    return res.status(400).json({ message: 'OTP has expired' });
+    throw new ApiError(400, "OTP has expired");
   }
 
   // OTP is valid, check if user exists
@@ -73,7 +83,7 @@ const verifyOTP = async (req, res) => {
   const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET, { expiresIn: '1h' });
 
   // Send token to the client
-  res.status(200).json({ token });
-};
+  return res.status(200).json(new ApiResponse(200, { token }, "Authentication successful"));
+});
 
 export { sendOTP, verifyOTP };

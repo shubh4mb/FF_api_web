@@ -3,6 +3,8 @@ import deliveryRiderModel from "../../models/deliveryRider.model.js";
 import PendingOrder from "../../models/pendingOrders.model.js";
 import { getRiderMeta, setRiderMeta } from "../../helperFns/deliveryRiderFns.js";
 import { emitOrderUpdate } from "../../sockets/order.socket.js";
+import { notifyOrderEvent } from "../../helperFns/notificationHelper.js";
+import { clearRiderTimeout } from "../../helperFns/riderTimeoutHelper.js";
 
 // Haversine formula to calculate distance between two points in meters
 const getDistance = (lat1, lon1, lat2, lon2) => {
@@ -90,6 +92,9 @@ export const acceptOrder = async (req, res) => {
     order.totalAmount = order.finalBilling.totalPayable;
 
     await order.save();
+
+    // ⏰ Clear the 2-minute timeout — rider accepted in time
+    clearRiderTimeout(orderId);
 
     // Update rider's current order
     rider.currentOrderId = orderId;
@@ -200,7 +205,20 @@ export const verifyOtp = async (req, res) => {
     order.deliveryRiderStatus = "en route to delivery";
     order.orderStatus = "out_for_delivery";
     await order.save();
-    emitOrderUpdate(req.io, orderId, order)
+    emitOrderUpdate(req.io, orderId, order);
+
+    // 📱 Rider notification: "OTP verified, head to customer"
+    notifyOrderEvent("rider", "otp_verified", {
+      riderId: req.riderId,
+      orderId: order._id,
+    });
+
+    // 📱 Customer notification: "Rider on the way" (selective milestone — replaces rider_assigned)
+    notifyOrderEvent("customer", "rider_arriving", {
+      userId: order.userId,
+      orderId: order._id,
+    });
+
     res.status(200).json({ message: "OTP verified successfully" });
   } catch (error) {
     console.error("Error in verifyOtp:", error);
@@ -224,22 +242,24 @@ export const reachedCustomerLocation = async (req, res) => {
     console.log(order.deliveryRiderId, req.riderId, "asdfasdf");
 
     if (order.deliveryRiderId?.toString() !== req.riderId.toString()) {
-
       return res.status(403).json({ message: "Not authorized for this order" });
     }
-    const customerLocation = {
-      latitude: 9.9675883,
-      longitude: 76.2984220
-    };
-    const distance = getDistance(latitude, longitude, customerLocation.latitude, customerLocation.longitude);
-    // if(distance>200){
-    //   return res.status(400).json({message:"Rider is ${distance.toFixed(2)} meters from customer location, must be within 50 meters"});
-    // }
+
+    // Use real delivery location from order instead of hardcoded coords
+    if (latitude != null && longitude != null && order.deliveryLocation?.coordinates?.length === 2) {
+      const [custLng, custLat] = order.deliveryLocation.coordinates;
+      const distance = getDistance(latitude, longitude, custLat, custLng);
+      // Soft check — log but don't block (GPS can be inaccurate)
+      if (distance > 500) {
+        console.warn(`Rider ${distance.toFixed(0)}m from customer — may not be at location`);
+      }
+    }
+
     order.deliveryRiderStatus = "arrived at delivery";
     order.orderStatus = "arrived at delivery";
-
     await order.save();
-    emitOrderUpdate(req.io, orderId, order)
+    emitOrderUpdate(req.io, orderId, order);
+
     res.status(200).json({ message: "Rider confirmed at customer location" });
   } catch (error) {
     console.error("Error in reachedCustomerLocation:", error);
@@ -281,35 +301,37 @@ export const handOutProducts = async (req, res) => {
   }
 };
 export const endTrialPhase = async (req, res) => {
-  const { orderId } = req.params;
+  const { orderId } = req.body;
   try {
     const order = await Order.findById(orderId);
     if (!order) return res.status(404).json({ message: "Order not found" });
 
-    if (order.orderStatus !== "try_phase" || order.deliveryRiderStatus !== "try_phase") {
-      return res.status(400).json({ message: "Order is not in trial phase" });
+    // Fixed: status string uses space, not underscore
+    if (order.orderStatus !== "try phase") {
+      return res.status(400).json({
+        message: `Order is not in trial phase (current: ${order.orderStatus})`
+      });
     }
 
-    // Set trial phase end time
-    order.trialPhaseEnd = new Date();
+    // Record end time and compute actual duration
+    const now = new Date();
+    order.trialPhaseEnd = now;
 
-    // Calculate duration in minutes
     const startTime = new Date(order.trialPhaseStart);
-    const endTime = new Date(order.trialPhaseEnd);
-    const durationMs = endTime - startTime; // Difference in milliseconds
-    const durationMinutes = Math.floor(durationMs / (1000 * 60)); // Convert to minutes
+    const durationMs = now - startTime;
+    const durationMinutes = Math.max(0, Math.floor(durationMs / (1000 * 60)));
 
-    // Update order with duration and new status
     order.trialPhaseDuration = durationMinutes;
-    order.orderStatus = "completed"; // Or another status after trial phase
-    order.deliveryRiderStatus = "completed"; // Adjust as needed
+    // The customer side decides items → sets actual final status
+    // Rider just signals end of wait; customer app takes over selection
+    order.deliveryRiderStatus = "waiting for customer selection";
 
     await order.save();
     emitOrderUpdate(req.io, orderId, order);
 
     return res.status(200).json({
-      message: "Trial phase ended",
-      trialPhaseDuration: durationMinutes,
+      message: "Trial phase timer ended — awaiting customer item selection",
+      trialPhaseDurationMinutes: durationMinutes,
       order,
     });
   } catch (error) {
@@ -321,27 +343,46 @@ export const endTrialPhase = async (req, res) => {
 export const verifyOtpOnReturn = async (req, res) => {
   try {
     const { orderId, otp } = req.body;
-    console.log(orderId, otp, "orderId,otp");
 
     const order = await Order.findById(orderId);
-    if (!order) {
-      return res.status(404).json({ message: "Order not found" });
-    }
-    if (order.otp !== otp) {
-      return res.status(400).json({ message: "Invalid OTP" });
-    }
-    console.log(order, "order");
+    if (!order) return res.status(404).json({ message: "Order not found" });
+    if (order.otp !== otp) return res.status(400).json({ message: "Invalid OTP" });
 
     order.deliveryRiderStatus = "otp-verified-return";
-    order.orderStatus = "otp-verified-return"
+    order.orderStatus = "otp-verified-return";
 
-    const pickupCoordinates = {
-      latitude: 9.9675883,
-      longitude: 76.2984220
+    // Free the rider — return trip complete
+    if (order.deliveryRiderId) {
+      await deliveryRiderModel.findByIdAndUpdate(order.deliveryRiderId, {
+        currentOrderId: null,
+        isBusy: false,
+        isAvailable: true,
+      });
     }
+
     await order.save();
-    emitOrderUpdate(req.io, orderId, order)
-    res.status(200).json({ message: "OTP verified successfully" });
+    emitOrderUpdate(req.io, orderId, order);
+
+    // 📱 Rider notification: "Return verified, you're done!"
+    notifyOrderEvent("rider", "return_complete", {
+      riderId: req.riderId,
+      orderId: order._id,
+    });
+
+    // 📱 Rider notification: earnings
+    notifyOrderEvent("rider", "earnings_credited", {
+      riderId: req.riderId,
+      orderId: order._id,
+      amount: order.deliveryCharge || 0,
+    });
+
+    // 📱 Customer notification: "Order fully complete"
+    notifyOrderEvent("customer", "delivery_complete", {
+      userId: order.userId,
+      orderId: order._id,
+    });
+
+    res.status(200).json({ message: "Return OTP verified. Order complete.", order });
   } catch (error) {
     console.error("Error in verifyOtpOnReturn:", error);
     res.status(500).json({ message: "❌ " + error.message });
@@ -350,8 +391,12 @@ export const verifyOtpOnReturn = async (req, res) => {
 
 export const reachedReturnMerchant = async (req, res) => {
   try {
-    const { orderId, latitue, longitude } = req.body;
-    console.log(req.body, "req.body");
+    const { orderId, latitude, longitude } = req.body; // Fixed: was 'latitue'
+
+    if (!orderId) {
+      return res.status(400).json({ message: "orderId is required" });
+    }
+
     const order = await Order.findById(orderId);
     if (!order) {
       return res.status(404).json({ message: "Order not found" });
@@ -359,22 +404,31 @@ export const reachedReturnMerchant = async (req, res) => {
     if (order.deliveryRiderId?.toString() !== req.riderId.toString()) {
       return res.status(403).json({ message: "Not authorized for this order" });
     }
-    const merchantLocation = {
-      latitude: 9.9675883,
-      longitude: 76.2984220
-    }
-    const distance = getDistance(latitue, longitude, merchantLocation.latitude, merchantLocation.longitude);
-    if (distance > 200) {
-      return res.status(400).json({ message: "Rider is ${distance.toFixed(2)} meters from merchant location, must be within 50 meters" });
-    }
-    order.deliveryRiderStatus = "en route to return";
-    order.orderStatus = "en route to return";
-    await order.save();
-    emitOrderUpdate(req.io, orderId, order)
-    res.status(200).json({ message: "Rider confirmed at merchant location" });
 
+    // Geo-check: only if coordinates are provided and merchant coords exist
+    if (latitude != null && longitude != null && order.pickupLocation?.coordinates?.length === 2) {
+      const [merchantLng, merchantLat] = order.pickupLocation.coordinates;
+      const distance = getDistance(latitude, longitude, merchantLat, merchantLng);
+      if (distance > 300) {
+        return res.status(400).json({
+          message: `Rider is ${Math.round(distance)}m from merchant — must be within 300m`,
+          distanceMeters: Math.round(distance),
+        });
+      }
+    }
+
+    // Correct statuses for return arrival at merchant
+    order.deliveryRiderStatus = "reached return merchant";
+    order.orderStatus = "reached return merchant";
+    await order.save();
+
+    emitOrderUpdate(req.io, orderId, order);
+    res.status(200).json({
+      message: "Rider confirmed at merchant location for return",
+      order,
+    });
   } catch (error) {
     console.error("Error in reachedReturnMerchant:", error);
     res.status(500).json({ message: "❌ " + error.message });
   }
-}
+};

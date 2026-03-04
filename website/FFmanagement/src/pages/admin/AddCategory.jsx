@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 // import { useNavigate } from "react-router-dom";
-import { getCategories , addCategory } from "../../api/categories"; // ✅ Adjust path as needed
+import { getCategories, addCategory } from "../../api/categories"; // ✅ Adjust path as needed
 import CropperModal from "../../components/CropperModal";
 const AddCategory = () => {
   // const navigate = useNavigate();
@@ -14,10 +14,13 @@ const AddCategory = () => {
     isActive: true,
     sortOrder: 0,
     image: null,
+    logo: null,
+    title_banner: null,
   });
-  const [previewUrl, setPreviewUrl] = useState(null); // base64 preview
-const [croppedImage, setCroppedImage] = useState(null); // blob
-const [showCropper, setShowCropper] = useState(false);
+  const [previewUrls, setPreviewUrls] = useState({ image: null, logo: null, title_banner: null });
+  const [croppedImages, setCroppedImages] = useState({ image: null, logo: null, title_banner: null });
+  const [showCropper, setShowCropper] = useState({ image: false, logo: false, title_banner: false });
+  const [currentCropType, setCurrentCropType] = useState(null);
 
   const [allCategories, setAllCategories] = useState([]);
   const [selectedTopCategory, setSelectedTopCategory] = useState("");
@@ -28,8 +31,8 @@ const [showCropper, setShowCropper] = useState(false);
     const fetchCategories = async () => {
       try {
         const response = await getCategories();
-     console.log(response,"dsfdsf")
-        
+        console.log(response, "dsfdsf")
+
         setAllCategories(response.categories || []);
       } catch (error) {
         console.error("Error fetching categories:", error);
@@ -44,23 +47,29 @@ const [showCropper, setShowCropper] = useState(false);
       setFormData((prev) => ({ ...prev, [name]: checked }));
     } else if (name === "level" || name === "sortOrder") {
       setFormData((prev) => ({ ...prev, [name]: parseInt(value) }));
-    }else if (type === "file") {
+    } else if (type === "file") {
       const file = files[0];
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setPreviewUrl(reader.result);  // base64
-        setShowCropper(true);          // open cropper modal
-      };
-      reader.readAsDataURL(file);
+      if (file) {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          setPreviewUrls((prev) => ({ ...prev, [name]: reader.result }));
+          setCurrentCropType(name);
+          setShowCropper((prev) => ({ ...prev, [name]: true }));
+        };
+        reader.readAsDataURL(file);
+      }
     } else {
       setFormData((prev) => ({ ...prev, [name]: value }));
     }
   };
+
   const handleCropComplete = (blob) => {
-    setCroppedImage(blob);
-    setFormData((prev) => ({ ...prev, image: blob }));
+    if (!currentCropType) return;
+    setCroppedImages((prev) => ({ ...prev, [currentCropType]: blob }));
+    setFormData((prev) => ({ ...prev, [currentCropType]: blob }));
+    setShowCropper((prev) => ({ ...prev, [currentCropType]: false }));
   };
-  
+
   const handleLevelChange = (e) => {
     const level = parseInt(e.target.value);
     setFormData((prev) => ({
@@ -184,44 +193,45 @@ const [showCropper, setShowCropper] = useState(false);
         {/* Sort Order */}
         <input type="number" name="sortOrder" value={formData.sortOrder} onChange={handleChange} className="border p-2 rounded w-full" placeholder="Sort Order" />
 
-        {/* Image */}
-        {showCropper && previewUrl && (
-  <CropperModal
-    imageSrc={previewUrl}
-    onClose={() => setShowCropper(false)}
-    onCropComplete={handleCropComplete}
-  />
-)}
+        {/* File Uploads */}
+        {['image', 'logo', 'title_banner'].map((type) => (
+          <div key={type} className="flex flex-col border p-4 rounded bg-gray-50">
+            <label htmlFor={type} className="mb-2 font-semibold capitalize">
+              Upload {type.replace('_', ' ')}
+            </label>
+            <input
+              type="file"
+              accept="image/*"
+              name={type}
+              onChange={handleChange}
+              className="border p-2 rounded mb-2 bg-white"
+            />
+            {previewUrls[type] && !showCropper[type] && !croppedImages[type] && (
+              <div className="mt-2">
+                <p className="text-sm text-gray-600">Selected {type.replace('_', ' ')}:</p>
+                <img src={previewUrls[type]} alt="Preview" className="h-24 rounded" />
+              </div>
+            )}
+            {croppedImages[type] && !showCropper[type] && (
+              <div className="mt-2">
+                <p className="text-sm text-gray-600">Cropped {type.replace('_', ' ')} Preview:</p>
+                <img
+                  src={URL.createObjectURL(croppedImages[type])}
+                  alt="Cropped"
+                  className="h-24 rounded border"
+                />
+              </div>
+            )}
+          </div>
+        ))}
 
-<div className="flex flex-col">
-  <label htmlFor="image" className="mb-1">Upload Image</label>
-  <input
-    type="file"
-    accept="image/*"
-    name="image"
-    onChange={handleChange}
-    className="border p-2 rounded"
-  />
-</div>
-
-{previewUrl && !showCropper && (
-  <div className="mt-2">
-    <p className="text-sm text-gray-600">Selected Image:</p>
-    <img src={previewUrl} alt="Preview" className="h-24 rounded" />
-  </div>
-)}
-
-{/* Cropped Image Preview */}
-{croppedImage && !showCropper && (
-  <div className="mt-4">
-    <p className="text-sm text-gray-600">Cropped Image Preview:</p>
-    <img
-      src={URL.createObjectURL(croppedImage)}
-      alt="Cropped"
-      className="h-24 rounded border"
-    />
-  </div>
-)}
+        {currentCropType && showCropper[currentCropType] && previewUrls[currentCropType] && (
+          <CropperModal
+            imageSrc={previewUrls[currentCropType]}
+            onClose={() => setShowCropper((prev) => ({ ...prev, [currentCropType]: false }))}
+            onCropComplete={handleCropComplete}
+          />
+        )}
 
         {/* Submit */}
         <button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded">

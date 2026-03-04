@@ -31,21 +31,31 @@ const categorySchema = new mongoose.Schema({
       type: String,
       required: false
     },
-      url: {
-        type: String,
-        required: false
-      }
+    url: {
+      type: String,
+      required: false
+    }
+  },
+  logo: {
+    public_id: {
+      type: String,
+      required: false
     },
-    title_banner: {
-      public_id: {
-        type: String,
-        required: false
-      },
-        url: {
-          type: String,
-          required: false
-        }
-      },
+    url: {
+      type: String,
+      required: false
+    }
+  },
+  title_banner: {
+    public_id: {
+      type: String,
+      required: false
+    },
+    url: {
+      type: String,
+      required: false
+    }
+  },
 }, { timestamps: true });
 
 export default mongoose.models.Category || mongoose.model("Category", categorySchema);

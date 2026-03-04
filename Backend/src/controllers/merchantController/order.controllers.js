@@ -2,16 +2,14 @@ import Order from "../../models/order.model.js";
 import Product from "../../models/product.model.js";
 import { emitOrderUpdate } from "../../sockets/order.socket.js";
 import { getIO } from "../../config/socket.js";
-
-
 import DeliveryRider from "../../models/deliveryRider.model.js";
-import { assignNearestRider } from "../../helperFns/deliveryRiderFns.js"
-import { enqueueOrder } from '../../helperFns/orderFns.js'; // Your new helper—add if not
+import { assignNearestRider } from "../../helperFns/deliveryRiderFns.js";
+import { enqueueOrder } from '../../helperFns/orderFns.js';
 import Merchant from "../../models/merchant.model.js";
+import { creditWallet } from "../../helperFns/walletHelper.js";
+import { notifyOrderEvent } from "../../helperFns/notificationHelper.js";
 
-const generateOTP = () => {
-  return Math.floor(1000 + Math.random() * 9000);
-}
+const generateOTP = () => Math.floor(1000 + Math.random() * 9000);
 
 export const saveProductDetails = async (req, res) => {
   try {
@@ -66,9 +64,10 @@ export const saveProductDetails = async (req, res) => {
 
 
 export const getPlacedOrder = async (req, res) => {
-  const io = getIO();
-  console.log(req.merchantId, 'merchantIddddd');
-  const orders = await Order.find({ merchantId: req.merchantId, orderStatus: "placed" });
+  const orders = await Order.find({ merchantId: req.merchantId, orderStatus: "placed" })
+    .select('orderStatus items totalAmount deliveryRiderStatus createdAt deliveryLocation userId')
+    .sort({ createdAt: -1 })
+    .lean();
   return res.status(200).json({ orders });
 };
 
@@ -100,9 +99,8 @@ export const orderRequestForMerchant = async (req, res) => {
       };
 
       const merchant = await Merchant.findById(order.merchantId);
-      const zoneId = merchant.zoneName || (await inferZone(pickupLocation.lat, pickupLocation.lng));
+      const zoneId = merchant.zoneName || 'global';
 
-      // This will now safely assign to the outer-scoped queueResult
       queueResult = await enqueueOrder({
         orderId: order._id.toString(),
         merchantId: order.merchantId.toString(),
@@ -113,18 +111,13 @@ export const orderRequestForMerchant = async (req, res) => {
         customerLng: customerLocation.lng,
       });
 
-      console.log(queueResult, "queueResult");
-
       if (queueResult.success) {
         order.deliveryRiderStatus = "queued";
         order.queuedZone = queueResult.zoneId;
-        console.log(`✅ Order ${orderId} queued in zone ${queueResult.zoneId}—matcher will assign rider`);
       } else {
-        console.log("❌ Queue failed—fallback to unassigned");
         order.deliveryRiderStatus = "unassigned";
       }
 
-      // Now safe to use queueResult here too
       const emitPayload = {
         orderId,
         orderStatus: order.orderStatus,
@@ -133,28 +126,52 @@ export const orderRequestForMerchant = async (req, res) => {
         merchantId: order.merchantId,
       };
 
-      // Make merchant's sockets join the order room
       io.in(`merchant:${order.merchantId}`).socketsJoin(orderId);
-      console.log(`Instructed all sockets in room merchant:${order.merchantId} to join order room ${orderId}`);
-
-      // Emit to merchant sockets directly via room
       io.to(`merchant:${order.merchantId}`).emit("orderUpdate", emitPayload);
-
-      // Emit to order room (which the merchant now joined)
       io.to(orderId).emit("orderUpdate", emitPayload);
-      console.log(`Emitted order update to room ${orderId}`);
+
+      // 📱 Customer notification: "Order Confirmed" (selective milestone #2)
+      notifyOrderEvent("customer", "order_accepted", {
+        userId: order.userId,
+        orderId: order._id,
+      });
     }
 
     if (status === "reject") {
       order.orderStatus = "rejected";
       order.reason = req.body.reason || "Merchant rejected the order";
+
+      // 💰 Refund delivery fee to customer wallet
+      const refundAmount = order.deliveryCharge || 0;
+      if (refundAmount > 0) {
+        await creditWallet({
+          userId: order.userId,
+          amount: refundAmount,
+          description: `Refund: Merchant declined order #${orderId.toString().slice(-5).toUpperCase()}`,
+          orderId: order._id,
+        });
+
+        // 📱 Customer notification: "Refund credited"
+        notifyOrderEvent("customer", "order_rejected", {
+          userId: order.userId,
+          orderId: order._id,
+          amount: refundAmount,
+        });
+      } else {
+        notifyOrderEvent("customer", "order_rejected", {
+          userId: order.userId,
+          orderId: order._id,
+        });
+      }
     }
 
     await order.save();
     emitOrderUpdate(io, orderId, order);
 
     return res.status(200).json({
-      message: "Order status updated",
+      message: status === "reject"
+        ? `Order rejected. ₹${order.deliveryCharge || 0} refunded to customer wallet.`
+        : "Order accepted & queued for rider.",
       orderId,
       order,
       queuedZone: status === "accept" && queueResult?.success ? queueResult.zoneId : undefined,
@@ -167,9 +184,10 @@ export const orderRequestForMerchant = async (req, res) => {
 };
 export const getAllOrder = async (req, res) => {
   try {
-    const orders = await Order.find({ merchantId: req.merchantId }).sort({ createdAt: -1 });
-    console.log(orders.length, 'orders length');
-
+    const orders = await Order.find({ merchantId: req.merchantId })
+      .select('orderStatus items totalAmount deliveryRiderStatus createdAt deliveryRiderDetails deliveryLocation userId')
+      .sort({ createdAt: -1 })
+      .lean();
     return res.status(200).json({ orders });
   } catch (error) {
     return res.status(500).json({ message: "Error fetching orders" });
@@ -187,8 +205,15 @@ export const orderPacked = async (req, res) => {
     await order.save();
     emitOrderUpdate(io, orderId, order);
 
-    return res.status(200).json({ message: "Order status updated", order });
+    // 📱 Rider notification: "Order packed, ready for pickup"
+    if (order.deliveryRiderId) {
+      notifyOrderEvent("rider", "pickup_ready", {
+        riderId: order.deliveryRiderId,
+        orderId: order._id,
+      });
+    }
 
+    return res.status(200).json({ message: "Order packed & OTP generated", order });
   } catch (error) {
     return res.status(500).json({ message: "Error updating order status" });
   }

@@ -1,19 +1,18 @@
 import Order from "../../models/order.model.js";
 import Product from "../../models/product.model.js";
-// controllers/orderController.js
 import Cart from '../../models/cart.model.js';
 import DeliveryRider from '../../models/deliveryRider.model.js';
 import Merchant from '../../models/merchant.model.js';
 import { emitOrderUpdate } from "../../sockets/order.socket.js";
-import {notifyMerchant} from "../../sockets/merchant.socket.js";
-import Razorpay from "../../config/RazorPay.js";
+import { notifyMerchant } from "../../sockets/merchant.socket.js";
 import Address from "../../models/address.model.js";
 import { getIO } from "../../config/socket.js";
-
-import {calculateDeliveryCharge} from "../../helperFns/deliveryChargeFns.js";
-import razorpay from '../../config/RazorPay.js'
+import { calculateDeliveryCharge } from "../../helperFns/deliveryChargeFns.js";
+import razorpay from '../../config/RazorPay.js';
 import crypto from 'crypto';
 import { calculateFinalBilling } from "../../helperFns/calculateFinalBilling.js";
+import { enqueueOrder } from "../../helperFns/orderFns.js";
+import { notifyOrderEvent } from "../../helperFns/notificationHelper.js";
 import mongoose from 'mongoose';
 
 // export const createOrder = async (req, res) => {
@@ -78,7 +77,7 @@ import mongoose from 'mongoose';
 //   // console.log(req.body.deliveryCharge, 'body');
 //   // let amount = req.body.deliveryCharge;
 //   let amount = 100;
-  
+
 
 //   try {
 //     // Create Razorpay order
@@ -115,7 +114,7 @@ import mongoose from 'mongoose';
 //     }
 
 //     // Fetch address details from address schema
-    
+
 //     const deliveryAddress = await Address.findOne({ _id: addressId, user: userId });
 //     if (!deliveryAddress) {
 //       return res.status(404).json({ message: 'Address not found' });
@@ -228,14 +227,14 @@ import mongoose from 'mongoose';
 //   const { status } = req.body;
 //   console.log(orderId,'orderId');
 //   console.log(req.body);
-  
-  
+
+
 //   console.log(status,'statussss');
-  
+
 
 //   const order = await Order.findById(orderId);
 //   if (!order) return res.status(404).json({ message: "Order not found" });
-  
+
 //   order[0].orderStatus = status;
 //   if(status=="accept"){
 //     const deliveryBoy = await Delivery.findOne({status:"active"})
@@ -245,13 +244,13 @@ import mongoose from 'mongoose';
 //     order.deliveryBoyId = deliveryBoy._id;
 //     order.deliveryBoyStatus = "assigned";    
 //   }
-  
+
 //   await order.save();
 
 //   emitOrderUpdate(io, orderId, { status });
 
 
-  
+
 //   return res.status(200).json({ message: "Order status updated", orderId });
 // };
 
@@ -301,29 +300,29 @@ export const createRazorpayOrder = async (req, res) => {
     const orderItems = [];
 
     for (const item of cart.items) {
-  const product = item.productId;
-  if (!product) continue;
+      const product = item.productId;
+      if (!product) continue;
 
-  const variant = product.variants.id(item.variantId);
-  if (!variant) continue;
+      const variant = product.variants.id(item.variantId);
+      if (!variant) continue;
 
-  const price = variant.price;
+      const price = variant.price;
 
-  for (let i = 0; i < item.quantity; i++) {
-    totalAmount += price;
+      for (let i = 0; i < item.quantity; i++) {
+        totalAmount += price;
 
-    orderItems.push({
-      productId: item.productId,
-      variantId: item.variantId,
-      name: product.name,
-      quantity: 1, // 🔥 ALWAYS 1
-      price,
-      size: item.size,
-      image: item.image?.url || "",
-      tryStatus: product.isTriable ? "pending" : "not-triable",
-    });
-  }
-}
+        orderItems.push({
+          productId: item.productId,
+          variantId: item.variantId,
+          name: product.name,
+          quantity: 1, // 🔥 ALWAYS 1
+          price,
+          size: item.size,
+          image: item.image?.url || "",
+          tryStatus: product.isTriable ? "pending" : "not-triable",
+        });
+      }
+    }
 
 
     // === FINAL PAYABLE ===
@@ -456,60 +455,31 @@ export const verifyPayment = async (req, res) => {
     }
 
     /* =======================
-       STEP 3: UPDATE ORDER
+       STEP 3: UPDATE ORDER — mark as placed (NOT yet confirmed_purchase)
+       Stock is only deducted after the trial when the customer confirms kept items
     ======================== */
     order.razorpayPaymentId = razorpay_payment_id;
-    order.paymentStatus = "paid";
-    order.orderStatus = "confirmed_purchase"; // adjust if needed
+    order.paymentStatus = "delivery_fee_paid";
+    order.orderStatus = "placed";
     await order.save({ session });
 
     /* =======================
-       STEP 4: UPDATE STOCK (VARIANT + SIZE)
-    ======================== */
-    for (const item of order.items) {
-      const stockUpdate = await Product.updateOne(
-        {
-          _id: item.productId,
-          "variants._id": item.variantId,
-        },
-        {
-          $inc: {
-            "variants.$[variant].sizes.$[size].stock": -item.quantity,
-          },
-        },
-        {
-          arrayFilters: [
-            { "variant._id": item.variantId },
-            { "size.size": item.size },
-          ],
-          session,
-        }
-      );
-
-      if (stockUpdate.modifiedCount === 0) {
-        throw new Error(
-          `Stock update failed for product ${item.productId}`
-        );
-      }
-    }
-
-    /* =======================
-       STEP 5: CLEAR USER CART
+       STEP 4: CLEAR USER CART
     ======================== */
     await Cart.updateOne(
       { userId: order.userId },
-      { $set: { items: [] } },
+      { $set: { items: [], merchantId: null } },
       { session }
     );
 
     /* =======================
-       STEP 6: COMMIT TRANSACTION
+       STEP 5: COMMIT TRANSACTION
     ======================== */
     await session.commitTransaction();
     session.endSession();
 
     /* =======================
-       STEP 7: SOCKET NOTIFY MERCHANT
+       STEP 6: NOTIFY MERCHANT + CONFIRM PLACED
     ======================== */
     try {
       const io = getIO();
@@ -518,18 +488,22 @@ export const verifyPayment = async (req, res) => {
       console.error("Socket notify error:", socketErr);
     }
 
+    // 📱 Customer notification: "Order Placed" (selective milestone #1)
+    notifyOrderEvent("customer", "order_placed", {
+      userId: order.userId,
+      orderId: order._id,
+    });
+
     return res.status(200).json({
       success: true,
-      message: "Payment verified & order confirmed",
+      message: "Payment verified. Order placed — awaiting merchant acceptance.",
       orderId: order._id,
     });
 
   } catch (error) {
     await session.abortTransaction();
     session.endSession();
-
     console.error("Verify Payment Error:", error);
-
     return res.status(500).json({
       success: false,
       message: "Payment verification failed",
@@ -626,7 +600,7 @@ export const orderPacked = async (req, res) => {
   const order = await Order.findById(orderId);
   if (!order) return res.status(404).json({ message: "Order not found" });
 
-  order.status="packed"
+  order.status = "packed"
   await order.save();
   return res.status(200).json({ message: "Order packed", order });
 };
@@ -680,33 +654,41 @@ export const handoverOrder = async (req, res) => {
 
 
 export const getOrderForMerchant = async (req, res) => {
-  const orders = await Order.find({ merchantId: req.merchant.merchantId });
+  const orders = await Order.find({ merchantId: req.merchant.merchantId })
+    .select('orderStatus items totalAmount deliveryRiderStatus createdAt deliveryRiderDetails')
+    .sort({ createdAt: -1 })
+    .lean();
   return res.status(200).json({ orders });
 };
 
 export const getOrderForDeliveryBoy = async (req, res) => {
   const { deliveryBoyId } = req.params;
-
-  const orders = await Order.find({ deliveryBoyId });
+  const orders = await Order.find({ deliveryBoyId })
+    .select('orderStatus items totalAmount deliveryRiderStatus deliveryLocation pickupLocation createdAt')
+    .sort({ createdAt: -1 })
+    .lean();
   return res.status(200).json({ orders });
 };
 
 export const getOrderForUser = async (req, res) => {
   const { userId } = req.params;
-
-  const orders = await Order.find({ userId });
+  const orders = await Order.find({ userId })
+    .select('orderStatus items totalAmount customerDeliveryStatus createdAt merchantDetails deliveryCharge')
+    .sort({ createdAt: -1 })
+    .lean();
   return res.status(200).json({ orders });
 };
 
-export const getAllOrders = async(req,res)=>{
+export const getAllOrders = async (req, res) => {
   try {
-    console.log(req.user);
-    
-    const userId = req.user.userId
-    const orders = await Order.find({userId})
-    return res.status(200).json({orders})
+    const userId = req.user.userId;
+    const orders = await Order.find({ userId })
+      .select('orderStatus items totalAmount customerDeliveryStatus createdAt merchantDetails deliveryCharge finalBilling')
+      .sort({ createdAt: -1 })
+      .lean();
+    return res.status(200).json({ orders });
   } catch (error) {
-    
+    return res.status(500).json({ message: 'Failed to fetch orders' });
   }
 }
 
@@ -715,11 +697,11 @@ export const initiateReturn = async (req, res) => {
     console.log("initiateReturn");
 
     let { orderId } = req.params;
-    console.log(orderId,'676777');
-    
+    console.log(orderId, '676777');
+
     orderId = orderId.replace(/^["']|["']$/g, '').trim();
-    console.log(orderId,'676777');
-    
+    console.log(orderId, '676777');
+
     const { items } = req.body; // Expected payload: array of { itemId, tryStatus: "keep"|"return", returnReason }
 
     if (!items || !Array.isArray(items) || items.length === 0) {
@@ -770,13 +752,13 @@ export const initiateReturn = async (req, res) => {
     // Determine final order status
     if (returnedItemsCount === order.items.length) {
       order.orderStatus = "returned";
-    order.customerDeliveryStatus="completed";
-      
+      order.customerDeliveryStatus = "completed";
+
       order.deliveryRiderStatus = "completed try phase"; // Rider will pick up all
     } else if (keptItemsCount === order.items.length) {
       order.orderStatus = "confirmed_purchase";
       order.deliveryRiderStatus = "confirmed purchase";
-    order.customerDeliveryStatus="trial_phase_ended"
+      order.customerDeliveryStatus = "trial_phase_ended"
 
     } else {
       order.orderStatus = "partially_returned";
@@ -808,13 +790,11 @@ export const initiateReturn = async (req, res) => {
 export const getOrderById = async (req, res) => {
   try {
     const { orderId } = req.params;
-    // Clean orderId by removing extra quotes if present
     const cleanOrderId = orderId.replace(/^"|"$/g, '');
-    const order = await Order.findById(cleanOrderId);
+    const order = await Order.findById(cleanOrderId).lean();
     if (!order) return res.status(404).json({ message: "Order not found" });
     return res.status(200).json({ order });
   } catch (error) {
-    console.log(error);
     return res.status(500).json({ message: "Internal server error" });
   }
 };
@@ -825,7 +805,7 @@ export const createFinalPaymentRazorpayOrder = async (req, res) => {
     const userId = req.user.userId;
     const { items } = req.body;
     console.log(req.body);
-    
+
 
     if (!items || !Array.isArray(items) || items.length === 0) {
       return res.status(400).json({ message: "Items array with tryStatus is required" });
@@ -860,14 +840,14 @@ export const createFinalPaymentRazorpayOrder = async (req, res) => {
     );
 
     if (acceptedItems.length === 0) {
-      console.log(acceptedItems,"wwwwwqqqqq");
-      
+      console.log(acceptedItems, "wwwwwqqqqq");
+
       // All items returned - no payment needed
       order.orderStatus = "completed try phase";
 
-      order.customerDeliveryStatus ='trial_phase_ended';
+      order.customerDeliveryStatus = 'trial_phase_ended';
       order.deliveryRiderStatus = "completed try phase";
-      
+
       // Clear rider's currentOrderId since order is completed
       // if (order.deliveryRiderId) {
       //   await DeliveryRider.findByIdAndUpdate(
@@ -875,16 +855,16 @@ export const createFinalPaymentRazorpayOrder = async (req, res) => {
       //     { currentOrderId: null }
       //   );
       // }
-      
+
       await order.save();
       const io = getIO();
       emitOrderUpdate(io, orderId, order)
-      
+
       return res.status(200).json({
         success: true,
         message: "All items returned. No payment required.",
         orderId: order._id,
-        order:order,
+        order: order,
         requiresPayment: false,
       });
     }
@@ -897,8 +877,8 @@ export const createFinalPaymentRazorpayOrder = async (req, res) => {
       trialPhaseEnd: order.trialPhaseEnd,
     });
 
-    console.log(billing,"sdfdfs");
-    
+    console.log(billing, "sdfdfs");
+
 
     // === STEP 3: Save billing into DB ===
     order.finalBilling = {
@@ -970,51 +950,90 @@ export const verifyFinalPayment = async (req, res) => {
       return res.status(400).json({ message: "Invalid order" });
     }
 
-    // Final updates
+    // === Mark payment done ===
     order.razorpayPaymentId = razorpay_payment_id;
     order.paymentStatus = "paid";
-    
-    // Check if all items were accepted (no returned items)
+
     const returnedItems = order.items.filter(item => item.tryStatus === 'returned');
+    const acceptedItems = order.items.filter(item =>
+      item.tryStatus === 'accepted' || item.tryStatus === 'not-triable'
+    );
     const allItemsAccepted = returnedItems.length === 0;
-    
+
     if (allItemsAccepted) {
-      // All items were bought - order is fully completed
       order.orderStatus = "completed";
       order.customerDeliveryStatus = "completed";
       order.deliveryRiderStatus = "completed";
-      
-      // Clear rider's currentOrderId since order is completed
-      if (order.deliveryRiderId) {
-        await DeliveryRider.findByIdAndUpdate(
-          order.deliveryRiderId,
-          { currentOrderId: null }
-        );
-      }
     } else {
-      // Some items were returned - trial phase ended with partial purchase
+      // Partial/full return — rider still needs to go back to merchant
       order.orderStatus = "completed try phase";
       order.customerDeliveryStatus = "trial_phase_ended";
       order.deliveryRiderStatus = "completed try phase";
     }
 
+    // === Deduct stock ONLY for accepted/kept items ===
+    const stockUpdateErrors = [];
+    for (const item of acceptedItems) {
+      const result = await Product.updateOne(
+        { _id: item.productId, "variants._id": item.variantId },
+        { $inc: { "variants.$[variant].sizes.$[size].stock": -item.quantity } },
+        { arrayFilters: [{ "variant._id": item.variantId }, { "size.size": item.size }] }
+      );
+      if (result.modifiedCount === 0) {
+        stockUpdateErrors.push(item.productId);
+        console.warn(`Stock not updated for product ${item.productId} — may already be 0`);
+      }
+    }
+
+    // === Free up the rider if all items accepted (no return trip needed) ===
+    if (allItemsAccepted && order.deliveryRiderId) {
+      await DeliveryRider.findByIdAndUpdate(order.deliveryRiderId, {
+        currentOrderId: null,
+        isBusy: false,
+        isAvailable: true,
+      });
+    }
+
     await order.save();
 
+    const io = getIO();
+    emitOrderUpdate(io, orderId, order);
 
-     const io = getIO();
-     emitOrderUpdate(io, orderId, order);
-    // Optional: Trigger notifications, invoice, etc.
+    // 📱 Customer notification: "Payment Confirmed" (selective milestone #3)
+    notifyOrderEvent("customer", "payment_confirmed", {
+      userId: order.userId,
+      orderId: order._id,
+    });
+
+    if (allItemsAccepted) {
+      // 📱 Customer notification: "Order Complete" (selective milestone #4 — final)
+      notifyOrderEvent("customer", "delivery_complete", {
+        userId: order.userId,
+        orderId: order._id,
+      });
+    } else if (order.deliveryRiderId) {
+      // 📱 Rider notification: "Head back to merchant with returns"
+      notifyOrderEvent("rider", "return_started", {
+        riderId: order.deliveryRiderId,
+        orderId: order._id,
+      });
+    }
 
     return res.status(200).json({
       success: true,
-      message: "Final payment successful! Purchase confirmed.",
+      message: allItemsAccepted
+        ? "Payment confirmed! Your order is complete."
+        : "Payment confirmed. Rider will now return the remaining items.",
       orderId: order._id,
+      hasReturnItems: !allItemsAccepted,
+      stockWarnings: stockUpdateErrors.length > 0 ? stockUpdateErrors : undefined,
     });
   } catch (error) {
     console.error("Verify Final Payment Error:", error);
     return res.status(500).json({ message: "Server error" });
   }
 };
+
 
 
 

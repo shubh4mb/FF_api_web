@@ -1,18 +1,17 @@
 import { useState, useEffect } from 'react';
 import { Upload, X, Loader2, AlertCircle, Check } from 'lucide-react';
 import { useParams } from 'react-router-dom';
-// import { getCategoryById, getCategories, updateCategory } from '../../api/categories';
-// import CropperModal from '../../components/CropperModal';
+import { getCategoryById, getCategories, updateCategory } from '../../api/categories';
+import CropperModal from '../../components/CropperModal';
 
 export default function EditCategoryPage() {
   const { categoryId } = useParams();
-//   const id = 'REPLACE_WITH_YOUR_ROUTER_PARAM'; // Replace with useParams() or your routing solution
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
   const [allCategories, setAllCategories] = useState([]);
-  
+
   const [formData, setFormData] = useState({
     name: '',
     slug: '',
@@ -22,16 +21,17 @@ export default function EditCategoryPage() {
     isActive: true,
     sortOrder: 0,
   });
-  
+
   const [parentCategoryName, setParentCategoryName] = useState('');
-  
+
   const [images, setImages] = useState({
     image: { preview: '', file: null, existing: null },
+    logo: { preview: '', file: null, existing: null },
     title_banner: { preview: '', file: null, existing: null }
   });
 
-  const [showCropper, setShowCropper] = useState({ image: false, title_banner: false });
-  const [tempImageSrc, setTempImageSrc] = useState({ image: '', title_banner: '' });
+  const [showCropper, setShowCropper] = useState({ image: false, logo: false, title_banner: false });
+  const [tempImageSrc, setTempImageSrc] = useState({ image: '', logo: '', title_banner: '' });
 
   useEffect(() => {
     loadCategory();
@@ -41,52 +41,37 @@ export default function EditCategoryPage() {
   const loadCategory = async () => {
     try {
       setLoading(true);
-      // Uncomment and use your actual import
-      // const data = await getCategoryById(id);
-      
-      // Mock data - remove this when using real API
-      const data = {
-        _id: '123',
-        name: 'Electronics',
-        slug: 'electronics',
-        parentId: '1',
-        level: 1,
-        gender: 'unisex',
-        isActive: true,
-        sortOrder: 0,
-        image: {
-          public_id: 'sample_image',
-          url: 'https://via.placeholder.com/400x300?text=Category+Image'
-        },
-        title_banner: {
-          public_id: 'sample_banner',
-          url: 'https://via.placeholder.com/1200x300?text=Title+Banner'
-        }
-      };
-      
+      const res = await getCategoryById(categoryId);
+      const data = res.category || res;
+
       setFormData({
-        name: data.name,
-        slug: data.slug,
+        name: data.name || '',
+        slug: data.slug || '',
         parentId: data.parentId || '',
-        level: data.level,
+        level: data.level || 0,
         gender: data.gender || 'unisex',
-        isActive: data.isActive,
+        isActive: data.isActive !== undefined ? data.isActive : true,
         sortOrder: data.sortOrder || 0,
       });
-      
+
       setImages({
-        image: { 
-          preview: data.image?.url || '', 
-          file: null, 
-          existing: data.image 
+        image: {
+          preview: data.image?.url || '',
+          file: null,
+          existing: data.image
         },
-        title_banner: { 
-          preview: data.title_banner?.url || '', 
-          file: null, 
-          existing: data.title_banner 
+        logo: {
+          preview: data.logo?.url || '',
+          file: null,
+          existing: data.logo
+        },
+        title_banner: {
+          preview: data.title_banner?.url || '',
+          file: null,
+          existing: data.title_banner
         }
       });
-      
+
       setError('');
     } catch (err) {
       setError('Failed to load category data');
@@ -98,18 +83,7 @@ export default function EditCategoryPage() {
 
   const loadCategories = async () => {
     try {
-      // Uncomment and use your actual import
-      // const response = await getCategories();
-      
-      // Mock data - remove this when using real API
-      const response = {
-        categories: [
-          { _id: '1', name: 'Top Level Category 1', level: 0 },
-          { _id: '2', name: 'Top Level Category 2', level: 0 },
-          { _id: '3', name: 'Sub Category 1', level: 1, parentId: '1' }
-        ]
-      };
-      
+      const response = await getCategories();
       setAllCategories(response.categories || []);
     } catch (err) {
       console.error('Failed to load categories');
@@ -127,7 +101,7 @@ export default function EditCategoryPage() {
 
   const handleInputChange = (e) => {
     const { name, value, type, checked } = e.target;
-    
+
     if (type === 'checkbox') {
       setFormData(prev => ({ ...prev, [name]: checked }));
     } else if (name === 'sortOrder') {
@@ -135,7 +109,7 @@ export default function EditCategoryPage() {
     } else {
       setFormData(prev => ({ ...prev, [name]: value }));
     }
-    
+
     // Auto-generate slug from name
     if (name === 'name') {
       const slug = value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
@@ -150,7 +124,7 @@ export default function EditCategoryPage() {
         setError('Image size should be less than 5MB');
         return;
       }
-      
+
       const reader = new FileReader();
       reader.onloadend = () => {
         setTempImageSrc(prev => ({ ...prev, [imageType]: reader.result }));
@@ -184,33 +158,31 @@ export default function EditCategoryPage() {
       setError('Name and slug are required');
       return;
     }
-    
+
     try {
       setSaving(true);
       setError('');
       setSuccess(false);
-      
+
       const submitData = new FormData();
       submitData.append('name', formData.name);
       submitData.append('slug', formData.slug);
       submitData.append('gender', formData.gender);
       submitData.append('isActive', formData.isActive);
       submitData.append('sortOrder', formData.sortOrder);
-      
+
       if (images.image.file) {
         submitData.append('image', images.image.file);
+      }
+      if (images.logo.file) {
+        submitData.append('logo', images.logo.file);
       }
       if (images.title_banner.file) {
         submitData.append('title_banner', images.title_banner.file);
       }
-      
-      // Uncomment and use your actual import
-      // await updateCategory(id, submitData);
-      
-      // Mock API call - remove this when using real API
-      console.log('Submitting:', Object.fromEntries(submitData.entries()));
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
+
+      await updateCategory(categoryId, submitData);
+
       setSuccess(true);
       setTimeout(() => setSuccess(false), 3000);
     } catch (err) {
@@ -234,21 +206,21 @@ export default function EditCategoryPage() {
       <div className="max-w-3xl mx-auto">
         <div className="bg-white rounded-lg shadow-md p-6">
           <h1 className="text-2xl font-bold text-gray-900 mb-6">Edit Category</h1>
-          
+
           {error && (
             <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg flex items-start gap-3">
               <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
               <span className="text-red-800">{error}</span>
             </div>
           )}
-          
+
           {success && (
             <div className="mb-4 p-4 bg-green-50 border border-green-200 rounded-lg flex items-start gap-3">
               <Check className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
               <span className="text-green-800">Category updated successfully!</span>
             </div>
           )}
-          
+
           <div className="space-y-6">
             {/* Level - Read Only */}
             <div>
@@ -269,7 +241,7 @@ export default function EditCategoryPage() {
                 {parentCategoryName}
               </div>
             </div>
-            
+
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Category Name *
@@ -283,7 +255,7 @@ export default function EditCategoryPage() {
                 required
               />
             </div>
-            
+
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Slug *
@@ -332,7 +304,7 @@ export default function EditCategoryPage() {
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
             </div>
-            
+
             <div className="flex items-center gap-3">
               <input
                 type="checkbox"
@@ -345,7 +317,7 @@ export default function EditCategoryPage() {
                 Is Active
               </label>
             </div>
-            
+
             {/* Category Image */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -379,7 +351,41 @@ export default function EditCategoryPage() {
                 </label>
               )}
             </div>
-            
+
+            {/* Logo */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Logo
+              </label>
+              {images.logo.preview ? (
+                <div className="relative inline-block w-full">
+                  <img
+                    src={images.logo.preview}
+                    alt="Logo"
+                    className="w-full h-32 object-contain rounded-lg border border-gray-300 bg-gray-50"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => removeImage('logo')}
+                    className="absolute top-2 right-2 p-1 bg-red-600 text-white rounded-full hover:bg-red-700"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              ) : (
+                <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50">
+                  <Upload className="w-8 h-8 text-gray-400 mb-2" />
+                  <span className="text-sm text-gray-500">Click to upload logo</span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => handleImageChange(e, 'logo')}
+                    className="hidden"
+                  />
+                </label>
+              )}
+            </div>
+
             {/* Title Banner */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -414,37 +420,21 @@ export default function EditCategoryPage() {
               )}
             </div>
 
-            {/* Cropper Modals */}
-            {showCropper.image && tempImageSrc.image && (
-              <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-                <div className="bg-white p-4 rounded-lg">
-                  <p>CropperModal component goes here</p>
-                  <p className="text-sm text-gray-500">Import your CropperModal component</p>
-                  <button
-                    onClick={() => setShowCropper(prev => ({ ...prev, image: false }))}
-                    className="mt-2 px-4 py-2 bg-gray-200 rounded"
-                  >
-                    Close
-                  </button>
+            {/* Shared Cropper Modal */}
+            {['image', 'logo', 'title_banner'].map((type) => (
+              showCropper[type] && tempImageSrc[type] && (
+                <div key={type} className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                  <div className="bg-white p-4 rounded-lg w-full max-w-2xl">
+                    <CropperModal
+                      imageSrc={tempImageSrc[type]}
+                      onClose={() => setShowCropper(prev => ({ ...prev, [type]: false }))}
+                      onCropComplete={(blob) => handleCropComplete(blob, type)}
+                    />
+                  </div>
                 </div>
-              </div>
-            )}
+              )
+            ))}
 
-            {showCropper.title_banner && tempImageSrc.title_banner && (
-              <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-                <div className="bg-white p-4 rounded-lg">
-                  <p>CropperModal component goes here</p>
-                  <p className="text-sm text-gray-500">Import your CropperModal component</p>
-                  <button
-                    onClick={() => setShowCropper(prev => ({ ...prev, title_banner: false }))}
-                    className="mt-2 px-4 py-2 bg-gray-200 rounded"
-                  >
-                    Close
-                  </button>
-                </div>
-              </div>
-            )}
-            
             <div className="flex gap-3 pt-4">
               <button
                 type="button"
