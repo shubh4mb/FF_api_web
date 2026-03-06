@@ -73,6 +73,8 @@ export const phoneLogin = async (req, res) => {
 
     const userId = user._id
     // Send response
+    console.log("isNewUser", isNewUser);
+
     return res.status(200).json({
       message: "Login successful",
       userId,
