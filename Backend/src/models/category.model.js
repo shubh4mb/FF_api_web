@@ -40,6 +40,14 @@ const categorySchema = new mongoose.Schema({
     grandparentGender: { type: String, default: null },
   },
 
+  // ── Commission (set on level-0 root categories) ──
+  commissionPercentage: {
+    type: Number,
+    default: 0,
+    min: 0,
+    max: 100,
+  },
+
   isActive: {
     type: Boolean,
     default: true,

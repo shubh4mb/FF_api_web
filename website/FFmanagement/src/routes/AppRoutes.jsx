@@ -23,9 +23,7 @@ import EditCategory from '../pages/admin/EditCategory';
 import AdminLogin from '../pages/admin/AdminLogin';
 import AdminRegister from '../pages/admin/AdminRegister';
 import ProtectedAdminRoute from '../components/ProtectedAdminRoute';
-
-// Placeholder components for missing admin pages
-const Settings = () => <div>Settings Page</div>;
+import Settings from '../pages/admin/Settings';
 
 const AppRoutes = () => {
   return (

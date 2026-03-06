@@ -9,9 +9,9 @@ function calculateDistanceKm(lat1, lon1, lat2, lon2) {
   const a =
     Math.sin(dLat / 2) * Math.sin(dLat / 2) +
     Math.cos(lat1 * Math.PI / 180) *
-      Math.cos(lat2 * Math.PI / 180) *
-      Math.sin(dLon / 2) *
-      Math.sin(dLon / 2);
+    Math.cos(lat2 * Math.PI / 180) *
+    Math.sin(dLon / 2) *
+    Math.sin(dLon / 2);
 
   return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
 }
@@ -26,9 +26,15 @@ function calculateDistanceKm(lat1, lon1, lat2, lon2) {
 // total = distance * 22.5 + 10
 // ----------------------------
 
-export function calculateDeliveryCharge(userCoords, merchantCoords) {
+export function calculateDeliveryCharge({
+  userCoords,
+  merchantCoords,
+  deliveryPerKmRate = 12,
+  returnPerKmRate = 7,
+  waitingCharge = 10
+}) {
   if (!userCoords?.length || !merchantCoords?.length) {
-    return { distanceKm: 0, deliveryCharge: 0 };
+    return { distanceKm: 0, deliveryCharge: 0, returnCharge: 0, estimatedTime: 0 };
   }
 
   const userLat = userCoords[1];
@@ -40,9 +46,12 @@ export function calculateDeliveryCharge(userCoords, merchantCoords) {
   const distanceKm = calculateDistanceKm(userLat, userLng, shopLat, shopLng);
   const roundedDistance = Number(distanceKm.toFixed(2));
 
-  // Charge Calculation
-  const charge = roundedDistance * 18 + 10;
-  const roundedCharge = Math.ceil(charge);
+  // Charge Calculation using config
+  const dCharge = roundedDistance * deliveryPerKmRate + waitingCharge;
+  const deliveryCharge = Math.ceil(dCharge);
+
+  const rCharge = roundedDistance * returnPerKmRate;
+  const returnCharge = Math.ceil(rCharge);
 
   // Estimated Time Calculation (minutes)
   // Rider to pickup: 15 mins base + 3 mins per km
@@ -53,7 +62,8 @@ export function calculateDeliveryCharge(userCoords, merchantCoords) {
 
   return {
     distanceKm: roundedDistance,
-    deliveryCharge: roundedCharge,
+    deliveryCharge,
+    returnCharge,
     estimatedTime
   };
 }

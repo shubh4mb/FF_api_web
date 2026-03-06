@@ -20,6 +20,7 @@ export default function EditCategoryPage() {
     gender: 'unisex',
     isActive: true,
     sortOrder: 0,
+    commissionPercentage: 0,
   });
 
   const [parentCategoryName, setParentCategoryName] = useState('');
@@ -52,6 +53,7 @@ export default function EditCategoryPage() {
         gender: data.gender || 'unisex',
         isActive: data.isActive !== undefined ? data.isActive : true,
         sortOrder: data.sortOrder || 0,
+        commissionPercentage: data.commissionPercentage || 0,
       });
 
       setImages({
@@ -106,6 +108,8 @@ export default function EditCategoryPage() {
       setFormData(prev => ({ ...prev, [name]: checked }));
     } else if (name === 'sortOrder') {
       setFormData(prev => ({ ...prev, [name]: parseInt(value) }));
+    } else if (name === 'commissionPercentage') {
+      setFormData(prev => ({ ...prev, [name]: parseFloat(value) || 0 }));
     } else {
       setFormData(prev => ({ ...prev, [name]: value }));
     }
@@ -170,6 +174,10 @@ export default function EditCategoryPage() {
       submitData.append('gender', formData.gender);
       submitData.append('isActive', formData.isActive);
       submitData.append('sortOrder', formData.sortOrder);
+
+      if (formData.level === 0) {
+        submitData.append('commissionPercentage', formData.commissionPercentage);
+      }
 
       if (images.image.file) {
         submitData.append('image', images.image.file);
@@ -241,6 +249,26 @@ export default function EditCategoryPage() {
                 {parentCategoryName}
               </div>
             </div>
+
+            {/* Commission Percentage (only if Top Level) */}
+            {formData.level === 0 && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Commission Percentage (%) *
+                </label>
+                <input
+                  type="number"
+                  name="commissionPercentage"
+                  value={formData.commissionPercentage}
+                  onChange={handleInputChange}
+                  min="0"
+                  max="100"
+                  step="0.01"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+                <p className="mt-1 text-sm text-gray-500">Used to calculate platform fee on product sales in this category.</p>
+              </div>
+            )}
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">

@@ -48,14 +48,18 @@ export const createRazorpayOrder = async (req, res) => {
 
     const merchantCoords = merchant.address.location.coordinates;
 
-    // === DELIVERY CHARGE USING HELPER ===
-    const { distanceKm, deliveryCharge, estimatedTime } = calculateDeliveryCharge(
-      userCoords,
-      merchantCoords
-    );
+    // === FETCH APP CONFIG ===
+    const AppConfig = (await import("../../models/appConfig.model.js")).default;
+    const config = await AppConfig.getConfig();
 
-    // === CALCULATE RETURN CHARGE ===
-    const returnCharge = Math.round(distanceKm * 7.5);
+    // === DELIVERY CHARGE USING HELPER ===
+    const { distanceKm, deliveryCharge, returnCharge, estimatedTime } = calculateDeliveryCharge({
+      userCoords,
+      merchantCoords,
+      deliveryPerKmRate: config.deliveryPerKmRate,
+      returnPerKmRate: config.returnPerKmRate,
+      waitingCharge: config.waitingCharge
+    });
 
     // === CALCULATE TOTAL ===
     let totalAmount = 0;
@@ -88,11 +92,13 @@ export const createRazorpayOrder = async (req, res) => {
 
 
     // === FINAL PAYABLE ===
-    const finalPayable = totalAmount + deliveryCharge;
+    // Customer pays delivery + return charge upfront.
+    const totalDeliveryFee = deliveryCharge + returnCharge;
+    const finalPayable = totalAmount + totalDeliveryFee;
 
     // === RAZORPAY ORDER ===
     const razorpayOrder = await razorpay.orders.create({
-      amount: deliveryCharge * 100,
+      amount: totalDeliveryFee * 100, // Only pay delivery upfront
       currency: "INR",
       receipt: `receipt_${Date.now()}`,
       payment_capture: 1,
@@ -149,10 +155,12 @@ export const createRazorpayOrder = async (req, res) => {
     return res.status(200).json({
       success: true,
       razorpayOrderId: razorpayOrder.id,
-      amount: deliveryCharge * 100,
+      amount: totalDeliveryFee * 100,
       key_id: process.env.RAZORPAY_KEY_ID,
       orderId: pendingOrder._id,
       deliveryCharge,
+      returnCharge,
+      totalDeliveryFee,
       deliveryDistance: distanceKm,
       estimatedTime,
       contact: deliveryAddress.phone,
@@ -301,6 +309,12 @@ export const razorpayWebhook = async (req, res) => {
       if (order.finalBilling?.totalPayable > order.deliveryCharge) {
         order.orderStatus = "confirmed_purchase";
         order.customerDeliveryStatus = "completed";
+
+        // Dynamically import and run settlement
+        import("../../helperFns/orderSettlement.js").then(({ settleOrder }) => {
+          settleOrder(order).catch(err => console.error("Webhook Settlement failed", err));
+        });
+
       } else {
         order.orderStatus = "placed"; // advance payment
       }
@@ -746,6 +760,7 @@ export const verifyFinalPayment = async (req, res) => {
       }
     }
 
+    // ... existing code ...
     // === Free up the rider if all items accepted (no return trip needed) ===
     if (allItemsAccepted && order.deliveryRiderId) {
       await DeliveryRider.findByIdAndUpdate(order.deliveryRiderId, {
@@ -754,6 +769,11 @@ export const verifyFinalPayment = async (req, res) => {
         isAvailable: true,
       });
     }
+
+    // === SETTLE WALLETS FOR MERCHANT, RIDER, ADMIN ===
+    // Import dynamically to avoid circular dependencies if any
+    const { settleOrder } = await import("../../helperFns/orderSettlement.js");
+    await settleOrder(order).catch(err => console.error("Settlement failed non-fatally", err));
 
     await order.save();
 

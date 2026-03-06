@@ -60,7 +60,7 @@ router.patch("/notifications/read-all", authMiddleware, async (req, res) => {
 
 router.get("/wallet", authMiddleware, async (req, res) => {
     try {
-        const details = await getWalletDetails(req.user.userId);
+        const details = await getWalletDetails("user", req.user.userId);
         return res.status(200).json({ success: true, ...details });
     } catch (err) {
         console.error("Get wallet error:", err);

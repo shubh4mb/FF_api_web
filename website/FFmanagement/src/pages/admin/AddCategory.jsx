@@ -13,6 +13,7 @@ const AddCategory = () => {
     gender: "unisex",
     isActive: true,
     sortOrder: 0,
+    commissionPercentage: 0,
     image: null,
     logo: null,
     title_banner: null,
@@ -47,6 +48,8 @@ const AddCategory = () => {
       setFormData((prev) => ({ ...prev, [name]: checked }));
     } else if (name === "level" || name === "sortOrder") {
       setFormData((prev) => ({ ...prev, [name]: parseInt(value) }));
+    } else if (name === "commissionPercentage") {
+      setFormData((prev) => ({ ...prev, [name]: parseFloat(value) || 0 }));
     } else if (type === "file") {
       const file = files[0];
       if (file) {
@@ -143,6 +146,27 @@ const AddCategory = () => {
             <option value={2}>Sub-Sub Category</option>
           </select>
         </div>
+
+        {/* Commission Percentage (only if Top Level) */}
+        {formData.level === 0 && (
+          <div className="flex flex-col">
+            <label className="font-semibold text-gray-700 mb-1">Commission Percentage (%)</label>
+            <input
+              type="number"
+              name="commissionPercentage"
+              placeholder="e.g. 15"
+              value={formData.commissionPercentage}
+              onChange={handleChange}
+              min="0"
+              max="100"
+              step="0.01"
+              className="border p-2 rounded w-full"
+            />
+            <p className="text-xs text-gray-500 mt-1">
+              Used to calculate platform fee on product sales in this category.
+            </p>
+          </div>
+        )}
 
         {/* Top Category (for sub & sub-sub) */}
         {formData.level > 0 && (

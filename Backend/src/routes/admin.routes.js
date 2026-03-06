@@ -7,6 +7,7 @@ import { getBaseProducts, getVariants, getBaseProductById, addVariant, getProduc
 import { addTitleBanner } from '../controllers/adminControllers/titleBanner.controllers.js';
 import { addCart, getCart } from '../controllers/adminControllers/cart.controllers.js';
 import { addZone, getAllZones, checkZoneOverlap } from '../controllers/adminControllers/zone.controllers.js';
+import { getAppConfig, updateAppConfig } from '../controllers/adminControllers/appConfig.controllers.js';
 import { verifyAdmin } from '../middleware/adminAuth.middleware.js';
 
 const router = express.Router();
@@ -43,6 +44,9 @@ router.post('/zone/add', verifyAdmin, addZone);
 router.get('/zone', verifyAdmin, getAllZones);
 router.post('/zone/check-overlap', verifyAdmin, checkZoneOverlap);
 
+// ── App Config (delivery/return per-km rates) ──
+router.get('/config', verifyAdmin, getAppConfig);
+router.put('/config', verifyAdmin, updateAppConfig);
 
 
 export default router;

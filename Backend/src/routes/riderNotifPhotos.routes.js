@@ -5,7 +5,8 @@
 import express from "express";
 import Notification from "../models/notification.model.js";
 import Order from "../models/order.model.js";
-import { authMiddlewareRider } from "../middleware/jwtAuth.js";
+import { getWalletDetails } from "../helperFns/walletHelper.js";
+import { authMiddlewareRider, authMiddleware } from "../middleware/jwtAuth.js"; // authMiddleware added here
 import upload from "../middleware/multer.js";
 import { v2 as cloudinary } from "cloudinary";
 
@@ -104,5 +105,17 @@ router.post(
         }
     }
 );
+
+// ── Wallet ──
+
+router.get("/wallet", authMiddlewareRider, async (req, res) => {
+    try {
+        const details = await getWalletDetails("rider", req.riderId);
+        return res.status(200).json({ success: true, ...details });
+    } catch (err) {
+        console.error("Get rider wallet error:", err);
+        return res.status(500).json({ message: "Failed to fetch wallet" });
+    }
+});
 
 export default router;

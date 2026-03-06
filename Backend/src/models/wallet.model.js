@@ -27,23 +27,46 @@ const transactionSchema = new mongoose.Schema({
 
 const walletSchema = new mongoose.Schema(
     {
+        // ── Owner fields (exactly one should be set) ──
+        ownerType: {
+            type: String,
+            enum: ["user", "merchant", "rider", "admin"],
+            required: true,
+        },
         userId: {
             type: mongoose.Schema.Types.ObjectId,
             ref: "User",
-            required: true,
-            unique: true,
+            default: null,
         },
+        merchantId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "Merchant",
+            default: null,
+        },
+        deliveryRiderId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "DeliveryRider",
+            default: null,
+        },
+        adminId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "Admin",
+            default: null,
+        },
+
         balance: {
             type: Number,
             default: 0,
-            min: 0,
         },
         transactions: [transactionSchema],
     },
     { timestamps: true }
 );
 
-// Index for fast lookups
-walletSchema.index({ userId: 1 });
+// ── Sparse unique indexes (only one owner per wallet) ──
+walletSchema.index({ userId: 1 }, { unique: true, sparse: true });
+walletSchema.index({ merchantId: 1 }, { unique: true, sparse: true });
+walletSchema.index({ deliveryRiderId: 1 }, { unique: true, sparse: true });
+walletSchema.index({ adminId: 1 }, { unique: true, sparse: true });
 
 export default mongoose.models.Wallet || mongoose.model("Wallet", walletSchema);
