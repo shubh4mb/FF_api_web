@@ -12,6 +12,8 @@ import merchantRoutes from './routes/merchant.routes.js';
 import deliveryRiderRoutes from './routes/deliveryRider.routes.js';
 import userNotifWalletRoutes from './routes/userNotifWallet.routes.js';
 import riderNotifPhotosRoutes from './routes/riderNotifPhotos.routes.js';
+import adminBannerRoutes from './routes/adminBanner.routes.js';
+import userBannerRoutes from './routes/userBanner.routes.js';
 
 import { allowedOrigins } from './config/cors.js';
 import { getIO } from './config/socket.js';
@@ -63,7 +65,9 @@ app.get('/ping', (req, res) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/user', userRoutes);
 app.use('/api/user', userNotifWalletRoutes);             // notifications + wallet
+app.use('/api/user/banners', userBannerRoutes);          // public banners
 app.use('/api/admin', adminRoutes);
+app.use('/api/admin/banners', adminBannerRoutes);        // banner management
 app.use('/api/merchant', merchantRoutes);
 app.use('/api/deliveryRider', deliveryRiderRoutes);
 app.use('/api/deliveryRider', riderNotifPhotosRoutes);   // notifications + return photos

@@ -6,7 +6,7 @@ import * as turf from "@turf/turf";
  */
 export const addZone = async (req, res) => {
   try {
-    const { zoneName, city, state, boundary, centerCoordinaties } = req.body;
+    const { zoneName, city, state, boundary, centerCoordinates } = req.body;
 
     // 1️⃣ Convert to Turf polygon
     const turfPolygon = turf.polygon(boundary.coordinates);
@@ -23,7 +23,7 @@ export const addZone = async (req, res) => {
       state,
       boundary,                         // original
       deliveryBoundary: bufferedPolygon.geometry, // 🔥 new
-      centerCoordinaties,
+      centerCoordinates,
     });
 
     return res.status(201).json({
@@ -150,7 +150,7 @@ export const deleteZone = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-     message: "Zone deleted successfully",
+      message: "Zone deleted successfully",
       data: deletedZone,
     });
   } catch (error) {
@@ -165,7 +165,7 @@ export const deleteZone = async (req, res) => {
 
 export const checkZoneOverlap = async (req, res) => {
   console.log(req.body);
-  
+
   try {
     const { polygon } = req.body;
 
@@ -239,8 +239,8 @@ export const checkDeliveryAvailability = async (req, res) => {
         },
       },
     }).select("zoneName city state");
-    console.log("zone avail,",zone);
-    
+    console.log("zone avail,", zone);
+
 
     // 3️⃣ Not serviceable
     if (!zone) {

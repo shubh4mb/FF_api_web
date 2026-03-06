@@ -1,23 +1,23 @@
 import express from 'express'
-import upload , {handleMulterError} from '../middleware/multer.js'
-import { addBaseProduct , addVariant, getBaseProducts, getVariants,getCategories,updateVariant,updateSize, deleteVariantSizes, updateSizeCount} from '../controllers/merchantController/product.controllers.js';
-import { deleteVariant ,addBrand, getBrands, getBaseProductById ,  getProductsByMerchantId, uploadProductImage, deleteImage, deleteProduct, updatePrice,editProduct,editVariant,updateVariantSizeStock,updateMultipleVariantSizes,getAllBrands} from '../controllers/merchantController/product.controllers.js';
+import upload, { handleMulterError } from '../middleware/multer.js'
+import { addBaseProduct, addVariant, getBaseProducts, getVariants, getCategories, updateVariant, updateSize, deleteVariantSizes, updateSizeCount } from '../controllers/merchantController/product.controllers.js';
+import { deleteVariant, addBrand, getBrands, getBaseProductById, getProductsByMerchantId, uploadProductImage, deleteImage, deleteProduct, updatePrice, editProduct, editVariant, updateVariantSizeStock, updateMultipleVariantSizes, getAllBrands } from '../controllers/merchantController/product.controllers.js';
 
 import { addMerchant } from '../controllers/merchantController/merchant.controller.js';
-import {  loginMerchant ,updateMerchantShopDetails, updateMerchantBankDetails, updateMerchantOperatingHours, activateMerchant, registerPhone, sendEmailOtp, verifyEmailOtp, getMerchantByEmail } from '../controllers/merchantController/authControllers.js';
-import {getAllOrder, saveProductDetails} from '../controllers/merchantController/order.controllers.js';
-import {authMiddlewareMerchant} from '../middleware/jwtAuth.js';
-import {getPlacedOrder,orderRequestForMerchant,orderPacked} from '../controllers/merchantController/order.controllers.js';
-import { getMerchantById  } from '../controllers/merchantController/merchant.controller.js';
+import { loginMerchant, updateMerchantShopDetails, updateMerchantBankDetails, updateMerchantOperatingHours, activateMerchant, registerPhone, sendEmailOtp, verifyEmailOtp, getMerchantByEmail } from '../controllers/merchantController/authControllers.js';
+import { getAllOrder, saveProductDetails } from '../controllers/merchantController/order.controllers.js';
+import { authMiddlewareMerchant } from '../middleware/jwtAuth.js';
+import { getPlacedOrder, orderRequestForMerchant, orderPacked } from '../controllers/merchantController/order.controllers.js';
+import { getMerchantById } from '../controllers/merchantController/merchant.controller.js';
 
 const router = express.Router();
 
 router.post('/auth/send-email-otp', sendEmailOtp);
 router.post('/auth/verify-email-otp', verifyEmailOtp);
-router.get('/getMerchant',authMiddlewareMerchant,getMerchantById)
+router.get('/getMerchant', authMiddlewareMerchant, getMerchantById)
 // router.get('/:ema:merchantIdil',getMerchantByEmail)
 
-router.put("/:merchantId/shop-details", upload.single("logo"),handleMulterError, updateMerchantShopDetails);
+router.put("/:merchantId/shop-details", upload.single("logo"), handleMulterError, updateMerchantShopDetails);
 router.put("/:merchantId/bank-details", updateMerchantBankDetails);
 router.put("/:merchantId/operating-hours", updateMerchantOperatingHours);
 router.put("/:merchantId/activate", activateMerchant);
@@ -25,47 +25,52 @@ router.post('/login', loginMerchant);
 
 
 
-router.post('/brand/add',upload.single('logo'),handleMulterError,addBrand);
-router.get('/brand/get/',getBrands);
+router.post('/brand/add', upload.single('logo'), handleMulterError, addBrand);
+router.get('/brand/get/', getBrands);
 
-router.post('/addBaseProduct',addBaseProduct);
+router.post('/addBaseProduct', addBaseProduct);
 router.delete('/deleteProduct/:productId', deleteProduct);
 
-router.get('/getBaseProducts',getBaseProducts);
+router.get('/getBaseProducts', getBaseProducts);
 
-router.get('/getBaseProductById/:productId',getBaseProductById);
+router.get('/getBaseProductById/:productId', getBaseProductById);
 router.get('/fetchProductsByMerchantId/:merchantId', getProductsByMerchantId);
-router.get('/getVariants',getVariants);
-router.get('/getCategories',getCategories)
-router.get('/brand/getAllBrands',getAllBrands)
+router.get('/getVariants', getVariants);
+router.get('/getCategories', getCategories)
+router.get('/brand/getAllBrands', getAllBrands)
 
-router.post("/upload/image",upload.array("images", 5), handleMulterError,uploadProductImage )
+router.post("/upload/image", upload.array("images", 5), handleMulterError, uploadProductImage)
 router.delete('/deleteImage/:imageId', deleteImage);
 
-router.post('/addVariant/:productId',upload.array('images'),handleMulterError,addVariant);
+router.post('/addVariant/:productId', upload.array('images'), handleMulterError, addVariant);
 router.delete('/deleteVariant/:productId/:variantId', deleteVariant);
 router.delete("/deleteSizes/:productId/:variantId/:sizeId", deleteVariantSizes);
-router.patch("/updateVariant/:productId/:variantId",upload.array("images"),handleMulterError,updateVariant);
+router.patch("/updateVariant/:productId/:variantId", upload.array("images"), handleMulterError, updateVariant);
 router.put("/updateStock/:productId/:variantId/:sizeId", updateSize);
 router.put("/updateStock/:productId/:variantId/:sizeId", updateSizeCount);
 router.put("/updateStock/:productId/:variantId", updateSize);
 router.put("/updatePrice/:productId/:variantId", updatePrice);
 
-router.patch('/editProduct/:id',editProduct)
+router.patch('/editProduct/:id', editProduct)
 // router.patch('/editVariant/:productId/:variantId',editVariant)
-router.patch('/updateVariantSizeStock/:productId/:variantId/:sizeName',updateVariantSizeStock)
-router.patch('/updateMultipleVariantSizes/:productId/:variantId',updateMultipleVariantSizes)
+router.patch('/updateVariantSizeStock/:productId/:variantId/:sizeName', updateVariantSizeStock)
+router.patch('/updateMultipleVariantSizes/:productId/:variantId', updateMultipleVariantSizes)
 
 
-router.get('/getAllOrders',authMiddlewareMerchant,getAllOrder)
-router.put('/orderRequestForMerchant/:orderId',authMiddlewareMerchant,orderRequestForMerchant)
-router.get('/getPlacedOrder',authMiddlewareMerchant,getPlacedOrder)
-router.post('/order/packed/:orderId',authMiddlewareMerchant,orderPacked)
+router.get('/getAllOrders', authMiddlewareMerchant, getAllOrder)
+router.put('/orderRequestForMerchant/:orderId', authMiddlewareMerchant, orderRequestForMerchant)
+router.get('/getPlacedOrder', authMiddlewareMerchant, getPlacedOrder)
+router.post('/order/packed/:orderId', authMiddlewareMerchant, orderPacked)
 
 router.put('/products/:id/details', saveProductDetails);
 
 // router.post('/updateOrderStatus',updateOrderStatus);
 // router.post('orderPacked',authMiddlewareMerchant,orderPacked)  
 
-router.post('/add',addMerchant)
+router.post('/add', addMerchant)
+
+// ── Reviews ──
+import { getMerchantOwnReviews } from '../controllers/userControllers/review.controllers.js';
+router.get('/reviews', authMiddlewareMerchant, getMerchantOwnReviews);
+
 export default router;

@@ -7,6 +7,23 @@ const axiosInstance = axios.create({
 });
 axiosInstance.defaults.headers.common['ngrok-skip-browser-warning'] = 'true';
 
+// Add a request interceptor to attach JWT token to admin requests
+axiosInstance.interceptors.request.use(
+  (config) => {
+    // Check if the request is going to an admin endpoint
+    if (config.url && config.url.includes('/admin')) {
+      const token = localStorage.getItem('adminToken');
+      if (token) {
+        config.headers['Authorization'] = `Bearer ${token}`;
+      }
+    }
+    return config;
+  },
+  (error) => {
+    return Promise.reject(error);
+  }
+);
+
 // Add a response interceptor for global error handling
 axiosInstance.interceptors.response.use(
   (response) => {

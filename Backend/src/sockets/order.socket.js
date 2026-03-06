@@ -1,39 +1,50 @@
 import { getMerchantMeta } from "../helperFns/merchantFns.js";
 
 export const registerOrderSockets = (io, socket) => {
-  console.log("Registering order sockets for:", socket.id);
-
   socket.on("joinOrderRoom", (orderId) => {
-    const roomName = orderId;
-    console.log(roomName, "roomName from join");
-    socket.join(roomName);
-    console.log(`✅ Socket ${socket.id} joined room ${roomName}`);
+    socket.join(orderId);
   });
 
   socket.on("disconnect", () => {
-    console.log(`❌ Socket ${socket.id} disconnected from order handling`);
+    // cleanup handled by socket.io automatically
   });
-
 };
 
 
 export const emitOrderUpdate = async (io, orderId, order) => {
-  console.log(orderId, "asdasdasdas nn");
+  // Project only status-relevant fields to reduce payload size
+  const payload = {
+    _id: order._id,
+    orderStatus: order.orderStatus,
+    deliveryRiderStatus: order.deliveryRiderStatus,
+    customerDeliveryStatus: order.customerDeliveryStatus,
+    paymentStatus: order.paymentStatus,
+    otp: order.otp,
+    items: order.items,
+    totalAmount: order.totalAmount,
+    finalBilling: order.finalBilling,
+    deliveryRiderDetails: order.deliveryRiderDetails,
+    merchantDetails: order.merchantDetails,
+    deliveryCharge: order.deliveryCharge,
+    merchantId: order.merchantId,
+    userId: order.userId,
+    deliveryRiderId: order.deliveryRiderId,
+    deliveryLocation: order.deliveryLocation,
+    pickupLocation: order.pickupLocation,
+    trialPhaseStart: order.trialPhaseStart,
+    trialPhaseEnd: order.trialPhaseEnd,
+    trialPhaseDuration: order.trialPhaseDuration,
+  };
 
   const merchantId = order.merchantId?.toString();
   if (merchantId) {
     const meta = await getMerchantMeta(merchantId);
     if (meta && meta.isOnline) {
-      io.to(`merchant:${merchantId}`).emit("orderUpdate", order);
-    } else {
-      console.log(`Merchant ${merchantId} is offline`);
+      io.to(`merchant:${merchantId}`).emit("orderUpdate", payload);
     }
   }
 
-  console.log("sdajfsdajf dasf");
-
-  // Emit to orderId room for other roles (e.g., user, rider)
-  io.to(orderId).emit("orderUpdate", order);
-  // console.log(`Emitted order update to room ${orderId}`);
+  // Emit to orderId room for other roles (user, rider)
+  io.to(orderId).emit("orderUpdate", payload);
 };
 

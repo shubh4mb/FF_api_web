@@ -35,12 +35,16 @@ export const addMerchant = asyncHandler(async (req, res) => {
 });
 
 export const getMerchants = asyncHandler(async (req, res) => {
-  const merchants = await Merchant.find({ isActive: true });
+  const merchants = await Merchant.find({ isActive: true })
+    .select('shopName logo rating reviewCount address operatingHours genderCategory zoneName zoneId stats isOnline')
+    .lean();
   return res.status(200).json(new ApiResponse(200, { merchants }, "Merchants retrieved successfully"));
 });
 
 export const getMerchantById = asyncHandler(async (req, res) => {
-  const merchant = await Merchant.findById(req.params.id);
+  const merchant = await Merchant.findById(req.params.id)
+    .select('shopName logo rating reviewCount address operatingHours genderCategory zoneName zoneId stats isOnline shopDescription phoneNumber ownerName')
+    .lean();
   if (!merchant) {
     throw new ApiError(404, "Merchant not found");
   }

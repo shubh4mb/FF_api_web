@@ -52,6 +52,9 @@ const userSchema = new mongoose.Schema({
   lastLogin: {
     type: Date,
   },
+
+  rating: { type: Number, default: 0 },
+  reviewCount: { type: Number, default: 0 },
 }, { timestamps: true });
 
 export default mongoose.models.User || mongoose.model('User', userSchema);

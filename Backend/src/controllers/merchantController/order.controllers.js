@@ -86,16 +86,21 @@ export const orderRequestForMerchant = async (req, res) => {
     if (status === "accept") {
       order.orderStatus = "accepted";
 
-      const pickupCoordinates = order.pickupLocation?.coordinates || [76.3244129, 9.9371151];
+      // Validate that order has required coordinates
+      if (!order.pickupLocation?.coordinates?.length || !order.deliveryLocation?.coordinates?.length) {
+        return res.status(400).json({ message: "Order missing pickup or delivery coordinates" });
+      }
+
+      const pickupCoordinates = order.pickupLocation.coordinates;
       const pickupLocation = {
-        lat: pickupCoordinates[1] ?? 9.9371151,
-        lng: pickupCoordinates[0] ?? 76.3244129,
+        lat: pickupCoordinates[1],
+        lng: pickupCoordinates[0],
       };
 
-      const customerCoordinates = order.deliveryLocation?.coordinates || [76.3244129, 9.9371151];
+      const customerCoordinates = order.deliveryLocation.coordinates;
       const customerLocation = {
-        lat: customerCoordinates[1] ?? 9.9371151,
-        lng: customerCoordinates[0] ?? 76.3244129,
+        lat: customerCoordinates[1],
+        lng: customerCoordinates[0],
       };
 
       const merchant = await Merchant.findById(order.merchantId);
@@ -213,7 +218,7 @@ export const orderPacked = async (req, res) => {
       });
     }
 
-    return res.status(200).json({ message: "Order packed & OTP generated", order });
+    return res.status(200).json({ message: "Order packed & OTP generated", otp: order.otp });
   } catch (error) {
     return res.status(500).json({ message: "Error updating order status" });
   }

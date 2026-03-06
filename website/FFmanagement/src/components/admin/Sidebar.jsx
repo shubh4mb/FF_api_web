@@ -19,10 +19,9 @@ function Sidebar() {
                 to="/admin"
                 end
                 className={({ isActive }) =>
-                  `block px-4 py-2 rounded-lg transition-colors ${
-                    isActive
-                      ? 'bg-sky-400 text-slate-800 font-semibold'
-                      : 'hover:bg-sky-700 hover:text-sky-400'
+                  `block px-4 py-2 rounded-lg transition-colors ${isActive
+                    ? 'bg-sky-400 text-slate-800 font-semibold'
+                    : 'hover:bg-sky-700 hover:text-sky-400'
                   }`
                 }
               >
@@ -33,10 +32,9 @@ function Sidebar() {
               <NavLink
                 to="/admin/category"
                 className={({ isActive }) =>
-                  `block px-4 py-2 rounded-lg transition-colors ${
-                    isActive
-                      ? 'bg-sky-400 text-slate-800 font-semibold'
-                      : 'hover:bg-sky-700 hover:text-sky-400'
+                  `block px-4 py-2 rounded-lg transition-colors ${isActive
+                    ? 'bg-sky-400 text-slate-800 font-semibold'
+                    : 'hover:bg-sky-700 hover:text-sky-400'
                   }`
                 }
               >
@@ -47,24 +45,22 @@ function Sidebar() {
               <NavLink
                 to="/admin/merchants"
                 className={({ isActive }) =>
-                  `block px-4 py-2 rounded-lg transition-colors ${
-                    isActive
-                      ? 'bg-sky-400 text-slate-800 font-semibold'
-                      : 'hover:bg-sky-700 hover:text-sky-400'
+                  `block px-4 py-2 rounded-lg transition-colors ${isActive
+                    ? 'bg-sky-400 text-slate-800 font-semibold'
+                    : 'hover:bg-sky-700 hover:text-sky-400'
                   }`
                 }
               >
                 Merchants
               </NavLink>
-            </li>    
+            </li>
             <li>
               <NavLink
                 to="/admin/add-products"
                 className={({ isActive }) =>
-                  `block px-4 py-2 rounded-lg transition-colors ${
-                    isActive
-                      ? 'bg-sky-400 text-slate-800 font-semibold'
-                      : 'hover:bg-sky-700 hover:text-sky-400'
+                  `block px-4 py-2 rounded-lg transition-colors ${isActive
+                    ? 'bg-sky-400 text-slate-800 font-semibold'
+                    : 'hover:bg-sky-700 hover:text-sky-400'
                   }`
                 }
               >
@@ -75,10 +71,9 @@ function Sidebar() {
               <NavLink
                 to="/admin/products"
                 className={({ isActive }) =>
-                  `block px-4 py-2 rounded-lg transition-colors ${
-                    isActive
-                      ? 'bg-sky-400 text-slate-800 font-semibold'
-                      : 'hover:bg-sky-700 hover:text-sky-400'
+                  `block px-4 py-2 rounded-lg transition-colors ${isActive
+                    ? 'bg-sky-400 text-slate-800 font-semibold'
+                    : 'hover:bg-sky-700 hover:text-sky-400'
                   }`
                 }
               >
@@ -89,10 +84,9 @@ function Sidebar() {
               <NavLink
                 to="/admin/add-merchant"
                 className={({ isActive }) =>
-                  `block px-4 py-2 rounded-lg transition-colors ${
-                    isActive
-                      ? 'bg-sky-400 text-slate-800 font-semibold'
-                      : 'hover:bg-sky-700 hover:text-sky-400'
+                  `block px-4 py-2 rounded-lg transition-colors ${isActive
+                    ? 'bg-sky-400 text-slate-800 font-semibold'
+                    : 'hover:bg-sky-700 hover:text-sky-400'
                   }`
                 }
               >
@@ -103,10 +97,9 @@ function Sidebar() {
               <NavLink
                 to="/admin/add-brand"
                 className={({ isActive }) =>
-                  `block px-4 py-2 rounded-lg transition-colors ${
-                    isActive
-                      ? 'bg-sky-400 text-slate-800 font-semibold'
-                      : 'hover:bg-sky-700 hover:text-sky-400'
+                  `block px-4 py-2 rounded-lg transition-colors ${isActive
+                    ? 'bg-sky-400 text-slate-800 font-semibold'
+                    : 'hover:bg-sky-700 hover:text-sky-400'
                   }`
                 }
               >
@@ -115,12 +108,24 @@ function Sidebar() {
             </li>
             <li>
               <NavLink
+                to="/admin/banners"
+                className={({ isActive }) =>
+                  `block px-4 py-2 rounded-lg transition-colors ${isActive
+                    ? 'bg-sky-400 text-slate-800 font-semibold'
+                    : 'hover:bg-sky-700 hover:text-sky-400'
+                  }`
+                }
+              >
+                Banners
+              </NavLink>
+            </li>
+            <li>
+              <NavLink
                 to="/admin/settings"
                 className={({ isActive }) =>
-                  `block px-4 py-2 rounded-lg transition-colors ${
-                    isActive
-                      ? 'bg-sky-400 text-slate-800 font-semibold'
-                      : 'hover:bg-sky-700 hover:text-sky-400'
+                  `block px-4 py-2 rounded-lg transition-colors ${isActive
+                    ? 'bg-sky-400 text-slate-800 font-semibold'
+                    : 'hover:bg-sky-700 hover:text-sky-400'
                   }`
                 }
               >

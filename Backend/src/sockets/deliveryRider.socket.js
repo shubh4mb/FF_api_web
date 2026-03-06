@@ -78,9 +78,7 @@ export const registerDeliveryRiderSockets = (io, socket) => {
     const isFirstUpdate = !currentMeta || Object.keys(currentMeta).length === 0;
 
     // THIS IS THE MAGIC LINE — GET ZONE FROM YOUR DB
-    // const zoneId = await inferZone(lat, lng);
-    const zoneId = "Kadavanthara"
-    console.log(`Rider ${riderId} detected in zone: ${zoneId}`);
+    const zoneId = await inferZone(lat, lng);
 
     const newMeta = {
       isOnline: true,

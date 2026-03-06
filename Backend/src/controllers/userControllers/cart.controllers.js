@@ -8,7 +8,7 @@ import { calculateDeliveryCharge } from '../../helperFns/deliveryChargeFns.js'
 export const addToCart = async (req, res) => {
   const userId = req.user.userId; // from JWT middleware
   const { productId, variantId, size, quantity, merchantId, image } = req.body;
-  console.log(req.body.image.url,'fejihfeneveni');
+
 
   if (!productId || !variantId || !size || !quantity || !merchantId || !image) {
     return res.status(400).json({ message: "Missing required fields" });
@@ -88,15 +88,11 @@ export const addToCart = async (req, res) => {
 
 export const getCartCount = async (req, res) => {
   const userId = req.user.userId;
-  // console.log("hitting", userId);
 
   try {
     const cart = await Cart.findOne({ userId })
-      .populate("items.productId")
-      .populate("items.merchantId");
-
-      // console.log(cart,'cartbjcebjcjcenj');
-      
+      .populate("items.productId", "variants")
+      .lean();
 
     if (!cart) {
       return res.status(200).json({
@@ -107,7 +103,6 @@ export const getCartCount = async (req, res) => {
       });
     }
 
-    // 🔁 Attach matching variant data to each item
     const itemsWithVariant = cart.items.map((item) => {
       const product = item.productId;
       const variant = product?.variants?.find(
@@ -115,7 +110,7 @@ export const getCartCount = async (req, res) => {
       );
 
       return {
-        ...item.toObject(),
+        ...item,
         price: variant?.price || null,
         mrp: variant?.mrp || null,
       };
@@ -128,110 +123,24 @@ export const getCartCount = async (req, res) => {
       items: itemsWithVariant,
     });
   } catch (err) {
-    console.error("Get cart error:", err);
+    console.error("Get cart count error:", err.message);
     res.status(500).json({ message: "Server error" });
   }
 };
 
-// export const getCart = async (req, res) => {
-//   const userId = req.user.userId;
-//   // console.log(req.body);
-  
-//   const { addressId } = req.params;
-//   console.log(addressId,"fsdfjskdfjskd");
-  
 
-//   try {
-//     // 1️⃣ Fetch cart
-//     const cart = await Cart.findOne({ userId })
-//       .populate("items.productId")
-//       .populate("items.merchantId");
 
-//     if (!cart) {
-//       return res.status(200).json({
-//         success: true,
-//         totalItems: 0,
-//         items: [],
-//         deliveryDetails: null,
-//       });
-//     }
-
-//     // 2️⃣ Fetch delivery address
-//     let selectedAddress = null;
-//     if (addressId) {
-//       selectedAddress = await Address.findById(addressId);
-//     }
-
-//     if (!selectedAddress) {
-//       return res.status(400).json({
-//         success: false,
-//         message: "Select a valid address",
-//       });
-//     }
-
-//     const userLat = selectedAddress.location.coordinates[1];
-//     const userLng = selectedAddress.location.coordinates[0];
-
-//     // 3️⃣ Build items with variant price + merchant delivery charge
-//     let merchantDeliveryMap = {}; // group by merchant
-
-//     const itemsWithVariant = cart.items.map((item) => {
-//       const product = item.productId;
-//       const merchant = item.merchantId;
-
-//       const variant = product?.variants?.find(
-//         (v) => v._id.toString() === item.variantId.toString()
-//       );
-
-//       // If merchant not calculated yet, compute distance & charge using helper
-//       if (!merchantDeliveryMap[merchant._id]) {
-//         const userCoords = [userLng, userLat]; // [longitude, latitude]
-//         const merchantCoords = [merchant.address.location.coordinates[0], merchant.address.location.coordinates[1]];
-
-//         const { distanceKm, deliveryCharge } = calculateDeliveryCharge(userCoords, merchantCoords);
-
-//         merchantDeliveryMap[merchant._id] = {
-//           merchantId: merchant._id,
-//           shopName: merchant.shopName, 
-//           distanceKm,
-//           deliveryCharge,
-//         };
-//       }
-
-//       return {
-//         ...item.toObject(),
-//         price: variant?.price || null,
-//         mrp: variant?.mrp || null,
-//         merchantDelivery: merchantDeliveryMap[merchant._id],
-//       };
-//     });
-
-//     // 4️⃣ Response
-//     res.status(200).json({
-//       success: true,
-//       totalItems: itemsWithVariant.length,
-//       items: itemsWithVariant,
-//       deliveryDetails: Object.values(merchantDeliveryMap), // list of merchants & charges
-//       address: selectedAddress,
-//     });
-//   } catch (err) {
-//     console.error("Get cart error:", err);
-//     res.status(500).json({ message: "Server error" });
-//   }
-// };
 
 export const getCart = async (req, res) => {
   const userId = req.user.userId;
-  const { addressId , serviceable } = req.body;
-  console.log(addressId,serviceable,"asdasdasd");
-  
+  const { addressId, serviceable } = req.body;
 
 
   try {
     // 1️⃣ Fetch cart
     const cart = await Cart.findOne({ userId })
-      .populate("items.productId")
-      .populate("items.merchantId");
+      .populate("items.productId", "name variants")
+      .populate("items.merchantId", "shopName address.location");
 
     if (!cart) {
       return res.status(200).json({
@@ -299,7 +208,7 @@ export const getCart = async (req, res) => {
 
         merchantDeliveryMap[merchant._id] = {
           merchantId: merchant._id,
-          shopName: merchant.shopName, 
+          shopName: merchant.shopName,
           distanceKm,
           deliveryCharge,
         };
@@ -324,9 +233,9 @@ export const getCart = async (req, res) => {
     });
   } catch (err) {
     console.error("Get cart error:", err);
-    res.status(500).json({ 
+    res.status(500).json({
       success: false,
-      message: "Server error" 
+      message: "Server error"
     });
   }
 };
@@ -354,18 +263,17 @@ export const clearCart = async (req, res) => {
 
 export const deleteCartItem = async (req, res) => {
   try {
-    const { itemId } = req.params; // cart item id
+    const { itemId } = req.params;
 
-    console.log(itemId,'itemIditemId');
-    console.log('Deleting cart item with:', { itemId });
 
-      const updatedCart = await Cart.findOneAndUpdate(
-        { "items._id": itemId },      // Filter cart that contains that specific item _id
-        {
-          $pull: { items: { _id: itemId } } // Remove by item _id
-        },
-        { new: true }
-      );
+
+    const updatedCart = await Cart.findOneAndUpdate(
+      { "items._id": itemId },      // Filter cart that contains that specific item _id
+      {
+        $pull: { items: { _id: itemId } } // Remove by item _id
+      },
+      { new: true }
+    );
 
     if (!updatedCart) {
       return res.status(404).json({
@@ -391,12 +299,13 @@ export const updateCartQuantity = async (req, res) => {
     const userId = req.user.userId; // assuming authMiddleware sets this
     const { cartId, quantity } = req.body;
 
-    console.log('Received data:', { userId, cartId, quantity });
+
+
 
     if (!cartId || typeof quantity !== "number" || quantity < 1) {
       return res.status(400).json({ success: false, message: 'Missing or invalid cartId or quantity' });
     }
-    
+
     // Find the user's cart
     const cart = await Cart.findOne({ userId });
     if (!cart) {
@@ -430,9 +339,9 @@ export const updateCartQuantity = async (req, res) => {
 
 
 
-  
 
 
-  
 
-  
+
+
+

@@ -45,4 +45,9 @@ router.post("/order/endTrialPhase", authMiddlewareRider, endTrialPhase);        
 router.post("/order/returnVerification", authMiddlewareRider, verifyOtpOnReturn);          // return OTP verify
 router.post("/order/reachedReturnMerchant", authMiddlewareRider, reachedReturnMerchant);   // ✅ was missing!
 
+// ── Reviews ──
+import { createRiderReview, deleteReview } from '../controllers/userControllers/review.controllers.js';
+router.post('/review', authMiddlewareRider, createRiderReview);
+router.delete('/review/:reviewId', authMiddlewareRider, deleteReview);
+
 export default router;

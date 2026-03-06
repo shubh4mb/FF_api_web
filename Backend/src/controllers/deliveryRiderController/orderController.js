@@ -147,15 +147,15 @@ export const reachedPickupLocation = async (req, res) => {
 
       return res.status(403).json({ message: 'Not authorized for this order' });
     }
+    // Validate pickup location exists on order
+    if (!order.pickupLocation?.coordinates?.length) {
+      return res.status(400).json({ message: 'Order pickup location not set' });
+    }
+    const [pickupLng, pickupLat] = order.pickupLocation.coordinates;
     const pickupLocation = {
-      latitude: 9.9675883,
-      longitude: 76.2984220
+      latitude: pickupLat,
+      longitude: pickupLng,
     };
-    // if (!order.pickupLocation || !order.pickupLocation.latitude || !order.pickupLocation.longitude) {
-    //   console.log(order.pickupLocation,order.pickupLocation.latitude,order.pickupLocation.longitude);
-
-    //   return res.status(400).json({ message: 'Order pickup location not set' });
-    // }
 
     // Calculate distance
     const distance = getDistance(
@@ -165,12 +165,11 @@ export const reachedPickupLocation = async (req, res) => {
       pickupLocation.longitude
     );
 
-    // Check if within 50 meters
-    // if (distance > 200) {
-    //   return res.status(400).json({ 
-    //     message: `Rider is ${distance.toFixed(2)} meters from pickup location, must be within 50 meters` 
-    //   });
-    // }
+    // Soft check — log but don't block (GPS can be inaccurate)
+    if (distance > 500) {
+      console.warn(`Rider ${distance.toFixed(0)}m from pickup — may not be at location`);
+    }
+
 
     // Update order status
     order.deliveryRiderStatus = 'arrived at pickup';
@@ -294,7 +293,7 @@ export const handOutProducts = async (req, res) => {
       trialPhaseDuration: order.trialPhaseDuration,
     });
 
-    return res.status(200).json({ message: "Order status updated", order });
+    return res.status(200).json({ message: "Order status updated" });
   } catch (error) {
     console.error("Error updating order status:", error);
     return res.status(500).json({ message: "Error updating order status" });
@@ -382,7 +381,7 @@ export const verifyOtpOnReturn = async (req, res) => {
       orderId: order._id,
     });
 
-    res.status(200).json({ message: "Return OTP verified. Order complete.", order });
+    res.status(200).json({ message: "Return OTP verified. Order complete." });
   } catch (error) {
     console.error("Error in verifyOtpOnReturn:", error);
     res.status(500).json({ message: "❌ " + error.message });

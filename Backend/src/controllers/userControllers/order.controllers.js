@@ -15,246 +15,8 @@ import { enqueueOrder } from "../../helperFns/orderFns.js";
 import { notifyOrderEvent } from "../../helperFns/notificationHelper.js";
 import mongoose from 'mongoose';
 
-// export const createOrder = async (req, res) => {
-//   try {
-//     const userId = req.user.userId;
-
-//     // 1. Get user's cart
-//     const cart = await Cart.findOne({ userId });
-//     if (!cart || cart.items.length === 0) {
-//       return res.status(400).json({ error: 'Cart is empty' });
-//     }
-
-//     // 2. Generate order items and calculate total
-//     let totalAmount = 0;
-//     const orderItems = [];
-
-//     for (let item of cart.items) {
-//       // Optional: You can fetch product price from DB
-//       // const product = await Product.findById(item.productId);
-//       // const variant = product.variants.id(item.variantId);
-//       // const price = variant.price;
-
-//       const price = 100; // TODO: replace with actual price from DB or cart item
-
-//       orderItems.push({
-//         productId: item.productId,
-//         variantId: item.variantId,
-//         image: item.image,
-//         size: item.size,
-//         quantity: item.quantity,
-//         price: price,
-//         merchantId: item.merchantId,
-//       });
-
-//       totalAmount += price * item.quantity;
-//     }
-
-//     // 3. Create order document
-//     const newOrder = new Order({
-//       userId,
-//       items: orderItems,
-//       totalAmount,
-//       status: 'placed',
-//       paymentStatus: 'pending' // or 'paid' if using fake payment
-//     });
-
-//     await newOrder.save();
-
-//     // 4. Clear cart (optional)
-//     cart.items = [];
-//     await cart.save();
-
-//     return res.status(201).json({ message: 'Order placed successfully', order: newOrder });
-
-//   } catch (error) {
-//     console.error("Order creation error:", error);
-//     return res.status(500).json({ error: 'Something went wrong while placing the order' });
-//   }
-// };
-
-// export const createOrder = async (req, res) => {
-//   // console.log(req.body.deliveryCharge, 'body');
-//   // let amount = req.body.deliveryCharge;
-//   let amount = 100;
 
 
-//   try {
-//     // Create Razorpay order
-//     // const razorpayOrder = await Razorpay.orders.create({
-//     //   amount,
-//     //   currency: "INR",
-//     //   receipt: `order_${Date.now()}`,
-//     // });
-// console.log("working");
-
-//     const userId = req.user.userId;
-
-//     // Step 1: Get user's cart
-//     const cart = await Cart.findOne({ userId });
-//     if (!cart || cart.items.length === 0) {
-//       return res.status(400).json({ message: 'Your cart is empty' });
-//     }
-
-//     // Step 2: All items are from the same merchant
-//     const merchantId = cart.items[0].merchantId;
-
-//     // Step 2.1: Get merchant coordinates for pickup
-//     const merchant = await Merchant.findById(merchantId);
-//     if (!merchant) {
-//       return res.status(404).json({ message: 'Merchant not found' });
-//     }
-
-//     const merchantCoordinates = merchant.address?.location?.coordinates || [];
-
-//     // Step 2.2: Get customer's selected delivery address from request body
-//     const { addressId } = req.body;
-//     if (!addressId) {
-//       return res.status(400).json({ message: 'Address ID is required' });
-//     }
-
-//     // Fetch address details from address schema
-
-//     const deliveryAddress = await Address.findOne({ _id: addressId, user: userId });
-//     if (!deliveryAddress) {
-//       return res.status(404).json({ message: 'Address not found' });
-//     }
-//     console.log("working2");
-
-//     let totalAmount = 0;
-//     const orderItems = [];
-
-//     for (const item of cart.items) {
-//       const product = await Product.findById(item.productId);
-//       if (!product) continue;
-
-//       const variant = product.variants.id(item.variantId);
-//       if (!variant) continue;
-
-//       const price = variant.price;
-//       const name = product.name;
-//       const image = item.image?.url || variant.images?.[0]?.url || '';
-
-//       totalAmount += price * item.quantity;
-
-//       orderItems.push({
-//         productId: item.productId,
-//         variantId: item.variantId,
-//         name,
-//         quantity: item.quantity,
-//         price,
-//         size: item.size,
-//         image,
-//         tryStatus: product.isTriable ? 'pending' : 'not-triable'
-//       });
-//     }
-
-//     // Step 3: Create order
-//     const newOrder = new Order({
-//       userId,
-//       merchantId,
-//       items: orderItems,
-//       totalAmount,
-//       finalBilling: {
-//         baseAmount: totalAmount,
-//         tryAndBuyFee: 0,
-//         gst: 0,
-//         discount: 0,
-//         deliveryCharge: req.body.deliveryCharge || 0,
-//         totalPayable: totalAmount + (req.body.deliveryCharge || 0),
-//       },
-//       deliveryLocation: {
-//         name: deliveryAddress.name,
-//         phone: deliveryAddress.phone,
-//         addressLine1: deliveryAddress.addressLine1,
-//         addressLine2: deliveryAddress.addressLine2,
-//         landmark: deliveryAddress.landmark,
-//         area: deliveryAddress.area,
-//         city: deliveryAddress.city,
-//         state: deliveryAddress.state,
-//         pincode: deliveryAddress.pincode,
-//         country: deliveryAddress.country,
-//         addressType: deliveryAddress.addressType,
-//         deliveryInstructions: deliveryAddress.deliveryInstructions,
-//         coordinates: deliveryAddress.location.coordinates // Customer's delivery coordinates [lng, lat]
-//       },
-//       // Store merchant coordinates separately for pickup location
-//       pickupLocation: {
-//         coordinates: merchantCoordinates // Merchant coordinates [lng, lat]
-//       }
-//     });
-
-//     await newOrder.save();
-
-//     // Join customer socket to orderId room
-//     // const userSocketIds = onlineUsers[userId?.toString()];
-//     // if (userSocketIds && userSocketIds.length > 0) {
-//     //   userSocketIds.forEach((socketId) => {
-//     //     const socket = io.sockets.sockets.get(socketId);
-//     //     if (socket) {
-//     //       socket.join(order._id.toString());
-//     //       console.log(`User socket ${socketId} joined room ${order._id}`);
-//     //     } else {
-//     //       console.warn(`Socket ${socketId} not found for user ${userId}`);
-//     //     }
-//     //   });
-//     // } else {
-//     //   console.log(`No active sockets for user ${userId}`);
-//     // }
-
-//     // Step 4: Clear cart
-//     // await Cart.updateOne({ userId }, { $set: { items: [] } });
-
-//     // Step 5: Notify merchant
-//     notifyMerchant(io, newOrder.merchantId, newOrder);
-// console.log("working3");
-
-//     return res.status(201).json({
-//       message: 'Order placed successfully',
-//       order: newOrder,
-//       // razorpayOrder,
-//     });
-
-//   } catch (error) {
-//     console.error('Create Order Error:', error);
-//     return res.status(500).json({ message: 'Internal server error' });
-//   }
-// };
-
-// export const orderRequestForMerchant = async (req, res) => {
-//   console.log("orderRequestForMerchant");
-//   const { orderId } = req.params;
-//   const { status } = req.body;
-//   console.log(orderId,'orderId');
-//   console.log(req.body);
-
-
-//   console.log(status,'statussss');
-
-
-//   const order = await Order.findById(orderId);
-//   if (!order) return res.status(404).json({ message: "Order not found" });
-
-//   order[0].orderStatus = status;
-//   if(status=="accept"){
-//     const deliveryBoy = await Delivery.findOne({status:"active"})
-//     if(!deliveryBoy){
-//       return res.status(404).json({ message: "Delivery boy not found" });
-//     }
-//     order.deliveryBoyId = deliveryBoy._id;
-//     order.deliveryBoyStatus = "assigned";    
-//   }
-
-//   await order.save();
-
-//   emitOrderUpdate(io, orderId, { status });
-
-
-
-//   return res.status(200).json({ message: "Order status updated", orderId });
-// };
-
-// 1. Create Razorpay Order + Pending Order in DB
 export const createRazorpayOrder = async (req, res) => {
   try {
     const userId = req.user.userId;
@@ -602,7 +364,7 @@ export const orderPacked = async (req, res) => {
 
   order.status = "packed"
   await order.save();
-  return res.status(200).json({ message: "Order packed", order });
+  return res.status(200).json({ message: "Order packed" });
 };
 
 export const reachedPickupLocation = async (req, res) => {
@@ -613,7 +375,7 @@ export const reachedPickupLocation = async (req, res) => {
 
   order.deliveryBoyStatus = "arrived at pickup";
   await order.save();
-  return res.status(200).json({ message: "Delivery boy reached pickup location", order });
+  return res.status(200).json({ message: "Delivery boy reached pickup location" });
 };
 
 export const orderPickedUp = async (req, res) => {
@@ -625,7 +387,7 @@ export const orderPickedUp = async (req, res) => {
   order.deliveryBoyStatus = "picked & verified order";
   order.orderStatus = "out_for_delivery";
   await order.save();
-  return res.status(200).json({ message: "Order picked up", order });
+  return res.status(200).json({ message: "Order picked up" });
 };
 
 export const reachedDeliveryLocation = async (req, res) => {
@@ -637,7 +399,7 @@ export const reachedDeliveryLocation = async (req, res) => {
   order.deliveryBoyStatus = "arrived at delivery";
   order.orderStatus = "arrived at delivery";
   await order.save();
-  return res.status(200).json({ message: "Delivery boy reached delivery location", order });
+  return res.status(200).json({ message: "Delivery boy reached delivery location" });
 };
 
 export const handoverOrder = async (req, res) => {
@@ -649,7 +411,7 @@ export const handoverOrder = async (req, res) => {
   order.deliveryBoyStatus = "try phase";
   order.orderStatus = "try phase";
   await order.save();
-  return res.status(200).json({ message: "Order handover", order });
+  return res.status(200).json({ message: "Order handover" });
 };
 
 
@@ -694,13 +456,10 @@ export const getAllOrders = async (req, res) => {
 
 export const initiateReturn = async (req, res) => {
   try {
-    console.log("initiateReturn");
 
     let { orderId } = req.params;
-    console.log(orderId, '676777');
 
     orderId = orderId.replace(/^["']|["']$/g, '').trim();
-    console.log(orderId, '676777');
 
     const { items } = req.body; // Expected payload: array of { itemId, tryStatus: "keep"|"return", returnReason }
 
@@ -791,7 +550,9 @@ export const getOrderById = async (req, res) => {
   try {
     const { orderId } = req.params;
     const cleanOrderId = orderId.replace(/^"|"$/g, '');
-    const order = await Order.findById(cleanOrderId).lean();
+    const order = await Order.findById(cleanOrderId)
+      .select('-deliveryTracking -razorpayPaymentId -razorpayOrderId')
+      .lean();
     if (!order) return res.status(404).json({ message: "Order not found" });
     return res.status(200).json({ order });
   } catch (error) {

@@ -135,6 +135,8 @@ const DeliveryRiderSchema = new mongoose.Schema({
     ref: "Order",
     default: null,
   },
+  rating: { type: Number, default: 0 },
+  reviewCount: { type: Number, default: 0 },
   createdAt: {
     type: Date,
     default: Date.now,

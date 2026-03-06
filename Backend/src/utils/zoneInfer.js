@@ -29,14 +29,14 @@ export const inferZone = async (lat, lng) => {
     });
 
     if (zoneWithPolygon) {
-      const zoneId = zoneWithPolygon.name.toLowerCase().replace(/\s+/g, '');
+      const zoneId = zoneWithPolygon.zoneName?.toLowerCase().replace(/\s+/g, '') || 'global';
       CACHE.set(key, { zoneId, ts: Date.now() });
       return zoneId;
     }
 
-    // 3. Fallback: Nearest zone center (you already have 2dsphere index)
+    // 3. Fallback: Nearest zone center (uses 2dsphere index on centerCoordinates)
     const nearest = await Zone.findOne({
-      center: {
+      centerCoordinates: {
         $near: {
           $geometry: { type: "Point", coordinates: [lng, lat] },
           $maxDistance: 15000 // 15 km max
@@ -44,8 +44,8 @@ export const inferZone = async (lat, lng) => {
       }
     });
 
-    const zoneId = nearest 
-      ? nearest.name.toLowerCase().replace(/\s+/g, '')
+    const zoneId = nearest
+      ? nearest.zoneName?.toLowerCase().replace(/\s+/g, '') || 'global'
       : 'global';
 
     CACHE.set(key, { zoneId, ts: Date.now() });
