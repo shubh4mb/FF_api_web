@@ -2,6 +2,8 @@
 import asyncHandler from 'express-async-handler';
 import Wishlist from '../../models/wishlist.model.js';
 import Product from "../../models/product.model.js";
+import { ApiResponse } from '../../utils/ApiResponse.js';
+import { ApiError } from '../../utils/ApiError.js';
 
 // @desc    Add product to wishlist
 // @route   POST /api/wishlist
@@ -9,11 +11,11 @@ import Product from "../../models/product.model.js";
 export const addToWishlist = asyncHandler(async (req, res) => {
   const { productId, variantId } = req.body;
   console.log(req.body);
-  
+
   const userId = req.user.userId;
 
   if (!productId || !variantId) {
-    return res.status(400).json({ message: 'productId and variantId are required' });
+    throw new ApiError(400, 'productId and variantId are required');
   }
 
   const product = await Product.findOne({
@@ -23,19 +25,17 @@ export const addToWishlist = asyncHandler(async (req, res) => {
   });
 
   if (!product) {
-    return res.status(404).json({ message: 'Product or variant not found' });
+    throw new ApiError(404, 'Product or variant not found');
   }
 
   const variant = product.variants.id(variantId);
   if (!variant) {
-    return res.status(400).json({ message: 'Variant not found' });
+    throw new ApiError(404, 'Variant not found');
   }
 
   const exists = await Wishlist.findOne({ userId, variantId });
   if (exists) {
-    return res.status(400).json({
-      message: 'This variant is already in your wishlist',
-    });
+    throw new ApiError(400, 'This variant is already in your wishlist');
   }
 
   const wishlistItem = await Wishlist.create({
@@ -52,11 +52,7 @@ export const addToWishlist = asyncHandler(async (req, res) => {
     },
   });
 
-  res.status(201).json({
-    success: true,
-    message: 'Variant added to wishlist',
-    data: wishlistItem,
-  });
+  res.status(201).json(new ApiResponse(201, wishlistItem, 'Variant added to wishlist'));
 });
 
 
@@ -73,21 +69,18 @@ export const removeFromWishlist = asyncHandler(async (req, res) => {
   });
 
   if (!deleted) {
-    return res.status(404).json({
-      message: 'Wishlist item not found or does not belong to you',
-    });
+    throw new ApiError(404, 'Wishlist item not found or does not belong to you');
   }
 
-  res.json({
-    success: true,
-    message: 'Item removed from wishlist',
-  });
+  res.json(new ApiResponse(200, null, 'Item removed from wishlist'));
 });
 // @desc    Get logged in user's wishlist with product details
 // @route   GET /api/wishlist
 // @access  Private
 export const getMyWishlist = asyncHandler(async (req, res) => {
   const userId = req.user.userId;
+  console.log(userId, 'userId');
+
 
   const wishlist = await Wishlist.find({ userId })
     .populate({
@@ -122,11 +115,10 @@ export const getMyWishlist = asyncHandler(async (req, res) => {
       };
     });
 
-  res.json({
-    success: true,
+  res.json(new ApiResponse(200, {
     count: result.length,
-    data: result,
-  });
+    wishlist: result,
+  }, "Wishlist retrieved"));
 });
 
 // @desc    Get logged in user's wishlist with only product and variant IDs
@@ -144,11 +136,10 @@ export const getMyWishlistIds = asyncHandler(async (req, res) => {
     variantId: item.variantId,
   }));
 
-  res.json({
-    success: true,
+  res.json(new ApiResponse(200, {
     count: result.length,
-    data: result,
-  });
+    wishlistIds: result,
+  }, "Wishlist IDs retrieved"));
 });
 
 

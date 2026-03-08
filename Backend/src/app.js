@@ -21,6 +21,9 @@ import { getIO } from './config/socket.js';
 
 const app = express();
 
+// Trust first proxy (needed for express-rate-limit behind ngrok/Render/etc.)
+app.set('trust proxy', 1);
+
 // ---- Security Middlewares ----
 app.use(helmet());
 
@@ -30,7 +33,7 @@ const apiLimiter = rateLimit({
   message: 'Too many requests from this IP, please try again after 15 minutes'
 });
 // Apply the rate limiter to all api requests
-app.use('/api/', apiLimiter);
+// app.use('/api/', apiLimiter);
 
 // ---- CORS ----
 app.use(cors({

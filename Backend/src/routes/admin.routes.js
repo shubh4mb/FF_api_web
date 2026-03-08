@@ -13,26 +13,26 @@ import { verifyAdmin } from '../middleware/adminAuth.middleware.js';
 const router = express.Router();
 
 router.post('/addCategory', verifyAdmin, upload.fields([{ name: 'image', maxCount: 1 }, { name: 'logo', maxCount: 1 }, { name: 'title_banner', maxCount: 1 }]), handleMulterError, addCategory);
-router.get('/getCategories', verifyAdmin, getCategories);
-router.get('/getCategoryById/:id', verifyAdmin, getCategoryById);
+router.get('/getCategories', getCategories);
+router.get('/getCategoryById/:id', getCategoryById);
 router.patch('/updateCategory/:id', verifyAdmin, upload.fields([{ name: 'image', maxCount: 1 }, { name: 'logo', maxCount: 1 }, { name: 'title_banner', maxCount: 1 }]), handleMulterError, updateCategory);
 
 
 router.post('/addMerchant', verifyAdmin, upload.single('logo'), handleMulterError, addMerchant);
-router.get('/getMerchants', verifyAdmin, getMerchants);
-router.get('/getMerchant/:id', verifyAdmin, getMerchantById);
+router.get('/getMerchants', getMerchants);
+router.get('/getMerchant/:id', getMerchantById);
 router.patch('/updateMerchant/:id', verifyAdmin, upload.single('logo'), handleMulterError, updateMerchantById);
 
 
 router.post('/brand/add', verifyAdmin, upload.single('logo'), handleMulterError, addBrand);
 router.get('/brand/get', verifyAdmin, getBrands);
 
-router.get('/getBaseProducts', verifyAdmin, getBaseProducts);
-router.get('/getVariants', verifyAdmin, getVariants);
-router.get('/getBaseProductById/:productId', verifyAdmin, getBaseProductById);
-router.post('/addVariant/:productId', verifyAdmin, upload.array('images'), handleMulterError, addVariant);
-router.get('/products/merchant/:merchantId', verifyAdmin, getProductsByMerchantId);
-router.put('/updateMatchingProducts/:productId', verifyAdmin, updateMatchingProducts);
+router.get('/getBaseProducts', getBaseProducts);
+router.get('/getVariants', getVariants);
+router.get('/getBaseProductById/:productId', getBaseProductById);
+router.post('/addVariant/:productId', upload.array('images'), handleMulterError, addVariant);
+router.get('/products/merchant/:merchantId', getProductsByMerchantId);
+router.put('/updateMatchingProducts/:productId', updateMatchingProducts);
 
 router.post('/titleBanner/add', verifyAdmin, upload.single('image'), handleMulterError, addTitleBanner)
 
