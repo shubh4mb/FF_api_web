@@ -9,13 +9,17 @@ import { addCart, getCart } from '../controllers/adminControllers/cart.controlle
 import { addZone, getAllZones, checkZoneOverlap } from '../controllers/adminControllers/zone.controllers.js';
 import { getAppConfig, updateAppConfig } from '../controllers/adminControllers/appConfig.controllers.js';
 import { verifyAdmin } from '../middleware/adminAuth.middleware.js';
+import adminBannerRoutes from './adminBanner.routes.js';
+import { createAttribute, getAttributes, updateAttribute, deleteAttribute } from '../controllers/adminControllers/attribute.controllers.js';
 
 const router = express.Router();
 
-router.post('/addCategory', verifyAdmin, upload.fields([{ name: 'image', maxCount: 1 }, { name: 'logo', maxCount: 1 }, { name: 'title_banner', maxCount: 1 }]), handleMulterError, addCategory);
+router.use('/banners', adminBannerRoutes);
+
+router.post('/addCategory', verifyAdmin, upload.fields([{ name: 'image', maxCount: 1 }, { name: 'logo', maxCount: 1 }, { name: 'title_banners', maxCount: 5 }]), handleMulterError, addCategory);
 router.get('/getCategories', getCategories);
 router.get('/getCategoryById/:id', getCategoryById);
-router.patch('/updateCategory/:id', verifyAdmin, upload.fields([{ name: 'image', maxCount: 1 }, { name: 'logo', maxCount: 1 }, { name: 'title_banner', maxCount: 1 }]), handleMulterError, updateCategory);
+router.patch('/updateCategory/:id', verifyAdmin, upload.fields([{ name: 'image', maxCount: 1 }, { name: 'logo', maxCount: 1 }, { name: 'title_banners', maxCount: 5 }]), handleMulterError, updateCategory);
 
 
 router.post('/addMerchant', verifyAdmin, upload.single('logo'), handleMulterError, addMerchant);
@@ -48,5 +52,10 @@ router.post('/zone/check-overlap', verifyAdmin, checkZoneOverlap);
 router.get('/config', verifyAdmin, getAppConfig);
 router.put('/config', verifyAdmin, updateAppConfig);
 
+// ── Attributes ──
+router.post('/attributes', verifyAdmin, createAttribute);
+router.get('/attributes', getAttributes);
+router.patch('/attributes/:id', verifyAdmin, updateAttribute);
+router.delete('/attributes/:id', verifyAdmin, deleteAttribute);
 
 export default router;

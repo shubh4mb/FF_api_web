@@ -35,7 +35,7 @@ async function buildAncestors(parentId, level) {
 export const addCategory = asyncHandler(async (req, res) => {
   let imageDetails = null;
   let logoDetails = null;
-  let titleBannerDetails = null;
+  let titleBannersDetails = [];
 
   const { name, slug, parentId, level, gender, sortOrder, isActive } = req.body;
 
@@ -68,7 +68,13 @@ export const addCategory = asyncHandler(async (req, res) => {
   if (req.files) {
     imageDetails = await uploadFile(req.files.image, 'image');
     logoDetails = await uploadFile(req.files.logo, 'logo');
-    titleBannerDetails = await uploadFile(req.files.title_banner, 'title_banner');
+
+    if (req.files.title_banners) {
+      for (const file of req.files.title_banners) {
+        const detail = await uploadFile([file], 'title_banner');
+        if (detail) titleBannersDetails.push(detail);
+      }
+    }
   }
 
   if (level == 2 && !imageDetails) {
@@ -86,7 +92,7 @@ export const addCategory = asyncHandler(async (req, res) => {
     isActive,
     ...(imageDetails && { image: imageDetails }),
     ...(logoDetails && { logo: logoDetails }),
-    ...(titleBannerDetails && { title_banner: titleBannerDetails })
+    ...(titleBannersDetails.length > 0 && { title_banners: titleBannersDetails })
   });
 
   await category.save();
@@ -97,7 +103,7 @@ export const addCategory = asyncHandler(async (req, res) => {
 export const updateCategory = asyncHandler(async (req, res) => {
   let imageDetails = null;
   let logoDetails = null;
-  let titleBannerDetails = null;
+  let titleBannersDetails = [];
 
   const uploadFile = async (fileObj, folderName) => {
     if (!fileObj || !fileObj[0]) return null;
@@ -114,13 +120,34 @@ export const updateCategory = asyncHandler(async (req, res) => {
   if (req.files) {
     imageDetails = await uploadFile(req.files.image, 'image');
     logoDetails = await uploadFile(req.files.logo, 'logo');
-    titleBannerDetails = await uploadFile(req.files.title_banner, 'title_banner');
+
+    if (req.files.title_banners) {
+      for (const file of req.files.title_banners) {
+        const detail = await uploadFile([file], 'title_banner');
+        if (detail) titleBannersDetails.push(detail);
+      }
+    }
   }
 
   const updateData = { ...req.body };
   if (imageDetails) updateData.image = imageDetails;
   if (logoDetails) updateData.logo = logoDetails;
-  if (titleBannerDetails) updateData.title_banner = titleBannerDetails;
+
+  // Retrieve existing banners that the frontend retained
+  let existingTitleBanners = [];
+  if (req.body.existing_title_banners) {
+    try {
+      existingTitleBanners = JSON.parse(req.body.existing_title_banners);
+    } catch (err) {
+      console.warn("Failed to parse existing_title_banners", err);
+    }
+  }
+
+  // Clean up frontend body artifacts
+  delete updateData.existing_title_banners;
+
+  // Final array is retained banners + newly uploaded banners
+  updateData.title_banners = [...existingTitleBanners, ...titleBannersDetails];
 
   // Re-build ancestors if parentId or level changed
   const existing = await Category.findById(req.params.id).lean();

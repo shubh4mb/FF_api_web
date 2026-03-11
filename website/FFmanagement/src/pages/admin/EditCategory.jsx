@@ -28,11 +28,13 @@ export default function EditCategoryPage() {
   const [images, setImages] = useState({
     image: { preview: '', file: null, existing: null },
     logo: { preview: '', file: null, existing: null },
-    title_banner: { preview: '', file: null, existing: null }
   });
 
-  const [showCropper, setShowCropper] = useState({ image: false, logo: false, title_banner: false });
-  const [tempImageSrc, setTempImageSrc] = useState({ image: '', logo: '', title_banner: '' });
+  // titleBanners state holds array of: { id, preview, file, existing }
+  const [titleBanners, setTitleBanners] = useState([]);
+
+  const [showCropper, setShowCropper] = useState({ image: false, logo: false, title_banners: false });
+  const [tempImageSrc, setTempImageSrc] = useState({ image: '', logo: '', title_banners: '' });
 
   useEffect(() => {
     loadCategory();
@@ -66,13 +68,18 @@ export default function EditCategoryPage() {
           preview: data.logo?.url || '',
           file: null,
           existing: data.logo
-        },
-        title_banner: {
-          preview: data.title_banner?.url || '',
-          file: null,
-          existing: data.title_banner
         }
       });
+
+      // Load existing array of banners
+      const existingBanners = data.title_banners || [];
+      const formattedBanners = existingBanners.map((b, i) => ({
+        id: b.public_id || `existing-${i}`,
+        preview: b.url,
+        file: null,
+        existing: b
+      }));
+      setTitleBanners(formattedBanners);
 
       setError('');
     } catch (err) {
@@ -114,7 +121,6 @@ export default function EditCategoryPage() {
       setFormData(prev => ({ ...prev, [name]: value }));
     }
 
-    // Auto-generate slug from name
     if (name === 'name') {
       const slug = value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
       setFormData(prev => ({ ...prev, slug }));
@@ -136,17 +142,28 @@ export default function EditCategoryPage() {
       };
       reader.readAsDataURL(file);
     }
+    e.target.value = null; // reset to allow repeated selection
   };
 
   const handleCropComplete = (blob, imageType) => {
-    setImages(prev => ({
-      ...prev,
-      [imageType]: {
+    if (imageType === 'title_banners') {
+      const newItem = {
+        id: Date.now().toString(),
         preview: URL.createObjectURL(blob),
         file: blob,
-        existing: prev[imageType].existing
-      }
-    }));
+        existing: null
+      };
+      setTitleBanners(prev => [...prev, newItem]);
+    } else {
+      setImages(prev => ({
+        ...prev,
+        [imageType]: {
+          preview: URL.createObjectURL(blob),
+          file: blob,
+          existing: prev[imageType].existing
+        }
+      }));
+    }
     setShowCropper(prev => ({ ...prev, [imageType]: false }));
   };
 
@@ -155,6 +172,10 @@ export default function EditCategoryPage() {
       ...prev,
       [imageType]: { preview: '', file: null, existing: null }
     }));
+  };
+
+  const removeTitleBanner = (idToRemove) => {
+    setTitleBanners(prev => prev.filter(b => b.id !== idToRemove));
   };
 
   const handleSubmit = async () => {
@@ -175,6 +196,9 @@ export default function EditCategoryPage() {
       submitData.append('isActive', formData.isActive);
       submitData.append('sortOrder', formData.sortOrder);
 
+      // We don't overwrite level or parentId in the frontend easily without causing ancestor problems,
+      // but if we were to support it we'd append them here.
+
       if (formData.level === 0) {
         submitData.append('commissionPercentage', formData.commissionPercentage);
       }
@@ -185,14 +209,28 @@ export default function EditCategoryPage() {
       if (images.logo.file) {
         submitData.append('logo', images.logo.file);
       }
-      if (images.title_banner.file) {
-        submitData.append('title_banner', images.title_banner.file);
-      }
+
+      // Existing Banners Retained (sent as JSON text block)
+      const existingBannersToKeep = titleBanners
+        .filter(b => b.existing)
+        .map(b => b.existing);
+      submitData.append('existing_title_banners', JSON.stringify(existingBannersToKeep));
+
+      // New Banner Files
+      titleBanners.forEach(b => {
+        if (b.file) {
+          submitData.append('title_banners', b.file);
+        }
+      });
 
       await updateCategory(categoryId, submitData);
 
       setSuccess(true);
       setTimeout(() => setSuccess(false), 3000);
+
+      // Reload the data to sync with backend 
+      loadCategory();
+
     } catch (err) {
       setError(err.message || 'Failed to update category');
       console.error(err);
@@ -414,42 +452,52 @@ export default function EditCategoryPage() {
               )}
             </div>
 
-            {/* Title Banner */}
-            <div>
+            {/* Title Banners Upload (Array) */}
+            <div className="border border-gray-200 rounded-lg p-4 bg-gray-50">
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Title Banner
+                Title Banners (Max 5)
               </label>
-              {images.title_banner.preview ? (
-                <div className="relative inline-block w-full">
-                  <img
-                    src={images.title_banner.preview}
-                    alt="Banner"
-                    className="w-full h-32 object-cover rounded-lg border border-gray-300"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => removeImage('title_banner')}
-                    className="absolute top-2 right-2 p-1 bg-red-600 text-white rounded-full hover:bg-red-700"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                </div>
-              ) : (
-                <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50">
-                  <Upload className="w-8 h-8 text-gray-400 mb-2" />
-                  <span className="text-sm text-gray-500">Click to upload banner</span>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={(e) => handleImageChange(e, 'title_banner')}
-                    className="hidden"
-                  />
-                </label>
-              )}
+
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-4">
+                {titleBanners.map((banner) => (
+                  <div key={banner.id} className="relative group border border-gray-200 rounded bg-white flex flex-col items-center p-2 shadow-sm">
+                    <img
+                      src={banner.preview}
+                      alt="Banner"
+                      className="h-24 object-cover rounded mb-2 w-full"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => removeTitleBanner(banner.id)}
+                      className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                      title="Remove banner"
+                    >
+                      <X size={14} />
+                    </button>
+                    {/* Tiny badge indicating type */}
+                    <span className="absolute bottom-1 left-1 text-[10px] bg-black bg-opacity-50 text-white px-1.5 py-0.5 rounded">
+                      {banner.existing ? 'Existing' : 'New'}
+                    </span>
+                  </div>
+                ))}
+
+                {titleBanners.length < 5 && (
+                  <label className="flex flex-col items-center justify-center h-[120px] border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:bg-gray-100 min-h-24">
+                    <Upload className="w-6 h-6 text-gray-400 mb-1" />
+                    <span className="text-xs text-gray-500 font-medium">Add Banner</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => handleImageChange(e, 'title_banners')}
+                      className="hidden"
+                    />
+                  </label>
+                )}
+              </div>
             </div>
 
             {/* Shared Cropper Modal */}
-            {['image', 'logo', 'title_banner'].map((type) => (
+            {['image', 'logo', 'title_banners'].map((type) => (
               showCropper[type] && tempImageSrc[type] && (
                 <div key={type} className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
                   <div className="bg-white p-4 rounded-lg w-full max-w-2xl">

@@ -4,7 +4,7 @@ import mongoose from 'mongoose';
 const variantSchema = new mongoose.Schema({
   color: {
     name: String,
-    hex: String, 
+    hex: String,
   },
   sizes: [
     {
@@ -14,23 +14,23 @@ const variantSchema = new mongoose.Schema({
       stock: {
         type: Number,
         default: 0,
-      },    
+      },
     }
   ],
   mrp: Number, // Original price before discount
 
   price: Number,
-  
-  images:[ {
+
+  images: [{
     public_id: {
       type: String,
       required: false
     },
-      url: {
-        type: String,
-        required: false
-      }
-    }], 
+    url: {
+      type: String,
+      required: false
+    }
+  }],
   discount: {
     type: Number,
     default: 0,
@@ -53,13 +53,13 @@ const productSchema = new mongoose.Schema({
   },
 
   // 🌟 Category Structure (referencing your Category model)
- categoryId: {
+  categoryId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Category',
     required: true,
-  }, 
+  },
   subCategoryId: {
-    
+
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Category',
   },
@@ -67,7 +67,10 @@ const productSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Category',
   },
-  gender: { type: String, enum: ['men', 'women', 'unisex','boys','girls','babies'], default: 'unisex' }, 
+  gender: { type: String, enum: ['men', 'women', 'unisex', 'boys', 'girls', 'babies'], default: 'unisex' },
+
+  soldBy: { type: String, required: false },
+  styleName: { type: String, required: false },
 
   description: String,
   matchingProducts: [
@@ -91,7 +94,17 @@ const productSchema = new mongoose.Schema({
     of: String,
     default: {}
   },
-  
+
+  attributes: [
+    {
+      attributeId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Attribute"
+      },
+      value: mongoose.Schema.Types.Mixed
+    }
+  ],
+
   tags: [String],
 
   variants: [variantSchema], // key for fashion variants (sizes, colors, etc.)
@@ -103,7 +116,7 @@ const productSchema = new mongoose.Schema({
   //   }
   // ],
 
-  isTriable:{type:Boolean,default:true},
+  isTriable: { type: Boolean, default: true },
 
   ratings: { type: Number, default: 0 },
   numReviews: { type: Number, default: 0 },

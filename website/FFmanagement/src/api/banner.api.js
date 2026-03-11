@@ -1,4 +1,4 @@
-import api from '../utils/axios.config.js';
+import api from '@/utils/axios.config';
 
 export const bannerApi = {
     // Get all banners (admin)

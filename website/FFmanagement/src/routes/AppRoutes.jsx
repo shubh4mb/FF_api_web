@@ -24,6 +24,7 @@ import AdminLogin from '../pages/admin/AdminLogin';
 import AdminRegister from '../pages/admin/AdminRegister';
 import ProtectedAdminRoute from '../components/ProtectedAdminRoute';
 import Settings from '../pages/admin/Settings';
+import AttributeManagement from '../pages/admin/AttributeManagement';
 
 const AppRoutes = () => {
   return (
@@ -52,6 +53,7 @@ const AppRoutes = () => {
             <Route path="merchants/:merchantId" element={<EditMerchant />} />
             <Route path="create-zone" element={<CreateZone />} />
             <Route path="banners" element={<BannersPage />} />
+            <Route path="attributes" element={<AttributeManagement />} />
           </Route>
         </Route>
 

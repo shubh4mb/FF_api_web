@@ -1,4 +1,4 @@
-import axios from "./axios"; // Assumes you have an axios interceptor configured
+import axios from "@/utils/axios.config"; // Assumes you have an axios interceptor configured
 
 /**
  * Get App Config (Delivery/Return Rates)

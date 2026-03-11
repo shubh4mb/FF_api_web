@@ -72,7 +72,7 @@ const categorySchema = new mongoose.Schema({
       required: false
     }
   },
-  title_banner: {
+  title_banners: [{
     public_id: {
       type: String,
       required: false
@@ -81,7 +81,7 @@ const categorySchema = new mongoose.Schema({
       type: String,
       required: false
     }
-  },
+  }],
 }, { timestamps: true });
 
 

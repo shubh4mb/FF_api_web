@@ -3,11 +3,11 @@ import jwt from "jsonwebtoken";
 import Merchant from "../../models/merchant.model.js";
 import Brand from "../../models/brand.model.js";
 import nodemailer from 'nodemailer';
-import Zone from "../../models/zone.model.js"; 
+import Zone from "../../models/zone.model.js";
 // import dotenv from 'dotenv';
 // dotenv.config();
 import { uploadToCloudinary } from '../../config/cloudinary.config.js';
-const jwt_secret="hehe"
+const jwt_secret = "hehe"
 const transporter = nodemailer.createTransport({
   service: "gmail",
   auth: {
@@ -20,7 +20,7 @@ const generateOtp = () => Math.floor(100000 + Math.random() * 900000).toString()
 export const sendEmailOtp = async (req, res) => {
   console.log(req.body);
   try {
-    const { email } = req.body;
+    const { email, password } = req.body;
 
     if (!email) return res.status(400).json({ message: "Email is required" });
 
@@ -30,9 +30,12 @@ export const sendEmailOtp = async (req, res) => {
     let merchant = await Merchant.findOne({ email });
     if (!merchant) {
       merchant = new Merchant({ email, isActive: false });
-      merchant.phoneNumber="123123679"
     }
-//random 10 digits number and save it as phoneNumber field 
+
+    // Store hashed password if provided during initial signup
+    if (password) {
+      merchant.password = await bcrypt.hash(password, 10);
+    }
 
     merchant.emailOtp = otp;
     merchant.emailOtpExpiry = expiry;
@@ -45,7 +48,7 @@ export const sendEmailOtp = async (req, res) => {
     //   text: `Your OTP is ${otp}. It expires in 5 minutes.`,
     // });
 
-    res.status(200).json({ otp,message: "OTP sent successfully" });
+    res.status(200).json({ otp, message: "OTP sent successfully" });
   } catch (err) {
     console.error("Error sending OTP:", err);
     res.status(500).json({ message: "Failed to send OTP" });
@@ -75,8 +78,8 @@ export const verifyEmailOtp = async (req, res) => {
     await merchant.save();
 
     const token = jwt.sign(
-      { id: merchant._id, email: merchant.email }, 
-      process.env.JWT_SECRET, 
+      { id: merchant._id, email: merchant.email },
+      process.env.JWT_SECRET,
       { expiresIn: "7d" } // token expiry
     );
 
@@ -120,7 +123,7 @@ export const verifyEmailOtp = async (req, res) => {
 // };
 
 
-export const registerPhone = async (req, res) => { 
+export const registerPhone = async (req, res) => {
   try {
     const { phoneNumber } = req.body;
     if (!phoneNumber) return res.status(400).json({ message: "Phone number is required" });
@@ -130,8 +133,8 @@ export const registerPhone = async (req, res) => {
       return res.status(400).json({ message: "Phone number already registered" });
     }
 
-    const merchant = new Merchant({ 
-      phoneNumber, 
+    const merchant = new Merchant({
+      phoneNumber,
       email: false // 👈 force undefined 
     });
 
@@ -145,27 +148,27 @@ export const registerPhone = async (req, res) => {
     console.error("Error saving phone:", error);
     res.status(500).json({ message: "Server error", error: error.message });
   }
-}; 
+};
 
 // Update Bank Details// Update Operating Hours// Activate Merchant
 export const getMerchantByEmail = async (req, res) => {
   try {
     const { email } = req.params;
-    console.log(email,'email');
-    
+    console.log(email, 'email');
+
     const merchant = await Merchant.findOne({ email });
     if (!merchant) return res.status(404).json({ success: false, message: 'Merchant not found11------' });
 
     res.json({ success: true, merchant });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
-  } 
+  }
 };
 
 export const updateMerchantShopDetails = async (req, res) => {
   try {
     const { merchantId } = req.params;
-    const { shopName, shopDescription, category, ownerName, latitude, longitude } = req.body;
+    const { shopName, shopDescription, category, genderCategory, ownerName, latitude, longitude } = req.body;
 
     // Parse address (string or form-data)
     let addressObj = {};
@@ -255,10 +258,11 @@ export const updateMerchantShopDetails = async (req, res) => {
           shopName,
           shopDescription,
           category,
+          genderCategory,
           ownerName,
           address: finalAddress,
-          zoneName:zone.zoneName,
-          zoneId:zone._id ,
+          zoneName: zone.zoneName,
+          zoneId: zone._id,
           ...(logo && { logo }),
         },
       },
@@ -332,25 +336,25 @@ export const activateMerchant = async (req, res) => {
 
 
 export const loginMerchant = async (req, res) => {
-  // console.log(req.body,'req.body;req.body;req.body;');
-  
   try {
-    const { identifier, email, password } = req.body;
-    const loginId = identifier || email;
+    const { identifier, password } = req.body;
 
-    if (!loginId || !password) {
+    if (!identifier || !password) {
       return res.status(400).json({ message: "Email/Phone and password are required" });
     }
 
-    const merchant = await Merchant.findOne({
-      $or: [
-        { email: loginId },
-        { phoneNumber: loginId }
-      ]
-    });
+    // Identify dynamically if the identifier is an email or phone number
+    const isEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(identifier);
+    const query = isEmail ? { email: identifier } : { phoneNumber: identifier };
+
+    const merchant = await Merchant.findOne(query);
 
     if (!merchant) {
-      return res.status(400).json({ message: "Merchant not found3" });
+      return res.status(400).json({ message: "Merchant not found" });
+    }
+
+    if (!merchant.password) {
+      return res.status(400).json({ message: "Invalid credentials or account not fully registered" });
     }
 
     const isMatch = await bcrypt.compare(password, merchant.password);
@@ -365,18 +369,6 @@ export const loginMerchant = async (req, res) => {
       { expiresIn: "7d" }
     );
 
-    // === NEW CODE HERE: Find the brand for this merchant ===
-    const brand = await Brand.findOne({
-      createdById: merchant._id,
-      createdByType: 'Merchant',
-    });
-
-    // console.log(brand,'BrandBrandBrandBrandBrand');
-    
-
-    // If the merchant has a brand, use its name, else null or empty string
-    const brandName = brand ? brand.name : null;
-
     // ==== Response ====
     return res.json({
       token,
@@ -385,12 +377,67 @@ export const loginMerchant = async (req, res) => {
         shopName: merchant.shopName,
         email: merchant.email,
         phoneNumber: merchant.phoneNumber,
-        brandName,        // <-- Add brand name here
+        isActive: merchant.isActive
       },
     });
 
   } catch (error) {
     console.error("Login error:", error);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+export const registerMerchant = async (req, res) => {
+  try {
+    const { identifier, password, shopName } = req.body;
+
+    if (!identifier || !password) {
+      return res.status(400).json({ message: "Identifier (Email/Phone) and password are required" });
+    }
+
+    const isEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(identifier);
+    const query = isEmail ? { email: identifier } : { phoneNumber: identifier };
+
+    let merchant = await Merchant.findOne(query);
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    if (merchant) {
+      if (merchant.isActive) {
+        return res.status(400).json({ message: "Merchant already active and registered with this identifier" });
+      }
+      // Update existing pre-verified user
+      merchant.password = hashedPassword;
+      merchant.shopName = shopName || merchant.shopName || "New Shop";
+    } else {
+      const newMerchantData = {
+        password: hashedPassword,
+        shopName: shopName || "New Shop",
+        isActive: false,
+      };
+
+      if (isEmail) {
+        newMerchantData.email = identifier;
+      } else {
+        newMerchantData.phoneNumber = identifier;
+      }
+
+      merchant = new Merchant(newMerchantData);
+    }
+
+    await merchant.save();
+
+    res.status(201).json({
+      message: "Merchant registered successfully",
+      merchant: {
+        id: merchant._id,
+        shopName: merchant.shopName,
+        email: merchant.email,
+        phoneNumber: merchant.phoneNumber,
+      }
+    });
+  } catch (error) {
+    console.error("Registration error:", error);
     res.status(500).json({ message: "Server error" });
   }
 };

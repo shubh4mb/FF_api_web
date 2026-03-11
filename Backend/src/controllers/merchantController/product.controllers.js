@@ -3,6 +3,7 @@ import Product from '../../models/product.model.js';
 import Category from '../../models/category.model.js';
 import { productSchema } from '../../utils/validators/product.validator.js';
 import Brand from "../../models/brand.model.js";
+import Merchant from "../../models/merchant.model.js";
 import { uploadToCloudinary, deleteFromCloudinary } from '../../config/cloudinary.config.js';
 import { log } from "console";
 
@@ -61,8 +62,8 @@ export const addVariant = async (req, res) => {
           public_id: img.public_id,
           url: img.url,
         });
-      } 
-        
+      }
+
       else if (img.url.startsWith("blob")) {
         // New local file
         const file = req.files[fileIndex];
@@ -424,7 +425,29 @@ export const addBaseProduct = async (req, res) => {
       return res.status(400).json({ message: "Validation failed", errors: error.details });
     }
 
-    const product = new Product(value);
+    // Auto-create or find brand based on merchant's shopName
+    if (value.merchantId) {
+      const merchant = await Merchant.findById(value.merchantId);
+      if (merchant) {
+        const brandName = merchant.shopName || merchant.ownerName || "Default Brand";
+        let brand = await Brand.findOne({ name: brandName, createdById: merchant._id });
+        if (!brand) {
+          brand = await Brand.create({
+            name: brandName,
+            createdByType: 'Merchant',
+            createdById: merchant._id,
+          });
+        }
+        value.brandId = brand._id;
+      } else {
+        return res.status(404).json({ message: "Merchant not found" });
+      }
+    }
+
+    const product = new Product({
+      ...value,
+      attributes: value.attributes || []
+    });
     await product.save();
 
     res.status(201).json({
@@ -551,10 +574,11 @@ export const getBaseProductById = async (req, res) => {
 
 
 export const getProductsByMerchantId = async (req, res) => {
-  console.log("working");
+  console.log("workinggggggg222");
 
   try {
     const { merchantId } = req.params;
+    console.log(merchantId);
 
     const products = await Product.find({ merchantId })
       .populate("brandId", "name")
@@ -565,6 +589,7 @@ export const getProductsByMerchantId = async (req, res) => {
       .sort({ createdAt: -1 }); // ✅ latest first
 
     if (!products || products.length === 0) {
+      console.log("No products found for this merchant");
       return res.status(404).json({ message: "No products found for this merchant" });
     }
 
@@ -925,19 +950,19 @@ export const updateMultipleVariantSizes = async (req, res) => {
   }
 };
 
-export const getAllBrands=async(req,res)=>{
+export const getAllBrands = async (req, res) => {
   try {
-    const brands=await Brand.find({isActive:true})
+    const brands = await Brand.find({ isActive: true })
     res.status(200).json({
-      success:true,
-      message:"All brands",
+      success: true,
+      message: "All brands",
       brands
     })
   } catch (error) {
     res.status(500).json({
-      success:false,
-      message:"Server error while getting brands",
-      error:error.message
+      success: false,
+      message: "Server error while getting brands",
+      error: error.message
     })
   }
 }

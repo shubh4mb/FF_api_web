@@ -2,8 +2,11 @@ import React, { useState, useEffect } from "react";
 // import { useNavigate } from "react-router-dom";
 import { getCategories, addCategory } from "../../api/categories"; // ✅ Adjust path as needed
 import CropperModal from "../../components/CropperModal";
+import { X, Upload, Loader2 } from "lucide-react";
+
 const AddCategory = () => {
   // const navigate = useNavigate();
+  const [saving, setSaving] = useState(false);
 
   const [formData, setFormData] = useState({
     name: "",
@@ -14,26 +17,26 @@ const AddCategory = () => {
     isActive: true,
     sortOrder: 0,
     commissionPercentage: 0,
-    image: null,
-    logo: null,
-    title_banner: null,
   });
-  const [previewUrls, setPreviewUrls] = useState({ image: null, logo: null, title_banner: null });
-  const [croppedImages, setCroppedImages] = useState({ image: null, logo: null, title_banner: null });
-  const [showCropper, setShowCropper] = useState({ image: false, logo: false, title_banner: false });
-  const [currentCropType, setCurrentCropType] = useState(null);
+
+  const [images, setImages] = useState({
+    image: { preview: '', file: null },
+    logo: { preview: '', file: null },
+  });
+
+  const [titleBanners, setTitleBanners] = useState([]);
+
+  const [showCropper, setShowCropper] = useState({ image: false, logo: false, title_banners: false });
+  const [tempImageSrc, setTempImageSrc] = useState({ image: '', logo: '', title_banners: '' });
 
   const [allCategories, setAllCategories] = useState([]);
   const [selectedTopCategory, setSelectedTopCategory] = useState("");
   const [selectedSubCategory, setSelectedSubCategory] = useState("");
 
-  // 🔄 Fetch categories on mount
   useEffect(() => {
     const fetchCategories = async () => {
       try {
         const response = await getCategories();
-        console.log(response, "dsfdsf")
-
         setAllCategories(response.categories || []);
       } catch (error) {
         console.error("Error fetching categories:", error);
@@ -43,35 +46,72 @@ const AddCategory = () => {
   }, []);
 
   const handleChange = (e) => {
-    const { name, value, type, checked, files } = e.target;
+    const { name, value, type, checked } = e.target;
     if (type === "checkbox") {
       setFormData((prev) => ({ ...prev, [name]: checked }));
     } else if (name === "level" || name === "sortOrder") {
       setFormData((prev) => ({ ...prev, [name]: parseInt(value) }));
     } else if (name === "commissionPercentage") {
       setFormData((prev) => ({ ...prev, [name]: parseFloat(value) || 0 }));
-    } else if (type === "file") {
-      const file = files[0];
-      if (file) {
-        const reader = new FileReader();
-        reader.onloadend = () => {
-          setPreviewUrls((prev) => ({ ...prev, [name]: reader.result }));
-          setCurrentCropType(name);
-          setShowCropper((prev) => ({ ...prev, [name]: true }));
-        };
-        reader.readAsDataURL(file);
-      }
     } else {
       setFormData((prev) => ({ ...prev, [name]: value }));
     }
+
+    if (name === 'name') {
+      const slug = value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+      setFormData(prev => ({ ...prev, slug }));
+    }
   };
 
-  const handleCropComplete = (blob) => {
-    if (!currentCropType) return;
-    setCroppedImages((prev) => ({ ...prev, [currentCropType]: blob }));
-    setFormData((prev) => ({ ...prev, [currentCropType]: blob }));
-    setShowCropper((prev) => ({ ...prev, [currentCropType]: false }));
+  const handleImageChange = (e, imageType) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 5 * 1024 * 1024) {
+        alert('Image size should be less than 5MB');
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setTempImageSrc(prev => ({ ...prev, [imageType]: reader.result }));
+        setShowCropper(prev => ({ ...prev, [imageType]: true }));
+      };
+      reader.readAsDataURL(file);
+    }
+    e.target.value = null; // reset to allow repeated selection
   };
+
+  const handleCropComplete = (blob, imageType) => {
+    if (imageType === 'title_banners') {
+      const newItem = {
+        id: Date.now().toString(),
+        preview: URL.createObjectURL(blob),
+        file: blob
+      };
+      setTitleBanners(prev => [...prev, newItem]);
+    } else {
+      setImages(prev => ({
+        ...prev,
+        [imageType]: {
+          preview: URL.createObjectURL(blob),
+          file: blob
+        }
+      }));
+    }
+    setShowCropper(prev => ({ ...prev, [imageType]: false }));
+  };
+
+  const removeImage = (imageType) => {
+    setImages(prev => ({
+      ...prev,
+      [imageType]: { preview: '', file: null }
+    }));
+  };
+
+  const removeTitleBanner = (idToRemove) => {
+    setTitleBanners(prev => prev.filter(b => b.id !== idToRemove));
+  };
+
 
   const handleLevelChange = (e) => {
     const level = parseInt(e.target.value);
@@ -107,23 +147,54 @@ const AddCategory = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    const submissionData = new FormData();
-    for (let key in formData) {
-      if (formData[key] !== null) {
-        submissionData.append(key, formData[key]);
-      }
+    if (!formData.name || !formData.slug) {
+      alert('Name and slug are required');
+      return;
     }
 
-    console.log("Submitting Form:", Object.fromEntries(submissionData.entries()));
-    // Replace this with your API call to submit the form
-    // navigate("/admin/categories");
     try {
+      setSaving(true);
+      const submissionData = new FormData();
+
+      submissionData.append('name', formData.name);
+      submissionData.append('slug', formData.slug);
+      submissionData.append('gender', formData.gender);
+      submissionData.append('isActive', formData.isActive);
+      submissionData.append('sortOrder', formData.sortOrder);
+      submissionData.append('level', formData.level);
+
+      if (formData.parentId) {
+        submissionData.append('parentId', formData.parentId);
+      }
+
+      if (formData.level === 0) {
+        submissionData.append('commissionPercentage', formData.commissionPercentage);
+      }
+
+      if (images.image.file) {
+        submissionData.append('image', images.image.file);
+      }
+      if (images.logo.file) {
+        submissionData.append('logo', images.logo.file);
+      }
+
+      titleBanners.forEach(b => {
+        if (b.file) {
+          submissionData.append('title_banners', b.file);
+        }
+      });
+
+      console.log("Submitting Form");
       const response = await addCategory(submissionData);
       console.log("Category added successfully:", response);
       alert("Category added successfully");
+
+      // Optionally reset form here
     } catch (error) {
       alert(error.message)
       console.error("Error adding category:", error);
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -217,49 +288,103 @@ const AddCategory = () => {
         {/* Sort Order */}
         <input type="number" name="sortOrder" value={formData.sortOrder} onChange={handleChange} className="border p-2 rounded w-full" placeholder="Sort Order" />
 
-        {/* File Uploads */}
-        {['image', 'logo', 'title_banner'].map((type) => (
-          <div key={type} className="flex flex-col border p-4 rounded bg-gray-50">
-            <label htmlFor={type} className="mb-2 font-semibold capitalize">
-              Upload {type.replace('_', ' ')}
+        {/* Image Input */}
+        <div className="flex flex-col border p-4 rounded bg-gray-50">
+          <label className="mb-2 font-semibold capitalize">Upload image</label>
+          {images.image.preview ? (
+            <div className="relative inline-block w-48 mx-auto">
+              <img src={images.image.preview} alt="Category" className="w-full h-48 object-cover rounded-lg border border-gray-300" />
+              <button
+                type="button"
+                onClick={() => removeImage('image')}
+                className="absolute top-2 right-2 p-1 bg-red-600 text-white rounded-full hover:bg-red-700"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          ) : (
+            <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50">
+              <Upload className="w-8 h-8 text-gray-400 mb-2" />
+              <span className="text-sm text-gray-500">Click to upload image</span>
+              <input type="file" accept="image/*" onChange={(e) => handleImageChange(e, 'image')} className="hidden" />
             </label>
-            <input
-              type="file"
-              accept="image/*"
-              name={type}
-              onChange={handleChange}
-              className="border p-2 rounded mb-2 bg-white"
-            />
-            {previewUrls[type] && !showCropper[type] && !croppedImages[type] && (
-              <div className="mt-2">
-                <p className="text-sm text-gray-600">Selected {type.replace('_', ' ')}:</p>
-                <img src={previewUrls[type]} alt="Preview" className="h-24 rounded" />
+          )}
+        </div>
+
+        {/* Logo Input */}
+        <div className="flex flex-col border p-4 rounded bg-gray-50">
+          <label className="mb-2 font-semibold capitalize">Upload logo</label>
+          {images.logo.preview ? (
+            <div className="relative inline-block w-48 mx-auto w-full">
+              <img src={images.logo.preview} alt="Logo" className="w-full h-32 object-contain rounded-lg border border-gray-300 bg-gray-50" />
+              <button
+                type="button"
+                onClick={() => removeImage('logo')}
+                className="absolute top-2 right-2 p-1 bg-red-600 text-white rounded-full hover:bg-red-700"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          ) : (
+            <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50">
+              <Upload className="w-8 h-8 text-gray-400 mb-2" />
+              <span className="text-sm text-gray-500">Click to upload logo</span>
+              <input type="file" accept="image/*" onChange={(e) => handleImageChange(e, 'logo')} className="hidden" />
+            </label>
+          )}
+        </div>
+
+        {/* Title Banners Upload (Array) */}
+        <div className="border border-gray-200 rounded-lg p-4 bg-gray-50">
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Title Banners (Max 5)
+          </label>
+
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-4">
+            {titleBanners.map((banner) => (
+              <div key={banner.id} className="relative group border border-gray-200 rounded bg-white flex flex-col items-center p-2 shadow-sm">
+                <img src={banner.preview} alt="Banner" className="h-24 object-cover rounded mb-2 w-full" />
+                <button
+                  type="button"
+                  onClick={() => removeTitleBanner(banner.id)}
+                  className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                  title="Remove banner"
+                >
+                  <X size={14} />
+                </button>
+                <span className="absolute bottom-1 left-1 text-[10px] bg-black bg-opacity-50 text-white px-1.5 py-0.5 rounded">New</span>
               </div>
-            )}
-            {croppedImages[type] && !showCropper[type] && (
-              <div className="mt-2">
-                <p className="text-sm text-gray-600">Cropped {type.replace('_', ' ')} Preview:</p>
-                <img
-                  src={URL.createObjectURL(croppedImages[type])}
-                  alt="Cropped"
-                  className="h-24 rounded border"
-                />
-              </div>
+            ))}
+
+            {titleBanners.length < 5 && (
+              <label className="flex flex-col items-center justify-center h-[120px] border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:bg-gray-100 min-h-24">
+                <Upload className="w-6 h-6 text-gray-400 mb-1" />
+                <span className="text-xs text-gray-500 font-medium">Add Banner</span>
+                <input type="file" accept="image/*" onChange={(e) => handleImageChange(e, 'title_banners')} className="hidden" />
+              </label>
             )}
           </div>
+        </div>
+
+        {/* Shared Cropper Modal */}
+        {['image', 'logo', 'title_banners'].map((type) => (
+          showCropper[type] && tempImageSrc[type] && (
+            <div key={type} className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+              <div className="bg-white p-4 rounded-lg w-full max-w-2xl">
+                <CropperModal
+                  imageSrc={tempImageSrc[type]}
+                  onClose={() => setShowCropper(prev => ({ ...prev, [type]: false }))}
+                  onCropComplete={(blob) => handleCropComplete(blob, type)}
+                />
+              </div>
+            </div>
+          )
         ))}
 
-        {currentCropType && showCropper[currentCropType] && previewUrls[currentCropType] && (
-          <CropperModal
-            imageSrc={previewUrls[currentCropType]}
-            onClose={() => setShowCropper((prev) => ({ ...prev, [currentCropType]: false }))}
-            onCropComplete={handleCropComplete}
-          />
-        )}
-
         {/* Submit */}
-        <button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded">
-          Add Category
+        <button type="submit" disabled={saving} className="bg-blue-600 text-white px-4 py-2 rounded flex items-center gap-2">
+          {saving && <Loader2 className="w-4 h-4 animate-spin" />}
+          {saving ? 'Saving...' : 'Add Category'}
         </button>
       </form>
     </div>

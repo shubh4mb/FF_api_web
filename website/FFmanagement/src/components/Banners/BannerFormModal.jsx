@@ -1,10 +1,8 @@
 import React, { useState } from 'react';
 import Modal from '../../components/Modal';
-import { Button } from '../../components/ui/button';
-import { Input } from '../../components/ui/input';
 import Cropper from 'react-easy-crop';
 import { useImageCropper } from '../../hooks/useImageCropper';
-import { toast } from 'sonner';
+import { toast } from 'react-hot-toast';
 
 const RATIOS = {
     '16:9': 16 / 9,
@@ -122,7 +120,9 @@ export default function BannerFormModal({ open, onClose, onSave, initialData }) 
 
                         <div className="space-y-2">
                             <label className="text-sm font-medium">Title (Optional)</label>
-                            <Input
+                            <input
+                                type="text"
+                                className="w-full border rounded-md p-2 h-10 border-slate-300 focus:outline-none focus:ring-1 focus:ring-slate-500"
                                 value={formData.title}
                                 onChange={e => setFormData({ ...formData, title: e.target.value })}
                                 placeholder="Internal identifier"
@@ -131,7 +131,9 @@ export default function BannerFormModal({ open, onClose, onSave, initialData }) 
 
                         <div className="space-y-2">
                             <label className="text-sm font-medium">Action URL (Optional)</label>
-                            <Input
+                            <input
+                                type="text"
+                                className="w-full border rounded-md p-2 h-10 border-slate-300 focus:outline-none focus:ring-1 focus:ring-slate-500"
                                 value={formData.actionUrl}
                                 onChange={e => setFormData({ ...formData, actionUrl: e.target.value })}
                                 placeholder="/category/mens"
@@ -140,8 +142,9 @@ export default function BannerFormModal({ open, onClose, onSave, initialData }) 
 
                         <div className="space-y-2">
                             <label className="text-sm font-medium">Sort Order</label>
-                            <Input
+                            <input
                                 type="number"
+                                className="w-full border rounded-md p-2 h-10 border-slate-300 focus:outline-none focus:ring-1 focus:ring-slate-500"
                                 value={formData.order}
                                 onChange={e => setFormData({ ...formData, order: Number(e.target.value) })}
                             />
@@ -159,8 +162,13 @@ export default function BannerFormModal({ open, onClose, onSave, initialData }) 
                     </div>
 
                     <div className="space-y-2">
-                        <label className="text-sm font-medium">Image</label>
-                        <Input type="file" accept="image/*" onChange={handleFileChange} />
+                        <label className="text-sm font-medium block">Image</label>
+                        <input
+                            type="file"
+                            accept="image/*"
+                            onChange={handleFileChange}
+                            className="w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-sky-50 file:text-sky-700 hover:file:bg-sky-100 border border-slate-200 p-2 rounded-lg cursor-pointer"
+                        />
                     </div>
 
                     {cropper.imageSrc ? (
@@ -183,10 +191,20 @@ export default function BannerFormModal({ open, onClose, onSave, initialData }) 
                     ) : null}
 
                     <div className="pt-4 flex justify-end gap-2">
-                        <Button type="button" variant="outline" onClick={() => { cropper.resetCropper(); onClose(); }}>Cancel</Button>
-                        <Button type="submit" disabled={isSubmitting}>
+                        <button
+                            type="button"
+                            className="px-4 py-2 border border-slate-300 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-50"
+                            onClick={() => { cropper.resetCropper(); onClose(); }}
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            type="submit"
+                            disabled={isSubmitting}
+                            className="px-4 py-2 bg-slate-900 rounded-lg text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
+                        >
                             {isSubmitting ? 'Saving...' : 'Save Banner'}
-                        </Button>
+                        </button>
                     </div>
                 </form>
             </div>

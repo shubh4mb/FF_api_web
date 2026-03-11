@@ -19,6 +19,7 @@ export const addMerchant = async (formData) => {
 export const getMerchants = async () => {
     try {
         const response = await axiosInstance.get('/admin/getMerchants');
+        console.log("yes reaching api : ",response.data);
         return response.data;
     } catch (error) {
         console.log(error)

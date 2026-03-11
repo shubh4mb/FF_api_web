@@ -10,7 +10,17 @@ export const productSchema = Joi.object({
   subSubCategoryId: Joi.string().hex().length(24).optional(),
   tags: Joi.array().items(Joi.string()).optional(),
   merchantId: Joi.string().hex().length(24).required(),
+
+  soldBy: Joi.string().optional(),
+  styleName: Joi.string().optional(),
+
   features: Joi.object().optional(),
+  attributes: Joi.array().items(
+    Joi.object({
+      attributeId: Joi.string().hex().length(24).required(),
+      value: Joi.any().required()
+    })
+  ).optional(),
   isActive: Joi.boolean().default(true),
   isTriable: Joi.boolean().default(true),
 

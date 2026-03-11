@@ -13,13 +13,13 @@ const merchantSchema = new mongoose.Schema(
       public_id: String,
       url: String,
     },
-    genderCategory: { type: String, enum: ['men', 'women', 'unisex', 'boys', 'girls', 'babies'] },
-     zoneId: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: "Zone",
-      },
+    genderCategory: { type: String, enum: ['Men', 'Women', 'Unisex', 'Kids'] },
+    zoneId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Zone",
+    },
     zoneName: { type: String },
-    
+
     address: {
       street: String,
       city: String,

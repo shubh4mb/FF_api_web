@@ -9,8 +9,8 @@ export const addCategory = async (formData) => {
     console.log(pair[0] + ': ' + pair[1]);
   }
   try {
-    const response = await axiosInstance.post('/admin/addCategory', formData,{
-      headers:{
+    const response = await axiosInstance.post('/admin/addCategory', formData, {
+      headers: {
         'Content-Type': 'multipart/form-data'
       }
     });
@@ -31,21 +31,25 @@ export const getCategories = async () => {
   }
 };
 
-export const getCategoryById = async (categoryId)=>{
-  try{
+export const getCategoryById = async (categoryId) => {
+  try {
     const response = await axiosInstance.get(`/admin/getCategoryById/${categoryId}`);
     return response.data;
-  }catch(error){
+  } catch (error) {
     console.log(error)
     throw error.response ? error.response.data : new Error('Network Error');
   }
 }
 
-export const updateCategory =async(categoryData)=>{
-  try{
-    const response = await axiosInstance.put(`/admin/updateCategory/${categoryData._id}`,categoryData);
+export const updateCategory = async (categoryId, formData) => {
+  try {
+    const response = await axiosInstance.patch(`/admin/updateCategory/${categoryId}`, formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data'
+      }
+    });
     return response.data;
-  }catch(error){
+  } catch (error) {
     console.log(error)
     throw error.response ? error.response.data : new Error('Network Error');
   }

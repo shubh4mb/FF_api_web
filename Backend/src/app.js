@@ -9,13 +9,7 @@ import authRoutes from './routes/auth.routes.js';
 import userRoutes from './routes/user.routes.js';
 import adminRoutes from './routes/admin.routes.js';
 import merchantRoutes from './routes/merchant.routes.js';
-import merchantWalletRoutes from './routes/merchantWallet.routes.js';
 import deliveryRiderRoutes from './routes/deliveryRider.routes.js';
-import userNotifWalletRoutes from './routes/userNotifWallet.routes.js';
-import riderNotifPhotosRoutes from './routes/riderNotifPhotos.routes.js';
-import adminBannerRoutes from './routes/adminBanner.routes.js';
-import userBannerRoutes from './routes/userBanner.routes.js';
-
 import { allowedOrigins } from './config/cors.js';
 import { getIO } from './config/socket.js';
 
@@ -68,14 +62,9 @@ app.get('/ping', (req, res) => {
 // ---- Routes ----
 app.use('/api/auth', authRoutes);
 app.use('/api/user', userRoutes);
-app.use('/api/user', userNotifWalletRoutes);             // notifications + wallet
-app.use('/api/user/banners', userBannerRoutes);          // public banners
 app.use('/api/admin', adminRoutes);
-app.use('/api/admin/banners', adminBannerRoutes);        // banner management
 app.use('/api/merchant', merchantRoutes);
-app.use('/api/merchant', merchantWalletRoutes);          // merchant wallet
 app.use('/api/deliveryRider', deliveryRiderRoutes);
-app.use('/api/deliveryRider', riderNotifPhotosRoutes);   // notifications + return photos
 
 app.get('/', (req, res) => {
   res.send('Backend is working!');

@@ -36,7 +36,7 @@ export const addMerchant = asyncHandler(async (req, res) => {
 
 export const getMerchants = asyncHandler(async (req, res) => {
   const merchants = await Merchant.find({ isActive: true })
-    .select('shopName logo rating reviewCount address operatingHours genderCategory zoneName zoneId stats isOnline')
+    .select('shopName phoneNumber email isActive logo rating reviewCount address operatingHours genderCategory zoneName zoneId stats isOnline')
     .lean();
   return res.status(200).json(new ApiResponse(200, { merchants }, "Merchants retrieved successfully"));
 });

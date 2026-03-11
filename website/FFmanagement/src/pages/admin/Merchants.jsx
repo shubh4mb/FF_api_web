@@ -9,8 +9,8 @@ const Merchants = () => {
 
   const merchantColumns = [
     { header: "#", accessor: "_index", render: (_, __, i) => i + 1 },
-    { header: "Name", accessor: "name" },
-    { header: "Phone", accessor: "phone" },
+    { header: "Name", accessor: "shopName" },
+    { header: "Phone", accessor: "phoneNumber" },
     { header: "Email", accessor: "email" },
     {
       header: "Status",
@@ -45,7 +45,7 @@ const Merchants = () => {
     const fetchMerchants = async () => {
       try {
         const res = await getMerchants();
-        console.log(res);
+        // console.log("yes reachingddd : ",res);
         setMerchants(res.merchants);
       } catch (err) {
         console.error(err);
@@ -56,10 +56,10 @@ const Merchants = () => {
   }, []);
 
   return (
-    <div className="p-4">
-      <h1 className="text-2xl font-semibold mb-4">Merchants</h1>
+    <div className="space-y-6">
+      <h1 className="text-3xl font-extrabold text-gray-900 tracking-tight">Merchants</h1>
       {merchants.length === 0 ? (
-        <p>No merchants found.</p>
+        <p className="text-gray-500">No merchants found.</p>
       ) : (
         <ReusableAdminTable columns={merchantColumns} data={merchants} actions={merchantActions} />
       )}

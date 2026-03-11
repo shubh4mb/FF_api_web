@@ -1,9 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Button } from '../../components/ui/button';
-import { Plus, Pencil, Trash2, CheckCircle2, XCircle } from 'lucide-react';
+import { Plus, Pencil, Trash2, CheckCircle2, XCircle, Image as ImageIcon } from 'lucide-react';
 import { bannerApi } from '../../api/banner.api';
 import BannerFormModal from '../../components/Banners/BannerFormModal';
-import { toast } from 'sonner';
+import { toast } from 'react-hot-toast';
 
 export default function BannersPage() {
     const [banners, setBanners] = useState([]);
@@ -30,9 +29,6 @@ export default function BannersPage() {
     const handleSaveBanner = async (formData, id) => {
         try {
             if (id) {
-                // Note: For updating with an image, your backend must support parsing the image
-                // If the backend patch route doesn't use multer, you might need to handle image replacement differently
-                // or send it via POST / PUT depending on API setup. Assuming it matches create.
                 await bannerApi.updateBanner(id, formData);
                 toast.success('Banner updated');
             } else {
@@ -61,7 +57,7 @@ export default function BannersPage() {
         try {
             await bannerApi.updateBanner(id, { isActive: !currentState });
             toast.success("Visibility updated");
-            fetchBanners(); // optimistic update could be better but this is safer
+            fetchBanners();
         } catch (err) {
             toast.error("Failed to update status");
         }
@@ -70,10 +66,16 @@ export default function BannersPage() {
     return (
         <div className="p-6">
             <div className="flex justify-between items-center mb-6">
-                <h1 className="text-2xl font-bold">Banner Management</h1>
-                <Button onClick={() => { setEditingBanner(null); setIsModalOpen(true); }} className="gap-2">
+                <div>
+                    <h1 className="text-2xl font-bold">Banner Management</h1>
+                    <p className="text-sm text-slate-500 mt-1">Manage marketing banners across different app sections</p>
+                </div>
+                <button
+                    onClick={() => { setEditingBanner(null); setIsModalOpen(true); }}
+                    className="flex items-center gap-2 bg-sky-600 hover:bg-sky-700 text-white px-4 py-2 rounded-xl transition-all font-medium text-sm shadow-sm"
+                >
                     <Plus size={16} /> Add Banner
-                </Button>
+                </button>
             </div>
 
             <div className="bg-white rounded-lg shadow overflow-hidden">
@@ -91,48 +93,78 @@ export default function BannersPage() {
                         </thead>
                         <tbody className="divide-y divide-gray-200">
                             {isLoading ? (
-                                <tr><td colSpan={6} className="text-center py-8">Loading banners...</td></tr>
+                                <tr>
+                                    <td colSpan={6} className="text-center py-8">
+                                        <div className="flex flex-col items-center justify-center">
+                                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-sky-600 mb-2"></div>
+                                            <span className="text-slate-500 text-sm">Loading banners...</span>
+                                        </div>
+                                    </td>
+                                </tr>
                             ) : banners.length === 0 ? (
-                                <tr><td colSpan={6} className="text-center py-8 text-slate-500">No banners found. Create one above.</td></tr>
+                                <tr>
+                                    <td colSpan={6} className="text-center py-16">
+                                        <div className="flex flex-col items-center justify-center">
+                                            <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mb-4">
+                                                <ImageIcon className="w-8 h-8 text-slate-400" />
+                                            </div>
+                                            <h3 className="text-lg font-bold text-slate-700">No Banners Found</h3>
+                                            <p className="text-slate-500 text-sm mt-1 max-w-sm">Create your first banner above.</p>
+                                        </div>
+                                    </td>
+                                </tr>
                             ) : (
                                 banners.map((banner) => (
                                     <tr key={banner._id} className="hover:bg-slate-50 transition-colors">
                                         <td className="px-6 py-4">
-                                            <div className="w-32 h-16 bg-slate-100 rounded-md overflow-hidden flex items-center justify-center">
-                                                <img src={banner.imageUrl} alt="banner" className="w-full h-full object-cover" />
+                                            <div className="w-32 h-16 bg-slate-100 rounded-md overflow-hidden flex items-center justify-center border border-slate-200 shadow-inner">
+                                                <img src={banner.imageUrl} alt="banner" className="w-full h-full object-contain" />
                                             </div>
                                         </td>
                                         <td className="px-6 py-4">
-                                            <div className="font-medium">{banner.title || 'Untitled'}</div>
-                                            <div className="text-xs text-slate-500 max-w-[150px] truncate">{banner.actionUrl || 'No link'}</div>
+                                            <div className="font-bold text-slate-800">{banner.title || 'Untitled'}</div>
+                                            <div className="text-xs text-sky-600 max-w-[150px] truncate mt-1">
+                                                <a href={banner.actionUrl} target="_blank" rel="noreferrer" className="hover:underline">
+                                                    {banner.actionUrl || 'No deep link'}
+                                                </a>
+                                            </div>
                                         </td>
                                         <td className="px-6 py-4">
-                                            <div className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                            <div className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold font-mono tracking-tighter bg-sky-100 text-sky-800">
                                                 {banner.type}
                                             </div>
-                                            <div className="text-xs text-slate-500 mt-1">{banner.ratio}</div>
+                                            <div className="text-xs text-slate-500 mt-1.5 font-semibold">Aspect: <span className="text-slate-700">{banner.ratio}</span></div>
                                         </td>
-                                        <td className="px-6 py-4 font-mono">{banner.order}</td>
+                                        <td className="px-6 py-4 font-mono font-bold text-slate-700">{banner.order}</td>
                                         <td className="px-6 py-4">
-                                            <button onClick={() => toggleActive(banner._id, banner.isActive)} className="group flex items-center gap-1">
+                                            <button onClick={() => toggleActive(banner._id, banner.isActive)} className="group flex items-center gap-1 hover:scale-105 transition-transform" title="Click to toggle status">
                                                 {banner.isActive ? (
-                                                    <span className="inline-flex items-center gap-1 text-green-700 bg-green-50 px-2.5 py-1 rounded-full text-xs font-medium">
-                                                        <CheckCircle2 size={14} /> Active
+                                                    <span className="inline-flex items-center gap-1.5 text-emerald-700 bg-emerald-100 px-3 py-1.5 rounded-full text-xs font-bold border border-emerald-200">
+                                                        <CheckCircle2 size={14} className="text-emerald-500" /> LIVE
                                                     </span>
                                                 ) : (
-                                                    <span className="inline-flex items-center gap-1 text-slate-600 bg-slate-100 px-2.5 py-1 rounded-full text-xs font-medium">
-                                                        <XCircle size={14} /> Hidden
+                                                    <span className="inline-flex items-center gap-1.5 text-slate-600 bg-slate-100 px-3 py-1.5 rounded-full text-xs font-bold border border-slate-200">
+                                                        <XCircle size={14} className="text-slate-400" /> HIDDEN
                                                     </span>
                                                 )}
                                             </button>
                                         </td>
                                         <td className="px-6 py-4 text-right space-x-2">
-                                            <Button variant="outline" size="sm" onClick={() => { setEditingBanner(banner); setIsModalOpen(true); }}>
-                                                <Pencil size={14} />
-                                            </Button>
-                                            <Button variant="outline" size="sm" className="text-red-600 hover:text-red-700 hover:bg-red-50" onClick={() => handleDelete(banner._id)}>
-                                                <Trash2 size={14} />
-                                            </Button>
+                                            {/* Note: In your original file it used a distinct Button component, replacing with standard tailwind to match */}
+                                            <button
+                                                className="p-1.5 text-slate-500 hover:text-sky-600 hover:bg-sky-50 rounded-lg transition-colors border border-transparent hover:border-sky-200"
+                                                onClick={() => { setEditingBanner(banner); setIsModalOpen(true); }}
+                                                title="Edit details (no image change)"
+                                            >
+                                                <Pencil size={18} />
+                                            </button>
+                                            <button
+                                                className="p-1.5 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded-lg transition-colors border border-transparent hover:border-rose-200"
+                                                onClick={() => handleDelete(banner._id)}
+                                                title="Delete banner permanently"
+                                            >
+                                                <Trash2 size={18} />
+                                            </button>
                                         </td>
                                     </tr>
                                 ))

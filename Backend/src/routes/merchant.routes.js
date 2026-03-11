@@ -1,12 +1,13 @@
 import express from 'express'
 import upload, { handleMulterError } from '../middleware/multer.js'
-import { addBaseProduct, addVariant, getBaseProducts, getVariants, getCategories, updateVariant, updateSize, deleteVariantSizes, updateSizeCount } from '../controllers/merchantController/product.controllers.js';
+import { addBaseProduct, addVariant, getBaseProducts, getVariants, updateVariant, updateSize, deleteVariantSizes, updateSizeCount } from '../controllers/merchantController/product.controllers.js';
 import { deleteVariant, addBrand, getBrands, getBaseProductById, getProductsByMerchantId, uploadProductImage, deleteImage, deleteProduct, updatePrice, editProduct, editVariant, updateVariantSizeStock, updateMultipleVariantSizes, getAllBrands } from '../controllers/merchantController/product.controllers.js';
 
 import { addMerchant } from '../controllers/merchantController/merchant.controller.js';
-import { loginMerchant, updateMerchantShopDetails, updateMerchantBankDetails, updateMerchantOperatingHours, activateMerchant, registerPhone, sendEmailOtp, verifyEmailOtp, getMerchantByEmail } from '../controllers/merchantController/authControllers.js';
+import { loginMerchant, registerMerchant, updateMerchantShopDetails, updateMerchantBankDetails, updateMerchantOperatingHours, activateMerchant, registerPhone, sendEmailOtp, verifyEmailOtp, getMerchantByEmail } from '../controllers/merchantController/authControllers.js';
 import { getAllOrder, saveProductDetails } from '../controllers/merchantController/order.controllers.js';
 import { authMiddlewareMerchant } from '../middleware/jwtAuth.js';
+import { getWalletDetails } from '../helperFns/walletHelper.js';
 import { getPlacedOrder, orderRequestForMerchant, orderPacked } from '../controllers/merchantController/order.controllers.js';
 import { getMerchantById } from '../controllers/merchantController/merchant.controller.js';
 
@@ -22,8 +23,12 @@ router.put("/:merchantId/bank-details", updateMerchantBankDetails);
 router.put("/:merchantId/operating-hours", updateMerchantOperatingHours);
 router.put("/:merchantId/activate", activateMerchant);
 router.post('/login', loginMerchant);
+router.post('/register', registerMerchant);
 
 
+
+import { getCategories } from '../controllers/adminControllers/category.controllers.js';
+import { getAttributes } from '../controllers/adminControllers/attribute.controllers.js';
 
 router.post('/brand/add', upload.single('logo'), handleMulterError, addBrand);
 router.get('/brand/get/', getBrands);
@@ -36,8 +41,9 @@ router.get('/getBaseProducts', getBaseProducts);
 router.get('/getBaseProductById/:productId', getBaseProductById);
 router.get('/fetchProductsByMerchantId/:merchantId', getProductsByMerchantId);
 router.get('/getVariants', getVariants);
-router.get('/getCategories', getCategories)
-router.get('/brand/getAllBrands', getAllBrands)
+router.get('/getCategories', getCategories);
+router.get('/attributes', getAttributes);
+router.get('/brand/getAllBrands', getAllBrands);
 
 router.post("/upload/image", upload.array("images", 5), handleMulterError, uploadProductImage)
 router.delete('/deleteImage/:imageId', deleteImage);
@@ -72,5 +78,16 @@ router.post('/add', addMerchant)
 // ── Reviews ──
 import { getMerchantOwnReviews } from '../controllers/userControllers/review.controllers.js';
 router.get('/reviews', authMiddlewareMerchant, getMerchantOwnReviews);
+
+// ── Wallet ──
+router.get('/wallet', authMiddlewareMerchant, async (req, res) => {
+    try {
+        const details = await getWalletDetails('merchant', req.merchantId);
+        return res.status(200).json({ success: true, ...details });
+    } catch (err) {
+        console.error('Get merchant wallet error:', err);
+        return res.status(500).json({ message: 'Failed to fetch wallet' });
+    }
+});
 
 export default router;
