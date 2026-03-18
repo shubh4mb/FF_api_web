@@ -7,6 +7,7 @@ const Settings = () => {
         deliveryPerKmRate: 12,
         returnPerKmRate: 7,
         waitingCharge: 10,
+        deliveryRadius: 5,
     });
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
@@ -27,6 +28,7 @@ const Settings = () => {
                     deliveryPerKmRate: data.config.deliveryPerKmRate,
                     returnPerKmRate: data.config.returnPerKmRate,
                     waitingCharge: data.config.waitingCharge,
+                    deliveryRadius: data.config.deliveryRadius ?? 5,
                 });
             }
         } catch (err) {
@@ -156,6 +158,24 @@ const Settings = () => {
                                 placeholder="e.g. 10"
                             />
                             <p className="text-xs text-gray-500">Base connection fee added to deliveries</p>
+                        </div>
+
+                        <div className="space-y-2">
+                            <label className="text-sm font-medium text-gray-700 block">
+                                Delivery Radius (Km)
+                            </label>
+                            <input
+                                type="number"
+                                name="deliveryRadius"
+                                value={config.deliveryRadius}
+                                onChange={handleChange}
+                                min="0"
+                                step="0.1"
+                                required
+                                className="w-full px-4 py-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
+                                placeholder="e.g. 5"
+                            />
+                            <p className="text-xs text-gray-500">Maximum delivery distance in kilometers</p>
                         </div>
                     </div>
 

@@ -17,6 +17,9 @@ const bannerSchema = new mongoose.Schema({
             'explore_hero',       // top of explore page
             'category_banner',    // inside specific categories
             'promotional',        // general promo banners
+            'new_arrivals_banner', // specialized section banners
+            'trending_banner',
+            'recommended_banner',
         ],
         required: true,
     },

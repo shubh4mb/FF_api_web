@@ -26,7 +26,7 @@ const categorySchema = new mongoose.Schema({
   // ── Gender (set on root categories, level 0) ──
   gender: {
     type: String,
-    enum: ["Men", "Women", "Unisex", "Kids", "Boys", "Girls"],
+    enum: ["Men", "Women", "Unisex", "Kids"],
     default: null,
   },
 
@@ -40,7 +40,7 @@ const categorySchema = new mongoose.Schema({
     grandparentGender: { type: String, default: null },
   },
 
-  // ── Commission (set on level-0 root categories) ──
+  // ── Commission (set on sub-sub categories, level 2) ──
   commissionPercentage: {
     type: Number,
     default: 0,

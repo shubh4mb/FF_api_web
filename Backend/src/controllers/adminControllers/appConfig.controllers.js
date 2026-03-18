@@ -21,13 +21,14 @@ export const getAppConfig = async (req, res) => {
  */
 export const updateAppConfig = async (req, res) => {
     try {
-        const { deliveryPerKmRate, returnPerKmRate, waitingCharge } = req.body;
+        const { deliveryPerKmRate, returnPerKmRate, waitingCharge, deliveryRadius } = req.body;
 
         const config = await AppConfig.getConfig();
 
         if (deliveryPerKmRate !== undefined) config.deliveryPerKmRate = deliveryPerKmRate;
         if (returnPerKmRate !== undefined) config.returnPerKmRate = returnPerKmRate;
         if (waitingCharge !== undefined) config.waitingCharge = waitingCharge;
+        if (deliveryRadius !== undefined) config.deliveryRadius = deliveryRadius;
 
         await config.save();
 

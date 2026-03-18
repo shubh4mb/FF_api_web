@@ -88,3 +88,25 @@ export const phoneLogin = async (req, res) => {
   }
 };
 
+export const addPushToken = async (req, res) => {
+  try {
+    const { token } = req.body;
+    if (!token) return res.status(400).json({ message: "Push token is required" });
+
+    // Ensure backwards compatibility just in case token is an object, though Expo tokens are strings.
+    const tokenStr = typeof token === 'string' ? token : token.data;
+
+    const user = await User.findById(req.user.userId);
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    if (!user.expoPushTokens.includes(tokenStr)) {
+      user.expoPushTokens.push(tokenStr);
+      await user.save();
+    }
+
+    return res.status(200).json({ message: "Push token saved successfully" });
+  } catch (error) {
+    console.error("Save user push token error:", error);
+    return res.status(500).json({ message: "Internal Server Error" });
+  }
+};

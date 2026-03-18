@@ -137,6 +137,7 @@ const DeliveryRiderSchema = new mongoose.Schema({
   },
   rating: { type: Number, default: 0 },
   reviewCount: { type: Number, default: 0 },
+  expoPushTokens: { type: [String], default: [] },
   createdAt: {
     type: Date,
     default: Date.now,

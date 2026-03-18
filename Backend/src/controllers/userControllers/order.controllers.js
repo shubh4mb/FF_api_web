@@ -146,7 +146,6 @@ export const createRazorpayOrder = async (req, res) => {
       },
       razorpayOrderId: razorpayOrder.id,
       paymentStatus: "pending",
-      status: "payment_pending",
     });
 
     await pendingOrder.save();
@@ -341,8 +340,8 @@ export const orderRequestForDeliveryBoy = async (req, res) => {
 
     if (action === "accept") {
       // Assign delivery boy
-      order.deliveryBoy = deliveryBoyId;
-      order.deliveryBoyStatus = "assigned";
+      order.deliveryRiderId = deliveryBoyId;
+      order.deliveryRiderStatus = "assigned";
 
       // Update delivery boy’s availability
       await DeliveryBoy.findByIdAndUpdate(deliveryBoyId, { status: "busy" });
@@ -355,7 +354,7 @@ export const orderRequestForDeliveryBoy = async (req, res) => {
     }
 
     if (action === "reject") {
-      order.deliveryBoyStatus = "rejected";
+      order.deliveryRiderStatus = "rejected";
       await order.save();
       return res.status(200).json({
         message: "Order rejected by delivery boy",
@@ -376,7 +375,7 @@ export const orderPacked = async (req, res) => {
   const order = await Order.findById(orderId);
   if (!order) return res.status(404).json({ message: "Order not found" });
 
-  order.status = "packed"
+  order.orderStatus = "packed"
   await order.save();
   return res.status(200).json({ message: "Order packed" });
 };

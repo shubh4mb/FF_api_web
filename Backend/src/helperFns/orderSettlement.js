@@ -25,7 +25,7 @@ export const settleOrder = async (order) => {
 
             let commissionPercentage = 0;
             if (product.categoryId) {
-                // Find the level-0 category to get the commission percentage
+                // Find the direct category (level-2) to get the commission percentage
                 const category = await Category.findById(product.categoryId).select("commissionPercentage");
                 if (category && category.commissionPercentage) {
                     commissionPercentage = category.commissionPercentage;

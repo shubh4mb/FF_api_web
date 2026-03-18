@@ -1,7 +1,7 @@
 import express from 'express';
 import { googleLogin, signup } from '../controllers/userControllers/authControllers.js';
-import { newArrivals, productsDetails, getFilteredProducts, getProductsByMerchantId, getYouMayLikeProducts, getProductsBatch } from '../controllers/userControllers/product.controllers.js';
-import { phoneLogin } from '../controllers/userControllers/authControllers.js';
+import { newArrivals, productsDetails, getFilteredProducts, getProductsByMerchantId, getYouMayLikeProducts, getProductsBatch, trendingProducts, recommendedProducts } from '../controllers/userControllers/product.controllers.js';
+import { phoneLogin, addPushToken } from '../controllers/userControllers/authControllers.js';
 import { addToCart, getCart, clearCart, updateCartQuantity, deleteCartItem, getCartCount } from '../controllers/userControllers/cart.controllers.js';
 import { authMiddleware } from '../middleware/jwtAuth.js';
 import { getAllOrders, initiateReturn, getOrderById, createRazorpayOrder, verifyPayment, razorpayWebhook, createFinalPaymentRazorpayOrder, verifyFinalPayment } from '../controllers/userControllers/order.controllers.js';
@@ -84,7 +84,11 @@ router.post('/signup', signup);
 router.post('/phoneLogin', phoneLogin)
 router.post('/checkDeliveryAvailability', checkDeliveryAvailability);
 
+router.put('/push-token', authMiddleware, addPushToken);
+
 router.get('/products/newArrivals', newArrivals)
+router.get('/products/trending', trendingProducts);
+router.get('/products/recommended', authMiddleware, recommendedProducts); // requires auth for cart/wishlist
 router.post('/products/filtered', getFilteredProducts)
 router.get('/products/getYouMayLikeProducts', getYouMayLikeProducts);
 router.get('/products/:id', productsDetails)

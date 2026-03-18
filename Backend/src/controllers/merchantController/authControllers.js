@@ -4,8 +4,8 @@ import Merchant from "../../models/merchant.model.js";
 import Brand from "../../models/brand.model.js";
 import nodemailer from 'nodemailer';
 import Zone from "../../models/zone.model.js";
-// import dotenv from 'dotenv';
-// dotenv.config();
+import dotenv from 'dotenv';
+dotenv.config();
 import { uploadToCloudinary } from '../../config/cloudinary.config.js';
 const jwt_secret = "hehe"
 const transporter = nodemailer.createTransport({
@@ -20,7 +20,7 @@ const generateOtp = () => Math.floor(100000 + Math.random() * 900000).toString()
 export const sendEmailOtp = async (req, res) => {
   console.log(req.body);
   try {
-    const { email, password } = req.body;
+    const { email, password, phoneNumber } = req.body;
 
     if (!email) return res.status(400).json({ message: "Email is required" });
 
@@ -37,21 +37,26 @@ export const sendEmailOtp = async (req, res) => {
       merchant.password = await bcrypt.hash(password, 10);
     }
 
+    // Store phone number if provided during initial signup  
+    if (phoneNumber) {
+      merchant.phoneNumber = phoneNumber;
+    }
+
     merchant.emailOtp = otp;
     merchant.emailOtpExpiry = expiry;
     await merchant.save();
 
-    // await transporter.sendMail({
-    //   from: `"FlashFits" <${process.env.EMAIL_USER}>`,
-    //   to: email,
-    //   subject: "Your OTP Code",
-    //   text: `Your OTP is ${otp}. It expires in 5 minutes.`,
-    // });
+    await transporter.sendMail({
+      from: `"FlashFits" <${process.env.EMAIL_USER}>`,
+      to: email,
+      subject: "Your OTP Code",
+      text: `Your FlashFits OTP is ${otp}. It expires in 5 minutes.`,
+    });
 
     res.status(200).json({ otp, message: "OTP sent successfully" });
   } catch (err) {
     console.error("Error sending OTP:", err);
-    res.status(500).json({ message: "Failed to send OTP" });
+    res.status(500).json({ message: "Failed to send OTP", error: err.message });
   }
 };
 
@@ -168,7 +173,16 @@ export const getMerchantByEmail = async (req, res) => {
 export const updateMerchantShopDetails = async (req, res) => {
   try {
     const { merchantId } = req.params;
-    const { shopName, shopDescription, category, genderCategory, ownerName, latitude, longitude } = req.body;
+    let { shopName, shopDescription, category, genderCategory, ownerName, latitude, longitude } = req.body;
+
+    // Sanitize genderCategory: handle array or comma-separated string
+    if (genderCategory) {
+      if (typeof genderCategory === 'string') {
+        genderCategory = genderCategory.split(',').map(item => item.trim());
+      } else if (!Array.isArray(genderCategory)) {
+        genderCategory = [genderCategory];
+      }
+    }
 
     // Parse address (string or form-data)
     let addressObj = {};
@@ -364,7 +378,7 @@ export const loginMerchant = async (req, res) => {
     }
 
     const token = jwt.sign(
-      { merchantId: merchant._id },
+      { id: merchant._id },
       process.env.JWT_SECRET,
       { expiresIn: "7d" }
     );

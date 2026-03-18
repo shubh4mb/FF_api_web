@@ -8,7 +8,8 @@ const RATIOS = {
     '16:9': 16 / 9,
     '4:3': 4 / 3,
     '1:1': 1 / 1,
-    '21:9': 21 / 9,
+    '27:7': 27 / 7,
+    '25:9': 25 / 9,
     '3:4': 3 / 4,
 };
 
@@ -99,6 +100,9 @@ export default function BannerFormModal({ open, onClose, onSave, initialData }) 
                                 <option value="explore_hero">Explore Top</option>
                                 <option value="category_banner">Category Banner</option>
                                 <option value="promotional">Promotional</option>
+                                <option value="new_arrivals_banner">New Arrivals Section</option>
+                                <option value="trending_banner">Trending Now Section</option>
+                                <option value="recommended_banner">You May Like Section</option>
                             </select>
                         </div>
 
@@ -112,6 +116,7 @@ export default function BannerFormModal({ open, onClose, onSave, initialData }) 
                             >
                                 <option value="16:9">16:9 (Widescreen)</option>
                                 <option value="21:9">21:9 (Ultrawide)</option>
+                                <option value="27:7">25:9 (Ultrawide)</option>
                                 <option value="4:3">4:3 (Standard)</option>
                                 <option value="1:1">1:1 (Square)</option>
                                 <option value="3:4">3:4 (Portrait)</option>

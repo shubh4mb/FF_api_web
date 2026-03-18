@@ -13,7 +13,7 @@ const AddCategory = () => {
     slug: "",
     level: 0,
     parentId: null,
-    gender: "unisex",
+    gender: "Unisex",
     isActive: true,
     sortOrder: 0,
     commissionPercentage: 0,
@@ -52,7 +52,7 @@ const AddCategory = () => {
     } else if (name === "level" || name === "sortOrder") {
       setFormData((prev) => ({ ...prev, [name]: parseInt(value) }));
     } else if (name === "commissionPercentage") {
-      setFormData((prev) => ({ ...prev, [name]: parseFloat(value) || 0 }));
+      setFormData((prev) => ({ ...prev, [name]: value === "" ? "" : parseFloat(value) }));
     } else {
       setFormData((prev) => ({ ...prev, [name]: value }));
     }
@@ -158,7 +158,12 @@ const AddCategory = () => {
 
       submissionData.append('name', formData.name);
       submissionData.append('slug', formData.slug);
-      submissionData.append('gender', formData.gender);
+      
+      // Only level 0 has an explicitly set gender
+      if (formData.level === 0) {
+        submissionData.append('gender', formData.gender);
+      }
+      
       submissionData.append('isActive', formData.isActive);
       submissionData.append('sortOrder', formData.sortOrder);
       submissionData.append('level', formData.level);
@@ -167,7 +172,7 @@ const AddCategory = () => {
         submissionData.append('parentId', formData.parentId);
       }
 
-      if (formData.level === 0) {
+      if (formData.level === 2) {
         submissionData.append('commissionPercentage', formData.commissionPercentage);
       }
 
@@ -218,8 +223,8 @@ const AddCategory = () => {
           </select>
         </div>
 
-        {/* Commission Percentage (only if Top Level) */}
-        {formData.level === 0 && (
+        {/* Commission Percentage (only if Sub-Sub Level i.e., Level 2) */}
+        {formData.level === 2 && (
           <div className="flex flex-col">
             <label className="font-semibold text-gray-700 mb-1">Commission Percentage (%)</label>
             <input
@@ -269,15 +274,18 @@ const AddCategory = () => {
         <input type="text" name="name" placeholder="Category Name" value={formData.name} onChange={handleChange} className="border p-2 rounded w-full" required />
         <input type="text" name="slug" placeholder="Slug" value={formData.slug} onChange={handleChange} className="border p-2 rounded w-full" required />
 
-        {/* Gender */}
-        <select name="gender" value={formData.gender} onChange={handleChange} className="border p-2 rounded w-full">
-          <option value="unisex">Unisex</option>
-          <option value="men">Men</option>
-          <option value="women">Women</option>
-          <option value="boys">Boys</option>
-          <option value="girls">Girls</option>
-          <option value="babies">Babies</option>
-        </select>
+        {/* Gender - Only visible for Level 0 */}
+        {formData.level === 0 && (
+          <div className="flex flex-col">
+            <label>Gender</label>
+            <select name="gender" value={formData.gender} onChange={handleChange} className="border p-2 rounded w-full">
+              <option value="Unisex">Unisex</option>
+              <option value="Men">Men</option>
+              <option value="Women">Women</option>
+              <option value="Kids">Kids</option>
+            </select>
+          </div>
+        )}
 
         {/* Is Active */}
         <div className="flex items-center gap-2">

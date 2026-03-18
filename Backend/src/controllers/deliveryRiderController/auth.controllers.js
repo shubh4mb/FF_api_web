@@ -304,4 +304,26 @@ export const saveBankDetails = async (req, res) => {
       res.status(500).json({ message: "Server error while fetching rider" });
     }
   }
+
+export const addPushToken = async (req, res) => {
+  try {
+    const { token } = req.body;
+    if (!token) return res.status(400).json({ message: "Push token is required" });
+
+    const tokenStr = typeof token === 'string' ? token : token.data;
+
+    const rider = await DeliveryRider.findById(req.riderId);
+    if (!rider) return res.status(404).json({ message: "Rider not found" });
+
+    if (!rider.expoPushTokens.includes(tokenStr)) {
+      rider.expoPushTokens.push(tokenStr);
+      await rider.save();
+    }
+
+    return res.status(200).json({ message: "Push token saved successfully" });
+  } catch (error) {
+    console.error("Save rider push token error:", error);
+    return res.status(500).json({ message: "Internal Server Error" });
+  }
+};
   

@@ -18,6 +18,11 @@ const appConfigSchema = new mongoose.Schema(
             default: 10, // fixed waiting charge ₹
             min: 0,
         },
+        deliveryRadius: {
+            type: Number,
+            default: 5, // max delivery radius in km
+            min: 0,
+        },
     },
     { timestamps: true }
 );

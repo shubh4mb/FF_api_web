@@ -1,5 +1,5 @@
 import express from 'express';
-import { register, verifyOTP, savePersonalDetails, uploadDocuments, saveBankDetails, getRider } from '../controllers/deliveryRiderController/auth.controllers.js';
+import { register, verifyOTP, savePersonalDetails, uploadDocuments, saveBankDetails, getRider, addPushToken } from '../controllers/deliveryRiderController/auth.controllers.js';
 import { authMiddlewareRider } from '../middleware/jwtAuth.js';
 import upload from '../middleware/multer.js';
 import { handleMulterError } from '../middleware/multer.js';
@@ -16,12 +16,14 @@ import {
   endTrialPhase,
   verifyOtpOnReturn,
   reachedReturnMerchant,
+  verifyMerchantReturnOtp
 } from '../controllers/deliveryRiderController/orderController.js';
 const router = express.Router();
 
 router.post('/register', register);
 router.get('/getRiderById', authMiddlewareRider, getRider);
 router.post("/auth/verify-otp", verifyOTP);
+router.put("/push-token", authMiddlewareRider, addPushToken);
 router.post("/registration/personal-details", authMiddlewareRider, savePersonalDetails);
 router.post(
   "/registration/upload-documents",
@@ -46,8 +48,9 @@ router.post("/order/verifyOtp", authMiddlewareRider, verifyOtp);                
 router.post("/order/reachedCustomerLocation", authMiddlewareRider, reachedCustomerLocation);
 router.post("/order/handOutProducts", authMiddlewareRider, handOutProducts);               // starts trial
 router.post("/order/endTrialPhase", authMiddlewareRider, endTrialPhase);                   // rider ends wait
-router.post("/order/returnVerification", authMiddlewareRider, verifyOtpOnReturn);          // return OTP verify
+router.post("/order/verifyOtpOnReturn", authMiddlewareRider, verifyOtpOnReturn);          // return OTP verify
 router.post("/order/reachedReturnMerchant", authMiddlewareRider, reachedReturnMerchant);   // ✅ was missing!
+router.post("/order/verifyMerchantReturnOtp", authMiddlewareRider, verifyMerchantReturnOtp);
 
 // ── Reviews ──
 import { createRiderReview, deleteReview } from '../controllers/userControllers/review.controllers.js';

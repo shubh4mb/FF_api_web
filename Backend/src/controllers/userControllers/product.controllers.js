@@ -1,16 +1,26 @@
 import Product from '../../models/product.model.js';
+import Cart from '../../models/cart.model.js';
+import Wishlist from '../../models/wishlist.model.js';
 import mongoose from 'mongoose';
 import { body, validationResult } from 'express-validator'
 
 export const newArrivals = async (req, res) => {
   try {
-    const products = await Product.find({
+    const { gender } = req.query;
+
+    const filter = {
       isActive: true,
       createdAt: {
         $gte: new Date(new Date().setDate(new Date().getDate() - 90))
       },
       variants: { $exists: true, $not: { $size: 0 } }
-    })
+    };
+
+    if (gender && gender !== 'All') {
+      filter.gender = gender;
+    }
+
+    const products = await Product.find(filter)
       .select('name merchantId brandId ratings numReviews variants')
       .lean();
 
@@ -55,6 +65,147 @@ export const productsDetails = async (req, res) => {
     res.status(200).json(product);
   } catch (error) {
     console.error('Error in productsDetails:', error.message);
+    res.status(500).json({ message: '❌ ' + error.message });
+  }
+}
+
+// ── Trending Products ──
+export const trendingProducts = async (req, res) => {
+  try {
+    const { gender } = req.query;
+
+    const filter = {
+      isActive: true,
+      variants: { $exists: true, $not: { $size: 0 } }
+    };
+
+    if (gender && gender !== 'All') {
+      filter.gender = gender;
+    }
+
+    const products = await Product.find(filter)
+      .select('name merchantId brandId ratings numReviews variants')
+      .sort({ numReviews: -1, ratings: -1 }) // Sort by popularity
+      .limit(15) // Limit to top 15 trending
+      .lean();
+
+    const trimmed = products.map(p => {
+      const v = p.variants?.[0];
+      return {
+        _id: p._id,
+        name: p.name,
+        merchantId: p.merchantId,
+        brandId: p.brandId,
+        ratings: p.ratings,
+        numReviews: p.numReviews,
+        variantId: v?._id,
+        price: v?.price,
+        mrp: v?.mrp,
+        discount: v?.discount || 0,
+        images: v?.images,
+        color: v?.color,
+      };
+    });
+
+    res.status(200).json(trimmed);
+  } catch (error) {
+    console.error('Error in trendingProducts:', error.message);
+    res.status(500).json({ message: '❌ ' + error.message });
+  }
+}
+
+// ── Recommended Products (You May Like) ──
+export const recommendedProducts = async (req, res) => {
+  try {
+    const { gender } = req.query;
+    const userId = req.user?.userId;
+
+    let subCategoryIds = [];
+    let excludedProductIds = [];
+
+    if (userId) {
+      // 1. Get recent Cart items
+      const cart = await Cart.findOne({ userId }).lean();
+      if (cart && cart.items) {
+        excludedProductIds.push(...cart.items.map(i => i.productId));
+      }
+
+      // 2. Get recent Wishlist items
+      const wishlist = await Wishlist.find({ userId }).select('productId').lean();
+      if (wishlist.length > 0) {
+        excludedProductIds.push(...wishlist.map(w => w.productId));
+      }
+
+      // 3. Find categories of those items
+      if (excludedProductIds.length > 0) {
+        const userProducts = await Product.find({ _id: { $in: excludedProductIds } })
+          .select('subCategoryId subSubCategoryId')
+          .lean();
+        
+        userProducts.forEach(p => {
+          if (p.subCategoryId) subCategoryIds.push(p.subCategoryId.toString());
+          if (p.subSubCategoryId) subCategoryIds.push(p.subSubCategoryId.toString());
+        });
+        
+        // Make unique
+        subCategoryIds = [...new Set(subCategoryIds)];
+      }
+    }
+
+    const filter = {
+      isActive: true,
+      variants: { $exists: true, $not: { $size: 0 } }
+    };
+
+    if (gender && gender !== 'All') filter.gender = gender;
+    
+    if (excludedProductIds.length > 0) {
+      filter._id = { $nin: excludedProductIds };
+    }
+
+    if (subCategoryIds.length > 0) {
+      filter.$or = [
+        { subCategoryId: { $in: subCategoryIds } },
+        { subSubCategoryId: { $in: subCategoryIds } }
+      ];
+    }
+
+    let products = await Product.find(filter)
+      .select('name merchantId brandId ratings numReviews variants')
+      .limit(15)
+      .lean();
+
+    // Fallback if recommendations don't match anything (e.g. no cart history)
+    if (products.length < 5) {
+      delete filter.$or; // remove strict category filter
+      products = await Product.find(filter)
+        .select('name merchantId brandId ratings numReviews variants')
+        .sort({ createdAt: -1 })
+        .limit(15)
+        .lean();
+    }
+
+    const trimmed = products.map(p => {
+      const v = p.variants?.[0];
+      return {
+        _id: p._id,
+        name: p.name,
+        merchantId: p.merchantId,
+        brandId: p.brandId,
+        ratings: p.ratings,
+        numReviews: p.numReviews,
+        variantId: v?._id,
+        price: v?.price,
+        mrp: v?.mrp,
+        discount: v?.discount || 0,
+        images: v?.images,
+        color: v?.color,
+      };
+    });
+
+    res.status(200).json(trimmed);
+  } catch (error) {
+    console.error('Error in recommendedProducts:', error.message);
     res.status(500).json({ message: '❌ ' + error.message });
   }
 }

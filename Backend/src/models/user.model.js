@@ -55,6 +55,7 @@ const userSchema = new mongoose.Schema({
 
   rating: { type: Number, default: 0 },
   reviewCount: { type: Number, default: 0 },
+  expoPushTokens: { type: [String], default: [] },
 }, { timestamps: true });
 
 export default mongoose.models.User || mongoose.model('User', userSchema);

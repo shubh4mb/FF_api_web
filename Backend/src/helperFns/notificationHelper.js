@@ -9,6 +9,69 @@
 
 import Notification from "../models/notification.model.js";
 import { getIO } from "../config/socket.js";
+import { Expo } from "expo-server-sdk";
+import User from "../models/user.model.js";
+import DeliveryRider from "../models/deliveryRider.model.js";
+
+const expo = new Expo();
+
+export async function sendPushNotifications(userId, riderId, title, body, data) {
+    let doc;
+    let isUser = !!userId;
+
+    if (isUser) {
+        doc = await User.findById(userId);
+    } else if (riderId) {
+        doc = await DeliveryRider.findById(riderId);
+    }
+
+    if (!doc || !doc.expoPushTokens || doc.expoPushTokens.length === 0) return;
+
+    let tokens = doc.expoPushTokens;
+    let messages = [];
+    let invalidTokens = [];
+
+    for (let pushToken of tokens) {
+        if (!Expo.isExpoPushToken(pushToken)) {
+            invalidTokens.push(pushToken);
+            continue;
+        }
+        messages.push({
+            to: pushToken,
+            sound: 'default',
+            title,
+            body,
+            data,
+        });
+    }
+
+    if (messages.length > 0) {
+        let chunks = expo.chunkPushNotifications(messages);
+
+        for (let chunk of chunks) {
+            try {
+                let ticketChunk = await expo.sendPushNotificationsAsync(chunk);
+                for (let i = 0; i < ticketChunk.length; i++) {
+                    let ticket = ticketChunk[i];
+                    if (ticket.status === 'error' && ticket.details && ticket.details.error === 'DeviceNotRegistered') {
+                        invalidTokens.push(chunk[i].to);
+                    }
+                }
+            } catch (error) {
+                console.error("Error sending push notifications chunk:", error);
+            }
+        }
+    }
+
+    if (invalidTokens.length > 0) {
+        // Remove invalid tokens efficiently
+        if (isUser) {
+            await User.findByIdAndUpdate(userId, { $pull: { expoPushTokens: { $in: invalidTokens } } });
+        } else {
+            await DeliveryRider.findByIdAndUpdate(riderId, { $pull: { expoPushTokens: { $in: invalidTokens } } });
+        }
+    }
+}
 
 /* ════════════════════════════════════════════════
    CUSTOMER NOTIFICATIONS (selective — 3-4 per order max)
@@ -36,6 +99,11 @@ export async function notifyCustomer({ userId, orderId, type, title, body, data 
             data,
             createdAt: notification.createdAt,
         });
+
+        // Attempt Expo push notifications (non-blocking)
+        sendPushNotifications(userId, null, title, body, data).catch((err) =>
+            console.error("Push notification logic error:", err)
+        );
 
         return notification;
     } catch (err) {
@@ -68,6 +136,11 @@ export async function notifyRider({ riderId, orderId, type, title, body, data = 
             data,
             createdAt: notification.createdAt,
         });
+
+        // Attempt Expo push notifications (non-blocking)
+        sendPushNotifications(null, riderId, title, body, data).catch((err) =>
+            console.error("Push notification logic error:", err)
+        );
 
         return notification;
     } catch (err) {

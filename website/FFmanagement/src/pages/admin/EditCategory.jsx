@@ -17,7 +17,7 @@ export default function EditCategoryPage() {
     slug: '',
     parentId: '',
     level: 0,
-    gender: 'unisex',
+    gender: 'Unisex',
     isActive: true,
     sortOrder: 0,
     commissionPercentage: 0,
@@ -52,7 +52,7 @@ export default function EditCategoryPage() {
         slug: data.slug || '',
         parentId: data.parentId || '',
         level: data.level || 0,
-        gender: data.gender || 'unisex',
+        gender: data.gender || 'Unisex',
         isActive: data.isActive !== undefined ? data.isActive : true,
         sortOrder: data.sortOrder || 0,
         commissionPercentage: data.commissionPercentage || 0,
@@ -116,7 +116,7 @@ export default function EditCategoryPage() {
     } else if (name === 'sortOrder') {
       setFormData(prev => ({ ...prev, [name]: parseInt(value) }));
     } else if (name === 'commissionPercentage') {
-      setFormData(prev => ({ ...prev, [name]: parseFloat(value) || 0 }));
+      setFormData(prev => ({ ...prev, [name]: value === "" ? "" : parseFloat(value) }));
     } else {
       setFormData(prev => ({ ...prev, [name]: value }));
     }
@@ -192,14 +192,18 @@ export default function EditCategoryPage() {
       const submitData = new FormData();
       submitData.append('name', formData.name);
       submitData.append('slug', formData.slug);
-      submitData.append('gender', formData.gender);
+      
+      if (formData.level === 0) {
+        submitData.append('gender', formData.gender);
+      }
+      
       submitData.append('isActive', formData.isActive);
       submitData.append('sortOrder', formData.sortOrder);
 
       // We don't overwrite level or parentId in the frontend easily without causing ancestor problems,
       // but if we were to support it we'd append them here.
 
-      if (formData.level === 0) {
+      if (formData.level === 2) {
         submitData.append('commissionPercentage', formData.commissionPercentage);
       }
 
@@ -288,8 +292,8 @@ export default function EditCategoryPage() {
               </div>
             </div>
 
-            {/* Commission Percentage (only if Top Level) */}
-            {formData.level === 0 && (
+            {/* Commission Percentage (only if Sub-Sub Category / Level 2) */}
+            {formData.level === 2 && (
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Commission Percentage (%) *
@@ -337,25 +341,25 @@ export default function EditCategoryPage() {
               <p className="mt-1 text-sm text-gray-500">URL-friendly version of the name</p>
             </div>
 
-            {/* Gender */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Gender
-              </label>
-              <select
-                name="gender"
-                value={formData.gender}
-                onChange={handleInputChange}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              >
-                <option value="unisex">Unisex</option>
-                <option value="men">Men</option>
-                <option value="women">Women</option>
-                <option value="boys">Boys</option>
-                <option value="girls">Girls</option>
-                <option value="babies">Babies</option>
-              </select>
-            </div>
+            {/* Gender - Only editable for Level 0 */}
+            {formData.level === 0 && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Gender
+                </label>
+                <select
+                  name="gender"
+                  value={formData.gender}
+                  onChange={handleInputChange}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="Unisex">Unisex</option>
+                  <option value="Men">Men</option>
+                  <option value="Women">Women</option>
+                  <option value="Kids">Kids</option>
+                </select>
+              </div>
+            )}
 
             {/* Sort Order */}
             <div>

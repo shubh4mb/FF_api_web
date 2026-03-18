@@ -44,9 +44,12 @@ export async function enqueueOrder(orderData) {
 
     console.log(`✅ Enqueued ${orderId} in zone ${zoneId} (pickup: ${pickupLat}, ${pickupLng})`);
 
-    // Trigger matcher for this zone (Socket.io emit—your rider events will hook this)
+    // Notify clients about new queued order
     const io = getIO();
     io.emit(`orderQueued:${zoneId}`, { zoneId, orderId });
+
+    // 🔥 Actually trigger the rider matcher NOW (the socket emit above only goes to clients)
+    await matchQueuedOrders(zoneId);
 
     return { 
       success: true, 

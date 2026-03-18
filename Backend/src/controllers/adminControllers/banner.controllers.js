@@ -1,4 +1,5 @@
 import Banner from "../../models/banner.model.js";
+import { uploadToCloudinary } from "../../config/cloudinary.config.js";
 
 // ====== ADMIN ROUTES ======
 
@@ -7,10 +8,29 @@ import Banner from "../../models/banner.model.js";
  */
 export const createBanner = async (req, res) => {
     try {
-        const { title, imageUrl, type, ratio, actionUrl, isActive, order } = req.body;
+        const { title, type, ratio, actionUrl, isActive, order } = req.body;
+        let imageUrl = req.body.imageUrl;
 
-        if (!imageUrl || !type || !ratio) {
-            return res.status(400).json({ message: "imageUrl, type, and ratio are required." });
+        // If a file is uploaded, upload it to Cloudinary
+        if (req.file) {
+            try {
+                const result = await uploadToCloudinary(req.file.buffer, {
+                    folder: 'banners',
+                    resource_type: 'image'
+                });
+                imageUrl = result.secure_url;
+            } catch (uploadError) {
+                console.error("Cloudinary upload error:", uploadError);
+                return res.status(500).json({ message: "Failed to upload image to Cloudinary" });
+            }
+        }
+
+        if (!imageUrl) {
+            return res.status(400).json({ message: "imageUrl (or an uploaded image) is required." });
+        }
+
+        if (!type || !ratio) {
+            return res.status(400).json({ message: "type and ratio are required." });
         }
 
         const newBanner = new Banner({
@@ -54,7 +74,21 @@ export const getAllBanners = async (req, res) => {
 export const updateBanner = async (req, res) => {
     try {
         const { id } = req.params;
-        const updates = req.body; // e.g., { isActive: false, order: 2 }
+        const updates = { ...req.body };
+
+        // If a new file is uploaded, upload it to Cloudinary
+        if (req.file) {
+            try {
+                const result = await uploadToCloudinary(req.file.buffer, {
+                    folder: 'banners',
+                    resource_type: 'image'
+                });
+                updates.imageUrl = result.secure_url;
+            } catch (uploadError) {
+                console.error("Cloudinary upload error:", uploadError);
+                return res.status(500).json({ message: "Failed to upload image to Cloudinary" });
+            }
+        }
 
         const updatedBanner = await Banner.findByIdAndUpdate(id, updates, { new: true });
 

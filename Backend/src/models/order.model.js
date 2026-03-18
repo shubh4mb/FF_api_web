@@ -57,14 +57,14 @@ const OrderSchema = new mongoose.Schema({
       'completed try phase',
       'otp-verified-return',
       'reached return merchant',
+      'merchant-return-otp-verified',
       'confirmed_purchase',
       'returned',
       'partially_returned',
       'delivered',
       'cancelled',
       'completed',
-      'rejected',
-      'completed'
+      'rejected'
     ],
     default: 'placed'
   },
@@ -188,7 +188,5 @@ OrderSchema.index({ userId: 1, createdAt: -1 });              // Customer: "My O
 OrderSchema.index({ merchantId: 1, orderStatus: 1 });         // Merchant dashboard
 OrderSchema.index({ deliveryRiderId: 1, orderStatus: 1 });    // Rider active order
 OrderSchema.index({ orderStatus: 1, createdAt: -1 });         // Admin / queue
-OrderSchema.index({ 'pickupLocation.coordinates': '2dsphere' });
-OrderSchema.index({ 'deliveryLocation.coordinates': '2dsphere' });
 
 export default mongoose.model("Order", OrderSchema);

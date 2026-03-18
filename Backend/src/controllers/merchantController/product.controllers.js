@@ -430,6 +430,10 @@ export const addBaseProduct = async (req, res) => {
       const merchant = await Merchant.findById(value.merchantId);
       if (merchant) {
         const brandName = merchant.shopName || merchant.ownerName || "Default Brand";
+
+        // Auto-assign soldBy
+        value.soldBy = merchant.shopName || merchant.ownerName || "Default Store";
+
         let brand = await Brand.findOne({ name: brandName, createdById: merchant._id });
         if (!brand) {
           brand = await Brand.create({
@@ -777,8 +781,16 @@ export const editProduct = async (req, res) => {
     console.log(id);
 
     // Prevent updates to protected fields
-    const restrictedFields = ['_id', 'createdAt', 'updatedAt', 'variants'];
+    const restrictedFields = ['_id', 'createdAt', 'updatedAt', 'variants', 'soldBy'];
     restrictedFields.forEach((field) => delete updateData[field]);
+
+    // Force exact merchant name if provided
+    if (updateData.merchantId) {
+      const merchant = await Merchant.findById(updateData.merchantId);
+      if (merchant) {
+        updateData.soldBy = merchant.shopName || merchant.ownerName || "Default Store";
+      }
+    }
 
     const updatedProduct = await Product.findByIdAndUpdate(
       id,

@@ -180,6 +180,7 @@ export const getCart = async (req, res) => {
     // 2️⃣ Fetch delivery address (only if addressId is provided)
     const selectedAddress = await Address.findById(addressId);
     if (!selectedAddress) {
+      console.log("Selected address not found");
       return res.status(400).json({
         success: false,
         message: "Selected address not found",

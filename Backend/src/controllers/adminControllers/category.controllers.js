@@ -37,7 +37,7 @@ export const addCategory = asyncHandler(async (req, res) => {
   let logoDetails = null;
   let titleBannersDetails = [];
 
-  const { name, slug, parentId, level, gender, sortOrder, isActive } = req.body;
+  const { name, slug, parentId, level, gender, sortOrder, isActive, commissionPercentage } = req.body;
 
   if (parentId) {
     const parentCategory = await Category.findById(parentId);
@@ -86,10 +86,11 @@ export const addCategory = asyncHandler(async (req, res) => {
     slug,
     parentId: parentId || null,
     level,
-    gender: gender || null,
+    gender: level == 0 ? (gender || null) : null,
     ancestors,
     sortOrder,
     isActive,
+    ...(level == 2 && commissionPercentage !== undefined && { commissionPercentage }),
     ...(imageDetails && { image: imageDetails }),
     ...(logoDetails && { logo: logoDetails }),
     ...(titleBannersDetails.length > 0 && { title_banners: titleBannersDetails })
@@ -132,6 +133,18 @@ export const updateCategory = asyncHandler(async (req, res) => {
   const updateData = { ...req.body };
   if (imageDetails) updateData.image = imageDetails;
   if (logoDetails) updateData.logo = logoDetails;
+
+  // Retrieve current category to check level for gender logic since level might not be in req.body
+  const existingCategoryBeforeUpdate = await Category.findById(req.params.id).lean();
+  if (!existingCategoryBeforeUpdate) throw new ApiError(404, "Category not found");
+  
+  const effectiveCategoryLevel = updateData.level ?? existingCategoryBeforeUpdate.level;
+
+  if (effectiveCategoryLevel > 0) {
+    updateData.gender = null; // Only level 0 can have gender
+  } else if (updateData.gender === undefined) {
+    // Keep existing gender if not provided for level 0
+  }
 
   // Retrieve existing banners that the frontend retained
   let existingTitleBanners = [];

@@ -22,7 +22,7 @@ router.get("/", verifyAdmin, getAllBanners);
  * @route   PATCH /api/admin/banners/:id
  * @desc    Update a banner (e.g., active status, order, URL)
  */
-router.patch("/:id", verifyAdmin, updateBanner);
+router.patch("/:id", verifyAdmin, upload.single("image"), updateBanner);
 
 /**
  * @route   DELETE /api/admin/banners/:id

@@ -8,6 +8,16 @@ import { ApiResponse } from "../../utils/ApiResponse.js";
 
 export const addMerchant = asyncHandler(async (req, res) => {
   console.log("hiii");
+  
+  // Sanitize genderCategory: handle array or comma-separated string
+  if (req.body.genderCategory) {
+    if (typeof req.body.genderCategory === 'string') {
+      req.body.genderCategory = req.body.genderCategory.split(',').map(item => item.trim());
+    } else if (!Array.isArray(req.body.genderCategory)) {
+      req.body.genderCategory = [req.body.genderCategory];
+    }
+  }
+
   const merchant = new Merchant(req.body);
   if (!req.file) {
     throw new ApiError(400, "Logo is required");
@@ -69,6 +79,15 @@ export const updateMerchantById = asyncHandler(async (req, res) => {
       throw new ApiError(500, "Error uploading image to Cloudinary", [uploadError.message]);
     }
     req.body.logo = imageDetails;
+  }
+
+  // Sanitize genderCategory: handle array or comma-separated string
+  if (req.body.genderCategory) {
+    if (typeof req.body.genderCategory === 'string') {
+      req.body.genderCategory = req.body.genderCategory.split(',').map(item => item.trim());
+    } else if (!Array.isArray(req.body.genderCategory)) {
+      req.body.genderCategory = [req.body.genderCategory];
+    }
   }
 
   const merchant = await Merchant.findByIdAndUpdate(req.params.id, req.body, { new: true });

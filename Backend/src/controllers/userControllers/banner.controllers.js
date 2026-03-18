@@ -23,6 +23,8 @@ export const getActiveBanners = async (req, res) => {
             return acc;
         }, {});
 
+        console.log("Active Banners Found:", banners.length, "Grouped Types:", Object.keys(groupedBanners));
+
         return res.status(200).json({
             success: true,
             banners: groupedBanners

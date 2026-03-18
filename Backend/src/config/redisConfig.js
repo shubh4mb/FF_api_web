@@ -75,12 +75,12 @@ const redis = {
           throw new Error(`HTTP ${response.status}: ${await response.text()}`);
         }
         const data = await response.json();
-        console.log(`Upstash hGetAll response data for key ${key}:`, data);  // Temp debug: check "result"
+        // console.log(`Upstash hGetAll response data for key ${key}:`, data);  // Temp debug: check "result"
         const raw = data.result || {};
 
         // Handle: object (parsed) or fallback array parse
         if (typeof raw === 'object' && raw !== null && !Array.isArray(raw)) {
-          console.log(`Upstash hGetAll parsed meta for key ${key}:`, raw);  // Temp; remove after
+          // console.log(`Upstash hGetAll parsed meta for key ${key}:`, raw);  // Temp; remove after
           return raw;
         } else if (Array.isArray(raw)) {
           const obj = {};
@@ -89,7 +89,7 @@ const redis = {
               obj[raw[i]] = raw[i + 1];
             }
           }
-          console.log(`Upstash hGetAll fallback-parsed meta for key ${key}:`, obj);  // Temp
+          // console.log(`Upstash hGetAll fallback-parsed meta for key ${key}:`, obj);  // Temp
           return obj;
         } else {
           console.error(`Upstash hGetAll unexpected raw for key ${key}:`, raw);
@@ -118,7 +118,7 @@ const redis = {
         longitude: lng,
         latitude: lat
       });
-      console.log(`${isUpstash ? 'Upstash' : 'node-redis'} geoAdd success for key ${key}, member ${member}`);
+      // console.log(`${isUpstash ? 'Upstash' : 'node-redis'} geoAdd success for key ${key}, member ${member}`);
       return result;
     } catch (err) {
       console.error(`${isUpstash ? 'Upstash' : 'node-redis'} geoAdd error for key ${key} at (${lat}, ${lng}):`, err);
@@ -170,7 +170,7 @@ const redis = {
             }
           }
         }
-        console.log(`Upstash geoSearch (REST GEORADIUS) raw result for key ${key}:`, parsed.length > 0 ? parsed : '[]');
+        // console.log(`Upstash geoSearch (REST GEORADIUS) raw result for key ${key}:`, parsed.length > 0 ? parsed : '[]');
         return parsed;
       } catch (err) {
         console.error(`Upstash geoSearch (REST) error for key ${key} at (${lat}, ${lng}), radius ${radiusKm}km:`, err);
@@ -190,7 +190,7 @@ const redis = {
             }
           }
         }
-        console.log(`node-redis geoSearch (GEORADIUS) raw result for key ${key}:`, result.length > 0 ? result : '[]');
+        // console.log(`node-redis geoSearch (GEORADIUS) raw result for key ${key}:`, result.length > 0 ? result : '[]');
         return result;
       } catch (err) {
         console.error(`node-redis geoSearch error for key ${key} at (${lat}, ${lng}), radius ${radiusKm}km:`, err);

@@ -20,11 +20,7 @@ export const uploadToCloudinary = (buffer, options = {}) => {
         resolve(result);
       });
       // Convert buffer to a readable stream and pipe to cloudinary
-      const readable = new Readable();
-      readable._read = () => {};
-      readable.push(buffer);
-      readable.push(null);
-      readable.pipe(stream);
+      Readable.from(buffer).pipe(stream);
     });
   };
     

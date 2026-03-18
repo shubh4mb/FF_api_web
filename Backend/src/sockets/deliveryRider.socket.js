@@ -42,6 +42,8 @@ export const registerDeliveryRiderSockets = (io, socket) => {
           const riderPayload = {
             _id: fullOrder._id,
             orderId: fullOrder._id.toString(),
+            orderStatus: fullOrder.orderStatus,
+            deliveryRiderStatus: fullOrder.deliveryRiderStatus,
             pickupLocation: fullOrder.pickupLocation,
             deliveryLocation: fullOrder.deliveryLocation,
             address: fullOrder.deliveryLocation?.addressLine1 || fullOrder.deliveryLocation?.street || "No address",
@@ -72,7 +74,7 @@ export const registerDeliveryRiderSockets = (io, socket) => {
   // Rider sends location updates frequently 
   // deliveryRider.socket.js
   socket.on("updateLocation", async ({ riderId, lat, lng, orderIdIfAny = null }) => {
-    console.log("updateLocation", riderId, lat, lng, orderIdIfAny);
+    // console.log("updateLocation", riderId, lat, lng, orderIdIfAny);
 
     const currentMeta = await getRiderMeta(riderId);
     const isFirstUpdate = !currentMeta || Object.keys(currentMeta).length === 0;

@@ -42,54 +42,16 @@ export const acceptOrder = async (req, res) => {
       return res.status(403).json({ message: 'Order already assigned to another rider' });
     }
 
-    // === CALCULATE DELIVERY CHARGE LOGIC ===
-    let deliveryCharge = 0;
-
-    // Check if any item is Try & Buy (has tryStatus field and not 'not-triable')
-    const hasTryAndBuyItem = order.items.some(item =>
-      item.tryStatus && item.tryStatus !== 'not-triable'
-    );
-
-    if (hasTryAndBuyItem) {
-      // Try & Buy: One way delivery + return trip
-      deliveryCharge = 15; // ₹10 (to customer) + ₹5 (return pickup)
-    } else {
-      // Regular delivery (one way only)
-      deliveryCharge = 10; // ₹10 one way
-    }
-
-    // Optional: Add distance-based charge later (if deliveryDistance exists)
-    // Example: deliveryCharge += order.deliveryDistance * 2; // ₹2 per km extra
-
-    // Update order fields
+    // Update order fields — rider assignment only
+    // Delivery charge & billing are already set during order creation (appConfig-based)
     order.deliveryRiderId = rider._id;
     order.deliveryRiderStatus = 'assigned';
-    order.deliveryCharge = deliveryCharge;
 
     // Save rider details
     order.deliveryRiderDetails = {
       name: rider.fullName,
       phone: rider.phone
     };
-
-    // Update final billing 
-    const subtotal = order.items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-
-    order.finalBilling = {
-      baseAmount: subtotal,
-      tryAndBuyFee: hasTryAndBuyItem ? 50 : 0, // optional extra fee
-      gst: Math.round(subtotal * 0.18), // 18% GST example
-      discount: 0,
-      deliveryCharge: deliveryCharge,
-
-      totalPayable: subtotal +
-        (hasTryAndBuyItem ? 50 : 0) +
-        Math.round(subtotal * 0.18) +
-        deliveryCharge
-    };
-
-    // Also update top-level deliveryCharge (for consistency)
-    order.totalAmount = order.finalBilling.totalPayable;
 
     await order.save();
 
@@ -107,10 +69,9 @@ export const acceptOrder = async (req, res) => {
       message: 'Order accepted successfully',
       order: {
         _id: order._id,
-        deliveryCharge,
+        deliveryCharge: order.deliveryCharge,
         totalAmount: order.totalAmount,
         finalBilling: order.finalBilling,
-        hasTryAndBuyItem
       }
     });
 
@@ -349,15 +310,7 @@ export const verifyOtpOnReturn = async (req, res) => {
 
     order.deliveryRiderStatus = "otp-verified-return";
     order.orderStatus = "otp-verified-return";
-
-    // Free the rider — return trip complete
-    if (order.deliveryRiderId) {
-      await deliveryRiderModel.findByIdAndUpdate(order.deliveryRiderId, {
-        currentOrderId: null,
-        isBusy: false,
-        isAvailable: true,
-      });
-    }
+    order.customerDeliveryStatus="completed"
 
     await order.save();
     emitOrderUpdate(req.io, orderId, order);
@@ -366,13 +319,6 @@ export const verifyOtpOnReturn = async (req, res) => {
     notifyOrderEvent("rider", "return_complete", {
       riderId: req.riderId,
       orderId: order._id,
-    });
-
-    // 📱 Rider notification: earnings
-    notifyOrderEvent("rider", "earnings_credited", {
-      riderId: req.riderId,
-      orderId: order._id,
-      amount: order.deliveryCharge || 0,
     });
 
     // 📱 Customer notification: "Order fully complete"
@@ -396,6 +342,8 @@ export const reachedReturnMerchant = async (req, res) => {
       return res.status(400).json({ message: "orderId is required" });
     }
 
+
+
     const order = await Order.findById(orderId);
     if (!order) {
       return res.status(404).json({ message: "Order not found" });
@@ -403,6 +351,9 @@ export const reachedReturnMerchant = async (req, res) => {
     if (order.deliveryRiderId?.toString() !== req.riderId.toString()) {
       return res.status(403).json({ message: "Not authorized for this order" });
     }
+
+    // Generate a NEW OTP for merchant to verify the return handover
+    order.otp = Math.floor(1000 + Math.random() * 9000);
 
     // Geo-check: only if coordinates are provided and merchant coords exist
     if (latitude != null && longitude != null && order.pickupLocation?.coordinates?.length === 2) {
@@ -422,12 +373,70 @@ export const reachedReturnMerchant = async (req, res) => {
     await order.save();
 
     emitOrderUpdate(req.io, orderId, order);
+    // Clone the order and hide the OTP from the rider's HTTP response
+    const safeOrder = order.toObject();
+    delete safeOrder.otp;
+
     res.status(200).json({
       message: "Rider confirmed at merchant location for return",
-      order,
+      order: safeOrder,
     });
   } catch (error) {
     console.error("Error in reachedReturnMerchant:", error);
     res.status(500).json({ message: "❌ " + error.message });
   }
 };
+
+export const verifyMerchantReturnOtp= async (req, res) => {
+  try {
+    const { orderId, otp } = req.body;
+
+    const order = await Order.findById(orderId);
+    if (!order) return res.status(404).json({ message: "Order not found" });
+    if (order.otp !== otp) return res.status(400).json({ message: "Invalid OTP" });
+
+    order.deliveryRiderStatus = "completed"
+    order.orderStatus = "merchant-return-otp-verified";
+
+    await order.save();
+    emitOrderUpdate(req.io, orderId, order);
+
+    // ✅ Free the rider in DB
+    if (order.deliveryRiderId) {
+      const deliveryRiderModel = (await import("../../models/deliveryRider.model.js")).default;
+      await deliveryRiderModel.findByIdAndUpdate(order.deliveryRiderId, {
+        currentOrderId: null,
+        isBusy: false,
+        isAvailable: true,
+      });
+
+      // ✅ Free rider from redis meta
+      try {
+        const { setRiderMeta, getRiderMeta } = await import("../../helperFns/deliveryRiderFns.js");
+        const meta = await getRiderMeta(order.deliveryRiderId.toString());
+        await setRiderMeta(order.deliveryRiderId.toString(), meta?.zoneId || 'global', {
+          isBusy: "false",
+          assignedOrderId: "",
+        });
+      } catch (redisErr) {
+        console.error("Redis meta cleanup error (non-fatal):", redisErr);
+      }
+    }    // 📱 Rider notification: "Return verified, you're done!"
+    notifyOrderEvent("rider", "return_complete", {
+      riderId: req.riderId,
+      orderId: order._id,
+    });
+
+    // 📱 Customer notification: "Order fully complete"
+    notifyOrderEvent("customer", "delivery_complete", {
+      userId: order.userId,
+      orderId: order._id,
+    });
+
+    res.status(200).json({ message: "Return OTP verified. Order complete." });
+  } catch (error) {
+    console.error("Error in verifyOtpOnReturn:", error);
+    res.status(500).json({ message: "❌ " + error.message });
+  }
+}
+

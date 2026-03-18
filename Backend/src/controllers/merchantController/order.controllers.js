@@ -64,6 +64,7 @@ export const saveProductDetails = async (req, res) => {
 
 
 export const getPlacedOrder = async (req, res) => {
+  console.log(req.merchantId,"sdadasd");
   const orders = await Order.find({ merchantId: req.merchantId, orderStatus: "placed" })
     .select('orderStatus items totalAmount deliveryRiderStatus createdAt deliveryLocation userId')
     .sort({ createdAt: -1 })
@@ -104,7 +105,8 @@ export const orderRequestForMerchant = async (req, res) => {
       };
 
       const merchant = await Merchant.findById(order.merchantId);
-      const zoneId = merchant.zoneName || 'global';
+      // Normalize zone name exactly like inferZone does (lowercase, no spaces)
+      const zoneId = (merchant.zoneName || 'global').toLowerCase().replace(/\s+/g, '');
 
       queueResult = await enqueueOrder({
         orderId: order._id.toString(),
@@ -172,7 +174,7 @@ export const orderRequestForMerchant = async (req, res) => {
 
     await order.save();
     emitOrderUpdate(io, orderId, order);
-
+    console.log(order,'order');
     return res.status(200).json({
       message: status === "reject"
         ? `Order rejected. ₹${order.deliveryCharge || 0} refunded to customer wallet.`
@@ -190,7 +192,7 @@ export const orderRequestForMerchant = async (req, res) => {
 export const getAllOrder = async (req, res) => {
   try {
     const orders = await Order.find({ merchantId: req.merchantId })
-      .select('orderStatus items totalAmount deliveryRiderStatus createdAt deliveryRiderDetails deliveryLocation userId')
+      .select('orderStatus items totalAmount deliveryRiderStatus createdAt deliveryRiderDetails deliveryLocation userId otp')
       .sort({ createdAt: -1 })
       .lean();
     return res.status(200).json({ orders });
