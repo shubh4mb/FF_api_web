@@ -141,12 +141,12 @@ export const recommendedProducts = async (req, res) => {
         const userProducts = await Product.find({ _id: { $in: excludedProductIds } })
           .select('subCategoryId subSubCategoryId')
           .lean();
-        
+
         userProducts.forEach(p => {
           if (p.subCategoryId) subCategoryIds.push(p.subCategoryId.toString());
           if (p.subSubCategoryId) subCategoryIds.push(p.subSubCategoryId.toString());
         });
-        
+
         // Make unique
         subCategoryIds = [...new Set(subCategoryIds)];
       }
@@ -158,7 +158,7 @@ export const recommendedProducts = async (req, res) => {
     };
 
     if (gender && gender !== 'All') filter.gender = gender;
-    
+
     if (excludedProductIds.length > 0) {
       filter._id = { $nin: excludedProductIds };
     }
