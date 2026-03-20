@@ -15,19 +15,6 @@ async function buildAncestors(parentId, level) {
   if (level == 1) {
     // Child → parent is root (level 0)
     ancestors.parentName = parent.name;
-    ancestors.parentGender = parent.gender || null;
-  } else if (level == 2) {
-    // Grandchild → parent is level 1, grandparent is level 0
-    ancestors.parentName = parent.name;
-    ancestors.parentGender = parent.gender || null;
-
-    if (parent.parentId) {
-      const grandparent = await Category.findById(parent.parentId).lean();
-      if (grandparent) {
-        ancestors.grandparentName = grandparent.name;
-        ancestors.grandparentGender = grandparent.gender || null;
-      }
-    }
   }
   return ancestors;
 }
@@ -37,7 +24,7 @@ export const addCategory = asyncHandler(async (req, res) => {
   let logoDetails = null;
   let titleBannersDetails = [];
 
-  const { name, slug, parentId, level, gender, sortOrder, isActive, commissionPercentage } = req.body;
+  const { name, slug, parentId, level, allowedGenders, sortOrder, isActive, isTriable, commissionPercentage } = req.body;
 
   if (parentId) {
     const parentCategory = await Category.findById(parentId);
@@ -77,8 +64,18 @@ export const addCategory = asyncHandler(async (req, res) => {
     }
   }
 
-  if (level == 2 && !imageDetails) {
-    throw new ApiError(400, "Image is required for level 2 categories");
+  if (level == 1 && !imageDetails) {
+    throw new ApiError(400, "Image is required for level 1 categories");
+  }
+
+  // Parse allowedGenders from request (could be JSON string or array)
+  let parsedAllowedGenders = ["MEN", "WOMEN"]; // default
+  if (allowedGenders) {
+    if (typeof allowedGenders === 'string') {
+      try { parsedAllowedGenders = JSON.parse(allowedGenders); } catch { parsedAllowedGenders = allowedGenders.split(',').map(g => g.trim()); }
+    } else if (Array.isArray(allowedGenders)) {
+      parsedAllowedGenders = allowedGenders;
+    }
   }
 
   const category = new Category({
@@ -86,11 +83,12 @@ export const addCategory = asyncHandler(async (req, res) => {
     slug,
     parentId: parentId || null,
     level,
-    gender: level == 0 ? (gender || null) : null,
+    allowedGenders: parsedAllowedGenders,
     ancestors,
     sortOrder,
     isActive,
-    ...(level == 2 && commissionPercentage !== undefined && { commissionPercentage }),
+    isTriable: isTriable === 'true' || isTriable === true,
+    ...(level == 1 && commissionPercentage !== undefined && { commissionPercentage }),
     ...(imageDetails && { image: imageDetails }),
     ...(logoDetails && { logo: logoDetails }),
     ...(titleBannersDetails.length > 0 && { title_banners: titleBannersDetails })
@@ -134,16 +132,18 @@ export const updateCategory = asyncHandler(async (req, res) => {
   if (imageDetails) updateData.image = imageDetails;
   if (logoDetails) updateData.logo = logoDetails;
 
-  // Retrieve current category to check level for gender logic since level might not be in req.body
-  const existingCategoryBeforeUpdate = await Category.findById(req.params.id).lean();
-  if (!existingCategoryBeforeUpdate) throw new ApiError(404, "Category not found");
-  
-  const effectiveCategoryLevel = updateData.level ?? existingCategoryBeforeUpdate.level;
+  // Parse allowedGenders if provided
+  if (updateData.allowedGenders) {
+    if (typeof updateData.allowedGenders === 'string') {
+      try { updateData.allowedGenders = JSON.parse(updateData.allowedGenders); } catch { updateData.allowedGenders = updateData.allowedGenders.split(',').map(g => g.trim()); }
+    }
+  }
 
-  if (effectiveCategoryLevel > 0) {
-    updateData.gender = null; // Only level 0 can have gender
-  } else if (updateData.gender === undefined) {
-    // Keep existing gender if not provided for level 0
+  // Remove legacy gender field if present
+  delete updateData.gender;
+
+  if (updateData.isTriable !== undefined) {
+    updateData.isTriable = updateData.isTriable === 'true' || updateData.isTriable === true;
   }
 
   // Retrieve existing banners that the frontend retained
@@ -176,31 +176,14 @@ export const updateCategory = asyncHandler(async (req, res) => {
     { new: true }
   );
 
-  // Cascade: if name or gender of this category changed, update children's ancestors
+  // Cascade: if name of this category changed, update children's ancestors
   const nameChanged = updateData.name && updateData.name !== existing.name;
-  const genderChanged = updateData.gender && updateData.gender !== existing.gender;
 
-  if (nameChanged || genderChanged) {
+  if (nameChanged) {
     const newName = updatedCategory.name;
-    const newGender = updatedCategory.gender;
 
-    // Update direct children (level = existing.level + 1)
     if (existing.level === 0) {
-      // Root changed → children are level 1
-      await Category.updateMany(
-        { parentId: updatedCategory._id },
-        { $set: { 'ancestors.parentName': newName, 'ancestors.parentGender': newGender } }
-      );
-      // Grandchildren are level 2 → update grandparent fields
-      const childIds = await Category.find({ parentId: updatedCategory._id }).distinct('_id');
-      if (childIds.length) {
-        await Category.updateMany(
-          { parentId: { $in: childIds } },
-          { $set: { 'ancestors.grandparentName': newName, 'ancestors.grandparentGender': newGender } }
-        );
-      }
-    } else if (existing.level === 1) {
-      // Level-1 changed → grandchildren's parentName
+      // Root changed → children are level 1, update parentName
       await Category.updateMany(
         { parentId: updatedCategory._id },
         { $set: { 'ancestors.parentName': newName } }

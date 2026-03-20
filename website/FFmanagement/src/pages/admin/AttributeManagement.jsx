@@ -97,7 +97,7 @@ const AttributeFormModal = ({ isOpen, onClose, onSubmit, editingAttribute, categ
     };
 
     const showValues = ['select', 'multiselect'].includes(formData.inputType);
-    const level2Categories = categories.filter(cat => cat.level === 2);
+    const level2Categories = categories.filter(cat => cat.level === 1);
 
     return (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={onClose}>
@@ -306,7 +306,7 @@ const AttributeManagement = () => {
         ? attributes.filter(a => (a.categoryId?._id || a.categoryId) === filterCategory)
         : attributes;
 
-    const level2Categories = categories.filter(c => c.level === 2);
+    const level2Categories = categories.filter(c => c.level === 1);
 
     if (loading) {
         return (

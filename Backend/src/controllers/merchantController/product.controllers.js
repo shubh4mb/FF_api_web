@@ -5,7 +5,6 @@ import { productSchema } from '../../utils/validators/product.validator.js';
 import Brand from "../../models/brand.model.js";
 import Merchant from "../../models/merchant.model.js";
 import { uploadToCloudinary, deleteFromCloudinary } from '../../config/cloudinary.config.js';
-import { log } from "console";
 
 export const addVariant = async (req, res) => {
   try {
@@ -448,6 +447,16 @@ export const addBaseProduct = async (req, res) => {
       }
     }
 
+    // ── Gender vs Category Validation ──
+    const leafCategoryId = value.subCategoryId || value.categoryId;
+    const leafCategory = await Category.findById(leafCategoryId).lean();
+    if (leafCategory && leafCategory.allowedGenders) {
+      const isValid = value.gender.every(g => leafCategory.allowedGenders.includes(g));
+      if (!isValid) {
+        return res.status(400).json({ message: 'Invalid gender for selected category. Allowed: ' + leafCategory.allowedGenders.join(', ') });
+      }
+    }
+
     const product = new Product({
       ...value,
       attributes: value.attributes || []
@@ -563,10 +572,9 @@ export const getBrands = async (req, res) => {
 export const getBaseProductById = async (req, res) => {
   try {
     const product = await Product.findById(req.params.productId)
-      .populate('brandId', 'name') // Only get the 'name' field of the Brand
+      .populate('brandId', 'name')
       .populate('categoryId', 'name')
       .populate('subCategoryId', 'name')
-      .populate('subSubCategoryId', 'name')
       .populate('merchantId', 'name')
 
     res.status(200).json(product);
@@ -588,16 +596,14 @@ export const getProductsByMerchantId = async (req, res) => {
       .populate("brandId", "name")
       .populate("categoryId", "name")
       .populate("subCategoryId", "name")
-      .populate("subSubCategoryId", "name")
       .populate("merchantId", "shopName email brandName")
-      .sort({ createdAt: -1 }); // ✅ latest first
+      .sort({ createdAt: -1 });
 
     if (!products || products.length === 0) {
       console.log("No products found for this merchant");
       return res.status(404).json({ message: "No products found for this merchant" });
     }
 
-    // 🔄 Transform for frontend
     const transformed = products.map((p) => ({
       id: p._id.toString(),
       name: p.name,
@@ -611,12 +617,10 @@ export const getProductsByMerchantId = async (req, res) => {
       brand: p.brandId?.name || "",
       category: p.categoryId?.name || "",
       subCategory: p.subCategoryId?.name || "",
-      subSubCategory: p.subSubCategoryId?.name || "",
 
       brandId: p.brandId?._id?.toString() || null,
       categoryId: p.categoryId?._id?.toString() || null,
       subCategoryId: p.subCategoryId?._id?.toString() || null,
-      subSubCategoryId: p.subSubCategoryId?._id?.toString() || null,
 
       gender: p.gender,
       description: p.description,

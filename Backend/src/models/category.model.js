@@ -20,27 +20,23 @@ const categorySchema = new mongoose.Schema({
   },
   level: {
     type: Number,
-    default: 0, // 0 = top-level, 1 = sub, 2 = sub-sub
+    default: 0, // 0 = top-level (e.g. Topwear), 1 = sub (e.g. T-Shirt)
   },
 
-  // ── Gender (set on root categories, level 0) ──
-  gender: {
-    type: String,
-    enum: ["Men", "Women", "Unisex", "Kids"],
-    default: null,
+  // ── Gender constraint (who this category is for) ──
+  allowedGenders: {
+    type: [String],
+    enum: ["MEN", "WOMEN", "KIDS"],
+    default: ["MEN", "WOMEN"],
   },
 
   // ── Denormalized ancestry (avoids populate chains) ──
   ancestors: {
     // Level 1 (child): parent info
     parentName: { type: String, default: null },
-    parentGender: { type: String, default: null },
-    // Level 2 (grandchild): grandparent + parent info
-    grandparentName: { type: String, default: null },
-    grandparentGender: { type: String, default: null },
   },
 
-  // ── Commission (set on sub-sub categories, level 2) ──
+  // ── Commission (set on leaf categories, level 1) ──
   commissionPercentage: {
     type: Number,
     default: 0,
@@ -51,6 +47,10 @@ const categorySchema = new mongoose.Schema({
   isActive: {
     type: Boolean,
     default: true,
+  },
+  isTriable: {
+    type: Boolean,
+    default: false,
   },
   image: {
     public_id: {

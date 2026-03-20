@@ -17,8 +17,9 @@ export default function EditCategoryPage() {
     slug: '',
     parentId: '',
     level: 0,
-    gender: 'Unisex',
+    allowedGenders: ['MEN', 'WOMEN'],
     isActive: true,
+    isTriable: false,
     sortOrder: 0,
     commissionPercentage: 0,
   });
@@ -52,8 +53,9 @@ export default function EditCategoryPage() {
         slug: data.slug || '',
         parentId: data.parentId || '',
         level: data.level || 0,
-        gender: data.gender || 'Unisex',
+        allowedGenders: data.allowedGenders || ['MEN', 'WOMEN'],
         isActive: data.isActive !== undefined ? data.isActive : true,
+        isTriable: data.isTriable !== undefined ? data.isTriable : false,
         sortOrder: data.sortOrder || 0,
         commissionPercentage: data.commissionPercentage || 0,
       });
@@ -193,17 +195,13 @@ export default function EditCategoryPage() {
       submitData.append('name', formData.name);
       submitData.append('slug', formData.slug);
       
-      if (formData.level === 0) {
-        submitData.append('gender', formData.gender);
-      }
+      submitData.append('allowedGenders', JSON.stringify(formData.allowedGenders));
       
       submitData.append('isActive', formData.isActive);
+      submitData.append('isTriable', formData.isTriable);
       submitData.append('sortOrder', formData.sortOrder);
 
-      // We don't overwrite level or parentId in the frontend easily without causing ancestor problems,
-      // but if we were to support it we'd append them here.
-
-      if (formData.level === 2) {
+      if (formData.level === 1) {
         submitData.append('commissionPercentage', formData.commissionPercentage);
       }
 
@@ -278,7 +276,7 @@ export default function EditCategoryPage() {
                 Category Level
               </label>
               <div className="w-full px-4 py-2 bg-gray-100 border border-gray-300 rounded-lg text-gray-700">
-                {formData.level === 0 ? 'Top Level' : formData.level === 1 ? 'Sub Category' : 'Sub-Sub Category'}
+              {formData.level === 0 ? 'Main Category' : 'Sub Category'}
               </div>
             </div>
 
@@ -292,8 +290,8 @@ export default function EditCategoryPage() {
               </div>
             </div>
 
-            {/* Commission Percentage (only if Sub-Sub Category / Level 2) */}
-            {formData.level === 2 && (
+            {/* Commission Percentage (Level 1 - leaf) */}
+            {formData.level === 1 && (
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Commission Percentage (%) *
@@ -341,25 +339,32 @@ export default function EditCategoryPage() {
               <p className="mt-1 text-sm text-gray-500">URL-friendly version of the name</p>
             </div>
 
-            {/* Gender - Only editable for Level 0 */}
-            {formData.level === 0 && (
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Gender
-                </label>
-                <select
-                  name="gender"
-                  value={formData.gender}
-                  onChange={handleInputChange}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                >
-                  <option value="Unisex">Unisex</option>
-                  <option value="Men">Men</option>
-                  <option value="Women">Women</option>
-                  <option value="Kids">Kids</option>
-                </select>
+            {/* Allowed Genders */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Allowed Genders
+              </label>
+              <div className="flex gap-4">
+                {['MEN', 'WOMEN', 'KIDS'].map(g => (
+                  <label key={g} className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={formData.allowedGenders.includes(g)}
+                      onChange={(e) => {
+                        setFormData(prev => ({
+                          ...prev,
+                          allowedGenders: e.target.checked
+                            ? [...prev.allowedGenders, g]
+                            : prev.allowedGenders.filter(x => x !== g)
+                        }));
+                      }}
+                      className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                    />
+                    <span className="text-sm font-medium text-gray-700">{g}</span>
+                  </label>
+                ))}
               </div>
-            )}
+            </div>
 
             {/* Sort Order */}
             <div>
@@ -375,17 +380,32 @@ export default function EditCategoryPage() {
               />
             </div>
 
-            <div className="flex items-center gap-3">
-              <input
-                type="checkbox"
-                name="isActive"
-                checked={formData.isActive}
-                onChange={handleInputChange}
-                className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-              />
-              <label className="text-sm font-medium text-gray-700">
-                Is Active
-              </label>
+            <div className="flex items-center gap-6">
+              <div className="flex items-center gap-3">
+                <input
+                  type="checkbox"
+                  name="isActive"
+                  checked={formData.isActive}
+                  onChange={handleInputChange}
+                  className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                />
+                <label className="text-sm font-medium text-gray-700">
+                  Is Active
+                </label>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <input
+                  type="checkbox"
+                  name="isTriable"
+                  checked={formData.isTriable}
+                  onChange={handleInputChange}
+                  className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                />
+                <label className="text-sm font-medium text-gray-700">
+                  Is Triable
+                </label>
+              </div>
             </div>
 
             {/* Category Image */}

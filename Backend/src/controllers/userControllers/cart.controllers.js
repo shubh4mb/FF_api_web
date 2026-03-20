@@ -4,6 +4,7 @@ import Product from '../../models/product.model.js';
 import { log } from "console";
 import Address from '../../models/address.model.js'
 import { calculateDeliveryCharge } from '../../helperFns/deliveryChargeFns.js'
+import AppConfig from "../../models/appConfig.model.js";
 
 export const addToCart = async (req, res) => {
   const userId = req.user.userId; // from JWT middleware
@@ -190,6 +191,9 @@ export const getCart = async (req, res) => {
     const userLat = selectedAddress.location.coordinates[1];
     const userLng = selectedAddress.location.coordinates[0];
 
+    // 2.5️⃣ Fetch App Config for rates
+    const config = await AppConfig.getConfig();
+
     // 3️⃣ Build items with variant price + merchant delivery charge
     let merchantDeliveryMap = {};
 
@@ -205,13 +209,20 @@ export const getCart = async (req, res) => {
         const userCoords = [userLng, userLat];
         const merchantCoords = [merchant.address.location.coordinates[0], merchant.address.location.coordinates[1]];
 
-        const { distanceKm, deliveryCharge } = calculateDeliveryCharge(userCoords, merchantCoords);
+        const { distanceKm, deliveryCharge, returnCharge } = calculateDeliveryCharge({
+          userCoords,
+          merchantCoords,
+          deliveryPerKmRate: config.deliveryPerKmRate,
+          returnPerKmRate: config.returnPerKmRate,
+          waitingCharge: config.waitingCharge
+        });
 
         merchantDeliveryMap[merchant._id] = {
           merchantId: merchant._id,
           shopName: merchant.shopName,
           distanceKm,
           deliveryCharge,
+          returnCharge, // Added returnCharge for frontend visibility
         };
       }
 

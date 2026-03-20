@@ -20,13 +20,13 @@ export const settleOrder = async (order) => {
 
         // 1. Calculate item splits
         for (const item of acceptedItems) {
-            const product = await Product.findById(item.productId).select("categoryId");
+            const product = await Product.findById(item.productId).select("categoryId subCategoryId");
             if (!product) continue;
 
             let commissionPercentage = 0;
-            if (product.categoryId) {
-                // Find the direct category (level-2) to get the commission percentage
-                const category = await Category.findById(product.categoryId).select("commissionPercentage");
+            if (product.subCategoryId) {
+                // Find the direct category (level-1) to get the commission percentage
+                const category = await Category.findById(product.subCategoryId).select("commissionPercentage");
                 if (category && category.commissionPercentage) {
                     commissionPercentage = category.commissionPercentage;
                 }

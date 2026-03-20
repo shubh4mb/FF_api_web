@@ -251,14 +251,25 @@ export const updateMerchantShopDetails = async (req, res) => {
       });
     }
 
-    // Upload logo if provided
     let logo;
-    if (req.file) {
-      const result = await uploadToCloudinary(req.file.buffer, {
+    if (req.files && req.files['logo']) {
+      const result = await uploadToCloudinary(req.files['logo'][0].buffer, {
         folder: "merchant_logos",
         resource_type: "image",
       });
       logo = {
+        public_id: result.public_id,
+        url: result.secure_url,
+      };
+    }
+
+    let backgroundImage;
+    if (req.files && req.files['backgroundImage']) {
+      const result = await uploadToCloudinary(req.files['backgroundImage'][0].buffer, {
+        folder: "merchant_backgrounds",
+        resource_type: "image",
+      });
+      backgroundImage = {
         public_id: result.public_id,
         url: result.secure_url,
       };
@@ -278,6 +289,7 @@ export const updateMerchantShopDetails = async (req, res) => {
           zoneName: zone.zoneName,
           zoneId: zone._id,
           ...(logo && { logo }),
+          ...(backgroundImage && { backgroundImage }),
         },
       },
       { new: true, runValidators: true }

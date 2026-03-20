@@ -11,12 +11,14 @@ const AddMerchants = () => {
     email: "",
     phoneNumber: "",
     password: "",
-    logo:null,
+    logo: null,
+    backgroundImage: null,
     category:"All"
   });
 
-    const [previewUrl, setPreviewUrl] = useState(null); // base64 preview
+  const [previewUrl, setPreviewUrl] = useState(null); // base64 preview
   const [croppedImage, setCroppedImage] = useState(null); // blob
+  const [activeCropField, setActiveCropField] = useState(null); // 'logo' or 'backgroundImage'
   const [showCropper, setShowCropper] = useState(false);
 
   const [message, setMessage] = useState("");
@@ -25,19 +27,27 @@ const AddMerchants = () => {
     setForm({ ...form, [e.target.name]: e.target.value });
   };
 
-  const handleImage=(e)=>{
+  const handleImage = (e, fieldName) => {
     const file = e.target.files[0];
+    if (!file) return;
     const reader = new FileReader();
     reader.onloadend = () => {
       setPreviewUrl(reader.result);  // base64
+      setActiveCropField(fieldName); // determine which field is cropping
       setShowCropper(true);          // open cropper modal
     };
     reader.readAsDataURL(file);
   }
 
   const handleCropComplete = (blob) => {
-    setCroppedImage(blob);
-    setForm((prev) => ({ ...prev, logo: blob }));
+    if (activeCropField === 'logo') {
+      setCroppedImage(blob); // kept for backward compatibility if needed
+      setForm((prev) => ({ ...prev, logo: blob }));
+    } else if (activeCropField === 'backgroundImage') {
+      setForm((prev) => ({ ...prev, backgroundImage: blob }));
+    }
+    setActiveCropField(null);
+    setShowCropper(false);
   };
 
   const handleSubmit = async (e) => {
@@ -54,8 +64,12 @@ const AddMerchants = () => {
           email: "",
           phoneNumber: "",
           password: "",
-          category:""
+          logo: null,
+          backgroundImage: null,
+          category:"All"
         });
+        setPreviewUrl(null);
+        setCroppedImage(null);
       } else {
         setMessage(`Error: ${res.message || "Something went wrong"}`);
       }
@@ -128,43 +142,59 @@ const AddMerchants = () => {
   <option value="Kids">Kids</option>
 </select>
 
-        {/* image */}
+        {/* Logo Image */}
         <div className="flex flex-col">
-  <label htmlFor="image" className="mb-1">Upload Image</label>
-  <input
-    type="file"
-    accept="image/*"
-    name="image"
-    onChange={handleImage}
-    className="border p-2 rounded"
-  />
-</div>
-{showCropper && previewUrl && (
-  <CropperModal
-    imageSrc={previewUrl}
-    onClose={() => setShowCropper(false)}
-    onCropComplete={handleCropComplete}
-  />
-)}
+          <label htmlFor="logo" className="mb-1">Upload Logo</label>
+          <input
+            type="file"
+            accept="image/*"
+            name="logo"
+            onChange={(e) => handleImage(e, 'logo')}
+            className="border p-2 rounded"
+          />
+        </div>
 
-        {previewUrl && !showCropper && (
-  <div className="mt-2">
-    <p className="text-sm text-gray-600">Selected Image:</p>
-    <img src={previewUrl} alt="Preview" className="h-24 rounded" />
-  </div>
-)}
+        {form.logo && !showCropper && (
+          <div className="mt-4">
+            <p className="text-sm text-gray-600">Cropped Logo Preview:</p>
+            <img
+              src={URL.createObjectURL(form.logo)}
+              alt="Cropped Logo"
+              className="h-24 rounded border"
+            />
+          </div>
+        )}
 
-{/* Cropped Image Preview */}
-{croppedImage && !showCropper && (
-  <div className="mt-4">
-    <p className="text-sm text-gray-600">Cropped Image Preview:</p>
-    <img
-      src={URL.createObjectURL(croppedImage)}
-      alt="Cropped"
-      className="h-24 rounded border"
-    />
-  </div>
-)}
+        {/* Background Image */}
+        <div className="flex flex-col">
+          <label htmlFor="backgroundImage" className="mb-1">Upload Background Image</label>
+          <input
+            type="file"
+            accept="image/*"
+            name="backgroundImage"
+            onChange={(e) => handleImage(e, 'backgroundImage')}
+            className="border p-2 rounded"
+          />
+        </div>
+
+        {form.backgroundImage && !showCropper && (
+          <div className="mt-4">
+            <p className="text-sm text-gray-600">Cropped Background Image Preview:</p>
+            <img
+              src={URL.createObjectURL(form.backgroundImage)}
+              alt="Cropped Background"
+              className="h-24 rounded border"
+            />
+          </div>
+        )}
+
+        {showCropper && previewUrl && (
+          <CropperModal
+            imageSrc={previewUrl}
+            onClose={() => setShowCropper(false)}
+            onCropComplete={handleCropComplete}
+          />
+        )}
         
         <button
           type="submit"

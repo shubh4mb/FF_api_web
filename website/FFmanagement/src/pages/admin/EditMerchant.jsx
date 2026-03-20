@@ -12,12 +12,15 @@ const EditMerchant = () => {
     email: "",
     phoneNumber: "",
     logo: null, // will contain { url, public_id } or cropped blob
+    backgroundImage: null,
   });
 
   const [loading, setLoading] = useState(true);
   const [showCropper, setShowCropper] = useState(false);
   const [previewUrl, setPreviewUrl] = useState(null);
-  const [croppedImage, setCroppedImage] = useState(null);
+  const [croppedLogo, setCroppedLogo] = useState(null);
+  const [croppedBg, setCroppedBg] = useState(null);
+  const [activeCropField, setActiveCropField] = useState(null); // 'logo' or 'backgroundImage'
 
   useEffect(() => {
     const fetchMerchant = async () => {
@@ -31,6 +34,7 @@ const EditMerchant = () => {
           email: data.merchant.email || "",
           phoneNumber: data.merchant.phoneNumber || "",
           logo: data.merchant.logo || null,
+          backgroundImage: data.merchant.backgroundImage || null,
         });
         setLoading(false);
       } catch (err) {
@@ -46,20 +50,28 @@ const EditMerchant = () => {
     setForm({ ...form, [e.target.name]: e.target.value });
   };
 
-  const handleImageChange = (e) => {
+  const handleImageChange = (e, fieldName) => {
     const file = e.target.files[0];
+    if (!file) return;
     const reader = new FileReader();
     reader.onloadend = () => {
       setPreviewUrl(reader.result);
+      setActiveCropField(fieldName);
       setShowCropper(true);
     };
     reader.readAsDataURL(file);
   };
 
   const handleCropComplete = (blob) => {
-    setCroppedImage(blob);
-    setForm({ ...form, logo: blob });
+    if (activeCropField === 'logo') {
+      setCroppedLogo(blob);
+      setForm({ ...form, logo: blob });
+    } else if (activeCropField === 'backgroundImage') {
+      setCroppedBg(blob);
+      setForm({ ...form, backgroundImage: blob });
+    }
     setShowCropper(false);
+    setActiveCropField(null);
   };
 
   const handleSubmit = async (e) => {
@@ -71,8 +83,11 @@ const EditMerchant = () => {
     payload.append("email", form.email);
     payload.append("phoneNumber", form.phoneNumber);
 
-    if (croppedImage) {
-      payload.append("logo", croppedImage);
+    if (croppedLogo) {
+      payload.append("logo", croppedLogo);
+    }
+    if (croppedBg) {
+      payload.append("backgroundImage", croppedBg);
     }
 
     try {
@@ -119,17 +134,27 @@ const EditMerchant = () => {
           placeholder="Phone Number"
         />
 
-        <input type="file" accept="image/*" onChange={handleImageChange} />
+        <div className="flex flex-col">
+          <label className="mb-1 font-semibold">Logo</label>
+          <input type="file" accept="image/*" onChange={(e) => handleImageChange(e, 'logo')} />
+          {form.logo?.url && !croppedLogo && (
+            <img src={form.logo.url} alt="Existing Logo" className="h-20 rounded mt-2" />
+          )}
+          {croppedLogo && (
+            <img src={URL.createObjectURL(croppedLogo)} alt="Cropped Logo Preview" className="h-20 rounded border mt-2" />
+          )}
+        </div>
 
-        {/* Existing image from DB */}
-        {form.logo?.url && !previewUrl && !showCropper && (
-          <img src={form.logo.url} alt="Existing Logo" className="h-20 rounded" />
-        )}
-
-        {/* Newly selected image before cropping */}
-        {previewUrl && !showCropper && (
-          <img src={previewUrl} alt="Preview" className="h-20 rounded" />
-        )}
+        <div className="flex flex-col mt-4">
+          <label className="mb-1 font-semibold">Background Image</label>
+          <input type="file" accept="image/*" onChange={(e) => handleImageChange(e, 'backgroundImage')} />
+          {form.backgroundImage?.url && !croppedBg && (
+            <img src={form.backgroundImage.url} alt="Existing Background" className="h-20 rounded mt-2" />
+          )}
+          {croppedBg && (
+            <img src={URL.createObjectURL(croppedBg)} alt="Cropped Background Preview" className="h-20 rounded border mt-2" />
+          )}
+        </div>
 
         {showCropper && previewUrl && (
           <CropperModal

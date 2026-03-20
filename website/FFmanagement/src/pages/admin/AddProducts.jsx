@@ -13,8 +13,7 @@ export default function AddProductPage() {
     brandId: '',
     categoryId: '',
     subCategoryId: '',
-    subSubCategoryId: '',
-    gender: 'unisex',
+    gender: ['MEN', 'WOMEN'],
     description: '',
     features: {},
     tags: '',
@@ -94,23 +93,14 @@ export default function AddProductPage() {
 
   const renderCategoryOptions = (level) => {
     if (level === 0) {
-      // Top-level categories
       return categories
         .filter(cat => cat.level === 0)
         .map(cat => (
           <option key={cat._id} value={cat._id}>{cat.name}</option>
         ));
     } else if (level === 1) {
-      // Sub-categories of selected top-level category
       return categories
         .filter(cat => cat.level === 1 && cat.parentId === formData.categoryId)
-        .map(cat => (
-          <option key={cat._id} value={cat._id}>{cat.name}</option>
-        ));
-    } else if (level === 2) {
-      // Sub-sub-categories of selected sub-category
-      return categories
-        .filter(cat => cat.level === 2 && cat.parentId === formData.subCategoryId)
         .map(cat => (
           <option key={cat._id} value={cat._id}>{cat.name}</option>
         ));
@@ -147,19 +137,30 @@ export default function AddProductPage() {
           {renderCategoryOptions(1)}
         </select>
 
-        <select name="subSubCategoryId" value={formData.subSubCategoryId} onChange={handleChange} className="w-full p-2 border rounded">
-          <option value="">Select Sub-Sub Category</option>
-          {renderCategoryOptions(2)}
-        </select>
-
-        <select name="gender" value={formData.gender} onChange={handleChange} className="w-full p-2 border rounded">
-          <option value="men">Men</option>
-          <option value="women">Women</option>
-          <option value="unisex">Unisex</option>
-          <option value="boys">Boys</option>
-          <option value="girls">Girls</option>
-          <option value="babies">Babies</option>
-        </select>
+        {/* Gender Multi-Checkbox */}
+        <div className="border p-3 rounded">
+          <label className="block text-sm font-semibold text-gray-800 mb-2">Gender Target</label>
+          <div className="flex gap-4">
+            {['MEN', 'WOMEN', 'KIDS'].map(g => (
+              <label key={g} className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={formData.gender.includes(g)}
+                  onChange={(e) => {
+                    setFormData(prev => ({
+                      ...prev,
+                      gender: e.target.checked
+                        ? [...prev.gender, g]
+                        : prev.gender.filter(x => x !== g)
+                    }));
+                  }}
+                  className="w-4 h-4"
+                />
+                <span>{g}</span>
+              </label>
+            ))}
+          </div>
+        </div>
 
         <textarea name="description" placeholder="Description" value={formData.description} onChange={handleChange} className="w-full p-2 border rounded" rows={4} />
         {/* <input type="number" name="mrp" placeholder="MRP" value={formData.mrp} onChange={handleChange} className="w-full p-2 border rounded" required />

@@ -13,8 +13,9 @@ const AddCategory = () => {
     slug: "",
     level: 0,
     parentId: null,
-    gender: "Unisex",
+    allowedGenders: ["MEN", "WOMEN"],
     isActive: true,
+    isTriable: false,
     sortOrder: 0,
     commissionPercentage: 0,
   });
@@ -127,20 +128,8 @@ const AddCategory = () => {
   const handleTopCategoryChange = (e) => {
     const topId = e.target.value;
     setSelectedTopCategory(topId);
-
     if (formData.level === 1) {
       setFormData((prev) => ({ ...prev, parentId: topId }));
-    } else {
-      setSelectedSubCategory("");
-    }
-  };
-
-  const handleSubCategoryChange = (e) => {
-    const subId = e.target.value;
-    setSelectedSubCategory(subId);
-
-    if (formData.level === 2) {
-      setFormData((prev) => ({ ...prev, parentId: subId }));
     }
   };
 
@@ -159,12 +148,11 @@ const AddCategory = () => {
       submissionData.append('name', formData.name);
       submissionData.append('slug', formData.slug);
       
-      // Only level 0 has an explicitly set gender
-      if (formData.level === 0) {
-        submissionData.append('gender', formData.gender);
-      }
+      // Send allowedGenders as JSON array
+      submissionData.append('allowedGenders', JSON.stringify(formData.allowedGenders));
       
       submissionData.append('isActive', formData.isActive);
+      submissionData.append('isTriable', formData.isTriable);
       submissionData.append('sortOrder', formData.sortOrder);
       submissionData.append('level', formData.level);
 
@@ -172,7 +160,7 @@ const AddCategory = () => {
         submissionData.append('parentId', formData.parentId);
       }
 
-      if (formData.level === 2) {
+      if (formData.level === 1) {
         submissionData.append('commissionPercentage', formData.commissionPercentage);
       }
 
@@ -204,9 +192,6 @@ const AddCategory = () => {
   };
 
   const topCategories = allCategories.filter((cat) => cat.level === 0);
-  const subCategories = allCategories.filter(
-    (cat) => cat.level === 1 && cat.parentId === selectedTopCategory
-  );
 
   return (
     <div className="p-6 space-y-4">
@@ -217,14 +202,13 @@ const AddCategory = () => {
         <div className="flex flex-col">
           <label>Category Level</label>
           <select name="level" value={formData.level} onChange={handleLevelChange} className="border p-2 rounded">
-            <option value={0}>Top Level</option>
-            <option value={1}>Sub Category</option>
-            <option value={2}>Sub-Sub Category</option>
+            <option value={0}>Main Category (e.g. Topwear)</option>
+            <option value={1}>Sub Category (e.g. T-Shirt)</option>
           </select>
         </div>
 
-        {/* Commission Percentage (only if Sub-Sub Level i.e., Level 2) */}
-        {formData.level === 2 && (
+        {/* Commission Percentage (only if Level 1 - leaf) */}
+        {formData.level === 1 && (
           <div className="flex flex-col">
             <label className="font-semibold text-gray-700 mb-1">Commission Percentage (%)</label>
             <input
@@ -244,26 +228,13 @@ const AddCategory = () => {
           </div>
         )}
 
-        {/* Top Category (for sub & sub-sub) */}
-        {formData.level > 0 && (
+        {/* Top Category (for sub) */}
+        {formData.level === 1 && (
           <div className="flex flex-col">
-            <label>Top Category</label>
+            <label>Parent Category</label>
             <select value={selectedTopCategory} onChange={handleTopCategoryChange} className="border p-2 rounded">
-              <option value="">Select Top Category</option>
+              <option value="">Select Parent Category</option>
               {topCategories.map((cat) => (
-                <option key={cat._id} value={cat._id}>{cat.name}</option>
-              ))}
-            </select>
-          </div>
-        )}
-
-        {/* Sub Category (only if adding sub-sub) */}
-        {formData.level === 2 && selectedTopCategory && (
-          <div className="flex flex-col">
-            <label>Sub Category</label>
-            <select value={selectedSubCategory} onChange={handleSubCategoryChange} className="border p-2 rounded">
-              <option value="">Select Sub Category</option>
-              {subCategories.map((cat) => (
                 <option key={cat._id} value={cat._id}>{cat.name}</option>
               ))}
             </select>
@@ -274,23 +245,41 @@ const AddCategory = () => {
         <input type="text" name="name" placeholder="Category Name" value={formData.name} onChange={handleChange} className="border p-2 rounded w-full" required />
         <input type="text" name="slug" placeholder="Slug" value={formData.slug} onChange={handleChange} className="border p-2 rounded w-full" required />
 
-        {/* Gender - Only visible for Level 0 */}
-        {formData.level === 0 && (
-          <div className="flex flex-col">
-            <label>Gender</label>
-            <select name="gender" value={formData.gender} onChange={handleChange} className="border p-2 rounded w-full">
-              <option value="Unisex">Unisex</option>
-              <option value="Men">Men</option>
-              <option value="Women">Women</option>
-              <option value="Kids">Kids</option>
-            </select>
+        {/* Allowed Genders */}
+        <div className="flex flex-col">
+          <label className="font-semibold text-gray-700 mb-2">Allowed Genders</label>
+          <div className="flex gap-4">
+            {['MEN', 'WOMEN', 'KIDS'].map(g => (
+              <label key={g} className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={formData.allowedGenders.includes(g)}
+                  onChange={(e) => {
+                    setFormData(prev => ({
+                      ...prev,
+                      allowedGenders: e.target.checked
+                        ? [...prev.allowedGenders, g]
+                        : prev.allowedGenders.filter(x => x !== g)
+                    }));
+                  }}
+                  className="w-4 h-4"
+                />
+                <span>{g}</span>
+              </label>
+            ))}
           </div>
-        )}
+        </div>
 
-        {/* Is Active */}
-        <div className="flex items-center gap-2">
-          <input type="checkbox" name="isActive" checked={formData.isActive} onChange={handleChange} />
-          <label>Is Active</label>
+        {/* Is Active and Is Triable */}
+        <div className="flex items-center gap-6">
+          <div className="flex items-center gap-2">
+            <input type="checkbox" name="isActive" checked={formData.isActive} onChange={handleChange} />
+            <label>Is Active</label>
+          </div>
+          <div className="flex items-center gap-2">
+            <input type="checkbox" name="isTriable" checked={formData.isTriable} onChange={handleChange} />
+            <label className="font-medium text-gray-700">Is Triable</label>
+          </div>
         </div>
 
         {/* Sort Order */}

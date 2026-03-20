@@ -62,6 +62,10 @@ export const productsDetails = async (req, res) => {
       .populate('merchantId', 'shopName')
       .lean();
 
+    if (!product) {
+      return res.status(404).json({ message: 'Product not found' });
+    }
+
     res.status(200).json(product);
   } catch (error) {
     console.error('Error in productsDetails:', error.message);
@@ -144,7 +148,6 @@ export const recommendedProducts = async (req, res) => {
 
         userProducts.forEach(p => {
           if (p.subCategoryId) subCategoryIds.push(p.subCategoryId.toString());
-          if (p.subSubCategoryId) subCategoryIds.push(p.subSubCategoryId.toString());
         });
 
         // Make unique
@@ -164,10 +167,7 @@ export const recommendedProducts = async (req, res) => {
     }
 
     if (subCategoryIds.length > 0) {
-      filter.$or = [
-        { subCategoryId: { $in: subCategoryIds } },
-        { subSubCategoryId: { $in: subCategoryIds } }
-      ];
+      filter.subCategoryId = { $in: subCategoryIds };
     }
 
     let products = await Product.find(filter)
@@ -260,7 +260,6 @@ export const getFilteredProducts = async (req, res) => {
           $or: [
             { categoryId: { $in: categoryObjectIds } },
             { subCategoryId: { $in: categoryObjectIds } },
-            { subSubCategoryId: { $in: categoryObjectIds } },
           ],
         };
 
@@ -308,16 +307,6 @@ export const getFilteredProducts = async (req, res) => {
           pipeline: [{ $project: { name: 1 } }],
         },
       },
-      {
-        $lookup: {
-          from: 'categories', // Assuming same collection for subSubCategoryId
-          localField: 'subSubCategoryId',
-          foreignField: '_id',
-          as: 'subSubCategory',
-          pipeline: [{ $project: { name: 1 } }],
-        },
-      },
-
       /* 2️⃣ Unwind variants */
       { $unwind: '$variants' },
 
@@ -331,7 +320,6 @@ export const getFilteredProducts = async (req, res) => {
                 { 'variants.color.name': new RegExp(search.trim(), 'i') },
                 { 'category.name': new RegExp(search.trim(), 'i') },
                 { 'subCategory.name': new RegExp(search.trim(), 'i') },
-                { 'subSubCategory.name': new RegExp(search.trim(), 'i') },
                 { 'brand.name': new RegExp(search.trim(), 'i') },
                 { 'merchant.shopName': new RegExp(search.trim(), 'i') },
               ],
@@ -363,7 +351,6 @@ export const getFilteredProducts = async (req, res) => {
           brandId: 1,
           categoryId: 1,
           subCategoryId: 1,
-          subSubCategoryId: 1,
           gender: 1,
           ratings: 1,
           numReviews: 1,
@@ -379,7 +366,6 @@ export const getFilteredProducts = async (req, res) => {
           brand: { $arrayElemAt: ['$brand.name', 0] },
           category: { $arrayElemAt: ['$category.name', 0] },
           subCategory: { $arrayElemAt: ['$subCategory.name', 0] },
-          subSubCategory: { $arrayElemAt: ['$subSubCategory.name', 0] },
         },
       },
     ];
@@ -422,12 +408,11 @@ export const getProductsByMerchantId = async (req, res) => {
     const { merchantId } = req.params;
 
     const products = await Product.find({ merchantId: merchantId })
-      .select('name brandId categoryId subCategoryId subSubCategoryId gender variants ratings numReviews')
+      .select('name brandId categoryId subCategoryId gender variants ratings numReviews')
       .populate([
         { path: 'brandId', select: 'name' },
         { path: 'categoryId', select: 'name' },
         { path: 'subCategoryId', select: 'name' },
-        { path: 'subSubCategoryId', select: 'name' },
       ])
       .lean();
 
@@ -466,18 +451,18 @@ export const getProductsByMerchantId = async (req, res) => {
 
 export const getYouMayLikeProducts = async (req, res) => {
   try {
-    const { subSubCategoryId, merchantId, excludeId, limit = 10 } = req.query;
+    const { subCategoryId, merchantId, excludeId, limit = 10 } = req.query;
 
-    if (!subSubCategoryId || !mongoose.Types.ObjectId.isValid(subSubCategoryId)) {
-      return res.status(400).json({ message: '❌ Invalid or missing subSubCategoryId' });
+    if (!subCategoryId || !mongoose.Types.ObjectId.isValid(subCategoryId)) {
+      return res.status(400).json({ message: '❌ Invalid or missing subCategoryId' });
     }
 
-    const subSubId = new mongoose.Types.ObjectId(subSubCategoryId);
+    const subCatId = new mongoose.Types.ObjectId(subCategoryId);
     const merchId = mongoose.Types.ObjectId.isValid(merchantId) ? new mongoose.Types.ObjectId(merchantId) : null;
     const excludeObjId = mongoose.Types.ObjectId.isValid(excludeId) ? new mongoose.Types.ObjectId(excludeId) : null;
 
     const matchConditions = {
-      subSubCategoryId: subSubId,
+      subCategoryId: subCatId,
       isActive: true,
     };
 
@@ -604,10 +589,10 @@ export const getProductsBatch = async (req, res) => {
           name: '$products.name',
           merchantId: '$products.merchantId',
           ratings: '$products.ratings',
-          gender: '$products.gender',
+          gender: { $ifNull: ['$products.gender', []] },
           categoryId: '$products.categoryId',
           subCategoryId: '$products.subCategoryId',
-          subSubCategoryId: '$products.subSubCategoryId',
+
           brandId: '$products.brandId',
           price: { $arrayElemAt: ['$products.variants.price', 0] },
           mrp: { $arrayElemAt: ['$products.variants.mrp', 0] },
@@ -636,15 +621,6 @@ export const getProductsBatch = async (req, res) => {
       { $unwind: { path: '$subCategoryId', preserveNullAndEmptyArrays: true } },
       {
         $lookup: {
-          from: 'categories',
-          localField: 'subSubCategoryId',
-          foreignField: '_id',
-          as: 'subSubCategoryId'
-        }
-      },
-      { $unwind: { path: '$subSubCategoryId', preserveNullAndEmptyArrays: true } },
-      {
-        $lookup: {
           from: 'brands',
           localField: 'brandId',
           foreignField: '_id',
@@ -669,7 +645,6 @@ export const getProductsBatch = async (req, res) => {
               images: '$images',
               categoryId: '$categoryId.name',
               subCategoryId: '$subCategoryId.name',
-              subSubCategoryId: '$subSubCategoryId.name',
               brandId: '$brandId.name'
             }
           }

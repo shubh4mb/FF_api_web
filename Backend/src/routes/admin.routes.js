@@ -22,10 +22,10 @@ router.get('/getCategoryById/:id', getCategoryById);
 router.patch('/updateCategory/:id', verifyAdmin, upload.fields([{ name: 'image', maxCount: 1 }, { name: 'logo', maxCount: 1 }, { name: 'title_banners', maxCount: 5 }]), handleMulterError, updateCategory);
 
 
-router.post('/addMerchant', verifyAdmin, upload.single('logo'), handleMulterError, addMerchant);
+router.post('/addMerchant', verifyAdmin, upload.fields([{ name: 'logo', maxCount: 1 }, { name: 'backgroundImage', maxCount: 1 }]), handleMulterError, addMerchant);
 router.get('/getMerchants', getMerchants);
 router.get('/getMerchant/:id', getMerchantById);
-router.patch('/updateMerchant/:id', verifyAdmin, upload.single('logo'), handleMulterError, updateMerchantById);
+router.patch('/updateMerchant/:id', verifyAdmin, upload.fields([{ name: 'logo', maxCount: 1 }, { name: 'backgroundImage', maxCount: 1 }]), handleMulterError, updateMerchantById);
 
 
 router.post('/brand/add', verifyAdmin, upload.single('logo'), handleMulterError, addBrand);
