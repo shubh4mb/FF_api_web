@@ -41,7 +41,12 @@ export const addCategory = asyncHandler(async (req, res) => {
     try {
       const imageResult = await uploadToCloudinary(fileObj[0].buffer, {
         folder: `category/${folderName}`,
-        resource_type: 'auto'
+        resource_type: 'auto',
+        quality: "auto",
+        fetch_format: "auto",
+        width: 1200,
+        height: 1200,
+        crop: "limit"
       });
       return {
         public_id: imageResult.public_id,
@@ -56,12 +61,25 @@ export const addCategory = asyncHandler(async (req, res) => {
     imageDetails = await uploadFile(req.files.image, 'image');
     logoDetails = await uploadFile(req.files.logo, 'logo');
 
+    // Handle gender-specific logos
+    const logos = {};
+    for (const gender of ['MEN', 'WOMEN', 'KIDS']) {
+      const fieldName = `logo_${gender}`;
+      if (req.files[fieldName]) {
+        const detail = await uploadFile(req.files[fieldName], `logo_${gender.toLowerCase()}`);
+        if (detail) logos[gender] = detail;
+      }
+    }
+
     if (req.files.title_banners) {
       for (const file of req.files.title_banners) {
         const detail = await uploadFile([file], 'title_banner');
         if (detail) titleBannersDetails.push(detail);
       }
     }
+    
+    // Attach logos to the final object
+    req.body.logos = logos;
   }
 
   if (level == 1 && !imageDetails) {
@@ -91,6 +109,7 @@ export const addCategory = asyncHandler(async (req, res) => {
     ...(level == 1 && commissionPercentage !== undefined && { commissionPercentage }),
     ...(imageDetails && { image: imageDetails }),
     ...(logoDetails && { logo: logoDetails }),
+    ...(req.body.logos && { logos: req.body.logos }),
     ...(titleBannersDetails.length > 0 && { title_banners: titleBannersDetails })
   });
 
@@ -108,7 +127,12 @@ export const updateCategory = asyncHandler(async (req, res) => {
     if (!fileObj || !fileObj[0]) return null;
     const imageResult = await uploadToCloudinary(fileObj[0].buffer, {
       folder: `category/${folderName}`,
-      resource_type: 'auto'
+      resource_type: 'auto',
+      quality: "auto",
+      fetch_format: "auto",
+      width: 1200,
+      height: 1200,
+      crop: "limit"
     });
     return {
       public_id: imageResult.public_id,
@@ -120,17 +144,42 @@ export const updateCategory = asyncHandler(async (req, res) => {
     imageDetails = await uploadFile(req.files.image, 'image');
     logoDetails = await uploadFile(req.files.logo, 'logo');
 
+    // Handle gender-specific logos
+    const logos = {};
+    for (const gender of ['MEN', 'WOMEN', 'KIDS']) {
+      const fieldName = `logo_${gender}`;
+      if (req.files[fieldName]) {
+        const detail = await uploadFile(req.files[fieldName], `logo_${gender.toLowerCase()}`);
+        if (detail) logos[gender] = detail;
+      }
+    }
+
     if (req.files.title_banners) {
       for (const file of req.files.title_banners) {
         const detail = await uploadFile([file], 'title_banner');
         if (detail) titleBannersDetails.push(detail);
       }
     }
+    
+    req.body.new_logos = logos;
   }
 
   const updateData = { ...req.body };
   if (imageDetails) updateData.image = imageDetails;
   if (logoDetails) updateData.logo = logoDetails;
+
+  // Merge gender-specific logos
+  let existingLogos = {};
+  if (req.body.existing_logos) {
+     try {
+       existingLogos = JSON.parse(req.body.existing_logos);
+     } catch (err) {
+       console.warn("Failed to parse existing_logos", err);
+     }
+  }
+  updateData.logos = { ...existingLogos, ...(req.body.new_logos || {}) };
+  delete updateData.existing_logos;
+  delete updateData.new_logos;
 
   // Parse allowedGenders if provided
   if (updateData.allowedGenders) {

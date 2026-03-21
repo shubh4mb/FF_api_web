@@ -20,7 +20,7 @@ import mongoose from 'mongoose';
 export const createRazorpayOrder = async (req, res) => {
   try {
     const userId = req.user.userId;
-    const { addressId } = req.body;
+    const { addressId, deliveryTip = 0 } = req.body;
 
     // === VALIDATE CART ===
     const cart = await Cart.findOne({ userId })
@@ -91,14 +91,17 @@ export const createRazorpayOrder = async (req, res) => {
     }
 
 
+    // === SERVICE GST (18% on delivery + tip) ===
+    const serviceGST = parseFloat(((deliveryCharge + deliveryTip) * 0.18).toFixed(2));
+
     // === FINAL PAYABLE ===
-    // Customer pays delivery + return charge upfront.
-    const totalDeliveryFee = deliveryCharge + returnCharge;
-    const finalPayable = totalAmount + totalDeliveryFee;
+    // Customer pays delivery + return charge + tip + service GST upfront.
+    const upfrontPayable = deliveryCharge + returnCharge + deliveryTip + serviceGST;
+    const finalPayable = totalAmount + upfrontPayable;
 
     // === RAZORPAY ORDER ===
     const razorpayOrder = await razorpay.orders.create({
-      amount: totalDeliveryFee * 100, // Only pay delivery upfront
+      amount: Math.round(upfrontPayable * 100), // Only pay delivery-related fees upfront
       currency: "INR",
       receipt: `receipt_${Date.now()}`,
       payment_capture: 1,
@@ -117,7 +120,9 @@ export const createRazorpayOrder = async (req, res) => {
       finalBilling: {
         baseAmount: totalAmount,
         tryAndBuyFee: 0,
-        gst: 0,
+        gst: 0, 
+        serviceGST,
+        deliveryTip,
         discount: 0,
         deliveryCharge,
         totalPayable: finalPayable,
@@ -154,12 +159,14 @@ export const createRazorpayOrder = async (req, res) => {
     return res.status(200).json({
       success: true,
       razorpayOrderId: razorpayOrder.id,
-      amount: totalDeliveryFee * 100,
+      amount: Math.round(upfrontPayable * 100),
       key_id: process.env.RAZORPAY_KEY_ID,
       orderId: pendingOrder._id,
+      totalDeliveryFee: upfrontPayable,
       deliveryCharge,
       returnCharge,
-      totalDeliveryFee,
+      deliveryTip,
+      serviceGST,
       deliveryDistance: distanceKm,
       estimatedTime,
       contact: deliveryAddress.phone,
@@ -654,15 +661,13 @@ export const createFinalPaymentRazorpayOrder = async (req, res) => {
     console.log(billing, "sdfdfs");
 
 
-    // === STEP 3: Save billing into DB ===
-    order.finalBilling = {
-      baseAmount: billing.baseAmount,
-      tryAndBuyFee: 0,
-      gst: billing.gst,
-      discount: billing.returnChargeDeduction, // deduction applied only if all kept
-      deliveryCharge: order.deliveryCharge,
-      totalPayable: billing.totalPayable,
-    };
+    // === STEP 3: Save billing into DB (Update, don't overwrite) ===
+    order.finalBilling.baseAmount = billing.baseAmount;
+    order.finalBilling.gst = billing.gst;
+    order.finalBilling.discount = billing.returnChargeDeduction; // deduction applied only if all kept
+    order.finalBilling.totalPayable = billing.totalPayable; // amount for the FINAL RAZORPAY ORDER
+    
+    // Note: deliveryTip and serviceGST are already in order.finalBilling from step 1
 
     order.overtimePenalty = billing.overtimePenalty;
     await order.save();

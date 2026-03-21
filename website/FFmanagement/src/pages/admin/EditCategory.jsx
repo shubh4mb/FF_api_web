@@ -29,13 +29,30 @@ export default function EditCategoryPage() {
   const [images, setImages] = useState({
     image: { preview: '', file: null, existing: null },
     logo: { preview: '', file: null, existing: null },
+    logo_MEN: { preview: '', file: null, existing: null },
+    logo_WOMEN: { preview: '', file: null, existing: null },
+    logo_KIDS: { preview: '', file: null, existing: null },
   });
 
   // titleBanners state holds array of: { id, preview, file, existing }
   const [titleBanners, setTitleBanners] = useState([]);
 
-  const [showCropper, setShowCropper] = useState({ image: false, logo: false, title_banners: false });
-  const [tempImageSrc, setTempImageSrc] = useState({ image: '', logo: '', title_banners: '' });
+  const [showCropper, setShowCropper] = useState({ 
+    image: false, 
+    logo: false, 
+    logo_MEN: false, 
+    logo_WOMEN: false, 
+    logo_KIDS: false, 
+    title_banners: false 
+  });
+  const [tempImageSrc, setTempImageSrc] = useState({ 
+    image: '', 
+    logo: '', 
+    logo_MEN: '', 
+    logo_WOMEN: '', 
+    logo_KIDS: '', 
+    title_banners: '' 
+  });
 
   useEffect(() => {
     loadCategory();
@@ -70,6 +87,21 @@ export default function EditCategoryPage() {
           preview: data.logo?.url || '',
           file: null,
           existing: data.logo
+        },
+        logo_MEN: {
+          preview: data.logos?.MEN?.url || '',
+          file: null,
+          existing: data.logos?.MEN
+        },
+        logo_WOMEN: {
+          preview: data.logos?.WOMEN?.url || '',
+          file: null,
+          existing: data.logos?.WOMEN
+        },
+        logo_KIDS: {
+          preview: data.logos?.KIDS?.url || '',
+          file: null,
+          existing: data.logos?.KIDS
         }
       });
 
@@ -132,8 +164,8 @@ export default function EditCategoryPage() {
   const handleImageChange = (e, imageType) => {
     const file = e.target.files?.[0];
     if (file) {
-      if (file.size > 5 * 1024 * 1024) {
-        setError('Image size should be less than 5MB');
+      if (file.size > 10 * 1024 * 1024) {
+        setError('Image size should be less than 10MB');
         return;
       }
 
@@ -211,6 +243,24 @@ export default function EditCategoryPage() {
       if (images.logo.file) {
         submitData.append('logo', images.logo.file);
       }
+
+      // Existing Gender-Specific Logos Retained (only for currently allowed genders)
+      const existingLogosToKeep = {};
+      formData.allowedGenders.forEach(gender => {
+        const logoState = images[`logo_${gender}`];
+        if (logoState.existing && !logoState.file) {
+          existingLogosToKeep[gender] = logoState.existing;
+        }
+      });
+      submitData.append('existing_logos', JSON.stringify(existingLogosToKeep));
+
+      // New Gender-Specific Logo Files
+      ['MEN', 'WOMEN', 'KIDS'].forEach(gender => {
+        const logoState = images[`logo_${gender}`];
+        if (logoState.file) {
+          submitData.append(`logo_${gender}`, logoState.file);
+        }
+      });
 
       // Existing Banners Retained (sent as JSON text block)
       const existingBannersToKeep = titleBanners
@@ -442,39 +492,41 @@ export default function EditCategoryPage() {
               )}
             </div>
 
-            {/* Logo */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Logo
-              </label>
-              {images.logo.preview ? (
-                <div className="relative inline-block w-full">
-                  <img
-                    src={images.logo.preview}
-                    alt="Logo"
-                    className="w-full h-32 object-contain rounded-lg border border-gray-300 bg-gray-50"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => removeImage('logo')}
-                    className="absolute top-2 right-2 p-1 bg-red-600 text-white rounded-full hover:bg-red-700"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                </div>
-              ) : (
-                <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50">
-                  <Upload className="w-8 h-8 text-gray-400 mb-2" />
-                  <span className="text-sm text-gray-500">Click to upload logo</span>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={(e) => handleImageChange(e, 'logo')}
-                    className="hidden"
-                  />
+            {/* Gender Specific Logos */}
+            {formData.allowedGenders.map(gender => (
+              <div key={gender}>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Logo for {gender}
                 </label>
-              )}
-            </div>
+                {images[`logo_${gender}`].preview ? (
+                  <div className="relative inline-block w-full">
+                    <img
+                      src={images[`logo_${gender}`].preview}
+                      alt={`Logo ${gender}`}
+                      className="w-full h-32 object-contain rounded-lg border border-gray-300 bg-gray-50"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => removeImage(`logo_${gender}`)}
+                      className="absolute top-2 right-2 p-1 bg-red-600 text-white rounded-full hover:bg-red-700"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                ) : (
+                  <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50">
+                    <Upload className="w-8 h-8 text-gray-400 mb-2" />
+                    <span className="text-sm text-gray-500">Click to upload logo for {gender}</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => handleImageChange(e, `logo_${gender}`)}
+                      className="hidden"
+                    />
+                  </label>
+                )}
+              </div>
+            ))}
 
             {/* Title Banners Upload (Array) */}
             <div className="border border-gray-200 rounded-lg p-4 bg-gray-50">
@@ -521,7 +573,7 @@ export default function EditCategoryPage() {
             </div>
 
             {/* Shared Cropper Modal */}
-            {['image', 'logo', 'title_banners'].map((type) => (
+            {['image', 'logo', 'logo_MEN', 'logo_WOMEN', 'logo_KIDS', 'title_banners'].map((type) => (
               showCropper[type] && tempImageSrc[type] && (
                 <div key={type} className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
                   <div className="bg-white p-4 rounded-lg w-full max-w-2xl">

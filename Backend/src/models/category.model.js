@@ -72,6 +72,20 @@ const categorySchema = new mongoose.Schema({
       required: false
     }
   },
+  logos: {
+    MEN: {
+      public_id: { type: String, required: false },
+      url: { type: String, required: false }
+    },
+    WOMEN: {
+      public_id: { type: String, required: false },
+      url: { type: String, required: false }
+    },
+    KIDS: {
+      public_id: { type: String, required: false },
+      url: { type: String, required: false }
+    }
+  },
   title_banners: [{
     public_id: {
       type: String,

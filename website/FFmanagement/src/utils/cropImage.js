@@ -30,7 +30,7 @@ export const getCroppedImg = (imageSrc, pixelCrop) => {
           return;
         }
         resolve(blob);
-      }, "image/jpeg");
+      }, "image/png");
     };
     image.onerror = reject;
   });

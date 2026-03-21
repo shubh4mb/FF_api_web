@@ -26,7 +26,12 @@ export const addTitleBanner=async(req,res)=>{
         if(req.file){
             const result=await uploadToCloudinary(req.file.buffer, {
                 folder: 'subsubCategory/image',
-                resource_type: 'auto'
+                resource_type: 'auto',
+                quality: "auto",
+                fetch_format: "auto",
+                width: 1200,
+                height: 1200,
+                crop: "limit"
               });
               req.body.image={
                 public_id: result.public_id,

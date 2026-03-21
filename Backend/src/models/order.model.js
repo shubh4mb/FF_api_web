@@ -116,7 +116,9 @@ const OrderSchema = new mongoose.Schema({
   finalBilling: {
     baseAmount: { type: Number, default: 0 },     // Sum of accepted items
     tryAndBuyFee: { type: Number, default: 0 },   // Optional fixed or % fee
-    gst: { type: Number, default: 0 },            // GST or tax
+    gst: { type: Number, default: 0 },            // GST or tax on items
+    serviceGST: { type: Number, default: 0 },     // GST on service (delivery + tip)
+    deliveryTip: { type: Number, default: 0 },    // Tip for delivery boy
     discount: { type: Number, default: 0 },       // Promo/coupon if any
     deliveryCharge: { type: Number, default: 0 }, // Optional
     totalPayable: { type: Number, default: 0 }    // Final amount to be paid
