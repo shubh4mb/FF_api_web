@@ -42,6 +42,11 @@ export const acceptOrder = async (req, res) => {
       return res.status(403).json({ message: 'Order already assigned to another rider' });
     }
 
+    // Guard: only allow acceptance when order is merchant-approved
+    if (order.orderStatus !== 'accepted') {
+      return res.status(400).json({ message: `Order cannot be accepted in "${order.orderStatus}" status` });
+    }
+
     // Update order fields — rider assignment only
     // Delivery charge & billing are already set during order creation (appConfig-based)
     order.deliveryRiderId = rider._id;
@@ -219,6 +224,12 @@ export const reachedCustomerLocation = async (req, res) => {
     order.orderStatus = "arrived at delivery";
     await order.save();
     emitOrderUpdate(req.io, orderId, order);
+
+    // 📱 Customer notification: "Rider at your location"
+    notifyOrderEvent("customer", "rider_reached_location", {
+      userId: order.userId,
+      orderId: order._id,
+    });
 
     res.status(200).json({ message: "Rider confirmed at customer location" });
   } catch (error) {

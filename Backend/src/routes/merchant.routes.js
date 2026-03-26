@@ -10,11 +10,77 @@ import { authMiddlewareMerchant } from '../middleware/jwtAuth.js';
 import { getWalletDetails } from '../helperFns/walletHelper.js';
 import { getPlacedOrder, orderRequestForMerchant, orderPacked } from '../controllers/merchantController/order.controllers.js';
 import { getMerchantById } from '../controllers/merchantController/merchant.controller.js';
+import { getMerchantAnalytics } from '../controllers/merchantController/analytics.controller.js';
 
 const router = express.Router();
 
+/**
+ * @swagger
+ * tags:
+ *   name: Merchant
+ *   description: Merchant management and product APIs
+ */
+
+/**
+ * @swagger
+ * /api/merchant/auth/send-email-otp:
+ *   post:
+ *     summary: Send OTP to merchant email for registration/login
+ *     tags: [Merchant]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [email]
+ *             properties:
+ *               email:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: OTP sent
+ */
 router.post('/auth/send-email-otp', sendEmailOtp);
+
+/**
+ * @swagger
+ * /api/merchant/auth/verify-email-otp:
+ *   post:
+ *     summary: Verify OTP sent to merchant email
+ *     tags: [Merchant]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [email, otp]
+ *             properties:
+ *               email:
+ *                 type: string
+ *               otp:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: OTP verified
+ */
 router.post('/auth/verify-email-otp', verifyEmailOtp);
+
+/**
+ * @swagger
+ * /api/merchant/getMerchant:
+ *   get:
+ *     summary: Get current logged in merchant details
+ *     tags: [Merchant]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Merchant details retrieved
+ *       401:
+ *         description: Unauthorized
+ */
 router.get('/getMerchant', authMiddlewareMerchant, getMerchantById)
 // router.get('/:ema:merchantIdil',getMerchantByEmail)
 
@@ -22,7 +88,58 @@ router.put("/:merchantId/shop-details", upload.fields([{ name: 'logo', maxCount:
 router.put("/:merchantId/bank-details", updateMerchantBankDetails);
 router.put("/:merchantId/operating-hours", updateMerchantOperatingHours);
 router.put("/:merchantId/activate", activateMerchant);
+
+/**
+ * @swagger
+ * /api/merchant/login:
+ *   post:
+ *     summary: Merchant login
+ *     tags: [Merchant]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [email, password]
+ *             properties:
+ *               email:
+ *                 type: string
+ *               password:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Merchant logged in successfully
+ *       401:
+ *         description: Unauthorized
+ */
 router.post('/login', loginMerchant);
+
+/**
+ * @swagger
+ * /api/merchant/register:
+ *   post:
+ *     summary: Register a new merchant
+ *     tags: [Merchant]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               email:
+ *                 type: string
+ *               password:
+ *                 type: string
+ *               shopName:
+ *                 type: string
+ *     responses:
+ *       201:
+ *         description: Merchant registered successfully
+ *       400:
+ *         description: Bad request
+ */
 router.post('/register', registerMerchant);
 
 
@@ -78,6 +195,9 @@ router.post('/add', addMerchant)
 // ── Reviews ──
 import { getMerchantOwnReviews } from '../controllers/userControllers/review.controllers.js';
 router.get('/reviews', authMiddlewareMerchant, getMerchantOwnReviews);
+
+// ── Analytics ──
+router.get('/analytics', authMiddlewareMerchant, getMerchantAnalytics);
 
 // ── Wallet ──
 router.get('/wallet', authMiddlewareMerchant, async (req, res) => {

@@ -10,26 +10,20 @@ cloudinary.config({
     api_secret: process.env.CLOUDINARY_API_SECRET
 });
 
-// Helper function to upload files to Cloudinary
 export const uploadToCloudinary = (buffer, options = {}) => {
     return new Promise((resolve, reject) => {
       const stream = cloudinary.uploader.upload_stream(options, (error, result) => {
-        if (error) {
-          return reject(error);
-        }
+        if (error) return reject(error);
         resolve(result);
       });
-      // Convert buffer to a readable stream and pipe to cloudinary
       Readable.from(buffer).pipe(stream);
     });
-  };
+};
     
 export const deleteFromCloudinary = async (public_id) => {
     try {
-        const result = await cloudinary.uploader.destroy(public_id);
-        return result;
+        return await cloudinary.uploader.destroy(public_id);
     } catch (error) {
-        // //('Error deleting from Cloudinary:', error);
         throw error;
     }
 };

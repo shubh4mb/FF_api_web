@@ -177,6 +177,10 @@ export async function notifyOrderEvent(target, event, ctx) {
             title: "Rider On The Way 🚴",
             body: `Your rider is heading to you with order #${shortId}.`,
         },
+        rider_reached_location: {
+            title: "Rider Arrived! 🏠",
+            body: `Your rider has reached your location with order #${shortId}. Please be ready!`,
+        },
         delivery_complete: {
             title: "Order Complete 🎊",
             body: `Your order #${shortId} is fully completed. Thanks for shopping!`,

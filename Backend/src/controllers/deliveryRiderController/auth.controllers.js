@@ -1,6 +1,6 @@
 import DeliveryRider from "../../models/deliveryRider.model.js";
 import jwt from "jsonwebtoken";
-import { uploadToCloudinary } from "../../config/cloudinary.config.js";
+import { storageService } from "../../services/storage.service.js";
 import zoneModel from "../../models/zone.model.js";
 // import { JWT_SECRET } from "../../config.js";
 
@@ -196,19 +196,14 @@ export const uploadDocuments = async (req, res) => {
       const uploadedFiles = {};
   
       // Upload all received files to Cloudinary
-     // Upload documents dynamically
 for (const [fieldName, fileArray] of Object.entries(req.files)) {
   const file = fileArray[0];
   try {
-    const result = await uploadToCloudinary(file.buffer, {
-      folder: `riders/${riderId}/documents`,
-      resource_type: "auto",
-    });
-
-    uploadedFiles[fieldName] = {
-      public_id: result.public_id,
-      url: result.secure_url,
-    };
+    const result = await storageService.uploadSingle(file, `riders/${riderId}/documents`);
+    
+    if (result) {
+      uploadedFiles[fieldName] = result;
+    }
   } catch (err) {
     console.error(`Error uploading ${fieldName}:`, err.message);
     return res.status(500).json({

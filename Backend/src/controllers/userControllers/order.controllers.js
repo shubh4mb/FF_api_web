@@ -72,6 +72,15 @@ export const createRazorpayOrder = async (req, res) => {
       const variant = product.variants.id(item.variantId);
       if (!variant) continue;
 
+      const sizeObj = variant.sizes.find(s => s.size === item.size);
+      if (!sizeObj) {
+        return res.status(400).json({ message: `Size ${item.size} not found for product ${product.name}` });
+      }
+
+      if (sizeObj.stock < item.quantity) {
+        return res.status(400).json({ message: `Insufficient stock for ${product.name} (Size: ${item.size}). Available: ${sizeObj.stock}, Requested: ${item.quantity}` });
+      }
+
       const price = variant.price;
 
       for (let i = 0; i < item.quantity; i++) {
@@ -117,18 +126,15 @@ export const createRazorpayOrder = async (req, res) => {
       },
       items: orderItems,
       totalAmount,
-      finalBilling: {
-        baseAmount: totalAmount,
-        tryAndBuyFee: 0,
-        gst: 0, 
-        serviceGST,
-        deliveryTip,
-        discount: 0,
-        deliveryCharge,
-        totalPayable: finalPayable,
-      },
-      deliveryDistance: distanceKm,
+      baseAmount: totalAmount,
+      tryAndBuyFee: 0,
+      gst: 0,
+      serviceGST,
+      deliveryTip,
+      discount: 0,
       deliveryCharge,
+      totalPayable: finalPayable,
+      deliveryDistance: distanceKm,
       returnCharge,
       estimatedTime,
       deliveryLocation: {
@@ -153,31 +159,31 @@ export const createRazorpayOrder = async (req, res) => {
       paymentStatus: "pending",
     });
 
-    await pendingOrder.save();
+  await pendingOrder.save();
 
-    // === RESPONSE ===
-    return res.status(200).json({
-      success: true,
-      razorpayOrderId: razorpayOrder.id,
-      amount: Math.round(upfrontPayable * 100),
-      key_id: process.env.RAZORPAY_KEY_ID,
-      orderId: pendingOrder._id,
-      totalDeliveryFee: upfrontPayable,
-      deliveryCharge,
-      returnCharge,
-      deliveryTip,
-      serviceGST,
-      deliveryDistance: distanceKm,
-      estimatedTime,
-      contact: deliveryAddress.phone,
-      name: deliveryAddress.name,
-      email: req.user.email || "customer@example.com",
-    });
+  // === RESPONSE ===
+  return res.status(200).json({
+    success: true,
+    razorpayOrderId: razorpayOrder.id,
+    amount: upfrontPayable * 100,
+    key_id: process.env.RAZORPAY_KEY_ID,
+    orderId: pendingOrder._id,
+    totalDeliveryFee: upfrontPayable,
+    deliveryCharge,
+    returnCharge,
+    deliveryTip,
+    serviceGST,
+    deliveryDistance: distanceKm,
+    estimatedTime,
+    contact: deliveryAddress.phone,
+    name: deliveryAddress.name,
+    email: req.user.email || "customer@example.com",
+  });
 
-  } catch (error) {
-    console.error("Create Razorpay Order Error:", error);
-    return res.status(500).json({ message: "Server error", error: error.message });
-  }
+} catch (error) {
+  console.error("Create Razorpay Order Error:", error);
+  return res.status(500).json({ message: "Server error", error: error.message });
+}
 };
 
 
@@ -475,6 +481,9 @@ export const getAllOrders = async (req, res) => {
 }
 
 export const initiateReturn = async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
   try {
 
     let { orderId } = req.params;
@@ -484,11 +493,15 @@ export const initiateReturn = async (req, res) => {
     const { items } = req.body; // Expected payload: array of { itemId, tryStatus: "keep"|"return", returnReason }
 
     if (!items || !Array.isArray(items) || items.length === 0) {
+      await session.abortTransaction();
+      session.endSession();
       return res.status(400).json({ message: "Items array with tryStatus is required" });
     }
 
-    const order = await Order.findById(orderId).populate('items.productId');
+    const order = await Order.findById(orderId).populate('items.productId').session(session);
     if (!order) {
+      await session.abortTransaction();
+      session.endSession();
       return res.status(404).json({ message: "Order not found" });
     }
 
@@ -498,6 +511,8 @@ export const initiateReturn = async (req, res) => {
       item => !orderItemIds.includes(item.itemId.toString())
     );
     if (invalidItem) {
+      await session.abortTransaction();
+      session.endSession();
       return res.status(400).json({ message: `Item with id ${invalidItem.itemId} not found in order` });
     }
 
@@ -545,7 +560,11 @@ export const initiateReturn = async (req, res) => {
 
     // Mark try phase as completed
     order.trialPhaseEnd = new Date();
-    await order.save();
+    await order.save({ session });
+    
+    await session.commitTransaction();
+    session.endSession();
+    
     // Emit real-time update (assuming you have socket.io set up)
     const io = getIO();
     emitOrderUpdate(io, orderId, order);
@@ -562,6 +581,8 @@ export const initiateReturn = async (req, res) => {
 
   } catch (error) {
     console.error("Error in initiateReturn:", error);
+    await session.abortTransaction();
+    session.endSession();
     return res.status(500).json({ message: "Internal server error" });
   }
 };
@@ -598,6 +619,11 @@ export const createFinalPaymentRazorpayOrder = async (req, res) => {
 
     if (!order) {
       return res.status(404).json({ message: "Order not found" });
+    }
+
+    // Guard: prevent duplicate Razorpay orders for already-paid orders
+    if (order.paymentStatus === "paid") {
+      return res.status(400).json({ message: "Payment already completed for this order" });
     }
 
     // === STEP 1: Update item tryStatus ===
@@ -666,7 +692,7 @@ export const createFinalPaymentRazorpayOrder = async (req, res) => {
     order.finalBilling.gst = billing.gst;
     order.finalBilling.discount = billing.returnChargeDeduction; // deduction applied only if all kept
     order.finalBilling.totalPayable = billing.totalPayable; // amount for the FINAL RAZORPAY ORDER
-    
+
     // Note: deliveryTip and serviceGST are already in order.finalBilling from step 1
 
     order.overtimePenalty = billing.overtimePenalty;
@@ -703,6 +729,9 @@ export const createFinalPaymentRazorpayOrder = async (req, res) => {
 };
 
 export const verifyFinalPayment = async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
   try {
     const {
       razorpay_order_id,
@@ -724,9 +753,19 @@ export const verifyFinalPayment = async (req, res) => {
       return res.status(400).json({ success: false, message: "Invalid signature" });
     }
 
-    const order = await Order.findOne({ _id: orderId, userId });
+    const order = await Order.findOne({ _id: orderId, userId }).session(session);
     if (!order || order.razorpayOrderId !== razorpay_order_id) {
       return res.status(400).json({ message: "Invalid order" });
+    }
+
+    if (order.paymentStatus === "paid") {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(200).json({
+        success: true,
+        message: "Payment already verified",
+        orderId: order._id,
+      });
     }
 
     // === Mark payment done ===
@@ -756,7 +795,7 @@ export const verifyFinalPayment = async (req, res) => {
       const result = await Product.updateOne(
         { _id: item.productId, "variants._id": item.variantId },
         { $inc: { "variants.$[variant].sizes.$[size].stock": -item.quantity } },
-        { arrayFilters: [{ "variant._id": item.variantId }, { "size.size": item.size }] }
+        { arrayFilters: [{ "variant._id": item.variantId }, { "size.size": item.size }], session }
       );
       if (result.modifiedCount === 0) {
         stockUpdateErrors.push(item.productId);
@@ -771,15 +810,21 @@ export const verifyFinalPayment = async (req, res) => {
         currentOrderId: null,
         isBusy: false,
         isAvailable: true,
-      });
+      }, { session });
     }
 
     // === SETTLE WALLETS FOR MERCHANT, RIDER, ADMIN ===
     // Import dynamically to avoid circular dependencies if any
     const { settleOrder } = await import("../../helperFns/orderSettlement.js");
-    await settleOrder(order).catch(err => console.error("Settlement failed non-fatally", err));
+    await settleOrder(order, session).catch(err => {
+      console.error("Settlement failed non-fatally", err);
+      order.settlementStatus = 'failed';
+    });
 
-    await order.save();
+    await order.save({ session });
+    
+    await session.commitTransaction();
+    session.endSession();
 
     const io = getIO();
     emitOrderUpdate(io, orderId, order);
@@ -815,10 +860,86 @@ export const verifyFinalPayment = async (req, res) => {
     });
   } catch (error) {
     console.error("Verify Final Payment Error:", error);
+    await session.abortTransaction();
+    session.endSession();
     return res.status(500).json({ message: "Server error" });
   }
 };
 
+export const cancelOrder = async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
+  try {
+    const { orderId } = req.params;
+    const userId = req.user.userId;
+
+    const order = await Order.findOne({ _id: orderId, userId }).session(session);
+    
+    if (!order) {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(404).json({ message: "Order not found" });
+    }
+
+    if (order.orderStatus !== "placed") {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(400).json({ message: `Cannot cancel order in ${order.orderStatus} state` });
+    }
+
+    // 💰 Refund full upfront amount to customer wallet
+    const refundAmount = (order.deliveryCharge || 0) + (order.returnCharge || 0) + (order.finalBilling?.deliveryTip || 0) + (order.finalBilling?.serviceGST || 0);
+
+    if (refundAmount > 0) {
+      const { creditWallet } = await import("../../helperFns/walletHelper.js");
+      await creditWallet({
+        ownerType: "user",
+        ownerId: order.userId,
+        amount: refundAmount,
+        description: `Refund: Cancelled order #${order._id.toString().slice(-5).toUpperCase()}`,
+        orderId: order._id,
+        session
+      });
+      order.paymentStatus = "refunded";
+    }
+
+    order.orderStatus = "cancelled";
+    await order.save({ session });
+
+    // Remove from pending orders queue if it exists
+    const PendingOrder = (await import("../../models/pendingOrders.model.js")).default;
+    await PendingOrder.deleteOne({ orderId: order._id }).session(session);
+
+    await session.commitTransaction();
+    session.endSession();
+
+    // 📱 Customer notification: "Order Cancelled"
+    notifyOrderEvent("customer", "order_cancelled", {
+      userId: order.userId,
+      orderId: order._id,
+      amount: refundAmount,
+    });
+    
+    // Also notify merchant via socket since order is cancelled before they accepted
+    const io = getIO();
+    emitOrderUpdate(io, order._id.toString(), order);
+    const { notifyMerchant } = await import("../../sockets/merchant.socket.js");
+    notifyMerchant(io, order.merchantId, `Order #${order._id.toString().slice(-5).toUpperCase()} was cancelled by user.`);
+
+    return res.status(200).json({
+      success: true,
+      message: "Order cancelled successfully, upfront fee refunded to wallet",
+      order
+    });
+
+  } catch (error) {
+    console.error("Cancel Order Error:", error);
+    await session.abortTransaction();
+    session.endSession();
+    return res.status(500).json({ message: "Server error" });
+  }
+};
 
 
 

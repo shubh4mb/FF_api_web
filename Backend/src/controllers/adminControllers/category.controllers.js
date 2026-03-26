@@ -1,5 +1,5 @@
 import Category from '../../models/category.model.js';
-import { uploadToCloudinary } from '../../config/cloudinary.config.js';
+import { storageService } from '../../services/storage.service.js';
 import { asyncHandler } from '../../utils/asyncHandler.js';
 import { ApiError } from '../../utils/ApiError.js';
 import { ApiResponse } from '../../utils/ApiResponse.js';
@@ -36,44 +36,29 @@ export const addCategory = asyncHandler(async (req, res) => {
   // Auto-populate ancestors
   const ancestors = await buildAncestors(parentId, level);
 
-  const uploadFile = async (fileObj, folderName) => {
-    if (!fileObj || !fileObj[0]) return null;
-    try {
-      const imageResult = await uploadToCloudinary(fileObj[0].buffer, {
-        folder: `category/${folderName}`,
-        resource_type: 'auto',
-        quality: "auto",
-        fetch_format: "auto",
-        width: 1200,
-        height: 1200,
-        crop: "limit"
-      });
-      return {
-        public_id: imageResult.public_id,
-        url: imageResult.secure_url
-      };
-    } catch (uploadError) {
-      throw new Error('Error uploading ' + folderName + ' to Cloudinary: ' + uploadError.message);
-    }
+  const CATEGORY_OPTIONS = {
+    width: 1200,
+    height: 1200,
+    crop: "limit"
   };
 
   if (req.files) {
-    imageDetails = await uploadFile(req.files.image, 'image');
-    logoDetails = await uploadFile(req.files.logo, 'logo');
+    imageDetails = await storageService.uploadSingle(req.files.image, 'category/image', CATEGORY_OPTIONS);
+    logoDetails = await storageService.uploadSingle(req.files.logo, 'category/logo', CATEGORY_OPTIONS);
 
     // Handle gender-specific logos
     const logos = {};
     for (const gender of ['MEN', 'WOMEN', 'KIDS']) {
       const fieldName = `logo_${gender}`;
       if (req.files[fieldName]) {
-        const detail = await uploadFile(req.files[fieldName], `logo_${gender.toLowerCase()}`);
+        const detail = await storageService.uploadSingle(req.files[fieldName], `category/logo_${gender.toLowerCase()}`, CATEGORY_OPTIONS);
         if (detail) logos[gender] = detail;
       }
     }
 
     if (req.files.title_banners) {
       for (const file of req.files.title_banners) {
-        const detail = await uploadFile([file], 'title_banner');
+        const detail = await storageService.uploadSingle([file], 'category/title_banner', CATEGORY_OPTIONS);
         if (detail) titleBannersDetails.push(detail);
       }
     }
@@ -123,40 +108,29 @@ export const updateCategory = asyncHandler(async (req, res) => {
   let logoDetails = null;
   let titleBannersDetails = [];
 
-  const uploadFile = async (fileObj, folderName) => {
-    if (!fileObj || !fileObj[0]) return null;
-    const imageResult = await uploadToCloudinary(fileObj[0].buffer, {
-      folder: `category/${folderName}`,
-      resource_type: 'auto',
-      quality: "auto",
-      fetch_format: "auto",
-      width: 1200,
-      height: 1200,
-      crop: "limit"
-    });
-    return {
-      public_id: imageResult.public_id,
-      url: imageResult.secure_url
-    };
+  const CATEGORY_OPTIONS = {
+    width: 1200,
+    height: 1200,
+    crop: "limit"
   };
 
   if (req.files) {
-    imageDetails = await uploadFile(req.files.image, 'image');
-    logoDetails = await uploadFile(req.files.logo, 'logo');
+    imageDetails = await storageService.uploadSingle(req.files.image, 'category/image', CATEGORY_OPTIONS);
+    logoDetails = await storageService.uploadSingle(req.files.logo, 'category/logo', CATEGORY_OPTIONS);
 
     // Handle gender-specific logos
     const logos = {};
     for (const gender of ['MEN', 'WOMEN', 'KIDS']) {
       const fieldName = `logo_${gender}`;
       if (req.files[fieldName]) {
-        const detail = await uploadFile(req.files[fieldName], `logo_${gender.toLowerCase()}`);
+        const detail = await storageService.uploadSingle(req.files[fieldName], `category/logo_${gender.toLowerCase()}`, CATEGORY_OPTIONS);
         if (detail) logos[gender] = detail;
       }
     }
 
     if (req.files.title_banners) {
       for (const file of req.files.title_banners) {
-        const detail = await uploadFile([file], 'title_banner');
+        const detail = await storageService.uploadSingle([file], 'category/title_banner', CATEGORY_OPTIONS);
         if (detail) titleBannersDetails.push(detail);
       }
     }

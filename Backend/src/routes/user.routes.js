@@ -4,7 +4,7 @@ import { newArrivals, productsDetails, getFilteredProducts, getProductsByMerchan
 import { phoneLogin, addPushToken } from '../controllers/userControllers/authControllers.js';
 import { addToCart, getCart, clearCart, updateCartQuantity, deleteCartItem, getCartCount } from '../controllers/userControllers/cart.controllers.js';
 import { authMiddleware } from '../middleware/jwtAuth.js';
-import { getAllOrders, initiateReturn, getOrderById, createRazorpayOrder, verifyPayment, razorpayWebhook, createFinalPaymentRazorpayOrder, verifyFinalPayment } from '../controllers/userControllers/order.controllers.js';
+import { getAllOrders, initiateReturn, getOrderById, createRazorpayOrder, verifyPayment, razorpayWebhook, createFinalPaymentRazorpayOrder, verifyFinalPayment, cancelOrder } from '../controllers/userControllers/order.controllers.js';
 import { body } from 'express-validator'
 import { createAddress, getAllAddresses, getSingleAddress, updateAddress, deleteAddress } from '../controllers/userControllers/address.controllers.js';
 import {
@@ -13,6 +13,8 @@ import {
   getMyWishlist,
   getMyWishlistIds,
 } from '../controllers/userControllers/wishlist.controllers.js';
+import { addToRecentlyViewed, getMyRecentlyViewed } from '../controllers/userControllers/recentlyViewed.controllers.js';
+
 import { checkDeliveryAvailability } from '../controllers/adminControllers/zone.controllers.js';
 import Notification from "../models/notification.model.js";
 import { getWalletDetails } from "../helperFns/walletHelper.js";
@@ -21,11 +23,28 @@ import userBannerRoutes from './userBanner.routes.js';
 
 const router = express.Router();
 
-router.use('/banners', userBannerRoutes);
+/**
+ * @swagger
+ * tags:
+ *   name: User
+ *   description: User-facing APIs for products, cart, wishlist, and orders
+ */
 
+router.use('/banners', userBannerRoutes);
 
 // ── Notifications ──
 
+/**
+ * @swagger
+ * /api/user/notifications:
+ *   get:
+ *     summary: Get user notifications
+ *     tags: [User]
+ *     security: [{ bearerAuth: [] }]
+ *     responses:
+ *       200:
+ *         description: List of notifications
+ */
 router.get("/notifications", authMiddleware, async (req, res) => {
   try {
     const userId = req.user.userId;
@@ -69,6 +88,17 @@ router.patch("/notifications/read-all", authMiddleware, async (req, res) => {
 
 // ── Wallet ──
 
+/**
+ * @swagger
+ * /api/user/wallet:
+ *   get:
+ *     summary: Get user wallet details
+ *     tags: [User]
+ *     security: [{ bearerAuth: [] }]
+ *     responses:
+ *       200:
+ *         description: Wallet details
+ */
 router.get("/wallet", authMiddleware, async (req, res) => {
   try {
     const details = await getWalletDetails("user", req.user.userId);
@@ -79,18 +109,130 @@ router.get("/wallet", authMiddleware, async (req, res) => {
   }
 });
 
+/**
+ * @swagger
+ * /api/user/googleLogin:
+ *   post:
+ *     summary: User login with Google
+ *     tags: [User]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [idToken]
+ *             properties:
+ *               idToken:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Login successful
+ */
 router.post('/googleLogin', googleLogin);
+
+/**
+ * @swagger
+ * /api/user/signup:
+ *   post:
+ *     summary: User registration
+ *     tags: [User]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [name, email, password]
+ *             properties:
+ *               name: { type: string }
+ *               email: { type: string }
+ *               password: { type: string }
+ *     responses:
+ *       201:
+ *         description: User registered
+ */
 router.post('/signup', signup);
+
+/**
+ * @swagger
+ * /api/user/phoneLogin:
+ *   post:
+ *     summary: User login with phone
+ *     tags: [User]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [phone, otp]
+ *             properties:
+ *               phone: { type: string }
+ *               otp: { type: string }
+ *     responses:
+ *       200:
+ *         description: Login successful
+ */
 router.post('/phoneLogin', phoneLogin)
 router.post('/checkDeliveryAvailability', checkDeliveryAvailability);
 
 router.put('/push-token', authMiddleware, addPushToken);
 
+/**
+ * @swagger
+ * /api/user/products/newArrivals:
+ *   get:
+ *     summary: Get new arrival products
+ *     tags: [User]
+ *     responses:
+ *       200:
+ *         description: List of new arrivals
+ */
 router.get('/products/newArrivals', newArrivals)
+
+/**
+ * @swagger
+ * /api/user/products/trending:
+ *   get:
+ *     summary: Get trending products
+ *     tags: [User]
+ *     responses:
+ *       200:
+ *         description: List of trending products
+ */
 router.get('/products/trending', trendingProducts);
+
+/**
+ * @swagger
+ * /api/user/products/recommended:
+ *   get:
+ *     summary: Get recommended products for the user
+ *     tags: [User]
+ *     security: [{ bearerAuth: [] }]
+ *     responses:
+ *       200:
+ *         description: List of recommended products
+ */
 router.get('/products/recommended', authMiddleware, recommendedProducts); // requires auth for cart/wishlist
 router.post('/products/filtered', getFilteredProducts)
 router.get('/products/getYouMayLikeProducts', getYouMayLikeProducts);
+
+/**
+ * @swagger
+ * /api/user/products/{id}:
+ *   get:
+ *     summary: Get product details by ID
+ *     tags: [User]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: Product details
+ */
 router.get('/products/:id', productsDetails)
 router.get('/products/merchant/:merchantId', getProductsByMerchantId)
 router.post(
@@ -102,44 +244,145 @@ router.post(
   getProductsBatch
 );
 
+/**
+ * @swagger
+ * /api/user/cart/add:
+ *   post:
+ *     summary: Add item to cart
+ *     tags: [User]
+ *     security: [{ bearerAuth: [] }]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [productId, variantId, sizeId, quantity]
+ *             properties:
+ *               productId: { type: string }
+ *               variantId: { type: string }
+ *               sizeId: { type: string }
+ *               quantity: { type: number }
+ *     responses:
+ *       200:
+ *         description: Added to cart
+ */
 router.post('/cart/add', authMiddleware, addToCart);
+
+/**
+ * @swagger
+ * /api/user/cartCount:
+ *   get:
+ *     summary: Get cart item count
+ *     tags: [User]
+ *     security: [{ bearerAuth: [] }]
+ *     responses:
+ *       200:
+ *         description: Cart count
+ */
 router.get('/cartCount', authMiddleware, getCartCount);
+
+/**
+ * @swagger
+ * /api/user/cart:
+ *   post:
+ *     summary: Get user cart
+ *     tags: [User]
+ *     security: [{ bearerAuth: [] }]
+ *     responses:
+ *       200:
+ *         description: Cart items
+ */
 router.post('/cart', authMiddleware, getCart);
 
 router.put('/cart/updatequantity', authMiddleware, updateCartQuantity);
 router.delete('/cart/clear', authMiddleware, clearCart)
 router.delete('/cart/delete/:itemId', deleteCartItem);
 
-// Add product to wishlist
+/**
+ * @swagger
+ * /api/user/wishlist/add:
+ *   post:
+ *     summary: Add product to wishlist
+ *     tags: [User]
+ *     security: [{ bearerAuth: [] }]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [productId, variantId]
+ *             properties:
+ *               productId: { type: string }
+ *               variantId: { type: string }
+ *     responses:
+ *       200:
+ *         description: Added to wishlist
+ */
 router.post('/wishlist/add', authMiddleware, addToWishlist);
-// Remove product from wishlist
 router.delete('/wishlist/delete/:wishlistItemId', authMiddleware, removeFromWishlist);
-// Get current user's full wishlist
+
+/**
+ * @swagger
+ * /api/user/wishlist/my:
+ *   get:
+ *     summary: Get user wishlist
+ *     tags: [User]
+ *     security: [{ bearerAuth: [] }]
+ *     responses:
+ *       200:
+ *         description: Wishlist items
+ */
 router.get('/wishlist/my', authMiddleware, getMyWishlist);
 
 router.get('/wishlist/ids', authMiddleware, getMyWishlistIds);
-// Check if a product is already in wishlist (for heart icon)
-// router.get('/wishlist/check/:productId',authMiddleware, isProductInWishlist);
 
 // router.post('/order/create', authMiddleware, createOrder);
 router.post('/order/create', authMiddleware, createRazorpayOrder);
 router.post('/order/verifyPayment', authMiddleware, verifyPayment);
 router.post('/webhook/razorpay', razorpayWebhook);
+
+/**
+ * @swagger
+ * /api/user/order/getAllOrders:
+ *   get:
+ *     summary: Get all user orders
+ *     tags: [User]
+ *     security: [{ bearerAuth: [] }]
+ *     responses:
+ *       200:
+ *         description: List of orders
+ */
 router.get('/order/getAllOrders', authMiddleware, getAllOrders)
 router.get('/order/:orderId', authMiddleware, getOrderById);
 router.post('/order/initiateReturn/:orderId', authMiddleware, initiateReturn);
-// router.post('/order/orderRequestForMerchant', authMiddleware, orderRequestForMerchant);
 
 router.post('/order/createFinalPaymentOrder/:orderId', authMiddleware, createFinalPaymentRazorpayOrder);
 router.post('/order/verifyFinalPayment', authMiddleware, verifyFinalPayment);
+router.post('/order/cancel/:orderId', authMiddleware, cancelOrder);
 
-// router.delete('/cart/delete/:itemId', deleteCartItem);
-
+/**
+ * @swagger
+ * /api/user/address/getAllAddress:
+ *   get:
+ *     summary: Get all user addresses
+ *     tags: [User]
+ *     security: [{ bearerAuth: [] }]
+ *     responses:
+ *       200:
+ *         description: List of addresses
+ */
 router.post("/address/add", authMiddleware, createAddress);
 router.get("/address/getAllAddress", authMiddleware, getAllAddresses);
 router.get("/address/:id", authMiddleware, getSingleAddress);
 router.put("/address/:id", authMiddleware, updateAddress);
 router.delete("/address/:id", authMiddleware, deleteAddress);
+
+// ── Recently Viewed ──
+router.post('/recently-viewed/add', authMiddleware, addToRecentlyViewed);
+router.get('/recently-viewed/my', authMiddleware, getMyRecentlyViewed);
+
 
 // ── Reviews ──
 import {

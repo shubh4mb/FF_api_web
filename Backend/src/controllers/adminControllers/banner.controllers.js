@@ -1,5 +1,5 @@
 import Banner from "../../models/banner.model.js";
-import { uploadToCloudinary } from "../../config/cloudinary.config.js";
+import { storageService } from "../../services/storage.service.js";
 
 // ====== ADMIN ROUTES ======
 
@@ -14,11 +14,8 @@ export const createBanner = async (req, res) => {
         // If a file is uploaded, upload it to Cloudinary
         if (req.file) {
             try {
-                const result = await uploadToCloudinary(req.file.buffer, {
-                    folder: 'banners',
-                    resource_type: 'image'
-                });
-                imageUrl = result.secure_url;
+                const result = await storageService.uploadSingle(req.file, 'banners');
+                if (result) imageUrl = result.url;
             } catch (uploadError) {
                 console.error("Cloudinary upload error:", uploadError);
                 return res.status(500).json({ message: "Failed to upload image to Cloudinary" });
@@ -79,11 +76,8 @@ export const updateBanner = async (req, res) => {
         // If a new file is uploaded, upload it to Cloudinary
         if (req.file) {
             try {
-                const result = await uploadToCloudinary(req.file.buffer, {
-                    folder: 'banners',
-                    resource_type: 'image'
-                });
-                updates.imageUrl = result.secure_url;
+                const result = await storageService.uploadSingle(req.file, 'banners');
+                if (result) updates.imageUrl = result.url;
             } catch (uploadError) {
                 console.error("Cloudinary upload error:", uploadError);
                 return res.status(500).json({ message: "Failed to upload image to Cloudinary" });

@@ -4,7 +4,7 @@ import Category from '../../models/category.model.js';
 import { productSchema } from '../../utils/validators/product.validator.js';
 import Brand from "../../models/brand.model.js";
 import Merchant from "../../models/merchant.model.js";
-import { uploadToCloudinary, deleteFromCloudinary } from '../../config/cloudinary.config.js';
+import { storageService } from '../../services/storage.service.js';
 
 export const addVariant = async (req, res) => {
   try {
@@ -67,11 +67,10 @@ export const addVariant = async (req, res) => {
         // New local file
         const file = req.files[fileIndex];
         if (file) {
-          const upload = await uploadToCloudinary(file.buffer, "products");
-          finalImages.push({
-            public_id: upload.public_id,
-            url: upload.secure_url,
-          });
+          const result = await storageService.uploadSingle(file, "products");
+          if (result) {
+            finalImages.push(result);
+          }
         }
         fileIndex++;
       }
@@ -196,11 +195,10 @@ export const updateVariant = async (req, res) => {
       if (img.url.startsWith("blob")) {
         const file = req.files?.[fileIndex];
         if (file) {
-          const upload = await uploadToCloudinary(file.buffer, "products");
-          finalImages.push({
-            public_id: upload.public_id,
-            url: upload.secure_url,
-          });
+           const result = await storageService.uploadSingle(file, "products");
+           if (result) {
+              finalImages.push(result);
+           }
         }
         fileIndex++; // increase only for blob
       }
@@ -211,11 +209,7 @@ export const updateVariant = async (req, res) => {
     // ----------------------------
     for (const img of deletedImages) {
       if (img.public_id) {
-        try {
-          await deleteFromCloudinary(img.public_id);
-        } catch (err) {
-          console.warn("Failed to delete image:", img.public_id);
-        }
+          await storageService.deleteFile(img.public_id);
       }
     }
 
@@ -515,15 +509,8 @@ export const addBrand = async (req, res) => {
 
     // If a logo file is uploaded, send it to Cloudinary
     if (req.file) {
-      const uploadResult = await uploadToCloudinary(req.file.buffer, {
-        folder: 'brands',
-        resource_type: 'image',
-      });
-
-      logoData = {
-        public_id: uploadResult.public_id,
-        url: uploadResult.secure_url,
-      };
+      const result = await storageService.uploadSingle(req.file, 'brands');
+      if (result) logoData = result;
     }
 
     // Create the brand
@@ -654,14 +641,8 @@ export const uploadProductImage = async (req, res) => {
     }
 
     // Upload to cloudinary
-    const uploadedImages = [];
-    for (const file of req.files) {
-      const result = await uploadToCloudinary(file.buffer, "products");
-      uploadedImages.push({
-        public_id: result.public_id,
-        url: result.secure_url,
-      });
-    }
+    const results = await storageService.uploadMultiple(req.files || [], "products");
+    const uploadedImages = results;
 
     // ✅ Update product variant images in DB
     const product = await Product.findById(productId);

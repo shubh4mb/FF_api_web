@@ -8,6 +8,7 @@ import { enqueueOrder } from '../../helperFns/orderFns.js';
 import Merchant from "../../models/merchant.model.js";
 import { creditWallet } from "../../helperFns/walletHelper.js";
 import { notifyOrderEvent } from "../../helperFns/notificationHelper.js";
+import { inferZone } from "../../utils/zoneInfer.js";
 
 const generateOTP = () => Math.floor(1000 + Math.random() * 9000);
 
@@ -105,8 +106,8 @@ export const orderRequestForMerchant = async (req, res) => {
       };
 
       const merchant = await Merchant.findById(order.merchantId);
-      // Normalize zone name exactly like inferZone does (lowercase, no spaces)
-      const zoneId = (merchant.zoneName || 'global').toLowerCase().replace(/\s+/g, '');
+      // Dynamic zone inference ensures perfect sync with Rider's inference
+      const zoneId = await inferZone(pickupLocation.lat, pickupLocation.lng);
 
       queueResult = await enqueueOrder({
         orderId: order._id.toString(),
@@ -148,15 +149,18 @@ export const orderRequestForMerchant = async (req, res) => {
       order.orderStatus = "rejected";
       order.reason = req.body.reason || "Merchant rejected the order";
 
-      // 💰 Refund delivery fee to customer wallet
-      const refundAmount = order.deliveryCharge || 0;
+      // 💰 Refund full upfront amount to customer wallet
+      const refundAmount = (order.deliveryCharge || 0) + (order.returnCharge || 0) + (order.finalBilling?.deliveryTip || 0) + (order.finalBilling?.serviceGST || 0);
+
       if (refundAmount > 0) {
         await creditWallet({
-          userId: order.userId,
+          ownerType: "user",
+          ownerId: order.userId,
           amount: refundAmount,
           description: `Refund: Merchant declined order #${orderId.toString().slice(-5).toUpperCase()}`,
           orderId: order._id,
         });
+        order.paymentStatus = "refunded";
 
         // 📱 Customer notification: "Refund credited"
         notifyOrderEvent("customer", "order_rejected", {

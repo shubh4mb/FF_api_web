@@ -16,10 +16,26 @@ const router = express.Router();
 
 router.use('/banners', adminBannerRoutes);
 
-router.post('/addCategory', verifyAdmin, upload.fields([{ name: 'image', maxCount: 1 }, { name: 'logo', maxCount: 1 }, { name: 'title_banners', maxCount: 5 }]), handleMulterError, addCategory);
+router.post('/addCategory', verifyAdmin, upload.fields([
+    { name: 'image', maxCount: 1 },
+    { name: 'logo', maxCount: 1 },
+    { name: 'logo_MEN', maxCount: 1 },
+    { name: 'logo_WOMEN', maxCount: 1 },
+    { name: 'logo_KIDS', maxCount: 1 },
+    { name: 'title_banners', maxCount: 5 }
+]), handleMulterError, addCategory);
+
 router.get('/getCategories', getCategories);
 router.get('/getCategoryById/:id', getCategoryById);
-router.patch('/updateCategory/:id', verifyAdmin, upload.fields([{ name: 'image', maxCount: 1 }, { name: 'logo', maxCount: 1 }, { name: 'title_banners', maxCount: 5 }]), handleMulterError, updateCategory);
+
+router.patch('/updateCategory/:id', verifyAdmin, upload.fields([
+    { name: 'image', maxCount: 1 },
+    { name: 'logo', maxCount: 1 },
+    { name: 'logo_MEN', maxCount: 1 },
+    { name: 'logo_WOMEN', maxCount: 1 },
+    { name: 'logo_KIDS', maxCount: 1 },
+    { name: 'title_banners', maxCount: 5 }
+]), handleMulterError, updateCategory);
 
 
 router.post('/addMerchant', verifyAdmin, upload.fields([{ name: 'logo', maxCount: 1 }, { name: 'backgroundImage', maxCount: 1 }]), handleMulterError, addMerchant);

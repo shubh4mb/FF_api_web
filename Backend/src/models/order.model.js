@@ -182,6 +182,11 @@ const OrderSchema = new mongoose.Schema({
   trialPhaseDuration: { type: Number, default: 0 },
   razorpayOrderId: { type: String },
   razorpayPaymentId: { type: String },
+  settlementStatus: {
+    type: String,
+    enum: ['unsettled', 'settled', 'failed'],
+    default: 'unsettled'
+  },
 
 }, { timestamps: true });
 

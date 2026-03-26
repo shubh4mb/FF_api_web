@@ -6,7 +6,7 @@ import nodemailer from 'nodemailer';
 import Zone from "../../models/zone.model.js";
 import dotenv from 'dotenv';
 dotenv.config();
-import { uploadToCloudinary } from '../../config/cloudinary.config.js';
+import { storageService } from '../../services/storage.service.js';
 const jwt_secret = "hehe"
 const transporter = nodemailer.createTransport({
   service: "gmail",
@@ -253,26 +253,12 @@ export const updateMerchantShopDetails = async (req, res) => {
 
     let logo;
     if (req.files && req.files['logo']) {
-      const result = await uploadToCloudinary(req.files['logo'][0].buffer, {
-        folder: "merchant_logos",
-        resource_type: "image",
-      });
-      logo = {
-        public_id: result.public_id,
-        url: result.secure_url,
-      };
+      logo = await storageService.uploadSingle(req.files['logo'], "merchant_logos");
     }
 
     let backgroundImage;
     if (req.files && req.files['backgroundImage']) {
-      const result = await uploadToCloudinary(req.files['backgroundImage'][0].buffer, {
-        folder: "merchant_backgrounds",
-        resource_type: "image",
-      });
-      backgroundImage = {
-        public_id: result.public_id,
-        url: result.secure_url,
-      };
+      backgroundImage = await storageService.uploadSingle(req.files['backgroundImage'], "merchant_backgrounds");
     }
 
     // Now safe to update

@@ -1,5 +1,5 @@
 import Merchant from "../../models/merchant.model.js";
-import { uploadToCloudinary } from "../../config/cloudinary.config.js";
+import { storageService } from "../../services/storage.service.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { ApiError } from "../../utils/ApiError.js";
 import { ApiResponse } from "../../utils/ApiResponse.js";
@@ -23,35 +23,11 @@ export const addMerchant = asyncHandler(async (req, res) => {
     throw new ApiError(400, "Logo is required");
   }
 
-  let imageDetails = null; // ✅ Declare outside try block
+  const imageDetails = await storageService.uploadSingle(req.files['logo'], 'merchant/logo');
   let bgImageDetails = null;
 
-  try {
-    const logoFile = req.files['logo'][0];
-    const imageResult = await uploadToCloudinary(logoFile.buffer, {
-      folder: 'merchant/logo',
-      resource_type: 'auto'
-    });
-
-    imageDetails = {
-      public_id: imageResult.public_id,
-      url: imageResult.secure_url
-    };
-
-    if (req.files['backgroundImage']) {
-      const bgFile = req.files['backgroundImage'][0];
-      const bgResult = await uploadToCloudinary(bgFile.buffer, {
-        folder: 'merchant/background',
-        resource_type: 'auto'
-      });
-      bgImageDetails = {
-        public_id: bgResult.public_id,
-        url: bgResult.secure_url
-      };
-    }
-  } catch (uploadError) {
-    console.log(uploadError);
-    throw new ApiError(500, "Error uploading image to Cloudinary", [uploadError.message]);
+  if (req.files['backgroundImage']) {
+    bgImageDetails = await storageService.uploadSingle(req.files['backgroundImage'], 'merchant/background');
   }
 
   merchant.logo = imageDetails;
@@ -82,37 +58,13 @@ export const updateMerchantById = asyncHandler(async (req, res) => {
   let bgImageDetails = null;
 
   if (req.files && req.files['logo']) {
-    try {
-      const imageResult = await uploadToCloudinary(req.files['logo'][0].buffer, {
-        folder: 'merchant/logo',
-        resource_type: 'auto'
-      });
-
-      imageDetails = {
-        public_id: imageResult.public_id,
-        url: imageResult.secure_url
-      };
-      req.body.logo = imageDetails;
-    } catch (uploadError) {
-      throw new ApiError(500, "Error uploading logo to Cloudinary", [uploadError.message]);
-    }
+    const imageDetails = await storageService.uploadSingle(req.files['logo'], 'merchant/logo');
+    if (imageDetails) req.body.logo = imageDetails;
   }
 
   if (req.files && req.files['backgroundImage']) {
-    try {
-      const bgResult = await uploadToCloudinary(req.files['backgroundImage'][0].buffer, {
-        folder: 'merchant/background',
-        resource_type: 'auto'
-      });
-
-      bgImageDetails = {
-        public_id: bgResult.public_id,
-        url: bgResult.secure_url
-      };
-      req.body.backgroundImage = bgImageDetails;
-    } catch (uploadError) {
-      throw new ApiError(500, "Error uploading background image to Cloudinary", [uploadError.message]);
-    }
+    const bgImageDetails = await storageService.uploadSingle(req.files['backgroundImage'], 'merchant/background');
+    if (bgImageDetails) req.body.backgroundImage = bgImageDetails;
   }
 
   // Sanitize genderCategory: handle array or comma-separated string

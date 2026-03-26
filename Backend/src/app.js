@@ -12,6 +12,8 @@ import merchantRoutes from './routes/merchant.routes.js';
 import deliveryRiderRoutes from './routes/deliveryRider.routes.js';
 import { allowedOrigins } from './config/cors.js';
 import { getIO } from './config/socket.js';
+import swaggerUi from 'swagger-ui-express';
+import { swaggerSpec } from './config/swagger.js';
 
 const app = express();
 
@@ -19,7 +21,19 @@ const app = express();
 app.set('trust proxy', 1);
 
 // ---- Security Middlewares ----
-app.use(helmet());
+app.use(
+  helmet({
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc: ["'self'", "'unsafe-inline'", "https://cdnjs.cloudflare.com"],
+        styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+        imgSrc: ["'self'", "data:", "https://*"],
+        connectSrc: ["'self'", "https://ff-api-web-2.onrender.com", "http://localhost:5000"]
+      },
+    },
+  })
+);
 
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
@@ -58,6 +72,16 @@ app.use((req, res, next) => {
 app.get('/ping', (req, res) => {
   res.send('pong');
 });
+
+// ---- Swagger API Docs ----
+// Redirect /api-docs to /api-docs/ for consistent pathing
+app.get('/api-docs', (req, res, next) => {
+  if (!req.url.endsWith('/')) {
+    return res.redirect(301, req.originalUrl + '/');
+  }
+  next();
+});
+app.use('/api-docs/', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
 // ---- Routes ----
 app.use('/api/auth', authRoutes);

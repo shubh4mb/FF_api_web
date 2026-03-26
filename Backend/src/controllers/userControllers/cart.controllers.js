@@ -134,7 +134,7 @@ export const getCartCount = async (req, res) => {
 
 export const getCart = async (req, res) => {
   const userId = req.user.userId;
-  const { addressId, serviceable } = req.body;
+  const { addressId, serviceable, deliveryTip = 0 } = req.body;
 
 
   try {
@@ -196,6 +196,8 @@ export const getCart = async (req, res) => {
 
     // 3️⃣ Build items with variant price + merchant delivery charge
     let merchantDeliveryMap = {};
+    let subtotal = 0;
+    let mrpTotal = 0;
 
     const itemsWithVariant = cart.items.map((item) => {
       const product = item.productId;
@@ -204,6 +206,11 @@ export const getCart = async (req, res) => {
       const variant = product?.variants?.find(
         (v) => v._id.toString() === item.variantId.toString()
       );
+
+      const price = variant?.price || 0;
+      const mrp = variant?.mrp || 0;
+      subtotal += price * item.quantity;
+      mrpTotal += mrp * item.quantity;
 
       if (!merchantDeliveryMap[merchant._id]) {
         const userCoords = [userLng, userLat];
@@ -222,17 +229,41 @@ export const getCart = async (req, res) => {
           shopName: merchant.shopName,
           distanceKm,
           deliveryCharge,
-          returnCharge, // Added returnCharge for frontend visibility
+          returnCharge,
         };
       }
 
       return {
         ...item.toObject(),
-        price: variant?.price || null,
-        mrp: variant?.mrp || null,
+        price,
+        mrp,
         merchantDelivery: merchantDeliveryMap[merchant._id],
       };
     });
+
+    // 3.5️⃣ Calculate Aggregate Totals
+    let totalDeliveryCharge = 0;
+    let totalReturnCharge = 0;
+    Object.values(merchantDeliveryMap).forEach(d => {
+      totalDeliveryCharge += d.deliveryCharge;
+      totalReturnCharge += d.returnCharge;
+    });
+
+    const tip = Number(deliveryTip) || 0;
+    const serviceGST = parseFloat(((totalDeliveryCharge + tip) * 0.18).toFixed(2));
+    const totalUpfrontPayable = totalDeliveryCharge + totalReturnCharge + tip + serviceGST;
+
+    const totals = {
+      subtotal,
+      mrpTotal,
+      discount: mrpTotal - subtotal,
+      totalDeliveryCharge,
+      totalReturnCharge,
+      deliveryTip: tip,
+      serviceGST,
+      totalUpfrontPayable,
+      finalTotal: subtotal + totalUpfrontPayable
+    };
 
     // 4️⃣ Response
     res.status(200).json({
@@ -240,6 +271,7 @@ export const getCart = async (req, res) => {
       totalItems: itemsWithVariant.length,
       items: itemsWithVariant,
       deliveryDetails: Object.values(merchantDeliveryMap),
+      totals,
       address: selectedAddress,
       serviceable
     });

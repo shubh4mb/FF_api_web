@@ -1,5 +1,5 @@
 import TitleBanner from "../../models/title_banners.model.js";  
-import { uploadToCloudinary } from "../../config/cloudinary.config.js";
+import { storageService } from "../../services/storage.service.js";
 
 export const addTitleBanner=async(req,res)=>{
     console.log("hii");
@@ -24,19 +24,12 @@ export const addTitleBanner=async(req,res)=>{
           }
 
         if(req.file){
-            const result=await uploadToCloudinary(req.file.buffer, {
-                folder: 'subsubCategory/image',
-                resource_type: 'auto',
-                quality: "auto",
-                fetch_format: "auto",
+            const result = await storageService.uploadSingle(req.file, 'subsubCategory/image', {
                 width: 1200,
                 height: 1200,
                 crop: "limit"
-              });
-              req.body.image={
-                public_id: result.public_id,
-                url: result.secure_url
-              };
+            });
+            req.body.image = result;
         }
         
         const titleBanner=new TitleBanner();

@@ -19,18 +19,24 @@ const OWNER_MAP = {
  * @param {string} ownerType  - "user" | "merchant" | "rider" | "admin"
  * @param {string} ownerId    - The ObjectId of the owner
  */
-export async function getOrCreateWallet(ownerType, ownerId) {
+export async function getOrCreateWallet(ownerType, ownerId, session = null) {
     const key = OWNER_MAP[ownerType];
     if (!key) throw new Error(`Invalid ownerType: ${ownerType}`);
 
-    let wallet = await Wallet.findOne({ [key]: ownerId });
+    let wallet = await Wallet.findOne({ [key]: ownerId }).session(session);
     if (!wallet) {
-        wallet = await Wallet.create({
+        const walletObj = {
             ownerType,
             [key]: ownerId,
             balance: 0,
             transactions: [],
-        });
+        };
+        if (session) {
+            wallet = await Wallet.create([walletObj], { session });
+            wallet = wallet[0];
+        } else {
+            wallet = await Wallet.create(walletObj);
+        }
     }
     return wallet;
 }
@@ -43,10 +49,11 @@ export async function getOrCreateWallet(ownerType, ownerId) {
  * @param {number} params.amount
  * @param {string} params.description
  * @param {string} [params.orderId]
+ * @param {object} [params.session]
  * @returns {{ wallet, transaction }}
  */
-export async function creditWallet({ ownerType, ownerId, amount, description, orderId = null }) {
-    const wallet = await getOrCreateWallet(ownerType, ownerId);
+export async function creditWallet({ ownerType, ownerId, amount, description, orderId = null, session = null }) {
+    let wallet = await getOrCreateWallet(ownerType, ownerId, session);
 
     const transaction = {
         type: "credit",
@@ -58,7 +65,7 @@ export async function creditWallet({ ownerType, ownerId, amount, description, or
 
     wallet.balance += amount;
     wallet.transactions.push(transaction);
-    await wallet.save();
+    await wallet.save({ session });
 
     return { wallet, transaction };
 }
@@ -67,8 +74,8 @@ export async function creditWallet({ ownerType, ownerId, amount, description, or
  * Debit an amount from a wallet.
  * @throws if insufficient balance
  */
-export async function debitWallet({ ownerType, ownerId, amount, description, orderId = null }) {
-    const wallet = await getOrCreateWallet(ownerType, ownerId);
+export async function debitWallet({ ownerType, ownerId, amount, description, orderId = null, session = null }) {
+    let wallet = await getOrCreateWallet(ownerType, ownerId, session);
 
     if (wallet.balance < amount) {
         throw new Error(`Insufficient wallet balance. Available: ₹${wallet.balance}, Required: ₹${amount}`);
@@ -84,7 +91,7 @@ export async function debitWallet({ ownerType, ownerId, amount, description, ord
 
     wallet.balance -= amount;
     wallet.transactions.push(transaction);
-    await wallet.save();
+    await wallet.save({ session });
 
     return { wallet, transaction };
 }
