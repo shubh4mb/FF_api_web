@@ -5,6 +5,8 @@ import { log } from "console";
 import Address from '../../models/address.model.js'
 import { calculateDeliveryCharge } from '../../helperFns/deliveryChargeFns.js'
 import AppConfig from "../../models/appConfig.model.js";
+import CourierCart from "../../models/courierCart.model.js";
+import { findBestOffers } from '../../services/offerEngine.js';
 
 export const addToCart = async (req, res) => {
   const userId = req.user.userId; // from JWT middleware
@@ -44,7 +46,7 @@ export const addToCart = async (req, res) => {
           quantity,
           stockQuantity: sizeObj.stock,
           merchantId,
-          image,
+          image: typeof image === 'string' ? { url: image } : image,
         }],
       });
     } else {
@@ -71,7 +73,7 @@ export const addToCart = async (req, res) => {
           quantity,
           stockQuantity: sizeObj.stock,
           merchantId,
-          image,
+          image: typeof image === 'string' ? { url: image } : image,
         });
       }
 
@@ -92,7 +94,7 @@ export const getCartCount = async (req, res) => {
 
   try {
     const cart = await Cart.findOne({ userId })
-      .populate("items.productId", "variants")
+      .populate("items.productId", "name variants images")
       .lean();
 
     if (!cart) {
@@ -134,14 +136,13 @@ export const getCartCount = async (req, res) => {
 
 export const getCart = async (req, res) => {
   const userId = req.user.userId;
-  const { addressId, serviceable, deliveryTip = 0 } = req.body;
-
+  const { addressId, latitude, longitude, serviceable, deliveryTip = 0 } = req.body;
 
   try {
     // 1️⃣ Fetch cart
     const cart = await Cart.findOne({ userId })
-      .populate("items.productId", "name variants")
-      .populate("items.merchantId", "shopName address.location");
+      .populate("items.productId", "name variants images")
+      .populate("items.merchantId", "shopName address"); // Fetch full address object
 
     if (!cart) {
       return res.status(200).json({
@@ -152,49 +153,30 @@ export const getCart = async (req, res) => {
       });
     }
 
-    // If no addressId provided, return just the cart items without delivery calculations
-    if (!addressId && !serviceable) {
-      const itemsWithVariant = cart.items.map((item) => {
-        const product = item.productId;
-        const variant = product?.variants?.find(
-          (v) => v._id.toString() === item.variantId.toString()
-        );
-
-        return {
-          ...item.toObject(),
-          price: variant?.price || null,
-          mrp: variant?.mrp || null,
-          merchantDelivery: null, // No delivery info available
-        };
-      });
-
-      return res.status(200).json({
-        success: true,
-        totalItems: itemsWithVariant.length,
-        items: itemsWithVariant,
-        deliveryDetails: null,
-        address: null,
-        serviceable
-      });
-    }
-
-    // 2️⃣ Fetch delivery address (only if addressId is provided)
-    const selectedAddress = await Address.findById(addressId);
-    if (!selectedAddress) {
-      console.log("Selected address not found");
-      return res.status(400).json({
-        success: false,
-        message: "Selected address not found",
-      });
-    }
-
-    const userLat = selectedAddress.location.coordinates[1];
-    const userLng = selectedAddress.location.coordinates[0];
-
     // 2.5️⃣ Fetch App Config for rates
     const config = await AppConfig.getConfig();
 
-    // 3️⃣ Build items with variant price + merchant delivery charge
+    // 2️⃣ Fetch delivery address (conditional)
+    let selectedAddress = null;
+    if (addressId) {
+      selectedAddress = await Address.findById(addressId).lean();
+    }
+
+    // Fallback: If no address found by ID, but coordinates provided, create a virtual one
+    if (!selectedAddress && latitude !== undefined && longitude !== undefined) {
+      selectedAddress = {
+        _id: "temporary",
+        addressType: "Current Location",
+        location: {
+          type: "Point",
+          coordinates: [Number(longitude), Number(latitude)]
+        },
+        latitude: Number(latitude),
+        longitude: Number(longitude)
+      };
+    }
+
+    // 3️⃣ Build items and calculate delivery per merchant
     let merchantDeliveryMap = {};
     let subtotal = 0;
     let mrpTotal = 0;
@@ -212,32 +194,58 @@ export const getCart = async (req, res) => {
       subtotal += price * item.quantity;
       mrpTotal += mrp * item.quantity;
 
-      if (!merchantDeliveryMap[merchant._id]) {
-        const userCoords = [userLng, userLat];
-        const merchantCoords = [merchant.address.location.coordinates[0], merchant.address.location.coordinates[1]];
+      // Delivery calculation logic
+      let deliveryInfo = null;
+      if (selectedAddress && merchant && merchant.address) {
+        const merchantKey = merchant._id.toString();
+        if (!merchantDeliveryMap[merchantKey]) {
+          // Robust coordinate extraction for User
+          let userCoords = selectedAddress.location?.coordinates;
+          if (!userCoords || userCoords.length < 2) {
+            if (selectedAddress.longitude !== undefined && selectedAddress.latitude !== undefined) {
+              userCoords = [selectedAddress.longitude, selectedAddress.latitude];
+            }
+          }
 
-        const { distanceKm, deliveryCharge, returnCharge } = calculateDeliveryCharge({
-          userCoords,
-          merchantCoords,
-          deliveryPerKmRate: config.deliveryPerKmRate,
-          returnPerKmRate: config.returnPerKmRate,
-          waitingCharge: config.waitingCharge
-        });
+          // Robust coordinate extraction for Merchant
+          let merchantCoords = merchant.address?.location?.coordinates;
+          if (!merchantCoords || merchantCoords.length < 2) {
+            if (merchant.address?.longitude !== undefined && merchant.address?.latitude !== undefined) {
+              merchantCoords = [merchant.address.longitude, merchant.address.latitude];
+            }
+          }
 
-        merchantDeliveryMap[merchant._id] = {
-          merchantId: merchant._id,
-          shopName: merchant.shopName,
-          distanceKm,
-          deliveryCharge,
-          returnCharge,
-        };
+          if (userCoords && merchantCoords && userCoords.length >= 2 && merchantCoords.length >= 2) {
+            const { distanceKm, deliveryCharge, returnCharge } = calculateDeliveryCharge({
+              userCoords,
+              merchantCoords,
+              deliveryPerKmRate: config.deliveryPerKmRate,
+              returnPerKmRate: config.returnPerKmRate,
+              waitingCharge: config.waitingCharge
+            });
+
+            const TRY_BUY_RADIUS = config.deliveryRadius || 7;
+            const isEligibleForTryBuy = distanceKm <= TRY_BUY_RADIUS;
+
+            merchantDeliveryMap[merchantKey] = {
+              merchantId: merchant._id,
+              shopName: merchant.shopName,
+              distanceKm,
+              deliveryCharge,
+              returnCharge,
+              isEligibleForTryBuy,
+              message: isEligibleForTryBuy ? null : `Merchant is beyond ${TRY_BUY_RADIUS}km for Try & Buy`
+            };
+          }
+        }
+        deliveryInfo = merchantDeliveryMap[merchantKey] || null;
       }
 
       return {
         ...item.toObject(),
         price,
         mrp,
-        merchantDelivery: merchantDeliveryMap[merchant._id],
+        merchantDelivery: deliveryInfo,
       };
     });
 
@@ -245,8 +253,8 @@ export const getCart = async (req, res) => {
     let totalDeliveryCharge = 0;
     let totalReturnCharge = 0;
     Object.values(merchantDeliveryMap).forEach(d => {
-      totalDeliveryCharge += d.deliveryCharge;
-      totalReturnCharge += d.returnCharge;
+      totalDeliveryCharge += d.deliveryCharge || 0;
+      totalReturnCharge += d.returnCharge || 0;
     });
 
     const tip = Number(deliveryTip) || 0;
@@ -265,22 +273,60 @@ export const getCart = async (req, res) => {
       finalTotal: subtotal + totalUpfrontPayable
     };
 
+    // 3.6 ── Compute best offers ──
+    let appliedOffers = { adminOffer: null, merchantOffer: null, totalDiscount: 0, freeDelivery: false };
+    try {
+      const merchantIds = Object.keys(merchantDeliveryMap);
+      const merchantTotals = {};
+      for (const item of itemsWithVariant) {
+        const mid = item.merchantId?._id?.toString() || item.merchantId?.toString() || 'unknown';
+        merchantTotals[mid] = (merchantTotals[mid] || 0) + (item.price * (item.quantity || 1));
+      }
+
+      appliedOffers = await findBestOffers(
+        userId,
+        { 
+          items: itemsWithVariant, 
+          subtotal, 
+          merchantTotals,
+          totalDeliveryCharge,
+          totalReturnCharge 
+        }
+      );
+      
+      // If freeDelivery applies, waive delivery & return charges
+      if (appliedOffers && appliedOffers.freeDelivery) {
+        totals.totalDeliveryCharge = 0;
+        totals.totalReturnCharge = 0;
+        
+        // Recalculate GST and upfront payable
+        const tip = Number(deliveryTip) || 0;
+        totals.serviceGST = parseFloat(((totals.totalDeliveryCharge + tip) * 0.18).toFixed(2));
+        totals.totalUpfrontPayable = totals.totalDeliveryCharge + totals.totalReturnCharge + tip + totals.serviceGST;
+        totals.finalTotal = subtotal - appliedOffers.totalDiscount + totals.totalUpfrontPayable;
+      } else {
+        totals.finalTotal = subtotal - appliedOffers.totalDiscount + totals.totalUpfrontPayable;
+      }
+      totals.discount = (mrpTotal - subtotal) + (appliedOffers.totalDiscount || 0);
+
+    } catch (offerErr) {
+      console.error('Offer engine error (non-blocking):', offerErr.message);
+    }
+
     // 4️⃣ Response
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
       totalItems: itemsWithVariant.length,
       items: itemsWithVariant,
-      deliveryDetails: Object.values(merchantDeliveryMap),
+      deliveryDetails: Object.values(merchantDeliveryMap).length > 0 ? Object.values(merchantDeliveryMap) : null,
       totals,
+      appliedOffers,
       address: selectedAddress,
-      serviceable
+      serviceable: !!(selectedAddress && serviceable),
     });
   } catch (err) {
     console.error("Get cart error:", err);
-    res.status(500).json({
-      success: false,
-      message: "Server error"
-    });
+    res.status(500).json({ success: false, message: "Server error" });
   }
 };
 
@@ -376,6 +422,67 @@ export const updateCartQuantity = async (req, res) => {
   } catch (error) {
     console.error('Error updating cart quantity:', error);
     return res.status(500).json({ success: false, message: 'Server error' });
+  }
+};
+
+export const moveToCourier = async (req, res) => {
+  const userId = req.user.userId;
+  const { merchantId, itemId } = req.body;
+
+  try {
+    let cart = await Cart.findOne({ userId });
+    if (!cart) return res.status(404).json({ success: false, message: "Cart not found" });
+
+    let itemsToMove = [];
+    if (merchantId) {
+      itemsToMove = cart.items.filter(item => item.merchantId.toString() === merchantId);
+      cart.items = cart.items.filter(item => item.merchantId.toString() !== merchantId);
+    } else if (itemId) {
+      const itemIndex = cart.items.findIndex(item => item._id.toString() === itemId);
+      if (itemIndex > -1) {
+        itemsToMove = [cart.items[itemIndex]];
+        cart.items.splice(itemIndex, 1);
+      }
+    }
+
+    if (itemsToMove.length === 0) {
+      return res.status(404).json({ success: false, message: "No items found to move" });
+    }
+
+    let courierCart = await CourierCart.findOne({ userId });
+    if (!courierCart) {
+      courierCart = new CourierCart({ userId, items: [] });
+    }
+
+    for (const item of itemsToMove) {
+      const existingItem = courierCart.items.find(ci => 
+        ci.productId.toString() === item.productId.toString() &&
+        ci.variantId.toString() === item.variantId.toString() &&
+        ci.size === item.size
+      );
+
+      if (existingItem) {
+        existingItem.quantity += item.quantity;
+      } else {
+        courierCart.items.push({
+          productId: item.productId,
+          variantId: item.variantId,
+          size: item.size,
+          quantity: item.quantity,
+          merchantId: item.merchantId,
+          image: item.image,
+          stockQuantity: item.stockQuantity
+        });
+      }
+    }
+
+    await cart.save();
+    await courierCart.save();
+
+    res.status(200).json({ success: true, message: "Items moved to courier cart" });
+  } catch (error) {
+    console.error("Move to courier error:", error);
+    res.status(500).json({ success: false, message: "Server error" });
   }
 };
 

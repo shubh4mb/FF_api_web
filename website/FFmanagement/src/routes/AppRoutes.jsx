@@ -25,6 +25,8 @@ import AdminRegister from '../pages/admin/AdminRegister';
 import ProtectedAdminRoute from '../components/ProtectedAdminRoute';
 import Settings from '../pages/admin/Settings';
 import AttributeManagement from '../pages/admin/AttributeManagement';
+import Hubs from '../pages/admin/Hubs';
+import OffersManagement from '../pages/admin/OffersManagement';
 
 const AppRoutes = () => {
   return (
@@ -54,6 +56,8 @@ const AppRoutes = () => {
             <Route path="create-zone" element={<CreateZone />} />
             <Route path="banners" element={<BannersPage />} />
             <Route path="attributes" element={<AttributeManagement />} />
+            <Route path="hubs" element={<Hubs />} />
+            <Route path="offers" element={<OffersManagement />} />
           </Route>
         </Route>
 

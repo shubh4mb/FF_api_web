@@ -2,19 +2,13 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import Merchant from "../../models/merchant.model.js";
 import Brand from "../../models/brand.model.js";
-import nodemailer from 'nodemailer';
+import { sendMail } from '../../services/mail.service.js';
 import Zone from "../../models/zone.model.js";
+import Hub from "../../models/hub.model.js";
 import dotenv from 'dotenv';
 dotenv.config();
 import { storageService } from '../../services/storage.service.js';
 const jwt_secret = "hehe"
-const transporter = nodemailer.createTransport({
-  service: "gmail",
-  auth: {
-    user: process.env.EMAIL_USER,   // your gmail address
-    pass: process.env.EMAIL_PASS,   // the app password
-  },
-});
 const generateOtp = () => Math.floor(100000 + Math.random() * 900000).toString();
 
 export const sendEmailOtp = async (req, res) => {
@@ -46,12 +40,11 @@ export const sendEmailOtp = async (req, res) => {
     merchant.emailOtpExpiry = expiry;
     await merchant.save();
 
-    await transporter.sendMail({
-      from: `"FlashFits" <${process.env.EMAIL_USER}>`,
-      to: email,
-      subject: "Your OTP Code",
-      text: `Your FlashFits OTP is ${otp}. It expires in 5 minutes.`,
-    });
+    await sendMail(
+      email,
+      "Your OTP Code",
+      `Your FlashFits OTP is ${otp}. It expires in 5 minutes.`
+    );
 
     res.status(200).json({ otp, message: "OTP sent successfully" });
   } catch (err) {
@@ -90,7 +83,11 @@ export const verifyEmailOtp = async (req, res) => {
 
     res.status(200).json({
       message: "Email verified successfully",
-      merchant: { _id: merchant._id, email: merchant.email },
+      merchant: {
+        _id: merchant._id,
+        email: merchant.email,
+        zoneId: merchant.zoneId
+      },
       token, // ✅ send token to frontend
     });
   } catch (error) {
@@ -98,34 +95,6 @@ export const verifyEmailOtp = async (req, res) => {
     res.status(500).json({ message: 'OTP verification failed' });
   }
 };
-
-
-// export const registerEmail = async (req, res) => {
-//   try {
-//     const { email } = req.body;
-//     if (!email) return res.status(400).json({ message: "Email is required" });
-
-//     const existingMerchant = await Merchant.findOne({ email });
-//     if (existingMerchant) {
-//       return res.status(400).json({ message: "Email already registered" });
-//     }
-
-//     const merchant = new Merchant({ 
-//       email, 
-//       phoneNumber: false // 👈 force undefined
-//     });
-
-//     await merchant.save();
-
-//     res.status(201).json({
-//       message: "Email registered successfully",
-//       merchant,
-//     });
-//   } catch (error) {
-//     console.error("Error saving email:", error);
-//     res.status(500).json({ message: "Server error", error: error.message });
-//   }
-// };
 
 
 export const registerPhone = async (req, res) => {
@@ -155,7 +124,43 @@ export const registerPhone = async (req, res) => {
   }
 };
 
-// Update Bank Details// Update Operating Hours// Activate Merchant
+export const toggleMerchantOnlineStatus = async (req, res) => {
+  try {
+    const { merchantId } = req.params;
+    const { isOnline } = req.body;
+
+    const merchant = await Merchant.findById(merchantId);
+
+    if (!merchant) {
+      return res.status(404).json({ success: false, message: "Merchant not found" });
+    }
+
+    // Safety check: Only merchants in a Try & Buy zone can toggle online status
+    if (!merchant.zoneId) {
+      return res.status(403).json({
+        success: false,
+        message: "Online toggle is only available for merchants in Try & Buy zones."
+      });
+    }
+
+    merchant.isOnline = !!isOnline;
+    await merchant.save();
+
+    if (!merchant) {
+      return res.status(404).json({ success: false, message: "Merchant not found" });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: `Merchant is now ${merchant.isOnline ? 'online' : 'offline'}`,
+      isOnline: merchant.isOnline
+    });
+  } catch (error) {
+    console.error("Toggle online status error:", error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 export const getMerchantByEmail = async (req, res) => {
   try {
     const { email } = req.params;
@@ -173,7 +178,7 @@ export const getMerchantByEmail = async (req, res) => {
 export const updateMerchantShopDetails = async (req, res) => {
   try {
     const { merchantId } = req.params;
-    let { shopName, shopDescription, category, genderCategory, ownerName, latitude, longitude } = req.body;
+    let { shopName, shopDescription, businessType, category, genderCategory, ownerName, managerName, managerPhoneNumber, managerEmail, latitude, longitude } = req.body;
 
     // Sanitize genderCategory: handle array or comma-separated string
     if (genderCategory) {
@@ -181,6 +186,15 @@ export const updateMerchantShopDetails = async (req, res) => {
         genderCategory = genderCategory.split(',').map(item => item.trim());
       } else if (!Array.isArray(genderCategory)) {
         genderCategory = [genderCategory];
+      }
+    }
+
+    // Sanitize category: handle array or comma-separated string
+    if (category) {
+      if (typeof category === 'string') {
+        category = category.split(',').map(item => item.trim());
+      } else if (!Array.isArray(category)) {
+        category = [category];
       }
     }
 
@@ -193,7 +207,10 @@ export const updateMerchantShopDetails = async (req, res) => {
         addressObj = {
           street: req.body["address[street]"] || "",
           city: req.body["address[city]"] || "",
+          state: req.body["address[state]"] || "",
           postalCode: req.body["address[postalCode]"] || "",
+          landmark: req.body["address[landmark]"] || "",
+          note: req.body["address[note]"] || "",
         };
       }
     }
@@ -230,7 +247,12 @@ export const updateMerchantShopDetails = async (req, res) => {
       },
     };
 
-    // CRITICAL: Check if this point falls inside ANY zone's boundary
+    let enableCourierDelivery = req.body.enableCourierDelivery === 'true' || req.body.enableCourierDelivery === true;
+    let shipsWithinHours = req.body.shipsWithinHours ? Number(req.body.shipsWithinHours) : undefined;
+    let acceptsReturns = req.body.acceptsReturns === 'true' || req.body.acceptsReturns === true;
+
+
+    // CRITICAL FIRST CHECK: Check if this point falls inside ANY zone's boundary (Try & Buy Zone)
     const zone = await Zone.findOne({
       boundary: {
         $geoIntersects: {
@@ -242,13 +264,52 @@ export const updateMerchantShopDetails = async (req, res) => {
       },
     });
 
-    if (!zone) {
-      return res.status(400).json({
-        success: false,
-        message: "Your shop location is outside our serviceable zones. We currently do not onboard merchants from this area.",
-        // Optional: include hint for admin
-        debug: { lat: latNum, lng: lngNum },
-      });
+    let zoneName = null;
+    let zoneId = null;
+
+    if (zone) {
+      // Inside Try & Buy Zone
+      zoneName = zone.zoneName;
+      zoneId = zone._id;
+
+      // If they optionally chose courier delivery, ensure they provided the required conditions
+      if (enableCourierDelivery && (!shipsWithinHours || !acceptsReturns)) {
+        return res.status(400).json({
+          success: false,
+          message: "To enable Courier Delivery, you must specify shipping hours and accept returns."
+        });
+      }
+    } else {
+      // Outside Try & Buy Zone: Must rely on Hubs. Check if the pin code is within ANY serviceable hub
+      const postalCode = addressObj.postalCode || req.body["address[postalCode]"];
+      if (!postalCode) {
+        return res.status(400).json({
+          success: false,
+          message: "Postal code is required to verify serviceability since your location is outside standard Try & Buy zones.",
+        });
+      }
+
+      const hub = await Hub.findOne({ "serviceablePincodes.code": postalCode });
+      if (!hub) {
+        return res.status(400).json({
+          success: false,
+          message: "Your shop location is outside our serviceable zones. We currently do not onboard merchants from this area.",
+          debug: { postalCode, lat: latNum, lng: lngNum },
+        });
+      }
+
+      // Outside Try & Buy Zone but inside Hub
+      zoneName = "Courier Only - " + hub.name;
+      enableCourierDelivery = true; // Force ON
+
+      // Enforce mandatory requirements for out-of-zone
+      if (!shipsWithinHours || !acceptsReturns) {
+        return res.status(400).json({
+          success: false,
+          requiresOutOfZoneDetails: true,
+          message: "Merchants outside Try & Buy zones must support courier shipping, specify max shipping hours, and accept returns."
+        });
+      }
     }
 
     let logo;
@@ -268,12 +329,19 @@ export const updateMerchantShopDetails = async (req, res) => {
         $set: {
           shopName,
           shopDescription,
+          businessType,
           category,
           genderCategory,
           ownerName,
+          managerName,
+          managerPhoneNumber,
+          managerEmail,
           address: finalAddress,
-          zoneName: zone.zoneName,
-          zoneId: zone._id,
+          zoneName,
+          zoneId,
+          enableCourierDelivery,
+          shipsWithinHours,
+          acceptsReturns,
           ...(logo && { logo }),
           ...(backgroundImage && { backgroundImage }),
         },
@@ -292,7 +360,7 @@ export const updateMerchantShopDetails = async (req, res) => {
       success: true,
       message: "Shop details updated successfully",
       merchant,
-      zone: zone.zoneName
+      zone: zoneName
     });
   } catch (error) {
     console.error("Error updating merchant shop details:", error);
@@ -346,7 +414,6 @@ export const activateMerchant = async (req, res) => {
   }
 };
 
-
 export const loginMerchant = async (req, res) => {
   try {
     const { identifier, password } = req.body;
@@ -389,7 +456,8 @@ export const loginMerchant = async (req, res) => {
         shopName: merchant.shopName,
         email: merchant.email,
         phoneNumber: merchant.phoneNumber,
-        isActive: merchant.isActive
+        isActive: merchant.isActive,
+        zoneId: merchant.zoneId
       },
     });
 
@@ -446,6 +514,8 @@ export const registerMerchant = async (req, res) => {
         shopName: merchant.shopName,
         email: merchant.email,
         phoneNumber: merchant.phoneNumber,
+        isActive: merchant.isActive,
+        zoneId: merchant.zoneId,
       }
     });
   } catch (error) {
@@ -454,6 +524,46 @@ export const registerMerchant = async (req, res) => {
   }
 };
 
+export const updateMerchantKYC = async (req, res) => {
+  try {
+    const { merchantId } = req.params;
+    const { panNumber, gstNumber, businessProofType } = req.body;
+    const merchant = await Merchant.findById(merchantId);
 
+    if (!merchant) {
+      return res.status(404).json({ message: "Merchant not found" });
+    }
 
+    // Initialize nested structures if they don't exist
+    if (!merchant.kyc) merchant.kyc = {};
+    if (!merchant.kyc.pan) merchant.kyc.pan = { verified: false };
+    if (!merchant.kyc.gst) merchant.kyc.gst = { verified: false };
+    if (!merchant.kyc.businessProof) merchant.kyc.businessProof = { verified: false };
+    if (!merchant.kyc.bankProof) merchant.kyc.bankProof = { verified: false };
 
+    if (panNumber) merchant.kyc.pan.number = panNumber;
+    if (gstNumber) merchant.kyc.gst.number = gstNumber;
+    if (businessProofType) merchant.kyc.businessProof.proofType = businessProofType;
+
+    if (req.files) {
+      if (req.files.panImage) {
+        merchant.kyc.pan.image = await storageService.uploadSingle(req.files.panImage[0], `merchant/${merchantId}/kyc/pan`);
+      }
+      if (req.files.gstImage) {
+        merchant.kyc.gst.image = await storageService.uploadSingle(req.files.gstImage[0], `merchant/${merchantId}/kyc/gst`);
+      }
+      if (req.files.businessProofImage) {
+        merchant.kyc.businessProof.image = await storageService.uploadSingle(req.files.businessProofImage[0], `merchant/${merchantId}/kyc/business`);
+      }
+      if (req.files.bankProofImage) {
+        merchant.kyc.bankProof.image = await storageService.uploadSingle(req.files.bankProofImage[0], `merchant/${merchantId}/kyc/bank`);
+      }
+    }
+
+    await merchant.save();
+    res.status(200).json({ success: true, message: "KYC documents updated successfully", merchant });
+  } catch (error) {
+    console.error("KYC update error:", error);
+    res.status(500).json({ message: "Server error", error: error.message });
+  }
+};

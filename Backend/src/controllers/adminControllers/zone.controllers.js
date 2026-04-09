@@ -1,4 +1,6 @@
 import Zone from "../../models/zone.model.js";
+import Merchant from "../../models/merchant.model.js";
+import AppConfig from "../../models/appConfig.model.js";
 import * as turf from "@turf/turf";
 /**
  * CREATE ZONE
@@ -108,6 +110,15 @@ export const updateZone = async (req, res) => {
       req.body,
       { new: true, runValidators: true }
     );
+
+    if (updatedZone && req.body.status !== undefined) {
+      const isLive = updatedZone.status === 'Active';
+      await Merchant.updateMany(
+        { zoneId: id },
+        { $set: { isZoneLive: isLive } }
+      );
+      console.log(`Synced isZoneLive=${isLive} for merchants in zone ${id}`);
+    }
 
     if (!updatedZone) {
       return res.status(404).json({
@@ -231,7 +242,7 @@ export const checkDeliveryAvailability = async (req, res) => {
       coordinates: [Number(lng), Number(lat)], // [lng, lat]
     };
 
-    // 2️⃣ Check delivery boundary
+    // 2️⃣ Check delivery boundary (zone-based)
     const zone = await Zone.findOne({
       deliveryBoundary: {
         $geoIntersects: {
@@ -241,21 +252,64 @@ export const checkDeliveryAvailability = async (req, res) => {
     }).select("zoneName city state");
     console.log("zone avail,", zone);
 
+    // 3️⃣ Count T&B-eligible merchants within the configurable radius
+    let tbAvailable = false;
+    let nearbyMerchantCount = 0;
+    let totalNearbyCount = 0;
+    let allOffline = false;
 
-    // 3️⃣ Not serviceable
+    try {
+      const config = await AppConfig.getConfig();
+      const radius = config.tryAndBuyRadius || 7;
+      
+      const { filterMerchantsByDistance } = await import("../../helperFns/geoHelpers.js");
+      
+      // Fetch all potentially eligible merchants (ignore isOnline for now)
+      const allPossibleMerchants = await Merchant.find({
+        isActive: true,
+        isVerified: true,
+        isZoneLive: true,
+        "address.location.coordinates": { $exists: true },
+      }).select("address.location shopName isOnline").lean();
+
+      const nearbyMerchants = filterMerchantsByDistance(
+        allPossibleMerchants,
+        [Number(lng), Number(lat)], // [lng, lat] — MongoDB format
+        radius
+      );
+
+      totalNearbyCount = nearbyMerchants.length;
+      const onlineNearby = nearbyMerchants.filter(m => m.isOnline);
+      nearbyMerchantCount = onlineNearby.length;
+      
+      tbAvailable = nearbyMerchantCount > 0;
+      allOffline = totalNearbyCount > 0 && nearbyMerchantCount === 0;
+
+    } catch (geoErr) {
+      console.error("T&B merchant count error:", geoErr);
+    }
+
+    // 4️⃣ Not serviceable (no zone)
     if (!zone) {
       return res.status(200).json({
         success: true,
         serviceable: false,
+        tbAvailable: false,
+        allOffline: false,
+        nearbyMerchantCount: 0,
         message: "Delivery not available in your area",
       });
     }
 
-    // 4️⃣ Serviceable
+    // 5️⃣ Serviceable
     return res.status(200).json({
       success: true,
       serviceable: true,
-      message: "Delivery available",
+      tbAvailable,
+      allOffline, // 🔥 New flag
+      nearbyMerchantCount,
+      totalNearbyCount, // 🔥 New count
+      message: allOffline ? "All merchants are currently offline" : "Delivery available",
       zone,
     });
 

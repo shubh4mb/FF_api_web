@@ -23,19 +23,50 @@ const appConfigSchema = new mongoose.Schema(
             default: 5, // max delivery radius in km
             min: 0,
         },
+        tryAndBuyRadius: {
+            type: Number,
+            default: 7, // default 7km for Try & Buy
+            min: 0,
+        },
     },
     { timestamps: true }
 );
 
 /**
  * Singleton accessor — always returns exactly ONE config doc.
+ * Optimized with a 5-minute in-memory cache.
  */
+let cachedConfig = null;
+let lastConfigFetch = 0;
+const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
 appConfigSchema.statics.getConfig = async function () {
-    let config = await this.findOne();
-    if (!config) {
-        config = await this.create({});
+    const now = Date.now();
+    
+    // Check if cache is still fresh
+    if (cachedConfig && (now - lastConfigFetch < CACHE_TTL_MS)) {
+        return cachedConfig;
     }
-    return config;
+
+    try {
+        let config = await this.findOne();
+        if (!config) {
+            config = await this.create({});
+        }
+        
+        // Update cache
+        cachedConfig = config;
+        lastConfigFetch = now;
+        
+        return config;
+    } catch (error) {
+        // If fetch fails, return stale cache as fallback if available
+        if (cachedConfig) {
+            console.error("[AppConfig] Failed to refresh config, using stale fallback:", error);
+            return cachedConfig;
+        }
+        throw error;
+    }
 };
 
 export default mongoose.models.AppConfig ||

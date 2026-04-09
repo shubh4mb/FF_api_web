@@ -12,10 +12,15 @@ const zoneSchema = new mongoose.Schema({
     type: { type: String, enum: ['Point'], default: 'Point' },
     coordinates: { type: [Number], required: true } // [lng, lat]
   },
-  deliveryBoundary: {
-    type: { type: String, enum: ['Polygon'], required: true },
-    coordinates: { type: [[[Number]]] },
-  }
+    deliveryBoundary: {
+      type: { type: String, enum: ['Polygon'], required: true },
+      coordinates: { type: [[[Number]]] },
+    },
+    status: { 
+      type: String, 
+      enum: ['Active', 'Inactive', 'Onboarding'], 
+      default: 'Inactive' 
+    }
 
 })
 

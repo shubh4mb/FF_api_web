@@ -8,12 +8,14 @@ import { notifyMerchant } from "../../sockets/merchant.socket.js";
 import Address from "../../models/address.model.js";
 import { getIO } from "../../config/socket.js";
 import { calculateDeliveryCharge } from "../../helperFns/deliveryChargeFns.js";
+import { isWithinTBRadius } from "../../helperFns/geoHelpers.js";
 import razorpay from '../../config/RazorPay.js';
 import crypto from 'crypto';
 import { calculateFinalBilling } from "../../helperFns/calculateFinalBilling.js";
 import { enqueueOrder } from "../../helperFns/orderFns.js";
 import { notifyOrderEvent } from "../../helperFns/notificationHelper.js";
 import mongoose from 'mongoose';
+import { findBestOffers, recordOfferUsage } from '../../services/offerEngine.js';
 
 
 
@@ -47,6 +49,15 @@ export const createRazorpayOrder = async (req, res) => {
     }
 
     const merchantCoords = merchant.address.location.coordinates;
+
+    // === TRY & BUY 7 KM RADIUS VALIDATION ===
+    if (!isWithinTBRadius(userCoords, merchantCoords)) {
+      return res.status(400).json({
+        success: false,
+        serviceable: false,
+        message: "Try & Buy is not available for this location. The merchant is beyond the 7 km delivery radius.",
+      });
+    }
 
     // === FETCH APP CONFIG ===
     const AppConfig = (await import("../../models/appConfig.model.js")).default;
@@ -100,21 +111,72 @@ export const createRazorpayOrder = async (req, res) => {
     }
 
 
+    // === COMPUTE BEST OFFERS ===
+    let appliedOffers = [];
+    let offerDiscount = 0;
+    try {
+      const merchantTotals = {};
+      merchantTotals[merchantId.toString()] = totalAmount;
+
+      const bestOffers = await findBestOffers(
+        userId,
+        { items: orderItems, subtotal: totalAmount, merchantTotals },
+        req.body.couponCode || null
+      );
+
+      if (bestOffers.adminOffer) {
+        appliedOffers.push({
+          offerId: bestOffers.adminOffer._id,
+          title: bestOffers.adminOffer.title,
+          scope: 'admin',
+          discountType: bestOffers.adminOffer.discountType,
+          discountValue: bestOffers.adminOffer.discountValue,
+          discountApplied: bestOffers.adminOffer.discountAmount,
+        });
+        offerDiscount += bestOffers.adminOffer.discountAmount;
+      }
+      if (bestOffers.merchantOffer) {
+        appliedOffers.push({
+          offerId: bestOffers.merchantOffer._id,
+          title: bestOffers.merchantOffer.title,
+          scope: 'merchant',
+          discountType: bestOffers.merchantOffer.discountType,
+          discountValue: bestOffers.merchantOffer.discountValue,
+          discountApplied: bestOffers.merchantOffer.discountAmount,
+        });
+        offerDiscount += bestOffers.merchantOffer.discountAmount;
+      }
+
+      if (bestOffers.freeDelivery) {
+        deliveryCharge = 0;
+        returnCharge = 0;
+      }
+    } catch (offerErr) {
+      console.error('Offer engine error (non-blocking):', offerErr.message);
+    }
+
     // === SERVICE GST (18% on delivery + tip) ===
     const serviceGST = parseFloat(((deliveryCharge + deliveryTip) * 0.18).toFixed(2));
 
     // === FINAL PAYABLE ===
     // Customer pays delivery + return charge + tip + service GST upfront.
     const upfrontPayable = deliveryCharge + returnCharge + deliveryTip + serviceGST;
-    const finalPayable = totalAmount + upfrontPayable;
+    const finalPayable = totalAmount - offerDiscount + upfrontPayable;
 
-    // === RAZORPAY ORDER ===
-    const razorpayOrder = await razorpay.orders.create({
-      amount: Math.round(upfrontPayable * 100), // Only pay delivery-related fees upfront
-      currency: "INR",
-      receipt: `receipt_${Date.now()}`,
-      payment_capture: 1,
-    });
+    let razorpayOrderId = `free_${Date.now()}`;
+    let paymentStatus = "delivery_fee_paid";
+    
+    if (Math.round(upfrontPayable * 100) > 0) {
+      // === RAZORPAY ORDER ===
+      const razorpayOrder = await razorpay.orders.create({
+        amount: Math.round(upfrontPayable * 100), // Only pay delivery-related fees upfront
+        currency: "INR",
+        receipt: `receipt_${Date.now()}`,
+        payment_capture: 1,
+      });
+      razorpayOrderId = razorpayOrder.id;
+      paymentStatus = "pending";
+    }
 
     // === SAVE ORDER IN DB ===
     const pendingOrder = new Order({
@@ -131,12 +193,13 @@ export const createRazorpayOrder = async (req, res) => {
       gst: 0,
       serviceGST,
       deliveryTip,
-      discount: 0,
+      discount: offerDiscount,
       deliveryCharge,
       totalPayable: finalPayable,
       deliveryDistance: distanceKm,
       returnCharge,
       estimatedTime,
+      appliedOffers,
       deliveryLocation: {
         name: deliveryAddress.name,
         phone: deliveryAddress.phone,
@@ -155,17 +218,54 @@ export const createRazorpayOrder = async (req, res) => {
       pickupLocation: {
         coordinates: merchant.address.location.coordinates,
       },
-      razorpayOrderId: razorpayOrder.id,
-      paymentStatus: "pending",
+      razorpayOrderId: razorpayOrderId,
+      paymentStatus: paymentStatus,
+      orderStatus: paymentStatus === "delivery_fee_paid" ? "placed" : "pending",
     });
 
   await pendingOrder.save();
 
+  // === RECORD OFFER USAGE ===
+  if (paymentStatus === "delivery_fee_paid") {
+    // Free order means placed directly
+    try {
+      for (const offer of appliedOffers) {
+        await recordOfferUsage(
+          userId,
+          offer.offerId,
+          pendingOrder._id,
+          'Order',
+          offer.discountApplied
+        );
+      }
+    } catch (usageErr) {
+      console.error('Offer usage recording error (non-blocking):', usageErr.message);
+    }
+    
+    // Clear cart
+    await Cart.updateOne(
+      { userId },
+      { $set: { items: [], merchantId: null } }
+    );
+
+    // Notify Merchant
+    try {
+      const io = getIO();
+      notifyMerchant(io, pendingOrder.merchantId, pendingOrder.toObject());
+      notifyOrderEvent("customer", "order_placed", {
+        userId: pendingOrder.userId,
+        orderId: pendingOrder._id,
+      });
+    } catch (socketErr) {
+      console.error("Socket notify error (free):", socketErr);
+    }
+  }
+
   // === RESPONSE ===
   return res.status(200).json({
     success: true,
-    razorpayOrderId: razorpayOrder.id,
-    amount: upfrontPayable * 100,
+    razorpayOrderId: razorpayOrderId,
+    amount: Math.round(upfrontPayable * 100),
     key_id: process.env.RAZORPAY_KEY_ID,
     orderId: pendingOrder._id,
     totalDeliveryFee: upfrontPayable,
@@ -178,12 +278,244 @@ export const createRazorpayOrder = async (req, res) => {
     contact: deliveryAddress.phone,
     name: deliveryAddress.name,
     email: req.user.email || "customer@example.com",
+    isFreeOrder: paymentStatus === "delivery_fee_paid"
   });
 
 } catch (error) {
   console.error("Create Razorpay Order Error:", error);
   return res.status(500).json({ message: "Server error", error: error.message });
 }
+};
+
+
+// ─── TEST MODE: Place T&B Order WITHOUT Razorpay ───
+// Use this during development/testing in Expo Go (no native build required)
+export const testPlaceOrder = async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const { addressId, deliveryTip = 0 } = req.body;
+
+    // === VALIDATE CART ===
+    const cart = await Cart.findOne({ userId })
+      .populate("items.productId")
+      .populate("items.merchantId");
+
+    if (!cart || cart.items.length === 0) {
+      return res.status(400).json({ message: "Your cart is empty" });
+    }
+
+    // === VALIDATE ADDRESS ===
+    const deliveryAddress = await Address.findOne({ _id: addressId, user: userId });
+    if (!deliveryAddress) {
+      return res.status(404).json({ message: "Delivery address not found" });
+    }
+
+    const userCoords = deliveryAddress.location.coordinates;
+
+    // === FETCH MERCHANT ===
+    const merchantId = cart.items[0].merchantId;
+    const merchant = await Merchant.findById(merchantId);
+    if (!merchant) {
+      return res.status(404).json({ message: "Merchant not found" });
+    }
+
+    const merchantCoords = merchant.address.location.coordinates;
+
+    // === TRY & BUY 7 KM RADIUS VALIDATION ===
+    if (!isWithinTBRadius(userCoords, merchantCoords)) {
+      return res.status(400).json({
+        success: false,
+        serviceable: false,
+        message: "Try & Buy is not available for this location. The merchant is beyond the 7 km delivery radius.",
+      });
+    }
+
+    // === DELIVERY CHARGE ===
+    const AppConfig = (await import("../../models/appConfig.model.js")).default;
+    const config = await AppConfig.getConfig();
+
+    const { distanceKm, deliveryCharge, returnCharge, estimatedTime } = calculateDeliveryCharge({
+      userCoords,
+      merchantCoords,
+      deliveryPerKmRate: config.deliveryPerKmRate,
+      returnPerKmRate: config.returnPerKmRate,
+      waitingCharge: config.waitingCharge
+    });
+
+    // === BUILD ORDER ITEMS ===
+    let totalAmount = 0;
+    const orderItems = [];
+
+    for (const item of cart.items) {
+      const product = item.productId;
+      if (!product) continue;
+      const variant = product.variants.id(item.variantId);
+      if (!variant) continue;
+      const sizeObj = variant.sizes.find(s => s.size === item.size);
+      if (!sizeObj) {
+        return res.status(400).json({ message: `Size ${item.size} not found for ${product.name}` });
+      }
+      if (sizeObj.stock < item.quantity) {
+        return res.status(400).json({ message: `Insufficient stock for ${product.name} (Size: ${item.size})` });
+      }
+      const price = variant.price;
+      for (let i = 0; i < item.quantity; i++) {
+        totalAmount += price;
+        orderItems.push({
+          productId: item.productId,
+          variantId: item.variantId,
+          name: product.name,
+          quantity: 1,
+          price,
+          size: item.size,
+          image: item.image?.url || "",
+          tryStatus: product.isTriable ? "pending" : "not-triable",
+        });
+      }
+    }
+
+    // === COMPUTE BEST OFFERS ===
+    let appliedOffers = [];
+    let offerDiscount = 0;
+    try {
+      const merchantTotals = {};
+      merchantTotals[merchantId.toString()] = totalAmount;
+
+      const bestOffers = await findBestOffers(
+        userId,
+        { items: orderItems, subtotal: totalAmount, merchantTotals },
+        req.body.couponCode || null
+      );
+
+      if (bestOffers.adminOffer) {
+        appliedOffers.push({
+          offerId: bestOffers.adminOffer._id,
+          title: bestOffers.adminOffer.title,
+          scope: 'admin',
+          discountType: bestOffers.adminOffer.discountType,
+          discountValue: bestOffers.adminOffer.discountValue,
+          discountApplied: bestOffers.adminOffer.discountAmount,
+        });
+        offerDiscount += bestOffers.adminOffer.discountAmount;
+      }
+      if (bestOffers.merchantOffer) {
+        appliedOffers.push({
+          offerId: bestOffers.merchantOffer._id,
+          title: bestOffers.merchantOffer.title,
+          scope: 'merchant',
+          discountType: bestOffers.merchantOffer.discountType,
+          discountValue: bestOffers.merchantOffer.discountValue,
+          discountApplied: bestOffers.merchantOffer.discountAmount,
+        });
+        offerDiscount += bestOffers.merchantOffer.discountAmount;
+      }
+      
+      if (bestOffers.freeDelivery) {
+        deliveryCharge = 0;
+        returnCharge = 0;
+      }
+    } catch (offerErr) {
+      console.error('Offer engine error (non-blocking):', offerErr.message);
+    }
+
+    const serviceGST = parseFloat(((deliveryCharge + deliveryTip) * 0.18).toFixed(2));
+    const upfrontPayable = deliveryCharge + returnCharge + deliveryTip + serviceGST;
+    const finalPayable = totalAmount - offerDiscount + upfrontPayable;
+
+    // === CREATE ORDER DIRECTLY (NO RAZORPAY) ===
+    const testOrder = new Order({
+      userId,
+      merchantId,
+      merchantDetails: {
+        name: merchant.name,
+        phone: merchant.phone,
+      },
+      items: orderItems,
+      totalAmount,
+      baseAmount: totalAmount,
+      tryAndBuyFee: 0,
+      gst: 0,
+      serviceGST,
+      deliveryTip,
+      discount: offerDiscount,
+      deliveryCharge,
+      totalPayable: finalPayable,
+      deliveryDistance: distanceKm,
+      returnCharge,
+      estimatedTime,
+      appliedOffers,
+      deliveryLocation: {
+        name: deliveryAddress.name,
+        phone: deliveryAddress.phone,
+        addressLine1: deliveryAddress.addressLine1,
+        addressLine2: deliveryAddress.addressLine2,
+        landmark: deliveryAddress.landmark,
+        area: deliveryAddress.area,
+        city: deliveryAddress.city,
+        state: deliveryAddress.state,
+        pincode: deliveryAddress.pincode,
+        country: deliveryAddress.country,
+        addressType: deliveryAddress.addressType,
+        deliveryInstructions: deliveryAddress.deliveryInstructions,
+        coordinates: deliveryAddress.location.coordinates,
+      },
+      pickupLocation: {
+        coordinates: merchant.address.location.coordinates,
+      },
+      razorpayOrderId: `test_${Date.now()}`,
+      paymentStatus: "delivery_fee_paid",
+      orderStatus: "placed",
+    });
+
+    await testOrder.save();
+
+    // === RECORD OFFER USAGE ===
+    try {
+      for (const offer of appliedOffers) {
+        await recordOfferUsage(
+          userId,
+          offer.offerId,
+          testOrder._id,
+          'Order',
+          offer.discountApplied
+        );
+      }
+    } catch (usageErr) {
+      console.error('Offer usage recording error (non-blocking):', usageErr.message);
+    }
+
+    // === CLEAR CART ===
+    await Cart.updateOne(
+      { userId },
+      { $set: { items: [], merchantId: null } }
+    );
+
+    // === NOTIFY MERCHANT ===
+    try {
+      const io = getIO();
+      notifyMerchant(io, testOrder.merchantId, testOrder.toObject());
+    } catch (socketErr) {
+      console.error("Socket notify error (test):", socketErr);
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "✅ TEST ORDER: Delivery & Return fees paid (Razorpay skipped)",
+      orderId: testOrder._id,
+      upfrontPaid: upfrontPayable,
+      totalPayable: finalPayable,
+      deliveryCharge,
+      returnCharge,
+      deliveryTip,
+      serviceGST,
+      deliveryDistance: distanceKm,
+      estimatedTime,
+    });
+
+  } catch (error) {
+    console.error("Test Place Order Error:", error);
+    return res.status(500).json({ message: "Server error", error: error.message });
+  }
 };
 
 
@@ -860,6 +1192,101 @@ export const verifyFinalPayment = async (req, res) => {
     });
   } catch (error) {
     console.error("Verify Final Payment Error:", error);
+    await session.abortTransaction();
+    session.endSession();
+    return res.status(500).json({ message: "Server error" });
+  }
+};
+
+// ─── TEST MODE: Verify Final Payment WITHOUT Razorpay Signature ───
+// Use this during development/testing in Expo Go (no native build required)
+export const testVerifyFinalPayment = async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
+  try {
+    const { orderId } = req.body;
+    const userId = req.user.userId;
+
+    const order = await Order.findOne({ _id: orderId, userId }).session(session);
+    if (!order) {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(400).json({ message: "Invalid order" });
+    }
+
+    if (order.paymentStatus === "paid") {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(200).json({
+        success: true,
+        message: "Payment already verified",
+        orderId: order._id,
+      });
+    }
+
+    // === Mock payment — skip signature verification ===
+    order.razorpayPaymentId = `test_pay_${Date.now()}`;
+    order.paymentStatus = "paid";
+
+    const returnedItems = order.items.filter(item => item.tryStatus === 'returned');
+    const acceptedItems = order.items.filter(item =>
+      item.tryStatus === 'accepted' || item.tryStatus === 'not-triable'
+    );
+    const allItemsAccepted = returnedItems.length === 0;
+
+    if (allItemsAccepted) {
+      order.orderStatus = "completed";
+      order.customerDeliveryStatus = "completed";
+      order.deliveryRiderStatus = "completed";
+    } else {
+      order.orderStatus = "completed try phase";
+      order.customerDeliveryStatus = "trial_phase_ended";
+      order.deliveryRiderStatus = "completed try phase";
+    }
+
+    // === Deduct stock ONLY for accepted/kept items ===
+    const stockUpdateErrors = [];
+    for (const item of acceptedItems) {
+      const result = await Product.updateOne(
+        { _id: item.productId, "variants._id": item.variantId },
+        { $inc: { "variants.$[variant].sizes.$[size].stock": -item.quantity } },
+        { arrayFilters: [{ "variant._id": item.variantId }, { "size.size": item.size }], session }
+      );
+      if (result.modifiedCount === 0) {
+        stockUpdateErrors.push(item.productId);
+        console.warn(`Stock not updated for product ${item.productId} — may already be 0`);
+      }
+    }
+
+    // === Free up the rider if all items accepted ===
+    if (allItemsAccepted && order.deliveryRiderId) {
+      await DeliveryRider.findByIdAndUpdate(order.deliveryRiderId, {
+        currentOrderId: null,
+        isBusy: false,
+        isAvailable: true,
+      }, { session });
+    }
+
+    await order.save({ session });
+    
+    await session.commitTransaction();
+    session.endSession();
+
+    const io = getIO();
+    emitOrderUpdate(io, orderId, order);
+
+    return res.status(200).json({
+      success: true,
+      message: allItemsAccepted
+        ? "✅ TEST: Payment confirmed! Your order is complete."
+        : "✅ TEST: Payment confirmed. Rider will now return the remaining items.",
+      orderId: order._id,
+      hasReturnItems: !allItemsAccepted,
+      stockWarnings: stockUpdateErrors.length > 0 ? stockUpdateErrors : undefined,
+    });
+  } catch (error) {
+    console.error("Test Verify Final Payment Error:", error);
     await session.abortTransaction();
     session.endSession();
     return res.status(500).json({ message: "Server error" });

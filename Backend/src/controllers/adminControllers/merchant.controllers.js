@@ -1,8 +1,10 @@
 import Merchant from "../../models/merchant.model.js";
+import Zone from "../../models/zone.model.js";
 import { storageService } from "../../services/storage.service.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { ApiError } from "../../utils/ApiError.js";
 import { ApiResponse } from "../../utils/ApiResponse.js";
+import { sendVerificationEmail } from "../../services/mail.service.js";
 
 
 
@@ -19,6 +21,13 @@ export const addMerchant = asyncHandler(async (req, res) => {
   }
 
   const merchant = new Merchant(req.body);
+  
+  if (req.body.zoneId) {
+    const zone = await Zone.findById(req.body.zoneId).lean();
+    if (zone) {
+      merchant.isZoneLive = zone.status === 'Active';
+    }
+  }
   if (!req.files || !req.files['logo']) {
     throw new ApiError(400, "Logo is required");
   }
@@ -38,14 +47,13 @@ export const addMerchant = asyncHandler(async (req, res) => {
 
 export const getMerchants = asyncHandler(async (req, res) => {
   const merchants = await Merchant.find({ isActive: true })
-    .select('shopName phoneNumber email isActive logo rating reviewCount address operatingHours genderCategory zoneName zoneId stats isOnline')
+    .select('shopName phoneNumber email isActive logo rating reviewCount address operatingHours genderCategory zoneName zoneId stats isOnline isVerified')
     .lean();
   return res.status(200).json(new ApiResponse(200, { merchants }, "Merchants retrieved successfully"));
 });
 
 export const getMerchantById = asyncHandler(async (req, res) => {
   const merchant = await Merchant.findById(req.params.id)
-    .select('shopName logo backgroundImage rating reviewCount address operatingHours genderCategory zoneName zoneId stats isOnline shopDescription phoneNumber ownerName')
     .lean();
   if (!merchant) {
     throw new ApiError(404, "Merchant not found");
@@ -81,5 +89,54 @@ export const updateMerchantById = asyncHandler(async (req, res) => {
     throw new ApiError(404, "Merchant not found");
   }
 
+  // If zone changed, sync the isZoneLive status
+  if (req.body.zoneId) {
+    const zone = await Zone.findById(req.body.zoneId).lean();
+    if (zone) {
+      merchant.isZoneLive = zone.status === 'Active';
+      await merchant.save();
+    }
+  }
+
   return res.status(200).json(new ApiResponse(200, { merchant }, "Merchant updated successfully"));
+});
+
+export const verifyMerchant = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const { isVerified, kycVerifications } = req.body;
+
+  let updateQuery = {};
+  if (isVerified !== undefined) updateQuery.isVerified = !!isVerified;
+
+  if (kycVerifications) {
+    if (kycVerifications.pan !== undefined) updateQuery['kyc.pan.verified'] = !!kycVerifications.pan;
+    if (kycVerifications.gst !== undefined) updateQuery['kyc.gst.verified'] = !!kycVerifications.gst;
+    if (kycVerifications.businessProof !== undefined) updateQuery['kyc.businessProof.verified'] = !!kycVerifications.businessProof;
+    if (kycVerifications.bankProof !== undefined) updateQuery['kyc.bankProof.verified'] = !!kycVerifications.bankProof;
+    if (kycVerifications.bankDetails !== undefined) updateQuery['bankDetails.isBankVerified'] = !!kycVerifications.bankDetails;
+  }
+
+  const merchant = await Merchant.findByIdAndUpdate(
+    id,
+    { $set: updateQuery },
+    { new: true }
+  );
+
+  if (!merchant) {
+    throw new ApiError(404, "Merchant not found");
+  }
+
+  // Trigger email notification if verified
+  if (isVerified) {
+    try {
+      await sendVerificationEmail(merchant.email, merchant.shopName);
+    } catch (emailError) {
+      console.error("Failed to send verification email:", emailError);
+      // We don't throw here to avoid failing the verification itself
+    }
+  }
+
+  return res.status(200).json(
+    new ApiResponse(200, { merchant }, `Merchant ${isVerified ? "verified" : "unverified"} successfully`)
+  );
 });

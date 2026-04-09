@@ -1,10 +1,11 @@
 import express from 'express';
 import { googleLogin, signup } from '../controllers/userControllers/authControllers.js';
-import { newArrivals, productsDetails, getFilteredProducts, getProductsByMerchantId, getYouMayLikeProducts, getProductsBatch, trendingProducts, recommendedProducts } from '../controllers/userControllers/product.controllers.js';
+import { newArrivals, productsDetails, getFilteredProducts, getRelatedProducts, getSearchSuggestions, getProductsByMerchantId, getYouMayLikeProducts, getProductsBatch, trendingProducts, recommendedProducts, getCourierProducts } from '../controllers/userControllers/product.controllers.js';
 import { phoneLogin, addPushToken } from '../controllers/userControllers/authControllers.js';
-import { addToCart, getCart, clearCart, updateCartQuantity, deleteCartItem, getCartCount } from '../controllers/userControllers/cart.controllers.js';
+import { addToCart, getCart, clearCart, updateCartQuantity, deleteCartItem, getCartCount, moveToCourier } from '../controllers/userControllers/cart.controllers.js';
+import { addToCourierCart, getCourierCart, clearCourierCart, updateCourierCartQuantity, deleteCourierCartItem, getCourierCartCount } from '../controllers/userControllers/courierCart.controllers.js';
 import { authMiddleware } from '../middleware/jwtAuth.js';
-import { getAllOrders, initiateReturn, getOrderById, createRazorpayOrder, verifyPayment, razorpayWebhook, createFinalPaymentRazorpayOrder, verifyFinalPayment, cancelOrder } from '../controllers/userControllers/order.controllers.js';
+import { getAllOrders, initiateReturn, getOrderById, createRazorpayOrder, verifyPayment, razorpayWebhook, createFinalPaymentRazorpayOrder, verifyFinalPayment, testVerifyFinalPayment, cancelOrder, testPlaceOrder } from '../controllers/userControllers/order.controllers.js';
 import { body } from 'express-validator'
 import { createAddress, getAllAddresses, getSingleAddress, updateAddress, deleteAddress } from '../controllers/userControllers/address.controllers.js';
 import {
@@ -14,8 +15,10 @@ import {
   getMyWishlistIds,
 } from '../controllers/userControllers/wishlist.controllers.js';
 import { addToRecentlyViewed, getMyRecentlyViewed } from '../controllers/userControllers/recentlyViewed.controllers.js';
+import { getNearbyMerchants } from '../controllers/userControllers/merchant.controllers.js';
 
 import { checkDeliveryAvailability } from '../controllers/adminControllers/zone.controllers.js';
+import { resolveNearbyMerchants } from '../middleware/nearbyMerchants.middleware.js';
 import Notification from "../models/notification.model.js";
 import { getWalletDetails } from "../helperFns/walletHelper.js";
 
@@ -189,7 +192,7 @@ router.put('/push-token', authMiddleware, addPushToken);
  *       200:
  *         description: List of new arrivals
  */
-router.get('/products/newArrivals', newArrivals)
+router.get('/products/newArrivals', resolveNearbyMerchants, newArrivals)
 
 /**
  * @swagger
@@ -201,7 +204,32 @@ router.get('/products/newArrivals', newArrivals)
  *       200:
  *         description: List of trending products
  */
-router.get('/products/trending', trendingProducts);
+router.get('/products/trending', resolveNearbyMerchants, trendingProducts);
+
+/**
+ * @swagger
+ * /api/user/products/courier:
+ *   get:
+ *     summary: Get products from courier-enabled merchants
+ *     tags: [User]
+ *     parameters:
+ *       - in: query
+ *         name: gender
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: List of courier-available products
+ */
+router.get('/products/courier', resolveNearbyMerchants, getCourierProducts);
 
 /**
  * @swagger
@@ -214,9 +242,10 @@ router.get('/products/trending', trendingProducts);
  *       200:
  *         description: List of recommended products
  */
-router.get('/products/recommended', authMiddleware, recommendedProducts); // requires auth for cart/wishlist
-router.post('/products/filtered', getFilteredProducts)
-router.get('/products/getYouMayLikeProducts', getYouMayLikeProducts);
+router.get('/products/recommended', authMiddleware, resolveNearbyMerchants, recommendedProducts); // requires auth for cart/wishlist
+router.get('/products/search-suggestions', getSearchSuggestions);
+router.post('/products/filtered', resolveNearbyMerchants, getFilteredProducts)
+router.get('/products/getYouMayLikeProducts', resolveNearbyMerchants, getYouMayLikeProducts);
 
 /**
  * @swagger
@@ -234,7 +263,9 @@ router.get('/products/getYouMayLikeProducts', getYouMayLikeProducts);
  *         description: Product details
  */
 router.get('/products/:id', productsDetails)
+router.get('/products/:id/related', resolveNearbyMerchants, getRelatedProducts)
 router.get('/products/merchant/:merchantId', getProductsByMerchantId)
+router.get('/merchants/nearby', resolveNearbyMerchants, getNearbyMerchants)
 router.post(
   '/products/batch',
   [
@@ -297,6 +328,7 @@ router.post('/cart', authMiddleware, getCart);
 
 router.put('/cart/updatequantity', authMiddleware, updateCartQuantity);
 router.delete('/cart/clear', authMiddleware, clearCart)
+router.post('/cart/move-to-courier', authMiddleware, moveToCourier);
 router.delete('/cart/delete/:itemId', deleteCartItem);
 
 /**
@@ -340,6 +372,7 @@ router.get('/wishlist/ids', authMiddleware, getMyWishlistIds);
 
 // router.post('/order/create', authMiddleware, createOrder);
 router.post('/order/create', authMiddleware, createRazorpayOrder);
+router.post('/order/test-place', authMiddleware, testPlaceOrder);  // 🧪 TEST MODE — skips Razorpay
 router.post('/order/verifyPayment', authMiddleware, verifyPayment);
 router.post('/webhook/razorpay', razorpayWebhook);
 
@@ -360,6 +393,7 @@ router.post('/order/initiateReturn/:orderId', authMiddleware, initiateReturn);
 
 router.post('/order/createFinalPaymentOrder/:orderId', authMiddleware, createFinalPaymentRazorpayOrder);
 router.post('/order/verifyFinalPayment', authMiddleware, verifyFinalPayment);
+router.post('/order/test-verifyFinalPayment', authMiddleware, testVerifyFinalPayment); // 🧪 TEST MODE — skips Razorpay signature
 router.post('/order/cancel/:orderId', authMiddleware, cancelOrder);
 
 /**
@@ -398,5 +432,21 @@ router.get('/reviews/my', authMiddleware, getMyReviews);
 router.get('/reviews/reviewable', authMiddleware, getReviewableItems);
 router.delete('/review/:reviewId', authMiddleware, deleteReview);
 router.get('/reviews/:targetType/:targetId', getReviews); // public
+
+// ── Offers ──
+import { getAvailableOffers, applyCoupon, getOffersByMerchant, getFlashSales, getBestOffersForCart } from '../controllers/userControllers/offer.controllers.js';
+router.get('/offers', authMiddleware, getAvailableOffers);
+router.post('/offers/apply', authMiddleware, applyCoupon);
+router.post('/offers/best-for-cart', authMiddleware, getBestOffersForCart);
+router.get('/offers/flash-sales', getFlashSales);
+router.get('/offers/merchant/:merchantId', getOffersByMerchant);
+
+// ── Courier Cart ──
+router.post('/courier-cart/add', authMiddleware, addToCourierCart);
+router.get('/courier-cart', authMiddleware, getCourierCart);
+router.get('/courier-cart/count', authMiddleware, getCourierCartCount);
+router.put('/courier-cart/updatequantity', authMiddleware, updateCourierCartQuantity);
+router.delete('/courier-cart/clear', authMiddleware, clearCourierCart);
+router.delete('/courier-cart/delete/:itemId', authMiddleware, deleteCourierCartItem);
 
 export default router;

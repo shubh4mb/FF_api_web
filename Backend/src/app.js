@@ -10,6 +10,7 @@ import userRoutes from './routes/user.routes.js';
 import adminRoutes from './routes/admin.routes.js';
 import merchantRoutes from './routes/merchant.routes.js';
 import deliveryRiderRoutes from './routes/deliveryRider.routes.js';
+import courierOrderRoutes from './routes/courierOrder.routes.js';
 import { allowedOrigins } from './config/cors.js';
 import { getIO } from './config/socket.js';
 import swaggerUi from 'swagger-ui-express';
@@ -83,12 +84,14 @@ app.get('/api-docs', (req, res, next) => {
 });
 app.use('/api-docs/', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
+
 // ---- Routes ----
 app.use('/api/auth', authRoutes);
 app.use('/api/user', userRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/merchant', merchantRoutes);
 app.use('/api/deliveryRider', deliveryRiderRoutes);
+app.use('/api/courier', courierOrderRoutes);
 
 app.get('/', (req, res) => {
   res.send('Backend is working!');

@@ -1,6 +1,6 @@
 import express from 'express';
 import { addCategory, getCategories, updateCategory, getCategoryById } from '../controllers/adminControllers/category.controllers.js';
-import { addMerchant, getMerchants, getMerchantById, updateMerchantById } from '../controllers/adminControllers/merchant.controllers.js';
+import { addMerchant, getMerchants, getMerchantById, updateMerchantById, verifyMerchant } from '../controllers/adminControllers/merchant.controllers.js';
 import { addBrand, getBrands } from '../controllers/adminControllers/brand.controllers.js';
 import upload, { handleMulterError } from '../middleware/multer.js';
 import { getBaseProducts, getVariants, getBaseProductById, addVariant, getProductsByMerchantId, updateMatchingProducts } from '../controllers/adminControllers/product.controllers.js';
@@ -11,6 +11,8 @@ import { getAppConfig, updateAppConfig } from '../controllers/adminControllers/a
 import { verifyAdmin } from '../middleware/adminAuth.middleware.js';
 import adminBannerRoutes from './adminBanner.routes.js';
 import { createAttribute, getAttributes, updateAttribute, deleteAttribute } from '../controllers/adminControllers/attribute.controllers.js';
+import { addHub, getAllHubs, updateHub, deleteHub } from '../controllers/adminControllers/hub.controllers.js';
+import { createOffer, getAllOffers, getOfferById, updateOffer, toggleOffer, deleteOffer, getAllOffersOverview } from '../controllers/adminControllers/offer.controllers.js';
 
 const router = express.Router();
 
@@ -42,6 +44,7 @@ router.post('/addMerchant', verifyAdmin, upload.fields([{ name: 'logo', maxCount
 router.get('/getMerchants', getMerchants);
 router.get('/getMerchant/:id', getMerchantById);
 router.patch('/updateMerchant/:id', verifyAdmin, upload.fields([{ name: 'logo', maxCount: 1 }, { name: 'backgroundImage', maxCount: 1 }]), handleMulterError, updateMerchantById);
+router.patch('/updateMerchant/:id/verify', verifyAdmin, verifyMerchant);
 
 
 router.post('/brand/add', verifyAdmin, upload.single('logo'), handleMulterError, addBrand);
@@ -73,5 +76,20 @@ router.post('/attributes', verifyAdmin, createAttribute);
 router.get('/attributes', getAttributes);
 router.patch('/attributes/:id', verifyAdmin, updateAttribute);
 router.delete('/attributes/:id', verifyAdmin, deleteAttribute);
+
+// ── Hubs ──
+router.post('/hub/add', verifyAdmin, addHub);
+router.get('/hub', verifyAdmin, getAllHubs);
+router.patch('/hub/:id', verifyAdmin, updateHub);
+router.delete('/hub/:id', verifyAdmin, deleteHub);
+
+// ── Offers ──
+router.post('/offers', verifyAdmin, createOffer);
+router.get('/offers', verifyAdmin, getAllOffers);
+router.get('/offers/overview', verifyAdmin, getAllOffersOverview);
+router.get('/offers/:id', verifyAdmin, getOfferById);
+router.put('/offers/:id', verifyAdmin, updateOffer);
+router.patch('/offers/:id/toggle', verifyAdmin, toggleOffer);
+router.delete('/offers/:id', verifyAdmin, deleteOffer);
 
 export default router;

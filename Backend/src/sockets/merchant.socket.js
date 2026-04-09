@@ -42,16 +42,22 @@ export const registerMerchantSockets = (io, socket) => {
 };
 
 export const notifyMerchant = async (io, merchantId, orderData) => {
-  console.log(merchantId, orderData, "asdfsadf");
+  const mId = String(merchantId);
+  const room = `merchant:${mId}`;
 
-  const meta = await getMerchantMeta(merchantId);
+  // Always attempt to emit to the socket room first
+  io.to(room).emit("newOrder", orderData);
+  console.log(`📩 [Socket] Attempted newOrder emission to room ${room}`);
 
-  if (meta && meta.isOnline) {
-    io.to(`merchant:${merchantId}`).emit("newOrder", orderData);
-    console.log(`📩 Sent newOrder to Merchant ${merchantId} room`);
-  } else {
-    console.log(
-      `⚠️ Merchant ${merchantId} is offline, maybe send push notification`
-    );
+  // Then check Redis meta for fallback/logging purposes
+  try {
+    const meta = await getMerchantMeta(mId);
+    if (!meta || !meta.isOnline) {
+      console.log(`⚠️ Merchant ${mId} is marked OFFLINE in Redis. Push/SMS might be needed.`);
+    } else {
+      console.log(`✅ Merchant ${mId} is marked ONLINE in Redis.`);
+    }
+  } catch (err) {
+    console.error(`❌ Error fetching merchant meta for ${mId}:`, err);
   }
 };

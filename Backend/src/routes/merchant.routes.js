@@ -4,13 +4,14 @@ import { addBaseProduct, addVariant, getBaseProducts, getVariants, updateVariant
 import { deleteVariant, addBrand, getBrands, getBaseProductById, getProductsByMerchantId, uploadProductImage, deleteImage, deleteProduct, updatePrice, editProduct, editVariant, updateVariantSizeStock, updateMultipleVariantSizes, getAllBrands } from '../controllers/merchantController/product.controllers.js';
 
 import { addMerchant } from '../controllers/merchantController/merchant.controller.js';
-import { loginMerchant, registerMerchant, updateMerchantShopDetails, updateMerchantBankDetails, updateMerchantOperatingHours, activateMerchant, registerPhone, sendEmailOtp, verifyEmailOtp, getMerchantByEmail } from '../controllers/merchantController/authControllers.js';
+import { loginMerchant, registerMerchant, updateMerchantShopDetails, updateMerchantBankDetails, updateMerchantKYC, updateMerchantOperatingHours, activateMerchant, registerPhone, sendEmailOtp, verifyEmailOtp, getMerchantByEmail, toggleMerchantOnlineStatus } from '../controllers/merchantController/authControllers.js';
 import { getAllOrder, saveProductDetails } from '../controllers/merchantController/order.controllers.js';
 import { authMiddlewareMerchant } from '../middleware/jwtAuth.js';
 import { getWalletDetails } from '../helperFns/walletHelper.js';
 import { getPlacedOrder, orderRequestForMerchant, orderPacked } from '../controllers/merchantController/order.controllers.js';
 import { getMerchantById } from '../controllers/merchantController/merchant.controller.js';
 import { getMerchantAnalytics } from '../controllers/merchantController/analytics.controller.js';
+import { getMerchantCourierOrders, updateCourierOrderStatus } from '../controllers/userControllers/courierOrder.controllers.js';
 
 const router = express.Router();
 
@@ -86,8 +87,15 @@ router.get('/getMerchant', authMiddlewareMerchant, getMerchantById)
 
 router.put("/:merchantId/shop-details", upload.fields([{ name: 'logo', maxCount: 1 }, { name: 'backgroundImage', maxCount: 1 }]), handleMulterError, updateMerchantShopDetails);
 router.put("/:merchantId/bank-details", updateMerchantBankDetails);
+router.put("/:merchantId/kyc", upload.fields([
+    { name: 'panImage', maxCount: 1 },
+    { name: 'gstImage', maxCount: 1 },
+    { name: 'businessProofImage', maxCount: 1 },
+    { name: 'bankProofImage', maxCount: 1 }
+]), handleMulterError, updateMerchantKYC);
 router.put("/:merchantId/operating-hours", updateMerchantOperatingHours);
 router.put("/:merchantId/activate", activateMerchant);
+router.patch("/:merchantId/toggle-online", toggleMerchantOnlineStatus);
 
 /**
  * @swagger
@@ -187,6 +195,10 @@ router.post('/order/packed/:orderId', authMiddlewareMerchant, orderPacked)
 
 router.put('/products/:id/details', saveProductDetails);
 
+// ── Courier Orders ──
+router.get('/courier/getAllOrders', authMiddlewareMerchant, getMerchantCourierOrders);
+router.patch('/courier/order/:orderId/status', authMiddlewareMerchant, updateCourierOrderStatus);
+
 // router.post('/updateOrderStatus',updateOrderStatus);
 // router.post('orderPacked',authMiddlewareMerchant,orderPacked)  
 
@@ -209,5 +221,13 @@ router.get('/wallet', authMiddlewareMerchant, async (req, res) => {
         return res.status(500).json({ message: 'Failed to fetch wallet' });
     }
 });
+
+// ── Offers ──
+import { createMerchantOffer, getMyOffers, updateMerchantOffer, toggleMerchantOffer, deleteMerchantOffer } from '../controllers/merchantController/offer.controllers.js';
+router.post('/offers', authMiddlewareMerchant, createMerchantOffer);
+router.get('/offers', authMiddlewareMerchant, getMyOffers);
+router.put('/offers/:id', authMiddlewareMerchant, updateMerchantOffer);
+router.patch('/offers/:id/toggle', authMiddlewareMerchant, toggleMerchantOffer);
+router.delete('/offers/:id', authMiddlewareMerchant, deleteMerchantOffer);
 
 export default router;

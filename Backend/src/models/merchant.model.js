@@ -7,6 +7,9 @@ const merchantSchema = new mongoose.Schema(
     shopDescription: { type: String },
     phoneNumber: { type: String },
     ownerName: { type: String },
+    managerName: { type: String },
+    managerPhoneNumber: { type: String },
+    managerEmail: { type: String },
     email: { type: String, unique: true, sparse: true },
     password: { type: String },
     logo: {
@@ -17,7 +20,12 @@ const merchantSchema = new mongoose.Schema(
       public_id: String,
       url: String,
     },
-    genderCategory: [{ type: String, enum: ['Men', 'Women', 'Unisex', 'Kids'] }],
+    businessType: { 
+      type: String, 
+      enum: ['Individual', 'Sole Proprietor', 'Partnership', 'Company'] 
+    },
+    category: [{ type: String }],
+    genderCategory: [{ type: String, enum: ['Men', 'Women', 'Kids'] }],
     zoneId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Zone",
@@ -27,7 +35,10 @@ const merchantSchema = new mongoose.Schema(
     address: {
       street: String,
       city: String,
+      state: String,
       postalCode: String,
+      landmark: String,
+      note: String,
       latitude: { type: Number },      // optional: keep for easy reading
       longitude: { type: Number },     // optional: keep for easy reading
       location: {                      // ← Use this for geospatial queries
@@ -60,13 +71,30 @@ const merchantSchema = new mongoose.Schema(
       isBankVerified: { type: Boolean, default: false },
     },
     kyc: {
-      gstNumber: String,
-      gstCertificateUrl: String,
-      panNumber: String,
-      panCardUrl: String,
-      businessLicenseUrl: String,
+      pan: {
+        number: String,
+        image: { url: String, public_id: String },
+        verified: { type: Boolean, default: false }
+      },
+      gst: {
+        number: String,
+        image: { url: String, public_id: String },
+        verified: { type: Boolean, default: false }
+      },
+      businessProof: {
+        proofType: String, // e.g., 'shop_license', 'udyam'
+        image: { url: String, public_id: String },
+        verified: { type: Boolean, default: false }
+      },
+      bankProof: {
+        image: { url: String, public_id: String },
+        verified: { type: Boolean, default: false }
+      },
       isKycVerified: { type: Boolean, default: false },
     },
+    enableCourierDelivery: { type: Boolean, default: false },
+    shipsWithinHours: { type: Number },
+    acceptsReturns: { type: Boolean, default: false },
     isVerified: { type: Boolean, default: false },
     isActive: { type: Boolean, default: false },
     operatingHours: {
@@ -83,6 +111,7 @@ const merchantSchema = new mongoose.Schema(
     },
     createdAt: { type: Date, default: Date.now },
     isOnline: { type: Boolean, default: false },
+    isZoneLive: { type: Boolean, default: false },
     emailOtp: { type: String },
     emailOtpExpiry: { type: Date },
   },

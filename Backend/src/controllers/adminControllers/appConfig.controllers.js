@@ -21,7 +21,7 @@ export const getAppConfig = async (req, res) => {
  */
 export const updateAppConfig = async (req, res) => {
     try {
-        const { deliveryPerKmRate, returnPerKmRate, waitingCharge, deliveryRadius } = req.body;
+        const { deliveryPerKmRate, returnPerKmRate, waitingCharge, deliveryRadius, tryAndBuyRadius } = req.body;
 
         const config = await AppConfig.getConfig();
 
@@ -29,6 +29,7 @@ export const updateAppConfig = async (req, res) => {
         if (returnPerKmRate !== undefined) config.returnPerKmRate = returnPerKmRate;
         if (waitingCharge !== undefined) config.waitingCharge = waitingCharge;
         if (deliveryRadius !== undefined) config.deliveryRadius = deliveryRadius;
+        if (tryAndBuyRadius !== undefined) config.tryAndBuyRadius = tryAndBuyRadius;
 
         await config.save();
 

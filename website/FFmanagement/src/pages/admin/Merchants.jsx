@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { getMerchants } from '@/api/merchants';
+import { getMerchants, verifyMerchant } from '@/api/merchants';
 import { useNavigate } from 'react-router-dom';
 import ReusableAdminTable from '@/components/admin/Table';
 
@@ -21,6 +21,15 @@ const Merchants = () => {
         </span>
       ),
     },
+    {
+      header: "Verified",
+      accessor: "isVerified",
+      render: (value) => (
+        <span className={`px-2 py-1 rounded text-xs font-bold ${value ? "bg-blue-100 text-blue-600" : "bg-orange-100 text-orange-600"}`}>
+          {value ? "VERIFIED" : "PENDING"}
+        </span>
+      ),
+    },
   ];
 
   const merchantActions = [
@@ -38,6 +47,18 @@ const Merchants = () => {
       label: "Delete",
       onClick: (row) => console.log("Delete", row),
       className: "text-red-600 hover:underline text-sm",
+    },
+    {
+      label: (row) => row.isVerified ? "Unverify" : "Verify",
+      onClick: async (row) => {
+        try {
+          await verifyMerchant(row._id, !row.isVerified);
+          window.location.reload(); // Quick refresh to show status
+        } catch (err) {
+          alert("Error updating verification: " + err.message);
+        }
+      },
+      className: (row) => row.isVerified ? "text-orange-600 hover:underline text-sm font-bold" : "text-green-600 hover:underline text-sm font-bold",
     },
   ];
 
