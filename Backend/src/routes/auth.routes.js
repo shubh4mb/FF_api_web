@@ -1,6 +1,6 @@
 import express from 'express';
-import { sendOTP, verifyOTP } from '../controllers/auth.controllers.js';
-import { adminLogin, registerAdmin } from '../controllers/adminAuth.controllers.js';
+import { sendOTP, verifyOTP, refreshUserToken } from '../controllers/auth.controllers.js';
+import { adminLogin, registerAdmin, refreshAdminToken } from '../controllers/adminAuth.controllers.js';
 
 const router = express.Router();
 
@@ -66,6 +66,15 @@ router.post('/verify-otp', verifyOTP);
 
 /**
  * @swagger
+ * /api/auth/refresh:
+ *   post:
+ *     summary: Refresh User Token
+ *     tags: [Auth]
+ */
+router.post('/refresh', refreshUserToken);
+
+/**
+ * @swagger
  * /api/auth/admin/login:
  *   post:
  *     summary: Admin login
@@ -119,5 +128,14 @@ router.post('/admin/login', adminLogin);
  *         description: Bad request
  */
 router.post('/admin/register', registerAdmin);
+
+/**
+ * @swagger
+ * /api/auth/admin/refresh:
+ *   post:
+ *     summary: Refresh Admin Token
+ *     tags: [Auth]
+ */
+router.post('/admin/refresh', refreshAdminToken);
 
 export default router;

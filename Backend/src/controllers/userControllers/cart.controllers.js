@@ -119,9 +119,12 @@ export const getCartCount = async (req, res) => {
       };
     });
 
+    // Count unique merchants
+    const merchantSet = new Set(cart.items.map(i => i.merchantId?.toString()));
+
     res.status(200).json({
       success: true,
-      totalCarts: 1,
+      totalCarts: merchantSet.size,
       totalItems: itemsWithVariant.length,
       items: itemsWithVariant,
     });
@@ -141,28 +144,31 @@ export const getCart = async (req, res) => {
   try {
     // 1️⃣ Fetch cart
     const cart = await Cart.findOne({ userId })
-      .populate("items.productId", "name variants images")
-      .populate("items.merchantId", "shopName address"); // Fetch full address object
+      .populate({
+        path: "items.productId",
+        select: "name variants images categoryId subCategoryId brandId gender tags collectionIds",
+      })
+      .populate("items.merchantId", "shopName address isOnline logo");
 
-    if (!cart) {
+    if (!cart || cart.items.length === 0) {
       return res.status(200).json({
         success: true,
         totalItems: 0,
+        merchantCarts: [],
+        // Legacy flat fields for backward compat
         items: [],
         deliveryDetails: null,
       });
     }
 
-    // 2.5️⃣ Fetch App Config for rates
+    // 2️⃣ Fetch App Config for rates
     const config = await AppConfig.getConfig();
 
-    // 2️⃣ Fetch delivery address (conditional)
+    // 3️⃣ Fetch delivery address (conditional)
     let selectedAddress = null;
     if (addressId) {
       selectedAddress = await Address.findById(addressId).lean();
     }
-
-    // Fallback: If no address found by ID, but coordinates provided, create a virtual one
     if (!selectedAddress && latitude !== undefined && longitude !== undefined) {
       selectedAddress = {
         _id: "temporary",
@@ -176,151 +182,168 @@ export const getCart = async (req, res) => {
       };
     }
 
-    // 3️⃣ Build items and calculate delivery per merchant
-    let merchantDeliveryMap = {};
-    let subtotal = 0;
-    let mrpTotal = 0;
+    // 4️⃣ Enrich items with price/variant info and group by merchant
+    const merchantGroupMap = {}; // merchantId -> { merchant, items[] }
 
-    const itemsWithVariant = cart.items.map((item) => {
+    for (const item of cart.items) {
       const product = item.productId;
       const merchant = item.merchantId;
+      const merchantKey = merchant?._id?.toString() || item.merchantId?.toString() || 'unknown';
 
       const variant = product?.variants?.find(
         (v) => v._id.toString() === item.variantId.toString()
       );
-
       const price = variant?.price || 0;
       const mrp = variant?.mrp || 0;
-      subtotal += price * item.quantity;
-      mrpTotal += mrp * item.quantity;
 
-      // Delivery calculation logic
-      let deliveryInfo = null;
-      if (selectedAddress && merchant && merchant.address) {
-        const merchantKey = merchant._id.toString();
-        if (!merchantDeliveryMap[merchantKey]) {
-          // Robust coordinate extraction for User
-          let userCoords = selectedAddress.location?.coordinates;
-          if (!userCoords || userCoords.length < 2) {
-            if (selectedAddress.longitude !== undefined && selectedAddress.latitude !== undefined) {
-              userCoords = [selectedAddress.longitude, selectedAddress.latitude];
-            }
-          }
-
-          // Robust coordinate extraction for Merchant
-          let merchantCoords = merchant.address?.location?.coordinates;
-          if (!merchantCoords || merchantCoords.length < 2) {
-            if (merchant.address?.longitude !== undefined && merchant.address?.latitude !== undefined) {
-              merchantCoords = [merchant.address.longitude, merchant.address.latitude];
-            }
-          }
-
-          if (userCoords && merchantCoords && userCoords.length >= 2 && merchantCoords.length >= 2) {
-            const { distanceKm, deliveryCharge, returnCharge } = calculateDeliveryCharge({
-              userCoords,
-              merchantCoords,
-              deliveryPerKmRate: config.deliveryPerKmRate,
-              returnPerKmRate: config.returnPerKmRate,
-              waitingCharge: config.waitingCharge
-            });
-
-            const TRY_BUY_RADIUS = config.deliveryRadius || 7;
-            const isEligibleForTryBuy = distanceKm <= TRY_BUY_RADIUS;
-
-            merchantDeliveryMap[merchantKey] = {
-              merchantId: merchant._id,
-              shopName: merchant.shopName,
-              distanceKm,
-              deliveryCharge,
-              returnCharge,
-              isEligibleForTryBuy,
-              message: isEligibleForTryBuy ? null : `Merchant is beyond ${TRY_BUY_RADIUS}km for Try & Buy`
-            };
-          }
-        }
-        deliveryInfo = merchantDeliveryMap[merchantKey] || null;
+      if (!merchantGroupMap[merchantKey]) {
+        merchantGroupMap[merchantKey] = {
+          merchant,
+          items: [],
+        };
       }
 
-      return {
+      merchantGroupMap[merchantKey].items.push({
         ...item.toObject(),
         price,
         mrp,
-        merchantDelivery: deliveryInfo,
-      };
-    });
-
-    // 3.5️⃣ Calculate Aggregate Totals
-    let totalDeliveryCharge = 0;
-    let totalReturnCharge = 0;
-    Object.values(merchantDeliveryMap).forEach(d => {
-      totalDeliveryCharge += d.deliveryCharge || 0;
-      totalReturnCharge += d.returnCharge || 0;
-    });
-
-    const tip = Number(deliveryTip) || 0;
-    const serviceGST = parseFloat(((totalDeliveryCharge + tip) * 0.18).toFixed(2));
-    const totalUpfrontPayable = totalDeliveryCharge + totalReturnCharge + tip + serviceGST;
-
-    const totals = {
-      subtotal,
-      mrpTotal,
-      discount: mrpTotal - subtotal,
-      totalDeliveryCharge,
-      totalReturnCharge,
-      deliveryTip: tip,
-      serviceGST,
-      totalUpfrontPayable,
-      finalTotal: subtotal + totalUpfrontPayable
-    };
-
-    // 3.6 ── Compute best offers ──
-    let appliedOffers = { adminOffer: null, merchantOffer: null, totalDiscount: 0, freeDelivery: false };
-    try {
-      const merchantIds = Object.keys(merchantDeliveryMap);
-      const merchantTotals = {};
-      for (const item of itemsWithVariant) {
-        const mid = item.merchantId?._id?.toString() || item.merchantId?.toString() || 'unknown';
-        merchantTotals[mid] = (merchantTotals[mid] || 0) + (item.price * (item.quantity || 1));
-      }
-
-      appliedOffers = await findBestOffers(
-        userId,
-        { 
-          items: itemsWithVariant, 
-          subtotal, 
-          merchantTotals,
-          totalDeliveryCharge,
-          totalReturnCharge 
-        }
-      );
-      
-      // If freeDelivery applies, waive delivery & return charges
-      if (appliedOffers && appliedOffers.freeDelivery) {
-        totals.totalDeliveryCharge = 0;
-        totals.totalReturnCharge = 0;
-        
-        // Recalculate GST and upfront payable
-        const tip = Number(deliveryTip) || 0;
-        totals.serviceGST = parseFloat(((totals.totalDeliveryCharge + tip) * 0.18).toFixed(2));
-        totals.totalUpfrontPayable = totals.totalDeliveryCharge + totals.totalReturnCharge + tip + totals.serviceGST;
-        totals.finalTotal = subtotal - appliedOffers.totalDiscount + totals.totalUpfrontPayable;
-      } else {
-        totals.finalTotal = subtotal - appliedOffers.totalDiscount + totals.totalUpfrontPayable;
-      }
-      totals.discount = (mrpTotal - subtotal) + (appliedOffers.totalDiscount || 0);
-
-    } catch (offerErr) {
-      console.error('Offer engine error (non-blocking):', offerErr.message);
+      });
     }
 
-    // 4️⃣ Response
+    // 5️⃣ Build per-merchant carts with delivery + totals + offers
+    const merchantCarts = [];
+    let globalTotalItems = 0;
+    // Also build legacy flat arrays for backward compat
+    const allItems = [];
+    const allDeliveryDetails = [];
+
+    for (const [merchantKey, group] of Object.entries(merchantGroupMap)) {
+      const { merchant, items } = group;
+      globalTotalItems += items.length;
+
+      // --- Delivery calculation for this merchant ---
+      let deliveryInfo = null;
+      if (selectedAddress && merchant && merchant.address) {
+        let userCoords = selectedAddress.location?.coordinates;
+        if (!userCoords || userCoords.length < 2) {
+          if (selectedAddress.longitude !== undefined && selectedAddress.latitude !== undefined) {
+            userCoords = [selectedAddress.longitude, selectedAddress.latitude];
+          }
+        }
+        let merchantCoords = merchant.address?.location?.coordinates;
+        if (!merchantCoords || merchantCoords.length < 2) {
+          if (merchant.address?.longitude !== undefined && merchant.address?.latitude !== undefined) {
+            merchantCoords = [merchant.address.longitude, merchant.address.latitude];
+          }
+        }
+        if (userCoords && merchantCoords && userCoords.length >= 2 && merchantCoords.length >= 2) {
+          const { distanceKm, deliveryCharge, returnCharge } = calculateDeliveryCharge({
+            userCoords,
+            merchantCoords,
+            deliveryPerKmRate: config.deliveryPerKmRate,
+            returnPerKmRate: config.returnPerKmRate,
+            waitingCharge: config.waitingCharge
+          });
+          const TRY_BUY_RADIUS = config.deliveryRadius || 7;
+          const isEligibleForTryBuy = distanceKm <= TRY_BUY_RADIUS;
+          deliveryInfo = {
+            merchantId: merchant._id,
+            shopName: merchant.shopName,
+            distanceKm,
+            deliveryCharge,
+            returnCharge,
+            isEligibleForTryBuy,
+            message: isEligibleForTryBuy ? null : `Merchant is beyond ${TRY_BUY_RADIUS}km for Try & Buy`
+          };
+          allDeliveryDetails.push(deliveryInfo);
+        }
+      }
+
+      // Attach delivery info to each item
+      const enrichedItems = items.map(item => ({
+        ...item,
+        merchantDelivery: deliveryInfo,
+      }));
+      allItems.push(...enrichedItems);
+
+      // --- Per-merchant totals ---
+      let mSubtotal = 0;
+      let mMrpTotal = 0;
+      for (const item of items) {
+        mSubtotal += item.price * item.quantity;
+        mMrpTotal += item.mrp * item.quantity;
+      }
+
+      const mDeliveryCharge = deliveryInfo?.deliveryCharge || 0;
+      const mReturnCharge = deliveryInfo?.returnCharge || 0;
+      const tip = Number(deliveryTip) || 0;
+      const mServiceGST = parseFloat(((mDeliveryCharge + tip) * 0.18).toFixed(2));
+      const mUpfrontPayable = mDeliveryCharge + mReturnCharge + tip + mServiceGST;
+
+      const mTotals = {
+        subtotal: mSubtotal,
+        mrpTotal: mMrpTotal,
+        discount: mMrpTotal - mSubtotal,
+        totalDeliveryCharge: mDeliveryCharge,
+        totalReturnCharge: mReturnCharge,
+        deliveryTip: tip,
+        serviceGST: mServiceGST,
+        totalUpfrontPayable: mUpfrontPayable,
+        finalTotal: mSubtotal + mUpfrontPayable,
+      };
+
+      // --- Per-merchant offers ---
+      let mAppliedOffers = { appliedOffers: [], totalDiscount: 0, freeDelivery: false };
+      try {
+        const merchantTotals = {};
+        merchantTotals[merchantKey] = mSubtotal;
+        mAppliedOffers = await findBestOffers(
+          userId,
+          {
+            items: enrichedItems,
+            subtotal: mSubtotal,
+            merchantTotals,
+            totalDeliveryCharge: mDeliveryCharge,
+            totalReturnCharge: mReturnCharge,
+          }
+        );
+        if (mAppliedOffers && mAppliedOffers.freeDelivery) {
+          mTotals.totalDeliveryCharge = 0;
+          mTotals.totalReturnCharge = 0;
+          mTotals.serviceGST = parseFloat(((0 + tip) * 0.18).toFixed(2));
+          mTotals.totalUpfrontPayable = 0 + 0 + tip + mTotals.serviceGST;
+          mTotals.finalTotal = mSubtotal - mAppliedOffers.totalDiscount + mTotals.totalUpfrontPayable;
+        } else {
+          mTotals.finalTotal = mSubtotal - (mAppliedOffers.totalDiscount || 0) + mTotals.totalUpfrontPayable;
+        }
+        mTotals.discount = (mMrpTotal - mSubtotal) + (mAppliedOffers.totalDiscount || 0);
+      } catch (offerErr) {
+        console.error('Offer engine error (non-blocking):', offerErr.message);
+      }
+
+      merchantCarts.push({
+        merchantId: merchantKey,
+        merchantDetails: {
+          _id: merchant?._id,
+          shopName: merchant?.shopName,
+          isOnline: merchant?.isOnline,
+          logo: merchant?.logo,
+        },
+        items: enrichedItems,
+        deliveryDetails: deliveryInfo,
+        totals: mTotals,
+        appliedOffers: mAppliedOffers,
+      });
+    }
+
+    // 6️⃣ Response — includes new merchantCarts array plus legacy flat fields
     return res.status(200).json({
       success: true,
-      totalItems: itemsWithVariant.length,
-      items: itemsWithVariant,
-      deliveryDetails: Object.values(merchantDeliveryMap).length > 0 ? Object.values(merchantDeliveryMap) : null,
-      totals,
-      appliedOffers,
+      totalItems: globalTotalItems,
+      merchantCarts,
+      // Legacy flat fields (kept for backward compat with header badge etc)
+      items: allItems,
+      deliveryDetails: allDeliveryDetails.length > 0 ? allDeliveryDetails : null,
       address: selectedAddress,
       serviceable: !!(selectedAddress && serviceable),
     });

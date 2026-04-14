@@ -4,13 +4,15 @@ import Merchant from "../../models/merchant.model.js";
 import Product from "../../models/product.model.js";
 import Address from "../../models/address.model.js";
 import mongoose from "mongoose";
+import crypto from "crypto";
+import razorpay from "../../config/RazorPay.js";
 import { findBestOffers, recordOfferUsage } from '../../services/offerEngine.js';
 
 const COURIER_DELIVERY_CHARGE = 40;
 
 /**
- * 1. Initiate Courier Order (Mock payment creation)
- * Validates cart and address, calculates billing, returns mock Razorpay ID.
+ * 1. Initiate Courier Order — creates a real Razorpay order
+ * Validates cart and address, calculates billing, creates Razorpay order.
  */
 export const initiateCourierOrder = async (req, res) => {
   const userId = req.user.userId;
@@ -29,6 +31,9 @@ export const initiateCourierOrder = async (req, res) => {
     if (!merchant.enableCourierDelivery) {
       return res.status(400).json({ success: false, message: `Merchant ${merchantId} does not support courier delivery.` });
     }
+    if (merchant.isOnline === false) {
+      return res.status(400).json({ success: false, message: "This merchant is currently offline and not accepting orders. Please try again later." });
+    }
 
     // 2. Validate Address
     const deliveryAddress = await Address.findOne({ _id: addressId, user: userId });
@@ -37,7 +42,10 @@ export const initiateCourierOrder = async (req, res) => {
     }
 
     // 3. Get Courier Cart Items
-    const cart = await CourierCart.findOne({ userId }).populate("items.productId");
+    const cart = await CourierCart.findOne({ userId }).populate({
+      path: "items.productId",
+      select: "name variants images categoryId subCategoryId brandId gender tags collectionIds",
+    });
     if (!cart || !cart.items || cart.items.length === 0) {
       return res.status(400).json({ success: false, message: "Courier cart is empty" });
     }
@@ -47,7 +55,6 @@ export const initiateCourierOrder = async (req, res) => {
     );
 
     if (merchantItems.length === 0) {
-      // For debugging, let's see what merchantIds are in the cart
       const cartMerchantIds = cart.items.map(i => i.merchantId?.toString());
       return res.status(400).json({ 
         success: false, 
@@ -95,36 +102,43 @@ export const initiateCourierOrder = async (req, res) => {
         req.body.couponCode || null
       );
 
-      if (bestOffers.adminOffer) {
-        appliedOffers.push({
-          offerId: bestOffers.adminOffer._id,
-          title: bestOffers.adminOffer.title,
-          scope: 'admin',
-          discountType: bestOffers.adminOffer.discountType,
-          discountValue: bestOffers.adminOffer.discountValue,
-          discountApplied: bestOffers.adminOffer.discountAmount,
-        });
-        offerDiscount += bestOffers.adminOffer.discountAmount;
-      }
-      if (bestOffers.merchantOffer) {
-        appliedOffers.push({
-          offerId: bestOffers.merchantOffer._id,
-          title: bestOffers.merchantOffer.title,
-          scope: 'merchant',
-          discountType: bestOffers.merchantOffer.discountType,
-          discountValue: bestOffers.merchantOffer.discountValue,
-          discountApplied: bestOffers.merchantOffer.discountAmount,
-        });
-        offerDiscount += bestOffers.merchantOffer.discountAmount;
+      if (bestOffers.appliedOffers && bestOffers.appliedOffers.length > 0) {
+        for (const offer of bestOffers.appliedOffers) {
+          appliedOffers.push({
+            offerId: offer._id,
+            title: offer.title,
+            scope: offer.scope,
+            discountType: offer.discountType,
+            discountValue: offer.discountValue,
+            discountApplied: offer.discountAmount,
+          });
+          offerDiscount += offer.discountAmount;
+        }
       }
     } catch (offerErr) {
       console.error('Offer engine error (non-blocking):', offerErr.message);
     }
 
     const totalPayable = totalAmount - offerDiscount + COURIER_DELIVERY_CHARGE + serviceGST + deliveryTip;
+    const amountInPaise = Math.round(totalPayable * 100);
 
-    // 5. Create Pending Courier Order
-    const mockRazorpayOrderId = `order_mock_${Date.now()}`;
+    // 5. Create real Razorpay order
+    let razorpayOrderId;
+    let paymentStatus = 'pending';
+
+    if (amountInPaise > 0) {
+      const razorpayOrder = await razorpay.orders.create({
+        amount: amountInPaise,
+        currency: "INR",
+        receipt: `courier_${Date.now()}`,
+        payment_capture: 1,
+      });
+      razorpayOrderId = razorpayOrder.id;
+    } else {
+      // Free order — no Razorpay needed
+      razorpayOrderId = `free_courier_${Date.now()}`;
+      paymentStatus = 'paid';
+    }
     
     const courierOrder = new CourierOrder({
       userId,
@@ -156,9 +170,9 @@ export const initiateCourierOrder = async (req, res) => {
         deliveryInstructions: deliveryAddress.deliveryInstructions,
         coordinates: deliveryAddress.location.coordinates,
       },
-      razorpayOrderId: mockRazorpayOrderId,
-      paymentStatus: 'pending',
-      orderStatus: 'placed',
+      razorpayOrderId,
+      paymentStatus,
+      orderStatus: paymentStatus === 'paid' ? 'confirmed' : 'placed',
     });
 
     await courierOrder.save();
@@ -178,54 +192,93 @@ export const initiateCourierOrder = async (req, res) => {
       console.error('Offer usage recording error (non-blocking):', usageErr.message);
     }
 
+    // If free order, clear cart immediately
+    if (paymentStatus === 'paid') {
+      const cartDoc = await CourierCart.findOne({ userId });
+      if (cartDoc) {
+        cartDoc.items = cartDoc.items.filter(
+          item => item.merchantId.toString() !== merchantId.toString()
+        );
+        await cartDoc.save();
+      }
+    }
+
     res.status(200).json({
       success: true,
-      message: "Order initiated",
-      razorpayOrderId: mockRazorpayOrderId,
+      message: paymentStatus === 'paid' ? "Free order placed successfully" : "Order initiated — proceed to payment",
+      razorpayOrderId,
+      amount: amountInPaise,
+      key_id: process.env.RAZORPAY_KEY_ID,
       totalPayable,
       orderId: courierOrder._id,
+      contact: deliveryAddress.phone,
+      name: deliveryAddress.name,
+      email: req.user.email || "customer@example.com",
+      isFreeOrder: paymentStatus === 'paid',
     });
 
   } catch (err) {
     console.error("Initiate courier order error:", err);
-    res.status(500).json({ success: false, message: "Server error" });
+    res.status(500).json({ success: false, message: "Server error", error: err.message });
   }
 };
 
 /**
- * 2. Verify Courier Payment (Mock)
- * Finalizes the order and clears items from Courier Cart.
+ * 2. Verify Courier Payment — validates Razorpay signature
+ * Finalizes the order, deducts stock, and clears items from Courier Cart.
  */
 export const verifyCourierOrderPayment = async (req, res) => {
   const userId = req.user.userId;
-  const { razorpayOrderId, razorpayPaymentId } = req.body;
+  const { razorpay_order_id, razorpay_payment_id, razorpay_signature, orderId } = req.body;
 
-  if (!razorpayOrderId) {
-    return res.status(400).json({ success: false, message: "razorpayOrderId is required" });
+  if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
+    return res.status(400).json({ success: false, message: "razorpay_order_id, razorpay_payment_id, and razorpay_signature are required" });
+  }
+
+  // === STEP 1: Verify Razorpay Signature ===
+  const sign = `${razorpay_order_id}|${razorpay_payment_id}`;
+  const expectedSign = crypto
+    .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
+    .update(sign)
+    .digest("hex");
+
+  if (expectedSign !== razorpay_signature) {
+    return res.status(400).json({ success: false, message: "Invalid payment signature" });
   }
 
   const session = await mongoose.startSession();
   session.startTransaction();
 
   try {
-    const order = await CourierOrder.findOne({ razorpayOrderId, userId }).session(session);
+    const order = await CourierOrder.findOne({ razorpayOrderId: razorpay_order_id, userId }).session(session);
     if (!order) {
       await session.abortTransaction();
+      session.endSession();
       return res.status(404).json({ success: false, message: "Order not found" });
     }
 
     if (order.paymentStatus === 'paid') {
       await session.commitTransaction();
+      session.endSession();
       return res.status(200).json({ success: true, message: "Already paid", orderId: order._id });
     }
 
-    // 1. Update Order Status
+    // === STEP 2: Update Order Status ===
     order.paymentStatus = 'paid';
-    order.razorpayPaymentId = razorpayPaymentId || `pay_mock_${Date.now()}`;
+    order.razorpayPaymentId = razorpay_payment_id;
     order.orderStatus = 'confirmed';
     await order.save({ session });
 
-    // 2. Clear Items from Courier Cart
+    // === STEP 3: Deduct Stock ===
+    for (const item of order.items) {
+      await Product.updateOne(
+        { _id: item.productId, "variants._id": item.variantId },
+        { $inc: { "variants.$[variant].sizes.$[size].stock": -item.quantity } },
+        { arrayFilters: [{ "variant._id": item.variantId }, { "size.size": item.size }], session }
+      );
+    }
+
+    // === STEP 4: Clear Items from Courier Cart ===
     const cart = await CourierCart.findOne({ userId }).session(session);
     if (cart) {
       cart.items = cart.items.filter(
@@ -239,7 +292,7 @@ export const verifyCourierOrderPayment = async (req, res) => {
 
     res.status(200).json({
       success: true,
-      message: "Payment verified successfully",
+      message: "Payment verified. Order confirmed.",
       orderId: order._id,
     });
 
@@ -250,6 +303,7 @@ export const verifyCourierOrderPayment = async (req, res) => {
     res.status(500).json({ success: false, message: "Server error" });
   }
 };
+
 
 /**
  * Get all courier orders for logged-in user
@@ -322,6 +376,11 @@ export const updateCourierOrderStatus = async (req, res) => {
     const order = await CourierOrder.findById(orderId);
     if (!order) {
       return res.status(404).json({ success: false, message: "Order not found" });
+    }
+
+    // Authorization check
+    if (order.merchantId.toString() !== req.merchantId.toString()) {
+      return res.status(403).json({ success: false, message: "Forbidden: You do not own this order" });
     }
 
     order.orderStatus = status;

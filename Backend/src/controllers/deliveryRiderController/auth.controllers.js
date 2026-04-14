@@ -93,18 +93,28 @@ export const verifyOTP = async (req, res) => {
       const token = jwt.sign(
         { id: deliveryRider._id, phone: deliveryRider.phone },
         process.env.JWT_SECRET,
-        { expiresIn: "60d" }
+        { expiresIn: "15m" }
+      );
+      const refreshToken = jwt.sign(
+        { id: deliveryRider._id },
+        process.env.JWT_SECRET,
+        { expiresIn: "30d" }
       );
       return res
         .status(201)
-        .json({ message: "Delivery rider created successfully", deliveryRider, token });
+        .json({ message: "Delivery rider created successfully", deliveryRider, token, refreshToken });
     }
     const token = jwt.sign(
       { id: deliveryRider._id, phone: deliveryRider.phone },
       process.env.JWT_SECRET,
-      { expiresIn: "60d" }
+      { expiresIn: "15m" }
     );
-    res.status(200).json({ message: "Delivery rider login successfully", deliveryRider, token });
+    const refreshToken = jwt.sign(
+      { id: deliveryRider._id },
+      process.env.JWT_SECRET,
+      { expiresIn: "30d" }
+    );
+    res.status(200).json({ message: "Delivery rider login successfully", deliveryRider, token, refreshToken });
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: "Server error", error: error.message });
@@ -317,7 +327,37 @@ export const addPushToken = async (req, res) => {
 
     return res.status(200).json({ message: "Push token saved successfully" });
   } catch (error) {
-    console.error("Save rider push token error:", error);
     return res.status(500).json({ message: "Internal Server Error" });
+  }
+};
+
+export const refreshRiderToken = async (req, res) => {
+  const refreshToken = req.cookies?.refreshToken || req.body?.refreshToken;
+  if (!refreshToken) {
+    return res.status(401).json({ message: "Refresh token is required" });
+  }
+
+  try {
+    const decoded = jwt.verify(refreshToken, process.env.JWT_SECRET);
+    const rider = await DeliveryRider.findById(decoded.id);
+
+    if (!rider) {
+      return res.status(401).json({ message: "Rider not found" });
+    }
+
+    const token = jwt.sign(
+      { id: rider._id, phone: rider.phone },
+      process.env.JWT_SECRET,
+      { expiresIn: "15m" }
+    );
+    const newRefreshToken = jwt.sign(
+      { id: rider._id },
+      process.env.JWT_SECRET,
+      { expiresIn: "30d" }
+    );
+
+    return res.status(200).json({ token, refreshToken: newRefreshToken, message: "Token refreshed successfully" });
+  } catch (error) {
+    return res.status(401).json({ message: "Invalid or expired refresh token" });
   }
 };

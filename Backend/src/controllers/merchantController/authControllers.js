@@ -78,8 +78,21 @@ export const verifyEmailOtp = async (req, res) => {
     const token = jwt.sign(
       { id: merchant._id, email: merchant.email },
       process.env.JWT_SECRET,
-      { expiresIn: "7d" } // token expiry
+      { expiresIn: "15m" } 
     );
+
+    const refreshToken = jwt.sign(
+      { id: merchant._id },
+      process.env.JWT_SECRET,
+      { expiresIn: "30d" }
+    );
+
+    res.cookie('refreshToken', refreshToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'strict',
+        maxAge: 30 * 24 * 60 * 60 * 1000
+    });
 
     res.status(200).json({
       message: "Email verified successfully",
@@ -445,12 +458,26 @@ export const loginMerchant = async (req, res) => {
     const token = jwt.sign(
       { id: merchant._id },
       process.env.JWT_SECRET,
-      { expiresIn: "7d" }
+      { expiresIn: "15m" }
     );
+
+    const refreshToken = jwt.sign(
+      { id: merchant._id },
+      process.env.JWT_SECRET,
+      { expiresIn: "30d" }
+    );
+
+    res.cookie('refreshToken', refreshToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'strict',
+        maxAge: 30 * 24 * 60 * 60 * 1000
+    });
 
     // ==== Response ====
     return res.json({
       token,
+      refreshToken,
       merchant: {
         id: merchant._id,
         shopName: merchant.shopName,
@@ -565,5 +592,43 @@ export const updateMerchantKYC = async (req, res) => {
   } catch (error) {
     console.error("KYC update error:", error);
     res.status(500).json({ message: "Server error", error: error.message });
+  }
+};
+
+export const refreshMerchantToken = async (req, res) => {
+  const refreshToken = req.cookies?.refreshToken || req.body?.refreshToken;
+  if (!refreshToken) {
+    return res.status(401).json({ message: "Refresh token is required" });
+  }
+
+  try {
+    const decoded = jwt.verify(refreshToken, process.env.JWT_SECRET);
+    const merchant = await Merchant.findById(decoded.id);
+
+    if (!merchant) {
+      return res.status(401).json({ message: "Merchant not found" });
+    }
+
+    const token = jwt.sign(
+      { id: merchant._id, email: merchant.email },
+      process.env.JWT_SECRET,
+      { expiresIn: "15m" }
+    );
+    const newRefreshToken = jwt.sign(
+      { id: merchant._id },
+      process.env.JWT_SECRET,
+      { expiresIn: "30d" }
+    );
+
+    res.cookie('refreshToken', newRefreshToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'strict',
+        maxAge: 30 * 24 * 60 * 60 * 1000
+    });
+
+    return res.status(200).json({ token, refreshToken: newRefreshToken, message: "Merchant token refreshed successfully" });
+  } catch (error) {
+    return res.status(401).json({ message: "Invalid or expired merchant refresh token" });
   }
 };

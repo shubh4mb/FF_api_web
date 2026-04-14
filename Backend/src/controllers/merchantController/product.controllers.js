@@ -87,11 +87,15 @@ export const addVariant = async (req, res) => {
     };
 
     // Save to DB
-    const updatedProduct = await Product.findByIdAndUpdate(
-      productId,
+    const updatedProduct = await Product.findOneAndUpdate(
+      { _id: productId, merchantId: req.merchantId },
       { $push: { variants: newVariant } },
       { new: true }
     );
+
+    if (!updatedProduct) {
+      return res.status(404).json({ success: false, message: "Product not found or unauthorized" });
+    }
 
     return res.json({
       success: true,
@@ -145,6 +149,7 @@ export const updateVariant = async (req, res) => {
     // ----------------------------
     const product = await Product.findOne({
       _id: productId,
+      merchantId: req.merchantId,
       "variants._id": variantId,
     });
 
@@ -228,7 +233,7 @@ export const updateVariant = async (req, res) => {
     // 7) Update database
     // ----------------------------
     const updatedProduct = await Product.findOneAndUpdate(
-      { _id: productId, "variants._id": variantId },
+      { _id: productId, merchantId: req.merchantId, "variants._id": variantId },
       { $set: updateData },
       { new: true, runValidators: true }
     );
@@ -259,7 +264,7 @@ export const updateSize = async (req, res) => {
     if (sizeId) {
       // ✅ Update existing size by _id
       updatedProduct = await Product.findOneAndUpdate(
-        { _id: productId, "variants._id": variantId, "variants.sizes._id": sizeId },
+        { _id: productId, merchantId: req.merchantId, "variants._id": variantId, "variants.sizes._id": sizeId },
         { $set: { "variants.$[v].sizes.$[s].stock": safeStock } },
         {
           new: true,
@@ -272,7 +277,7 @@ export const updateSize = async (req, res) => {
     } else {
       // ✅ Add new size
       updatedProduct = await Product.findOneAndUpdate(
-        { _id: productId, "variants._id": variantId },
+        { _id: productId, merchantId: req.merchantId, "variants._id": variantId },
         { $push: { "variants.$.sizes": { size, stock: safeStock } } },
         { new: true }
       );
@@ -310,6 +315,7 @@ export const updateSizeCount = async (req, res) => {
     const updatedProduct = await Product.findOneAndUpdate(
       {
         _id: productId,
+        merchantId: req.merchantId,
         "variants._id": variantId,
         "variants.sizes._id": sizeId
       },
@@ -355,7 +361,7 @@ export const updatePrice = async (req, res) => {
     const safeDiscount = isNaN(Number(discount)) ? 0 : Number(discount);
 
     const updatedProduct = await Product.findOneAndUpdate(
-      { _id: productId, "variants._id": variantId },
+      { _id: productId, merchantId: req.merchantId, "variants._id": variantId },
       {
         $set: {
           "variants.$.mrp": safeMRP,
@@ -387,7 +393,7 @@ export const deleteVariantSizes = async (req, res) => {
 
     // ✅ Pull a specific size by _id
     const updatedProduct = await Product.findOneAndUpdate(
-      { _id: productId, "variants._id": variantId },
+      { _id: productId, merchantId: req.merchantId, "variants._id": variantId },
       { $pull: { "variants.$.sizes": { _id: sizeId } } },
       { new: true }
     );
@@ -419,11 +425,14 @@ export const addBaseProduct = async (req, res) => {
     }
 
     // Auto-create or find brand based on merchant's shopName
+    // FORCE merchantId from auth token to prevent IDOR
+    value.merchantId = req.merchantId;
+
     if (value.merchantId) {
       const merchant = await Merchant.findById(value.merchantId);
       if (merchant) {
         const brandName = merchant.shopName || merchant.ownerName || "Default Brand";
-
+        
         // Auto-assign soldBy
         value.soldBy = merchant.shopName || merchant.ownerName || "Default Store";
 
@@ -699,7 +708,7 @@ export const deleteProduct = async (req, res) => {
   try {
     const { productId } = req.params;
 
-    const deleted = await Product.findByIdAndDelete(productId);
+    const deleted = await Product.findOneAndDelete({ _id: productId, merchantId: req.merchantId });
 
     if (!deleted) {
       return res.status(404).json({
@@ -728,8 +737,8 @@ export const deleteVariant = async (req, res) => {
     const { productId, variantId } = req.params;
 
     // Pull variant by ID
-    const updatedProduct = await Product.findByIdAndUpdate(
-      productId,
+    const updatedProduct = await Product.findOneAndUpdate(
+      { _id: productId, merchantId: req.merchantId },
       { $pull: { variants: { _id: variantId } } },
       { new: true }
     );
@@ -777,8 +786,8 @@ export const editProduct = async (req, res) => {
       }
     }
 
-    const updatedProduct = await Product.findByIdAndUpdate(
-      id,
+    const updatedProduct = await Product.findOneAndUpdate(
+      { _id: id, merchantId: req.merchantId },
       { $set: updateData },
       { new: true, runValidators: true }
     );

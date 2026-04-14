@@ -13,11 +13,13 @@ import adminBannerRoutes from './adminBanner.routes.js';
 import { createAttribute, getAttributes, updateAttribute, deleteAttribute } from '../controllers/adminControllers/attribute.controllers.js';
 import { addHub, getAllHubs, updateHub, deleteHub } from '../controllers/adminControllers/hub.controllers.js';
 import { createOffer, getAllOffers, getOfferById, updateOffer, toggleOffer, deleteOffer, getAllOffersOverview } from '../controllers/adminControllers/offer.controllers.js';
+import { createCollection, getAllCollections, updateCollection, deleteCollection } from '../controllers/adminControllers/collection.controllers.js';
 
 const router = express.Router();
 
 router.use('/banners', adminBannerRoutes);
 
+// ── Categories ──
 router.post('/addCategory', verifyAdmin, upload.fields([
     { name: 'image', maxCount: 1 },
     { name: 'logo', maxCount: 1 },
@@ -26,10 +28,8 @@ router.post('/addCategory', verifyAdmin, upload.fields([
     { name: 'logo_KIDS', maxCount: 1 },
     { name: 'title_banners', maxCount: 5 }
 ]), handleMulterError, addCategory);
-
 router.get('/getCategories', getCategories);
 router.get('/getCategoryById/:id', getCategoryById);
-
 router.patch('/updateCategory/:id', verifyAdmin, upload.fields([
     { name: 'image', maxCount: 1 },
     { name: 'logo', maxCount: 1 },
@@ -39,17 +39,24 @@ router.patch('/updateCategory/:id', verifyAdmin, upload.fields([
     { name: 'title_banners', maxCount: 5 }
 ]), handleMulterError, updateCategory);
 
+// ── Collections (Standardized & Prioritized) ──
+router.post('/addCollection', verifyAdmin, upload.single('bannerImage'), handleMulterError, createCollection);
+router.get('/getCollections', verifyAdmin, getAllCollections);
+router.patch('/updateCollection/:id', verifyAdmin, upload.single('bannerImage'), handleMulterError, updateCollection);
+router.delete('/deleteCollection/:id', verifyAdmin, deleteCollection);
 
+// ── Merchants ──
 router.post('/addMerchant', verifyAdmin, upload.fields([{ name: 'logo', maxCount: 1 }, { name: 'backgroundImage', maxCount: 1 }]), handleMulterError, addMerchant);
 router.get('/getMerchants', getMerchants);
 router.get('/getMerchant/:id', getMerchantById);
 router.patch('/updateMerchant/:id', verifyAdmin, upload.fields([{ name: 'logo', maxCount: 1 }, { name: 'backgroundImage', maxCount: 1 }]), handleMulterError, updateMerchantById);
 router.patch('/updateMerchant/:id/verify', verifyAdmin, verifyMerchant);
 
-
+// ── Brands ──
 router.post('/brand/add', verifyAdmin, upload.single('logo'), handleMulterError, addBrand);
 router.get('/brand/get', verifyAdmin, getBrands);
 
+// ── Products ──
 router.get('/getBaseProducts', getBaseProducts);
 router.get('/getVariants', getVariants);
 router.get('/getBaseProductById/:productId', getBaseProductById);
@@ -57,17 +64,18 @@ router.post('/addVariant/:productId', upload.array('images'), handleMulterError,
 router.get('/products/merchant/:merchantId', getProductsByMerchantId);
 router.put('/updateMatchingProducts/:productId', updateMatchingProducts);
 
-router.post('/titleBanner/add', verifyAdmin, upload.single('image'), handleMulterError, addTitleBanner)
+router.post('/titleBanner/add', verifyAdmin, upload.single('image'), handleMulterError, addTitleBanner);
 
+// ── Cart ──
 router.post('/cart/add', verifyAdmin, addCart);
 router.get('/cart', verifyAdmin, getCart);
-// router.put('/cart/updatequantity', verifyAdmin, updateCartQuantity);
 
+// ── Zones ──
 router.post('/zone/add', verifyAdmin, addZone);
 router.get('/zone', verifyAdmin, getAllZones);
 router.post('/zone/check-overlap', verifyAdmin, checkZoneOverlap);
 
-// ── App Config (delivery/return per-km rates) ──
+// ── App Config ──
 router.get('/config', verifyAdmin, getAppConfig);
 router.put('/config', verifyAdmin, updateAppConfig);
 

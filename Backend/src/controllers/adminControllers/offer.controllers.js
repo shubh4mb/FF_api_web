@@ -3,10 +3,10 @@ import Offer from '../../models/offer.model.js';
 /**
  * ── Admin Offer Controllers ──
  * Full CRUD for admin-scoped offers:
- *   FIRST_TIME_USER, CART_VALUE, CATEGORY, FLASH_SALE
+ *   FIRST_TIME_USER, CART_VALUE, CATEGORY, FLASH_SALE, COLLECTION
  */
 
-const ADMIN_OFFER_TYPES = ['FIRST_TIME_USER', 'CART_VALUE', 'CATEGORY', 'FLASH_SALE'];
+const ADMIN_OFFER_TYPES = ['FIRST_TIME_USER', 'CART_VALUE', 'CATEGORY', 'FLASH_SALE', 'COLLECTION'];
 
 // ── Create Offer ──
 export const createOffer = async (req, res) => {
@@ -62,6 +62,7 @@ export const createOffer = async (req, res) => {
         categoryIds: conditions?.categoryIds || [],
         subCategoryIds: conditions?.subCategoryIds || [],
         productIds: conditions?.productIds || [],
+        collectionId: conditions?.collectionId || null,
         genders: conditions?.genders || [],
         firstTimeUserOnly: type === 'FIRST_TIME_USER' ? true : (conditions?.firstTimeUserOnly || false),
         minOrderValue: conditions?.minOrderValue || 0,
@@ -75,6 +76,9 @@ export const createOffer = async (req, res) => {
       maxUsagePerUser: maxUsagePerUser || 1,
       freeDelivery: freeDelivery || false,
       priority: priority || 0,
+      benefitType: req.body.benefitType || (type === 'COLLECTION' ? 'PRODUCT' : 'CART'),
+      stackable: req.body.stackable !== undefined ? req.body.stackable : true,
+      isExclusive: req.body.isExclusive || false,
       isActive: true,
     });
 

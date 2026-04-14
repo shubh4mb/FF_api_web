@@ -15,14 +15,19 @@ import { calculateFinalBilling } from "../../helperFns/calculateFinalBilling.js"
 import { enqueueOrder } from "../../helperFns/orderFns.js";
 import { notifyOrderEvent } from "../../helperFns/notificationHelper.js";
 import mongoose from 'mongoose';
-import { findBestOffers, recordOfferUsage } from '../../services/offerEngine.js';
+import { findBestOffers, recordOfferUsage, validateOfferEligibility, getApplicableAmount, calculateDiscount } from '../../services/offerEngine.js';
+import Offer from '../../models/offer.model.js';
 
 
 
 export const createRazorpayOrder = async (req, res) => {
   try {
     const userId = req.user.userId;
-    const { addressId, deliveryTip = 0 } = req.body;
+    const { addressId, deliveryTip = 0, merchantId: requestedMerchantId } = req.body;
+
+    if (!requestedMerchantId) {
+      return res.status(400).json({ message: "merchantId is required for multi-cart checkout" });
+    }
 
     // === VALIDATE CART ===
     const cart = await Cart.findOne({ userId })
@@ -33,6 +38,16 @@ export const createRazorpayOrder = async (req, res) => {
       return res.status(400).json({ message: "Your cart is empty" });
     }
 
+    // === FILTER ITEMS FOR REQUESTED MERCHANT ===
+    const merchantItems = cart.items.filter(item => {
+      const itemMid = item.merchantId?._id?.toString() || item.merchantId?.toString();
+      return itemMid === requestedMerchantId;
+    });
+
+    if (merchantItems.length === 0) {
+      return res.status(400).json({ message: "No items found for this merchant in your cart" });
+    }
+
     // === VALIDATE ADDRESS ===
     const deliveryAddress = await Address.findOne({ _id: addressId, user: userId });
     if (!deliveryAddress) {
@@ -41,11 +56,19 @@ export const createRazorpayOrder = async (req, res) => {
 
     const userCoords = deliveryAddress.location.coordinates;
 
-    // === FETCH MERCHANT (SINGLE SHOP CART FOR NOW) ===
-    const merchantId = cart.items[0].merchantId;
+    // === FETCH MERCHANT ===
+    const merchantId = requestedMerchantId;
     const merchant = await Merchant.findById(merchantId);
     if (!merchant) {
       return res.status(404).json({ message: "Merchant not found" });
+    }
+
+    // === VALIDATE MERCHANT STATUS ===
+    if (merchant.isOnline === false) {
+      return res.status(400).json({ 
+        success: false, 
+        message: "This merchant is currently offline and not accepting orders. Please try again later." 
+      });
     }
 
     const merchantCoords = merchant.address.location.coordinates;
@@ -64,7 +87,7 @@ export const createRazorpayOrder = async (req, res) => {
     const config = await AppConfig.getConfig();
 
     // === DELIVERY CHARGE USING HELPER ===
-    const { distanceKm, deliveryCharge, returnCharge, estimatedTime } = calculateDeliveryCharge({
+    let { distanceKm, deliveryCharge, returnCharge, estimatedTime } = calculateDeliveryCharge({
       userCoords,
       merchantCoords,
       deliveryPerKmRate: config.deliveryPerKmRate,
@@ -76,7 +99,7 @@ export const createRazorpayOrder = async (req, res) => {
     let totalAmount = 0;
     const orderItems = [];
 
-    for (const item of cart.items) {
+    for (const item of merchantItems) {
       const product = item.productId;
       if (!product) continue;
 
@@ -124,27 +147,18 @@ export const createRazorpayOrder = async (req, res) => {
         req.body.couponCode || null
       );
 
-      if (bestOffers.adminOffer) {
-        appliedOffers.push({
-          offerId: bestOffers.adminOffer._id,
-          title: bestOffers.adminOffer.title,
-          scope: 'admin',
-          discountType: bestOffers.adminOffer.discountType,
-          discountValue: bestOffers.adminOffer.discountValue,
-          discountApplied: bestOffers.adminOffer.discountAmount,
-        });
-        offerDiscount += bestOffers.adminOffer.discountAmount;
-      }
-      if (bestOffers.merchantOffer) {
-        appliedOffers.push({
-          offerId: bestOffers.merchantOffer._id,
-          title: bestOffers.merchantOffer.title,
-          scope: 'merchant',
-          discountType: bestOffers.merchantOffer.discountType,
-          discountValue: bestOffers.merchantOffer.discountValue,
-          discountApplied: bestOffers.merchantOffer.discountAmount,
-        });
-        offerDiscount += bestOffers.merchantOffer.discountAmount;
+      if (bestOffers.appliedOffers && bestOffers.appliedOffers.length > 0) {
+        for (const offer of bestOffers.appliedOffers) {
+          appliedOffers.push({
+            offerId: offer._id,
+            title: offer.title,
+            scope: offer.scope,
+            discountType: offer.discountType,
+            discountValue: offer.discountValue,
+            discountApplied: offer.discountAmount,
+          });
+          offerDiscount += offer.discountAmount;
+        }
       }
 
       if (bestOffers.freeDelivery) {
@@ -242,10 +256,11 @@ export const createRazorpayOrder = async (req, res) => {
       console.error('Offer usage recording error (non-blocking):', usageErr.message);
     }
     
-    // Clear cart
+    // Clear only this merchant's items from cart (not the whole cart)
+    const merchantItemIds = merchantItems.map(i => i._id);
     await Cart.updateOne(
       { userId },
-      { $set: { items: [], merchantId: null } }
+      { $pull: { items: { _id: { $in: merchantItemIds } } } }
     );
 
     // Notify Merchant
@@ -287,236 +302,6 @@ export const createRazorpayOrder = async (req, res) => {
 }
 };
 
-
-// ─── TEST MODE: Place T&B Order WITHOUT Razorpay ───
-// Use this during development/testing in Expo Go (no native build required)
-export const testPlaceOrder = async (req, res) => {
-  try {
-    const userId = req.user.userId;
-    const { addressId, deliveryTip = 0 } = req.body;
-
-    // === VALIDATE CART ===
-    const cart = await Cart.findOne({ userId })
-      .populate("items.productId")
-      .populate("items.merchantId");
-
-    if (!cart || cart.items.length === 0) {
-      return res.status(400).json({ message: "Your cart is empty" });
-    }
-
-    // === VALIDATE ADDRESS ===
-    const deliveryAddress = await Address.findOne({ _id: addressId, user: userId });
-    if (!deliveryAddress) {
-      return res.status(404).json({ message: "Delivery address not found" });
-    }
-
-    const userCoords = deliveryAddress.location.coordinates;
-
-    // === FETCH MERCHANT ===
-    const merchantId = cart.items[0].merchantId;
-    const merchant = await Merchant.findById(merchantId);
-    if (!merchant) {
-      return res.status(404).json({ message: "Merchant not found" });
-    }
-
-    const merchantCoords = merchant.address.location.coordinates;
-
-    // === TRY & BUY 7 KM RADIUS VALIDATION ===
-    if (!isWithinTBRadius(userCoords, merchantCoords)) {
-      return res.status(400).json({
-        success: false,
-        serviceable: false,
-        message: "Try & Buy is not available for this location. The merchant is beyond the 7 km delivery radius.",
-      });
-    }
-
-    // === DELIVERY CHARGE ===
-    const AppConfig = (await import("../../models/appConfig.model.js")).default;
-    const config = await AppConfig.getConfig();
-
-    const { distanceKm, deliveryCharge, returnCharge, estimatedTime } = calculateDeliveryCharge({
-      userCoords,
-      merchantCoords,
-      deliveryPerKmRate: config.deliveryPerKmRate,
-      returnPerKmRate: config.returnPerKmRate,
-      waitingCharge: config.waitingCharge
-    });
-
-    // === BUILD ORDER ITEMS ===
-    let totalAmount = 0;
-    const orderItems = [];
-
-    for (const item of cart.items) {
-      const product = item.productId;
-      if (!product) continue;
-      const variant = product.variants.id(item.variantId);
-      if (!variant) continue;
-      const sizeObj = variant.sizes.find(s => s.size === item.size);
-      if (!sizeObj) {
-        return res.status(400).json({ message: `Size ${item.size} not found for ${product.name}` });
-      }
-      if (sizeObj.stock < item.quantity) {
-        return res.status(400).json({ message: `Insufficient stock for ${product.name} (Size: ${item.size})` });
-      }
-      const price = variant.price;
-      for (let i = 0; i < item.quantity; i++) {
-        totalAmount += price;
-        orderItems.push({
-          productId: item.productId,
-          variantId: item.variantId,
-          name: product.name,
-          quantity: 1,
-          price,
-          size: item.size,
-          image: item.image?.url || "",
-          tryStatus: product.isTriable ? "pending" : "not-triable",
-        });
-      }
-    }
-
-    // === COMPUTE BEST OFFERS ===
-    let appliedOffers = [];
-    let offerDiscount = 0;
-    try {
-      const merchantTotals = {};
-      merchantTotals[merchantId.toString()] = totalAmount;
-
-      const bestOffers = await findBestOffers(
-        userId,
-        { items: orderItems, subtotal: totalAmount, merchantTotals },
-        req.body.couponCode || null
-      );
-
-      if (bestOffers.adminOffer) {
-        appliedOffers.push({
-          offerId: bestOffers.adminOffer._id,
-          title: bestOffers.adminOffer.title,
-          scope: 'admin',
-          discountType: bestOffers.adminOffer.discountType,
-          discountValue: bestOffers.adminOffer.discountValue,
-          discountApplied: bestOffers.adminOffer.discountAmount,
-        });
-        offerDiscount += bestOffers.adminOffer.discountAmount;
-      }
-      if (bestOffers.merchantOffer) {
-        appliedOffers.push({
-          offerId: bestOffers.merchantOffer._id,
-          title: bestOffers.merchantOffer.title,
-          scope: 'merchant',
-          discountType: bestOffers.merchantOffer.discountType,
-          discountValue: bestOffers.merchantOffer.discountValue,
-          discountApplied: bestOffers.merchantOffer.discountAmount,
-        });
-        offerDiscount += bestOffers.merchantOffer.discountAmount;
-      }
-      
-      if (bestOffers.freeDelivery) {
-        deliveryCharge = 0;
-        returnCharge = 0;
-      }
-    } catch (offerErr) {
-      console.error('Offer engine error (non-blocking):', offerErr.message);
-    }
-
-    const serviceGST = parseFloat(((deliveryCharge + deliveryTip) * 0.18).toFixed(2));
-    const upfrontPayable = deliveryCharge + returnCharge + deliveryTip + serviceGST;
-    const finalPayable = totalAmount - offerDiscount + upfrontPayable;
-
-    // === CREATE ORDER DIRECTLY (NO RAZORPAY) ===
-    const testOrder = new Order({
-      userId,
-      merchantId,
-      merchantDetails: {
-        name: merchant.name,
-        phone: merchant.phone,
-      },
-      items: orderItems,
-      totalAmount,
-      baseAmount: totalAmount,
-      tryAndBuyFee: 0,
-      gst: 0,
-      serviceGST,
-      deliveryTip,
-      discount: offerDiscount,
-      deliveryCharge,
-      totalPayable: finalPayable,
-      deliveryDistance: distanceKm,
-      returnCharge,
-      estimatedTime,
-      appliedOffers,
-      deliveryLocation: {
-        name: deliveryAddress.name,
-        phone: deliveryAddress.phone,
-        addressLine1: deliveryAddress.addressLine1,
-        addressLine2: deliveryAddress.addressLine2,
-        landmark: deliveryAddress.landmark,
-        area: deliveryAddress.area,
-        city: deliveryAddress.city,
-        state: deliveryAddress.state,
-        pincode: deliveryAddress.pincode,
-        country: deliveryAddress.country,
-        addressType: deliveryAddress.addressType,
-        deliveryInstructions: deliveryAddress.deliveryInstructions,
-        coordinates: deliveryAddress.location.coordinates,
-      },
-      pickupLocation: {
-        coordinates: merchant.address.location.coordinates,
-      },
-      razorpayOrderId: `test_${Date.now()}`,
-      paymentStatus: "delivery_fee_paid",
-      orderStatus: "placed",
-    });
-
-    await testOrder.save();
-
-    // === RECORD OFFER USAGE ===
-    try {
-      for (const offer of appliedOffers) {
-        await recordOfferUsage(
-          userId,
-          offer.offerId,
-          testOrder._id,
-          'Order',
-          offer.discountApplied
-        );
-      }
-    } catch (usageErr) {
-      console.error('Offer usage recording error (non-blocking):', usageErr.message);
-    }
-
-    // === CLEAR CART ===
-    await Cart.updateOne(
-      { userId },
-      { $set: { items: [], merchantId: null } }
-    );
-
-    // === NOTIFY MERCHANT ===
-    try {
-      const io = getIO();
-      notifyMerchant(io, testOrder.merchantId, testOrder.toObject());
-    } catch (socketErr) {
-      console.error("Socket notify error (test):", socketErr);
-    }
-
-    return res.status(200).json({
-      success: true,
-      message: "✅ TEST ORDER: Delivery & Return fees paid (Razorpay skipped)",
-      orderId: testOrder._id,
-      upfrontPaid: upfrontPayable,
-      totalPayable: finalPayable,
-      deliveryCharge,
-      returnCharge,
-      deliveryTip,
-      serviceGST,
-      deliveryDistance: distanceKm,
-      estimatedTime,
-    });
-
-  } catch (error) {
-    console.error("Test Place Order Error:", error);
-    return res.status(500).json({ message: "Server error", error: error.message });
-  }
-};
 
 
 // 2. Verify Payment & Confirm Order
@@ -578,13 +363,23 @@ export const verifyPayment = async (req, res) => {
     await order.save({ session });
 
     /* =======================
-       STEP 4: CLEAR USER CART
+       STEP 4: REMOVE ONLY THIS ORDER'S MERCHANT ITEMS FROM CART
     ======================== */
-    await Cart.updateOne(
-      { userId: order.userId },
-      { $set: { items: [], merchantId: null } },
-      { session }
-    );
+    // Remove only items belonging to the merchant of this order
+    const orderMerchantId = order.merchantId?.toString();
+    const userCart = await Cart.findOne({ userId: order.userId }).session(session);
+    if (userCart) {
+      const itemIdsToRemove = userCart.items
+        .filter(i => (i.merchantId?.toString()) === orderMerchantId)
+        .map(i => i._id);
+      if (itemIdsToRemove.length > 0) {
+        await Cart.updateOne(
+          { userId: order.userId },
+          { $pull: { items: { _id: { $in: itemIdsToRemove } } } },
+          { session }
+        );
+      }
+    }
 
     /* =======================
        STEP 5: COMMIT TRANSACTION
@@ -689,7 +484,7 @@ export const orderRequestForDeliveryBoy = async (req, res) => {
       order.deliveryRiderStatus = "assigned";
 
       // Update delivery boy’s availability
-      await DeliveryBoy.findByIdAndUpdate(deliveryBoyId, { status: "busy" });
+      await DeliveryRider.findByIdAndUpdate(deliveryBoyId, { status: "busy" });
 
       await order.save();
       return res.status(200).json({
@@ -1008,22 +803,73 @@ export const createFinalPaymentRazorpayOrder = async (req, res) => {
       });
     }
 
+    // === NEW: Recalculate Offers based strictly on kept items ===
+    let recalculatedDiscount = 0;
+    
+    if (order.appliedOffers && order.appliedOffers.length > 0) {
+      const acceptedSubtotal = acceptedItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+      
+      const merchantTotals = {};
+      const midStr = order.merchantId?._id ? order.merchantId._id.toString() : order.merchantId.toString();
+      merchantTotals[midStr] = acceptedSubtotal;
+      
+      const cartContext = {
+        items: acceptedItems,
+        subtotal: acceptedSubtotal,
+        merchantTotals,
+      };
+
+      for (let i = 0; i < order.appliedOffers.length; i++) {
+        const appliedOffer = order.appliedOffers[i];
+        try {
+          const offerDoc = await Offer.findById(appliedOffer.offerId).lean();
+          if (offerDoc) {
+            let isStillValid = true;
+            
+            // Check thresholds
+            if (offerDoc.conditions?.minCartValue > 0 && acceptedSubtotal < offerDoc.conditions.minCartValue) {
+              isStillValid = false;
+            }
+            if (offerDoc.conditions?.minOrderValue > 0 && acceptedSubtotal < offerDoc.conditions.minOrderValue) {
+              isStillValid = false;
+            }
+
+            if (isStillValid) {
+              const applicableAmount = getApplicableAmount(offerDoc, cartContext);
+              if (applicableAmount > 0) {
+                const discount = calculateDiscount(offerDoc, applicableAmount);
+                recalculatedDiscount += discount;
+                order.appliedOffers[i].discountApplied = discount; // Update DB record
+              } else {
+                 order.appliedOffers[i].discountApplied = 0;
+              }
+            } else {
+              // Threshold not met anymore -> lose offer completely
+              order.appliedOffers[i].discountApplied = 0;
+            }
+          }
+        } catch (e) {
+          console.error('Failed to recalculate offer for final billing:', e);
+        }
+      }
+    }
+
     // === STEP 2: Use Helper Function for Billing Calculation ===
     const billing = calculateFinalBilling({
       orderItems: order.items,
       returnCharge: order.returnCharge,
       trialPhaseStart: order.trialPhaseStart,
       trialPhaseEnd: order.trialPhaseEnd,
+      discountToApply: recalculatedDiscount
     });
 
-    console.log(billing, "sdfdfs");
-
+    console.log("Recalculated Final Billing Payload:", billing);
 
     // === STEP 3: Save billing into DB (Update, don't overwrite) ===
     order.finalBilling.baseAmount = billing.baseAmount;
     order.finalBilling.gst = billing.gst;
-    order.finalBilling.discount = billing.returnChargeDeduction; // deduction applied only if all kept
-    order.finalBilling.totalPayable = billing.totalPayable; // amount for the FINAL RAZORPAY ORDER
+    order.finalBilling.discount = recalculatedDiscount + billing.returnChargeDeduction; 
+    order.finalBilling.totalPayable = billing.totalPayable; 
 
     // Note: deliveryTip and serviceGST are already in order.finalBilling from step 1
 
@@ -1065,7 +911,7 @@ export const verifyFinalPayment = async (req, res) => {
   session.startTransaction();
 
   try {
-    const {
+    let {
       razorpay_order_id,
       razorpay_payment_id,
       razorpay_signature,
@@ -1073,6 +919,11 @@ export const verifyFinalPayment = async (req, res) => {
     } = req.body;
 
     const userId = req.user.userId;
+
+    // Clean orderId just in case it reaches here with quotes
+    if (orderId && typeof orderId === 'string') {
+      orderId = orderId.replace(/^["']|["']$/g, '').trim();
+    }
 
     // Verify signature
     const sign = razorpay_order_id + "|" + razorpay_payment_id;
@@ -1194,104 +1045,14 @@ export const verifyFinalPayment = async (req, res) => {
     console.error("Verify Final Payment Error:", error);
     await session.abortTransaction();
     session.endSession();
-    return res.status(500).json({ message: "Server error" });
-  }
-};
-
-// ─── TEST MODE: Verify Final Payment WITHOUT Razorpay Signature ───
-// Use this during development/testing in Expo Go (no native build required)
-export const testVerifyFinalPayment = async (req, res) => {
-  const session = await mongoose.startSession();
-  session.startTransaction();
-
-  try {
-    const { orderId } = req.body;
-    const userId = req.user.userId;
-
-    const order = await Order.findOne({ _id: orderId, userId }).session(session);
-    if (!order) {
-      await session.abortTransaction();
-      session.endSession();
-      return res.status(400).json({ message: "Invalid order" });
-    }
-
-    if (order.paymentStatus === "paid") {
-      await session.abortTransaction();
-      session.endSession();
-      return res.status(200).json({
-        success: true,
-        message: "Payment already verified",
-        orderId: order._id,
-      });
-    }
-
-    // === Mock payment — skip signature verification ===
-    order.razorpayPaymentId = `test_pay_${Date.now()}`;
-    order.paymentStatus = "paid";
-
-    const returnedItems = order.items.filter(item => item.tryStatus === 'returned');
-    const acceptedItems = order.items.filter(item =>
-      item.tryStatus === 'accepted' || item.tryStatus === 'not-triable'
-    );
-    const allItemsAccepted = returnedItems.length === 0;
-
-    if (allItemsAccepted) {
-      order.orderStatus = "completed";
-      order.customerDeliveryStatus = "completed";
-      order.deliveryRiderStatus = "completed";
-    } else {
-      order.orderStatus = "completed try phase";
-      order.customerDeliveryStatus = "trial_phase_ended";
-      order.deliveryRiderStatus = "completed try phase";
-    }
-
-    // === Deduct stock ONLY for accepted/kept items ===
-    const stockUpdateErrors = [];
-    for (const item of acceptedItems) {
-      const result = await Product.updateOne(
-        { _id: item.productId, "variants._id": item.variantId },
-        { $inc: { "variants.$[variant].sizes.$[size].stock": -item.quantity } },
-        { arrayFilters: [{ "variant._id": item.variantId }, { "size.size": item.size }], session }
-      );
-      if (result.modifiedCount === 0) {
-        stockUpdateErrors.push(item.productId);
-        console.warn(`Stock not updated for product ${item.productId} — may already be 0`);
-      }
-    }
-
-    // === Free up the rider if all items accepted ===
-    if (allItemsAccepted && order.deliveryRiderId) {
-      await DeliveryRider.findByIdAndUpdate(order.deliveryRiderId, {
-        currentOrderId: null,
-        isBusy: false,
-        isAvailable: true,
-      }, { session });
-    }
-
-    await order.save({ session });
-    
-    await session.commitTransaction();
-    session.endSession();
-
-    const io = getIO();
-    emitOrderUpdate(io, orderId, order);
-
-    return res.status(200).json({
-      success: true,
-      message: allItemsAccepted
-        ? "✅ TEST: Payment confirmed! Your order is complete."
-        : "✅ TEST: Payment confirmed. Rider will now return the remaining items.",
-      orderId: order._id,
-      hasReturnItems: !allItemsAccepted,
-      stockWarnings: stockUpdateErrors.length > 0 ? stockUpdateErrors : undefined,
+    return res.status(500).json({ 
+      message: "Server error", 
+      error: error.message,
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined 
     });
-  } catch (error) {
-    console.error("Test Verify Final Payment Error:", error);
-    await session.abortTransaction();
-    session.endSession();
-    return res.status(500).json({ message: "Server error" });
   }
 };
+
 
 export const cancelOrder = async (req, res) => {
   const session = await mongoose.startSession();

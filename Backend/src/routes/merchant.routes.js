@@ -4,7 +4,7 @@ import { addBaseProduct, addVariant, getBaseProducts, getVariants, updateVariant
 import { deleteVariant, addBrand, getBrands, getBaseProductById, getProductsByMerchantId, uploadProductImage, deleteImage, deleteProduct, updatePrice, editProduct, editVariant, updateVariantSizeStock, updateMultipleVariantSizes, getAllBrands } from '../controllers/merchantController/product.controllers.js';
 
 import { addMerchant } from '../controllers/merchantController/merchant.controller.js';
-import { loginMerchant, registerMerchant, updateMerchantShopDetails, updateMerchantBankDetails, updateMerchantKYC, updateMerchantOperatingHours, activateMerchant, registerPhone, sendEmailOtp, verifyEmailOtp, getMerchantByEmail, toggleMerchantOnlineStatus } from '../controllers/merchantController/authControllers.js';
+import { loginMerchant, registerMerchant, updateMerchantShopDetails, updateMerchantBankDetails, updateMerchantKYC, updateMerchantOperatingHours, activateMerchant, registerPhone, sendEmailOtp, verifyEmailOtp, getMerchantByEmail, toggleMerchantOnlineStatus, refreshMerchantToken } from '../controllers/merchantController/authControllers.js';
 import { getAllOrder, saveProductDetails } from '../controllers/merchantController/order.controllers.js';
 import { authMiddlewareMerchant } from '../middleware/jwtAuth.js';
 import { getWalletDetails } from '../helperFns/walletHelper.js';
@@ -12,6 +12,7 @@ import { getPlacedOrder, orderRequestForMerchant, orderPacked } from '../control
 import { getMerchantById } from '../controllers/merchantController/merchant.controller.js';
 import { getMerchantAnalytics } from '../controllers/merchantController/analytics.controller.js';
 import { getMerchantCourierOrders, updateCourierOrderStatus } from '../controllers/userControllers/courierOrder.controllers.js';
+import { getAllCollections } from '../controllers/adminControllers/collection.controllers.js';
 
 const router = express.Router();
 
@@ -70,6 +71,15 @@ router.post('/auth/verify-email-otp', verifyEmailOtp);
 
 /**
  * @swagger
+ * /api/merchant/auth/refresh:
+ *   post:
+ *     summary: Refresh Merchant Token
+ *     tags: [Merchant]
+ */
+router.post('/auth/refresh', refreshMerchantToken);
+
+/**
+ * @swagger
  * /api/merchant/getMerchant:
  *   get:
  *     summary: Get current logged in merchant details
@@ -85,17 +95,17 @@ router.post('/auth/verify-email-otp', verifyEmailOtp);
 router.get('/getMerchant', authMiddlewareMerchant, getMerchantById)
 // router.get('/:ema:merchantIdil',getMerchantByEmail)
 
-router.put("/:merchantId/shop-details", upload.fields([{ name: 'logo', maxCount: 1 }, { name: 'backgroundImage', maxCount: 1 }]), handleMulterError, updateMerchantShopDetails);
-router.put("/:merchantId/bank-details", updateMerchantBankDetails);
-router.put("/:merchantId/kyc", upload.fields([
+router.put("/:merchantId/shop-details", authMiddlewareMerchant, upload.fields([{ name: 'logo', maxCount: 1 }, { name: 'backgroundImage', maxCount: 1 }]), handleMulterError, updateMerchantShopDetails);
+router.put("/:merchantId/bank-details", authMiddlewareMerchant, updateMerchantBankDetails);
+router.put("/:merchantId/kyc", authMiddlewareMerchant, upload.fields([
     { name: 'panImage', maxCount: 1 },
     { name: 'gstImage', maxCount: 1 },
     { name: 'businessProofImage', maxCount: 1 },
     { name: 'bankProofImage', maxCount: 1 }
 ]), handleMulterError, updateMerchantKYC);
-router.put("/:merchantId/operating-hours", updateMerchantOperatingHours);
+router.put("/:merchantId/operating-hours", authMiddlewareMerchant, updateMerchantOperatingHours);
 router.put("/:merchantId/activate", activateMerchant);
-router.patch("/:merchantId/toggle-online", toggleMerchantOnlineStatus);
+router.patch("/:merchantId/toggle-online", authMiddlewareMerchant, toggleMerchantOnlineStatus);
 
 /**
  * @swagger
@@ -158,8 +168,8 @@ import { getAttributes } from '../controllers/adminControllers/attribute.control
 router.post('/brand/add', upload.single('logo'), handleMulterError, addBrand);
 router.get('/brand/get/', getBrands);
 
-router.post('/addBaseProduct', addBaseProduct);
-router.delete('/deleteProduct/:productId', deleteProduct);
+router.post('/addBaseProduct', authMiddlewareMerchant, addBaseProduct);
+router.delete('/deleteProduct/:productId', authMiddlewareMerchant, deleteProduct);
 
 router.get('/getBaseProducts', getBaseProducts);
 
@@ -169,23 +179,24 @@ router.get('/getVariants', getVariants);
 router.get('/getCategories', getCategories);
 router.get('/attributes', getAttributes);
 router.get('/brand/getAllBrands', getAllBrands);
+router.get('/collections', getAllCollections);
 
-router.post("/upload/image", upload.array("images", 5), handleMulterError, uploadProductImage)
-router.delete('/deleteImage/:imageId', deleteImage);
+router.post("/upload/image", authMiddlewareMerchant, upload.array("images", 5), handleMulterError, uploadProductImage)
+router.delete('/deleteImage/:imageId', authMiddlewareMerchant, deleteImage);
 
-router.post('/addVariant/:productId', upload.array('images'), handleMulterError, addVariant);
-router.delete('/deleteVariant/:productId/:variantId', deleteVariant);
-router.delete("/deleteSizes/:productId/:variantId/:sizeId", deleteVariantSizes);
-router.patch("/updateVariant/:productId/:variantId", upload.array("images"), handleMulterError, updateVariant);
-router.put("/updateStock/:productId/:variantId/:sizeId", updateSize);
-router.put("/updateStock/:productId/:variantId/:sizeId", updateSizeCount);
-router.put("/updateStock/:productId/:variantId", updateSize);
-router.put("/updatePrice/:productId/:variantId", updatePrice);
+router.post('/addVariant/:productId', authMiddlewareMerchant, upload.array('images'), handleMulterError, addVariant);
+router.delete('/deleteVariant/:productId/:variantId', authMiddlewareMerchant, deleteVariant);
+router.delete("/deleteSizes/:productId/:variantId/:sizeId", authMiddlewareMerchant, deleteVariantSizes);
+router.patch("/updateVariant/:productId/:variantId", authMiddlewareMerchant, upload.array("images"), handleMulterError, updateVariant);
+router.put("/updateStock/:productId/:variantId/:sizeId", authMiddlewareMerchant, updateSize);
+router.put("/updateStock/:productId/:variantId/:sizeId", authMiddlewareMerchant, updateSizeCount);
+router.put("/updateStock/:productId/:variantId", authMiddlewareMerchant, updateSize);
+router.put("/updatePrice/:productId/:variantId", authMiddlewareMerchant, updatePrice);
 
-router.patch('/editProduct/:id', editProduct)
+router.patch('/editProduct/:id', authMiddlewareMerchant, editProduct)
 // router.patch('/editVariant/:productId/:variantId',editVariant)
-router.patch('/updateVariantSizeStock/:productId/:variantId/:sizeName', updateVariantSizeStock)
-router.patch('/updateMultipleVariantSizes/:productId/:variantId', updateMultipleVariantSizes)
+router.patch('/updateVariantSizeStock/:productId/:variantId/:sizeName', authMiddlewareMerchant, updateVariantSizeStock)
+router.patch('/updateMultipleVariantSizes/:productId/:variantId', authMiddlewareMerchant, updateMultipleVariantSizes)
 
 
 router.get('/getAllOrders', authMiddlewareMerchant, getAllOrder)
@@ -193,7 +204,7 @@ router.put('/orderRequestForMerchant/:orderId', authMiddlewareMerchant, orderReq
 router.get('/getPlacedOrder', authMiddlewareMerchant, getPlacedOrder)
 router.post('/order/packed/:orderId', authMiddlewareMerchant, orderPacked)
 
-router.put('/products/:id/details', saveProductDetails);
+router.put('/products/:id/details', authMiddlewareMerchant, saveProductDetails);
 
 // ── Courier Orders ──
 router.get('/courier/getAllOrders', authMiddlewareMerchant, getMerchantCourierOrders);

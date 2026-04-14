@@ -2,13 +2,17 @@ import React, { useState, useEffect } from 'react';
 import {
   Tag, Plus, Pencil, Trash2, ToggleLeft, ToggleRight,
   Zap, Gift, ShoppingCart, Layers, AlertCircle, CheckCircle, X, Clock,
+  LayoutGrid
 } from 'lucide-react';
 import { getOffers, createOffer, updateOffer, toggleOffer, deleteOffer } from '../../api/offers';
+import { getCategories } from '../../api/categories';
+import { getCollections } from '../../api/collections';
 
 const ADMIN_OFFER_TYPES = [
   { value: 'FIRST_TIME_USER', label: 'First-Time User', icon: Gift, color: '#16A34A', bg: '#F0FDF4', description: 'Discount for first-time buyers' },
   { value: 'CART_VALUE', label: 'Cart Value', icon: ShoppingCart, color: '#EA580C', bg: '#FFF7ED', description: 'Discount when cart exceeds value' },
   { value: 'CATEGORY', label: 'Category', icon: Layers, color: '#2563EB', bg: '#EFF6FF', description: 'Discount on specific categories' },
+  { value: 'COLLECTION', label: 'Collection', icon: LayoutGrid, color: '#7C3AED', bg: '#F5F3FF', description: 'Discount on curated collections' },
   { value: 'FLASH_SALE', label: 'Flash Sale', icon: Zap, color: '#DC2626', bg: '#FEF2F2', description: 'Time-limited flash discount' },
 ];
 
@@ -21,6 +25,23 @@ export default function OffersManagement() {
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
   const [typeFilter, setTypeFilter] = useState('');
+  const [categories, setCategories] = useState([]);
+  const [collections, setCollections] = useState([]);
+
+  const fetchInitialData = async () => {
+    try {
+      const [catRes, collRes] = await Promise.all([
+        getCategories(),
+        getCollections()
+      ]);
+      setCategories(catRes?.categories || []);
+      setCollections(collRes?.collections || []);
+    } catch (err) {
+      console.error('Failed to fetch initial data', err);
+    }
+  };
+
+  useEffect(() => { fetchInitialData(); }, []);
 
   const fetchOffers = async () => {
     try {
@@ -108,35 +129,15 @@ export default function OffersManagement() {
 
       {/* Notifications */}
       {error && (
-        <div className="flex items-center gap-2 px-4 py-3 rounded-xl bg-red-50 border border-red-200 text-red-600 text-sm font-semibold mb-4">
+        <div className="flex items-center gap-2 px-4 py-3 rounded-xl bg-red-50 border border-red-200 text-red-600 text-sm font-semibold mb-4 text-center">
           <AlertCircle size={16} /> {error}
         </div>
       )}
       {success && (
-        <div className="flex items-center gap-2 px-4 py-3 rounded-xl bg-green-50 border border-green-200 text-green-600 text-sm font-semibold mb-4">
+        <div className="flex items-center gap-2 px-4 py-3 rounded-xl bg-green-50 border border-green-200 text-green-600 text-sm font-semibold mb-4 text-center">
           <CheckCircle size={16} /> {success}
         </div>
       )}
-
-      {/* Stats */}
-      <div className="grid grid-cols-4 gap-4 mb-6">
-        <div className="bg-white rounded-xl p-4 border border-slate-100">
-          <div className="text-2xl font-black text-slate-800">{offers.length}</div>
-          <div className="text-xs font-semibold text-slate-400 mt-1">Total Offers</div>
-        </div>
-        <div className="bg-white rounded-xl p-4 border border-slate-100">
-          <div className="text-2xl font-black text-green-600">{activeOffers.length}</div>
-          <div className="text-xs font-semibold text-slate-400 mt-1">Active</div>
-        </div>
-        <div className="bg-white rounded-xl p-4 border border-slate-100">
-          <div className="text-2xl font-black text-orange-600">{inactiveOffers.length}</div>
-          <div className="text-xs font-semibold text-slate-400 mt-1">Inactive</div>
-        </div>
-        <div className="bg-white rounded-xl p-4 border border-slate-100">
-          <div className="text-2xl font-black text-blue-600">{offers.reduce((s, o) => s + (o.currentUsage || 0), 0)}</div>
-          <div className="text-xs font-semibold text-slate-400 mt-1">Total Redemptions</div>
-        </div>
-      </div>
 
       {/* Type Filters */}
       <div className="flex gap-2 mb-6 flex-wrap">
@@ -173,7 +174,7 @@ export default function OffersManagement() {
         </div>
       )}
 
-      {/* Active Offers */}
+      {/* Offers Table / Rows */}
       {!loading && activeOffers.length > 0 && (
         <div className="mb-8">
           <h2 className="text-sm font-bold text-slate-700 mb-3">Active Offers ({activeOffers.length})</h2>
@@ -201,6 +202,8 @@ export default function OffersManagement() {
         <OfferFormModal
           offer={editingOffer}
           submitting={submitting}
+          categories={categories}
+          collections={collections}
           onSubmit={handleFormSubmit}
           onClose={() => { setShowForm(false); setEditingOffer(null); }}
         />
@@ -227,21 +230,22 @@ function OfferRow({ offer, onToggle, onEdit, onDelete }) {
       <div className="flex-1 min-w-0">
         <div className="text-sm font-bold text-slate-800 truncate">{offer.title}</div>
         <div className="flex items-center gap-2 mt-1 flex-wrap">
-          <span className="text-xs font-bold px-2 py-0.5 rounded-md" style={{ background: typeConfig?.bg || '#F1F5F9', color: typeConfig?.color || '#475569' }}>
+          <span className="text-[10px] font-bold px-2 py-0.5 rounded-md uppercase tracking-tight" style={{ background: typeConfig?.bg || '#F1F5F9', color: typeConfig?.color || '#475569' }}>
             {typeConfig?.label || offer.type}
           </span>
           <span className="text-xs font-extrabold" style={{ color: typeConfig?.color || '#475569' }}>
             {discountLabel}
           </span>
           {offer.couponCode && (
-            <span className="text-xs font-bold px-2 py-0.5 rounded-md bg-slate-50 text-slate-500 border border-dashed border-slate-300" style={{ letterSpacing: '0.5px' }}>
+            <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-slate-50 text-slate-500 border border-dashed border-slate-300">
               {offer.couponCode}
             </span>
           )}
-          {isExpired && <span className="text-xs font-bold px-2 py-0.5 rounded-md bg-red-50 text-red-500">EXPIRED</span>}
-          {offer.conditions?.firstTimeUserOnly && <span className="text-xs font-bold px-2 py-0.5 rounded-md bg-green-50 text-green-600">1ST ORDER</span>}
+          {isExpired && <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-red-50 text-red-500">EXPIRED</span>}
+          {offer.conditions?.firstTimeUserOnly && <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-green-50 text-green-600">1ST ORDER</span>}
+          {offer.benefitType === 'PRODUCT' && <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-blue-50 text-blue-600">PRODUCT BENEFIT</span>}
         </div>
-        <div className="flex items-center gap-3 mt-1.5 text-xs text-slate-400">
+        <div className="flex items-center gap-3 mt-1.5 text-[10px] text-slate-400 font-medium">
           <span className="flex items-center gap-1"><Clock size={10} /> Ends {new Date(offer.endDate).toLocaleDateString()}</span>
           <span>{offer.currentUsage || 0} used</span>
           {offer.maxUsageTotal && <span>/ {offer.maxUsageTotal} max</span>}
@@ -265,7 +269,7 @@ function OfferRow({ offer, onToggle, onEdit, onDelete }) {
 }
 
 // ── Form Modal ──
-function OfferFormModal({ offer, submitting, onSubmit, onClose }) {
+function OfferFormModal({ offer, submitting, categories, collections, onSubmit, onClose }) {
   const [form, setForm] = useState({
     title: offer?.title || '',
     description: offer?.description || '',
@@ -277,6 +281,8 @@ function OfferFormModal({ offer, submitting, onSubmit, onClose }) {
     conditions: {
       minCartValue: offer?.conditions?.minCartValue || 0,
       categoryIds: offer?.conditions?.categoryIds || [],
+      subCategoryIds: offer?.conditions?.subCategoryIds || [],
+      collectionId: offer?.conditions?.collectionId || null,
       genders: offer?.conditions?.genders || [],
       firstTimeUserOnly: offer?.conditions?.firstTimeUserOnly || offer?.type === 'FIRST_TIME_USER',
     },
@@ -289,10 +295,37 @@ function OfferFormModal({ offer, submitting, onSubmit, onClose }) {
     maxUsagePerUser: offer?.maxUsagePerUser || 1,
     freeDelivery: offer?.freeDelivery || false,
     priority: offer?.priority || 0,
+    benefitType: offer?.benefitType || (offer?.type === 'COLLECTION' ? 'PRODUCT' : 'CART'),
+    stackable: offer?.stackable !== undefined ? offer.stackable : true,
+    isExclusive: offer?.isExclusive || false,
   });
 
-  const update = (key, value) => setForm((p) => ({ ...p, [key]: value }));
+  const update = (key, value) => {
+    setForm((p) => {
+        const newState = { ...p, [key]: value };
+        // Auto-set benefit type if choosing collection or category
+        if (key === 'type' && (value === 'COLLECTION' || value === 'CATEGORY')) {
+            newState.benefitType = 'PRODUCT';
+        } else if (key === 'type') {
+            newState.benefitType = 'CART';
+        }
+        return newState;
+    });
+  };
+  
   const updateCond = (key, value) => setForm((p) => ({ ...p, conditions: { ...p.conditions, [key]: value } }));
+
+  const mainCategories = categories?.filter(c => c.level === 0) || [];
+  const subCategories = categories?.filter(c => c.level === 1) || [];
+
+  const handleToggleCategory = (id, type) => {
+    const list = form.conditions[type] || [];
+    if (list.includes(id)) {
+      updateCond(type, list.filter(x => x !== id));
+    } else {
+      updateCond(type, [...list, id]);
+    }
+  };
 
   const handleTypeChange = (type) => {
     update('type', type);
@@ -327,22 +360,22 @@ function OfferFormModal({ offer, submitting, onSubmit, onClose }) {
         <form onSubmit={handleSubmit} className="space-y-5">
           {/* Type */}
           <div>
-            <label className="text-xs font-bold text-slate-500 mb-2 block">Offer Type</label>
+            <label className="text-xs font-bold text-slate-500 mb-2 block tracking-tight uppercase">Offer Type</label>
             <div className="grid grid-cols-2 gap-2">
               {ADMIN_OFFER_TYPES.map((t) => (
                 <button
                   key={t.value} type="button"
                   onClick={() => handleTypeChange(t.value)}
-                  className={`flex items-center gap-3 p-3 rounded-xl border-2 transition-all text-left ${form.type === t.value ? 'shadow-sm' : 'border-slate-100'}`}
+                  className={`flex items-center gap-3 p-3 rounded-xl border-2 transition-all text-left ${form.type === t.value ? 'shadow-sm' : 'border-slate-50'}`}
                   style={{
                     borderColor: form.type === t.value ? t.color : undefined,
-                    background: form.type === t.value ? t.bg : '#fff',
+                    background: form.type === t.value ? t.bg : '#F8FAFC',
                   }}
                 >
                   <t.icon size={18} color={t.color} />
                   <div>
                     <div className="text-xs font-bold text-slate-700">{t.label}</div>
-                    <div className="text-[10px] text-slate-400">{t.description}</div>
+                    <div className="text-[10px] text-slate-400 font-medium">{t.description}</div>
                   </div>
                 </button>
               ))}
@@ -352,19 +385,13 @@ function OfferFormModal({ offer, submitting, onSubmit, onClose }) {
           {/* Title */}
           <div>
             <label className="text-xs font-bold text-slate-500 mb-1 block">Title *</label>
-            <input value={form.title} onChange={(e) => update('title', e.target.value)} placeholder="e.g. Get ₹150 OFF on first order" className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm font-medium bg-slate-50 focus:outline-none focus:ring-2 focus:ring-blue-200" required />
-          </div>
-
-          {/* Description */}
-          <div>
-            <label className="text-xs font-bold text-slate-500 mb-1 block">Description</label>
-            <input value={form.description} onChange={(e) => update('description', e.target.value)} placeholder="Additional details for customers" className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm font-medium bg-slate-50 focus:outline-none focus:ring-2 focus:ring-blue-200" />
+            <input value={form.title} onChange={(e) => update('title', e.target.value)} placeholder="e.g. ₹150 OFF on first order" className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm font-medium bg-slate-50 outline-none focus:ring-2 focus:ring-blue-100" required />
           </div>
 
           {/* Discount */}
           <div className="grid grid-cols-3 gap-3">
             <div>
-              <label className="text-xs font-bold text-slate-500 mb-1 block">Type</label>
+              <label className="text-xs font-bold text-slate-500 mb-1 block">Discount Type</label>
               <select value={form.discountType} onChange={(e) => update('discountType', e.target.value)} className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm font-medium bg-slate-50">
                 <option value="percentage">% Off</option>
                 <option value="flat">₹ Flat</option>
@@ -382,36 +409,87 @@ function OfferFormModal({ offer, submitting, onSubmit, onClose }) {
             )}
           </div>
 
-          {/* Cart Value condition */}
-          {(form.type === 'CART_VALUE' || form.type === 'CATEGORY') && (
-            <div>
-              <label className="text-xs font-bold text-slate-500 mb-1 block">Min Cart Value (₹)</label>
-              <input type="number" value={form.conditions.minCartValue} onChange={(e) => updateCond('minCartValue', Number(e.target.value))} min={0} className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm font-medium bg-slate-50" />
-            </div>
-          )}
-
-          {/* Gender filter for CATEGORY */}
-          {form.type === 'CATEGORY' && (
-            <div>
-              <label className="text-xs font-bold text-slate-500 mb-2 block">Gender Filter (optional)</label>
-              <div className="flex gap-2">
-                {['MEN', 'WOMEN', 'KIDS'].map((g) => (
-                  <button
-                    key={g} type="button"
-                    onClick={() => {
-                      const genders = form.conditions.genders || [];
-                      updateCond('genders', genders.includes(g) ? genders.filter((x) => x !== g) : [...genders, g]);
-                    }}
-                    className={`px-4 py-2 rounded-lg text-xs font-bold border transition-all ${(form.conditions.genders || []).includes(g) ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-500 border-slate-200 hover:border-slate-400'}`}
-                  >
-                    {g}
-                  </button>
-                ))}
+          {/* Logic Box */}
+          <div className="bg-slate-50 p-5 rounded-2xl border border-slate-100 space-y-4">
+            <h3 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Eligibility Logic</h3>
+            
+            {(form.type === 'CART_VALUE' || form.type === 'CATEGORY' || form.type === 'COLLECTION') && (
+              <div>
+                <label className="text-xs font-bold text-slate-500 mb-1 block">Min Cart Value (₹)</label>
+                <input type="number" value={form.conditions.minCartValue} onChange={(e) => updateCond('minCartValue', Number(e.target.value))} min={0} className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm font-medium bg-white" />
               </div>
-            </div>
-          )}
+            )}
 
-          {/* Date Range */}
+            {form.type === 'COLLECTION' && (
+              <div>
+                <label className="text-xs font-bold text-slate-500 mb-1 block">Target Collection</label>
+                <select 
+                  value={form.conditions.collectionId || ''} 
+                  onChange={(e) => updateCond('collectionId', e.target.value || null)}
+                  className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm font-bold bg-white"
+                >
+                  <option value="">Select Collection</option>
+                  {collections.map(c => (
+                    <option key={c._id} value={c._id}>{c.name}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {form.type === 'CATEGORY' && (
+              <div className="space-y-4">
+                <div>
+                  <label className="text-xs font-bold text-slate-500 mb-2 block">Whitelist Genders</label>
+                  <div className="flex gap-2">
+                    {['MEN', 'WOMEN', 'KIDS'].map((g) => (
+                      <button
+                        key={g} type="button"
+                        onClick={() => {
+                          const genders = form.conditions.genders || [];
+                          updateCond('genders', genders.includes(g) ? genders.filter((x) => x !== g) : [...genders, g]);
+                        }}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all uppercase ${(form.conditions.genders || []).includes(g) ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-400 border-slate-200 hover:border-slate-300'}`}
+                      >
+                        {g}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                
+                <div className="grid grid-cols-2 gap-4">
+                    <div>
+                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-tight block mb-1.5">Categories</label>
+                        <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto">
+                            {mainCategories.map(cat => (
+                            <button
+                                key={cat._id} type="button"
+                                onClick={() => handleToggleCategory(cat._id, 'categoryIds')}
+                                className={`px-2 py-1 rounded-md text-[10px] font-bold border transition-all uppercase ${(form.conditions.categoryIds || []).includes(cat._id) ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-400 border-slate-200 hover:border-slate-300'}`}
+                            >
+                                {cat.name}
+                            </button>
+                            ))}
+                        </div>
+                    </div>
+                    <div>
+                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-tight block mb-1.5">Sub-Categories</label>
+                        <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto">
+                            {subCategories.map(sub => (
+                            <button
+                                key={sub._id} type="button"
+                                onClick={() => handleToggleCategory(sub._id, 'subCategoryIds')}
+                                className={`px-2 py-1 rounded-md text-[10px] font-bold border transition-all uppercase ${(form.conditions.subCategoryIds || []).includes(sub._id) ? 'bg-orange-500 text-white border-orange-500' : 'bg-white text-slate-400 border-slate-200 hover:border-slate-300'}`}
+                            >
+                                {sub.name}
+                            </button>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+              </div>
+            )}
+          </div>
+
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="text-xs font-bold text-slate-500 mb-1 block">Start *</label>
@@ -423,42 +501,54 @@ function OfferFormModal({ offer, submitting, onSubmit, onClose }) {
             </div>
           </div>
 
-          {/* Coupon and Free Delivery */}
-          <div className="grid grid-cols-2 gap-3 items-end">
+          <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="text-xs font-bold text-slate-500 mb-1 block">Coupon Code</label>
-              <input value={form.couponCode} onChange={(e) => update('couponCode', e.target.value.toUpperCase())} placeholder="Optional" className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm font-bold bg-slate-50 tracking-wider" />
+                <label className="text-xs font-bold text-slate-500 mb-1 block">Coupon Code</label>
+                <input value={form.couponCode} onChange={(e) => update('couponCode', e.target.value.toUpperCase())} placeholder="Optional" className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm font-bold bg-slate-50 tracking-wider" />
             </div>
-            <div className="flex flex-col gap-2 py-2">
-              <label className="flex items-center gap-2 cursor-pointer whitespace-nowrap">
-                <input type="checkbox" checked={form.requiresCoupon} onChange={(e) => update('requiresCoupon', e.target.checked)} className="rounded" />
-                <span className="text-xs font-semibold text-slate-500">Requires code</span>
-              </label>
-              <label className="flex items-center gap-2 cursor-pointer whitespace-nowrap">
-                <input type="checkbox" checked={form.freeDelivery} onChange={(e) => update('freeDelivery', e.target.checked)} className="rounded" />
-                <span className="text-xs font-semibold text-slate-500">Free Delivery Included</span>
-              </label>
+            <div className="space-y-2 py-1">
+                <label className="flex items-center gap-2 cursor-pointer">
+                    <input type="checkbox" checked={form.requiresCoupon} onChange={(e) => update('requiresCoupon', e.target.checked)} className="rounded" />
+                    <span className="text-xs font-semibold text-slate-500">Requires coupon</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                    <input type="checkbox" checked={form.freeDelivery} onChange={(e) => update('freeDelivery', e.target.checked)} className="rounded" />
+                    <span className="text-xs font-semibold text-slate-500">Free Delivery</span>
+                </label>
             </div>
           </div>
 
-          {/* Limits */}
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs font-bold text-slate-500 mb-1 block">Max Total Uses</label>
-              <input type="number" value={form.maxUsageTotal} onChange={(e) => update('maxUsageTotal', e.target.value)} min={1} placeholder="Unlimited" className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm font-medium bg-slate-50" />
-            </div>
-            <div>
-              <label className="text-xs font-bold text-slate-500 mb-1 block">Per User Max</label>
-              <input type="number" value={form.maxUsagePerUser} onChange={(e) => update('maxUsagePerUser', Number(e.target.value))} min={1} className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm font-medium bg-slate-50" />
-            </div>
+          <div className="border border-slate-100 rounded-xl p-4 bg-slate-50/50">
+                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-3">Stacking & Type</label>
+                <div className="flex gap-2 mb-3">
+                    {['PRODUCT', 'CART', 'DELIVERY'].map(bt => (
+                        <button
+                            key={bt} type="button"
+                            onClick={() => update('benefitType', bt)}
+                            className={`flex-1 py-1.5 rounded-lg text-xs font-extrabold border transition-all ${form.benefitType === bt ? 'bg-blue-600 text-white border-blue-600 shadow-sm' : 'bg-white text-slate-400 border-slate-100 hover:border-slate-300'}`}
+                        >
+                            {bt}
+                        </button>
+                    ))}
+                </div>
+                <div className="flex gap-4">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                        <input type="checkbox" checked={form.stackable} onChange={(e) => update('stackable', e.target.checked)} className="rounded" />
+                        <span className="text-xs font-semibold text-slate-500">Stackable</span>
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer">
+                        <input type="checkbox" checked={form.isExclusive} onChange={(e) => { update('isExclusive', e.target.checked); if(e.target.checked) update('stackable', false); }} className="rounded" />
+                        <span className="text-xs font-semibold text-orange-600">Exclusive</span>
+                    </label>
+                </div>
           </div>
 
           <button
             type="submit" disabled={submitting}
-            className="w-full py-3 rounded-xl text-sm font-extrabold text-white transition-all"
-            style={{ background: submitting ? '#94A3B8' : 'linear-gradient(135deg, #3B82F6, #2563EB)', boxShadow: '0 4px 14px rgba(59,130,246,0.3)' }}
+            className="w-full py-3.5 rounded-xl text-sm font-extrabold text-white transition-all disabled:opacity-50"
+            style={{ background: 'linear-gradient(135deg, #3B82F6, #2563EB)' }}
           >
-            {submitting ? 'Saving...' : offer ? 'Update Offer' : 'Create Offer'}
+            {submitting ? 'Processing...' : offer ? 'Update Live Scheme' : 'Launch New Offer'}
           </button>
         </form>
       </div>

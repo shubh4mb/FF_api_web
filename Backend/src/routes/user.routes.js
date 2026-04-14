@@ -1,11 +1,11 @@
 import express from 'express';
 import { googleLogin, signup } from '../controllers/userControllers/authControllers.js';
-import { newArrivals, productsDetails, getFilteredProducts, getRelatedProducts, getSearchSuggestions, getProductsByMerchantId, getYouMayLikeProducts, getProductsBatch, trendingProducts, recommendedProducts, getCourierProducts } from '../controllers/userControllers/product.controllers.js';
+import { newArrivals, productsDetails, getFilteredProducts, getRelatedProducts, getSearchSuggestions, getProductsByMerchantId, getYouMayLikeProducts, getProductsBatch, trendingProducts, recommendedProducts, getCourierProducts, getCollectionProductsByMerchant } from '../controllers/userControllers/product.controllers.js';
 import { phoneLogin, addPushToken } from '../controllers/userControllers/authControllers.js';
 import { addToCart, getCart, clearCart, updateCartQuantity, deleteCartItem, getCartCount, moveToCourier } from '../controllers/userControllers/cart.controllers.js';
 import { addToCourierCart, getCourierCart, clearCourierCart, updateCourierCartQuantity, deleteCourierCartItem, getCourierCartCount } from '../controllers/userControllers/courierCart.controllers.js';
 import { authMiddleware } from '../middleware/jwtAuth.js';
-import { getAllOrders, initiateReturn, getOrderById, createRazorpayOrder, verifyPayment, razorpayWebhook, createFinalPaymentRazorpayOrder, verifyFinalPayment, testVerifyFinalPayment, cancelOrder, testPlaceOrder } from '../controllers/userControllers/order.controllers.js';
+import { getAllOrders, initiateReturn, getOrderById, createRazorpayOrder, verifyPayment, razorpayWebhook, createFinalPaymentRazorpayOrder, verifyFinalPayment, cancelOrder } from '../controllers/userControllers/order.controllers.js';
 import { body } from 'express-validator'
 import { createAddress, getAllAddresses, getSingleAddress, updateAddress, deleteAddress } from '../controllers/userControllers/address.controllers.js';
 import {
@@ -23,6 +23,7 @@ import Notification from "../models/notification.model.js";
 import { getWalletDetails } from "../helperFns/walletHelper.js";
 
 import userBannerRoutes from './userBanner.routes.js';
+import { getCollectionsForHome } from '../controllers/userControllers/collection.controllers.js';
 
 const router = express.Router();
 
@@ -265,6 +266,8 @@ router.get('/products/getYouMayLikeProducts', resolveNearbyMerchants, getYouMayL
 router.get('/products/:id', productsDetails)
 router.get('/products/:id/related', resolveNearbyMerchants, getRelatedProducts)
 router.get('/products/merchant/:merchantId', getProductsByMerchantId)
+router.get('/products/collection', getCollectionProductsByMerchant);
+router.get('/collections/home', resolveNearbyMerchants, getCollectionsForHome);
 router.get('/merchants/nearby', resolveNearbyMerchants, getNearbyMerchants)
 router.post(
   '/products/batch',
@@ -372,7 +375,6 @@ router.get('/wishlist/ids', authMiddleware, getMyWishlistIds);
 
 // router.post('/order/create', authMiddleware, createOrder);
 router.post('/order/create', authMiddleware, createRazorpayOrder);
-router.post('/order/test-place', authMiddleware, testPlaceOrder);  // 🧪 TEST MODE — skips Razorpay
 router.post('/order/verifyPayment', authMiddleware, verifyPayment);
 router.post('/webhook/razorpay', razorpayWebhook);
 
@@ -393,7 +395,6 @@ router.post('/order/initiateReturn/:orderId', authMiddleware, initiateReturn);
 
 router.post('/order/createFinalPaymentOrder/:orderId', authMiddleware, createFinalPaymentRazorpayOrder);
 router.post('/order/verifyFinalPayment', authMiddleware, verifyFinalPayment);
-router.post('/order/test-verifyFinalPayment', authMiddleware, testVerifyFinalPayment); // 🧪 TEST MODE — skips Razorpay signature
 router.post('/order/cancel/:orderId', authMiddleware, cancelOrder);
 
 /**
@@ -434,12 +435,13 @@ router.delete('/review/:reviewId', authMiddleware, deleteReview);
 router.get('/reviews/:targetType/:targetId', getReviews); // public
 
 // ── Offers ──
-import { getAvailableOffers, applyCoupon, getOffersByMerchant, getFlashSales, getBestOffersForCart } from '../controllers/userControllers/offer.controllers.js';
+import { getAvailableOffers, applyCoupon, getOffersByMerchant, getFlashSales, getBestOffersForCart, getPromotionalBanners } from '../controllers/userControllers/offer.controllers.js';
 router.get('/offers', authMiddleware, getAvailableOffers);
 router.post('/offers/apply', authMiddleware, applyCoupon);
 router.post('/offers/best-for-cart', authMiddleware, getBestOffersForCart);
 router.get('/offers/flash-sales', getFlashSales);
 router.get('/offers/merchant/:merchantId', getOffersByMerchant);
+router.get('/offers/promotional-banners', getPromotionalBanners);
 
 // ── Courier Cart ──
 router.post('/courier-cart/add', authMiddleware, addToCourierCart);

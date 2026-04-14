@@ -76,6 +76,9 @@ export const createMerchantOffer = async (req, res) => {
       maxUsagePerUser: maxUsagePerUser || 1,
       freeDelivery: freeDelivery || false,
       priority: priority || 0,
+      benefitType: req.body.benefitType || 'CART',
+      stackable: req.body.stackable !== undefined ? req.body.stackable : true,
+      isExclusive: req.body.isExclusive || false,
       isActive: true,
     });
 

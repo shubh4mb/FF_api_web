@@ -36,22 +36,18 @@ const walletSchema = new mongoose.Schema(
         userId: {
             type: mongoose.Schema.Types.ObjectId,
             ref: "User",
-            default: null,
         },
         merchantId: {
             type: mongoose.Schema.Types.ObjectId,
             ref: "Merchant",
-            default: null,
         },
         deliveryRiderId: {
             type: mongoose.Schema.Types.ObjectId,
             ref: "DeliveryRider",
-            default: null,
         },
         adminId: {
             type: mongoose.Schema.Types.ObjectId,
             ref: "Admin",
-            default: null,
         },
 
         balance: {

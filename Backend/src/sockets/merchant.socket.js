@@ -4,10 +4,8 @@ import { setMerchantMeta, getMerchantMeta } from "../helperFns/merchantFns.js";
 
 export const registerMerchantSockets = (io, socket) => {
   socket.on("registerMerchant", async (merchantId) => {
-    const merchant = await Merchant.findById(merchantId);
+    const merchant = await Merchant.findByIdAndUpdate(merchantId, { isOnline: true });
     if (!merchant) return;
-    merchant.isOnline = true;
-    await merchant.save();
 
     // Join a Socket.io room specific to this merchant
     socket.join(`merchant:${merchantId}`);

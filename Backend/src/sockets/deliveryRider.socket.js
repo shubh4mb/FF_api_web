@@ -9,12 +9,10 @@ export const registerDeliveryRiderSockets = (io, socket) => {
 
   socket.on("registerRider", async ({ riderId }) => {
     // map socket -> rider room and store socketId in meta
-    const rider = await DeliveryRider.findById(riderId);
+    const rider = await DeliveryRider.findByIdAndUpdate(riderId, { isAvailable: true });
     if (!rider) {
       return socket.emit("error", "Rider not found");
     }
-    rider.isAvailable = true;
-    await rider.save();
     socket.join(`riderSocket:${riderId}`);    // join a personal socket room
     socket.join(`rider:${riderId}`);
     // await geoAdd("riders:geo", lng, lat, riderId);       // alternative room for fallback messages

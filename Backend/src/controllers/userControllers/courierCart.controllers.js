@@ -69,7 +69,7 @@ export const getCourierCart = async (req, res) => {
   try {
     const cart = await CourierCart.findOne({ userId })
       .populate("items.productId", "name variants images")
-      .populate("items.merchantId", "shopName address enableCourierDelivery");
+      .populate("items.merchantId", "shopName address enableCourierDelivery isOnline");
 
     if (!cart || cart.items.length === 0) {
       return res.status(200).json({

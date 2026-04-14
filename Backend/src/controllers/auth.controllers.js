@@ -181,9 +181,15 @@ const verifyOTP = asyncHandler(async (req, res) => {
   // ── Clean up OTP ──────────────────────────────────────────────────
   await OTPModel.deleteMany({ phone: cleanPhone });
 
-  // ── Generate JWT (30 days — matches existing phoneLogin) ──────────
+  // ── Generate JWT (15 minutes for access, 30 days for refresh) ──────────
   const token = jwt.sign(
     { userId: user._id, phoneNumber: user.phoneNumber },
+    process.env.JWT_SECRET,
+    { expiresIn: '15m' }
+  );
+
+  const refreshToken = jwt.sign(
+    { userId: user._id },
     process.env.JWT_SECRET,
     { expiresIn: '30d' }
   );
@@ -191,10 +197,44 @@ const verifyOTP = asyncHandler(async (req, res) => {
   return res.status(200).json(
     new ApiResponse(200, {
       token,
+      refreshToken,
       userId: user._id,
       isNewUser,
     }, "Authentication successful")
   );
+});
+
+export const refreshUserToken = asyncHandler(async (req, res) => {
+  const refreshToken = req.cookies?.refreshToken || req.body?.refreshToken;
+  if (!refreshToken) {
+    throw new ApiError(401, "Refresh token is required");
+  }
+
+  try {
+    const decoded = jwt.verify(refreshToken, process.env.JWT_SECRET);
+    const user = await User.findById(decoded.userId || decoded.id); // depending on how it was signed
+
+    if (!user) {
+      throw new ApiError(401, "User not found");
+    }
+
+    const token = jwt.sign(
+      { userId: user._id, phoneNumber: user.phoneNumber },
+      process.env.JWT_SECRET,
+      { expiresIn: '15m' }
+    );
+    const newRefreshToken = jwt.sign(
+      { userId: user._id },
+      process.env.JWT_SECRET,
+      { expiresIn: '30d' }
+    );
+
+    return res.status(200).json(
+      new ApiResponse(200, { token, refreshToken: newRefreshToken }, "Token refreshed successfully")
+    );
+  } catch (error) {
+    throw new ApiError(401, "Invalid or expired refresh token");
+  }
 });
 
 export { sendOTP, verifyOTP };

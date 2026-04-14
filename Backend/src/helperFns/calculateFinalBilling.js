@@ -3,7 +3,8 @@ export function calculateFinalBilling({
   orderItems, 
   returnCharge = 0, 
   trialPhaseStart, 
-  trialPhaseEnd 
+  trialPhaseEnd,
+  discountToApply = 0
 }) {
 
   // === STEP 1: Accepted (kept or non-triable) items ===
@@ -23,7 +24,7 @@ export function calculateFinalBilling({
     const start = new Date(trialPhaseStart);
     const end = new Date(trialPhaseEnd);
     const minutes = Math.floor((end - start) / (1000 * 60));
-    if (minutes > 10) overtimePenalty = minutes - 10; // ₹1/min over 10 mins
+    if (minutes > 10) overtimePenalty = (minutes - 10) * 2; // ₹2/min over 10 mins
   }
 
   // === STEP 3: Return logic ===
@@ -46,7 +47,7 @@ export function calculateFinalBilling({
 
   // === STEP 5: Final total for THIS payment ===
   const totalBeforeDeduction = baseAmount + gst + overtimePenalty;
-  const totalPayable = Math.max(0, totalBeforeDeduction - returnChargeDeduction);
+  const totalPayable = Math.max(0, totalBeforeDeduction - returnChargeDeduction - discountToApply);
 
   return {
     baseAmount,

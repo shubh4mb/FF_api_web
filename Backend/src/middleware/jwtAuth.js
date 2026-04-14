@@ -1,5 +1,5 @@
 import jwt from 'jsonwebtoken';
-const secretkey = "hehe"
+// Removed hardcoded JWT secret
 
 export const authMiddleware = (req, res, next) => {
   // console.log(req.headers.authorization);

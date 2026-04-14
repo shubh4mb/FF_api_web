@@ -110,7 +110,6 @@ const merchantSchema = new mongoose.Schema(
       totalReturns: { type: Number, default: 0 },
     },
     createdAt: { type: Date, default: Date.now },
-    isOnline: { type: Boolean, default: false },
     isZoneLive: { type: Boolean, default: false },
     emailOtp: { type: String },
     emailOtpExpiry: { type: Date },

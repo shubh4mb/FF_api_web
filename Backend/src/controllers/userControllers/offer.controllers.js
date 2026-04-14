@@ -145,3 +145,25 @@ export const getBestOffersForCart = async (req, res) => {
     return res.status(500).json({ success: false, message: 'Server error' });
   }
 };
+
+// ── Get Promotional Banners for Homepage ──
+export const getPromotionalBanners = async (req, res) => {
+  try {
+    const now = new Date();
+    const banners = await Offer.find({
+      isActive: true,
+      startDate: { $lte: now },
+      endDate: { $gt: now },
+      badgeText: { $ne: '' }, // Often used for top promos
+      'bannerImage.url': { $exists: true, $ne: null },
+    })
+    .sort({ priority: -1, createdAt: -1 })
+    .select('title bannerImage conditions collectionId badgeText')
+    .lean();
+
+    return res.status(200).json({ success: true, banners });
+  } catch (error) {
+    console.error('[User] Get promotional banners error:', error);
+    return res.status(500).json({ success: false, message: 'Server error' });
+  }
+};

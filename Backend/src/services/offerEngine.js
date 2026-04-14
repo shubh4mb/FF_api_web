@@ -54,6 +54,60 @@ export const calculateDiscount = (offer, applicableAmount) => {
 };
 
 // ────────────────────────────────────────
+// Check if an item matches offer conditions
+// ────────────────────────────────────────
+export const isItemApplicable = (item, offer) => {
+  if (!offer.conditions) return true;
+
+  const { productIds, categoryIds, subCategoryIds, collectionId, genders } = offer.conditions;
+  const product = item.productId;
+
+  // If no specific item conditions, it applies to all items in current scope (merchant/cart)
+  const hasItemRestrictions = 
+    (productIds && productIds.length > 0) || 
+    (categoryIds && categoryIds.length > 0) || 
+    (subCategoryIds && subCategoryIds.length > 0) || 
+    collectionId || 
+    (genders && genders.length > 0);
+
+  if (!hasItemRestrictions) return true;
+
+  // Match Product ID
+  if (productIds && productIds.length > 0) {
+    const pid = product?._id?.toString() || product?.toString();
+    if (productIds.map(id => id.toString()).includes(pid)) return true;
+  }
+
+  // Match Collection
+  if (collectionId) {
+    const collIdStr = collectionId.toString();
+    if (product?.collectionIds?.some(id => id.toString() === collIdStr)) return true;
+  }
+
+  // Match Category / Sub-Category
+  if (categoryIds && categoryIds.length > 0) {
+    const catIds = categoryIds.map(id => id.toString());
+    const itemCatId = product?.categoryId?.toString();
+    const itemSubCatId = product?.subCategoryId?.toString();
+    if (catIds.includes(itemCatId) || catIds.includes(itemSubCatId)) return true;
+  }
+
+  if (subCategoryIds && subCategoryIds.length > 0) {
+    const subCatIds = subCategoryIds.map(id => id.toString());
+    const itemSubCatId = product?.subCategoryId?.toString();
+    if (subCatIds.includes(itemSubCatId)) return true;
+  }
+
+  // Match Gender
+  if (genders && genders.length > 0) {
+    const itemGenders = product?.gender || [];
+    if (itemGenders.some(g => genders.includes(g))) return true;
+  }
+
+  return false;
+};
+
+// ────────────────────────────────────────
 // Check if a single offer is eligible
 // ────────────────────────────────────────
 export const validateOfferEligibility = async (offer, userId, cartContext) => {
@@ -106,31 +160,13 @@ export const validateOfferEligibility = async (offer, userId, cartContext) => {
     }
   }
 
-  // 7. Category filter
-  if (offer.conditions?.categoryIds?.length > 0) {
-    const catIds = offer.conditions.categoryIds.map(c => c.toString());
-    const hasMatchingItem = cartContext.items?.some(item => {
-      const itemCatId = item.categoryId?.toString();
-      const itemSubCatId = item.subCategoryId?.toString();
-      return catIds.includes(itemCatId) || catIds.includes(itemSubCatId);
-    });
-    if (!hasMatchingItem) {
-      return { eligible: false, reason: 'No eligible items in cart for this offer' };
-    }
+  // 7. Item-specific filters (Category, Product, Collection, Gender)
+  const hasMatchingItem = cartContext.items?.some(item => isItemApplicable(item, offer));
+  if (!hasMatchingItem) {
+    return { eligible: false, reason: 'No eligible items in cart for this offer' };
   }
 
-  // 8. Gender filter
-  if (offer.conditions?.genders?.length > 0) {
-    const hasMatchingGender = cartContext.items?.some(item => {
-      const itemGenders = item.gender || [];
-      return itemGenders.some(g => offer.conditions.genders.includes(g));
-    });
-    if (!hasMatchingGender) {
-      return { eligible: false, reason: 'No eligible items for this gender-based offer' };
-    }
-  }
-
-  // 9. Merchant match (for merchant-scoped offers)
+  // 8. Merchant match (for merchant-scoped offers)
   if (offer.scope === 'merchant' && offer.merchantId) {
     const merchantIdStr = offer.merchantId.toString();
     const hasItemFromMerchant = cartContext.items?.some(item => {
@@ -148,21 +184,34 @@ export const validateOfferEligibility = async (offer, userId, cartContext) => {
 // ────────────────────────────────────────
 // Get the applicable amount for an offer
 // ────────────────────────────────────────
-const getApplicableAmount = (offer, cartContext) => {
-  // For category-based offers, only consider items matching the category
-  if (offer.conditions?.categoryIds?.length > 0) {
-    const catIds = offer.conditions.categoryIds.map(c => c.toString());
-    return cartContext.items?.reduce((sum, item) => {
-      const itemCatId = item.categoryId?.toString();
-      const itemSubCatId = item.subCategoryId?.toString();
-      if (catIds.includes(itemCatId) || catIds.includes(itemSubCatId)) {
-        return sum + (item.price || 0) * (item.quantity || 1);
-      }
-      return sum;
-    }, 0) || 0;
+export const getApplicableAmount = (offer, cartContext) => {
+  // If there are item-specific restrictions, only sum matching items
+  const { productIds, categoryIds, subCategoryIds, collectionId, genders } = offer.conditions || {};
+  const hasItemRestrictions =
+    (productIds && productIds.length > 0) ||
+    (categoryIds && categoryIds.length > 0) ||
+    (subCategoryIds && subCategoryIds.length > 0) ||
+    collectionId ||
+    (genders && genders.length > 0);
+
+  if (hasItemRestrictions) {
+    return (
+      cartContext.items?.reduce((sum, item) => {
+        if (isItemApplicable(item, offer)) {
+          // Double check merchant scope if it's a merchant offer
+          if (offer.scope === 'merchant' && offer.merchantId) {
+            const mid = offer.merchantId.toString();
+            const itemMid = item.merchantId?._id?.toString() || item.merchantId?.toString();
+            if (itemMid !== mid) return sum;
+          }
+          return sum + (item.price || 0) * (item.quantity || 1);
+        }
+        return sum;
+      }, 0) || 0
+    );
   }
 
-  // For merchant-specific offers, only consider that merchant's items
+  // For merchant-specific offers with no item restrictions, only consider that merchant's items
   if (offer.scope === 'merchant' && offer.merchantId) {
     const mid = offer.merchantId.toString();
     return cartContext.items?.reduce((sum, item) => {
@@ -183,37 +232,26 @@ const getApplicableAmount = (offer, cartContext) => {
 // ────────────────────────────────────────
 export const findBestOffers = async (userId, cartContext, couponCode = null) => {
   const now = new Date();
-  const logStream = fs.createWriteStream('debug_offers.log', { flags: 'a' });
   const log = (msg) => {
-    logStream.write(`[${new Date().toISOString()}] ${msg}\n`);
     console.log(`[OFFER_DEBUG] ${msg}`);
   };
   
   log(`--- NEW REQUEST: findBestOffers userId: ${userId}, couponCode: ${couponCode}`);
   log(`Cart Context: ${JSON.stringify(cartContext)}`);
 
-  // Fetch all currently active and valid offers
   const query = {
     isActive: true,
     startDate: { $lte: now },
     endDate: { $gt: now },
   };
 
-  // If no coupon provided, only get auto-apply offers
-  // If coupon provided, also include that specific coupon offer
   const offers = await Offer.find(query).sort({ priority: -1 }).lean();
 
-  let bestAdmin = null;
-  let bestAdminDiscount = 0;
-  let bestMerchant = null;
-  let bestMerchantDiscount = 0;
-  let couponOffer = null;
-  let couponDiscount = 0;
+  let validOffers = [];
+  let explicitCoupon = null;
 
   for (const offer of offers) {
-    // Skip coupon-only offers if no coupon provided for them
     if (offer.requiresCoupon && offer.couponCode !== couponCode) {
-      log(`Offer ${offer.title} skipped: requiresCoupon true but code mismatch.`);
       continue;
     }
 
@@ -227,72 +265,98 @@ export const findBestOffers = async (userId, cartContext, couponCode = null) => 
     const discount = calculateDiscount(offer, applicableAmount);
 
     if (discount <= 0 && !offer.freeDelivery) {
-      log(`Offer ${offer.title} skipped: discount <= 0 and not freeDelivery.`);
       continue;
     }
 
-    log(`Offer ${offer.title} passed all checks! (discount: ${discount}, freeDelivery: ${!!offer.freeDelivery})`);
-
-    // Calculate true value of offer (including delivery savings if applicable)
     let totalValue = discount;
     if (offer.freeDelivery) {
-      const deliverySavings = (cartContext.totalDeliveryCharge || 0) + (cartContext.totalReturnCharge || 0);
-      totalValue += deliverySavings;
+      totalValue += (cartContext.totalDeliveryCharge || 0) + (cartContext.totalReturnCharge || 0);
     }
 
-    // If this is the coupon the user submitted
+    const processedOffer = {
+      ...offer,
+      discountAmount: discount,
+      totalValue,
+    };
+
     if (couponCode && offer.couponCode === couponCode) {
-      couponOffer = offer;
-      couponDiscount = discount;
-      continue;
+      explicitCoupon = processedOffer;
     }
 
-    // Find best per scope based on TOTAL value, but we only store the item discount for UI
-    if (offer.scope === 'admin') {
-      const currentBestValue = bestAdminDiscount + (bestAdmin && bestAdmin.freeDelivery ? ((cartContext.totalDeliveryCharge || 0) + (cartContext.totalReturnCharge || 0)) : 0);
-      if (totalValue > currentBestValue || bestAdmin === null) {
-        log(`=> bestAdmin replaced by ${offer.title} (totalValue: ${totalValue})`);
-        bestAdmin = offer;
-        bestAdminDiscount = discount; // Store just item discount
-      }
-    } else if (offer.scope === 'merchant') {
-      const currentBestValue = bestMerchantDiscount + (bestMerchant && bestMerchant.freeDelivery ? ((cartContext.totalDeliveryCharge || 0) + (cartContext.totalReturnCharge || 0)) : 0);
-      if (totalValue > currentBestValue || bestMerchant === null) {
-        log(`=> bestMerchant replaced by ${offer.title} (totalValue: ${totalValue})`);
-        bestMerchant = offer;
-        bestMerchantDiscount = discount; // Store just item discount
-      }
+    validOffers.push(processedOffer);
+  }
+
+  // Evaluate the three scenarios:
+  // A. The best 'isExclusive' offer
+  // B. The best 'stackable: false' offer
+  // C. The best combination of 'stackable: true' offers (max 1 per benefitType)
+
+  const bestExclusive = validOffers
+    .filter(o => o.isExclusive)
+    .sort((a, b) => b.totalValue - a.totalValue)[0];
+
+  const bestNonStackable = validOffers
+    .filter(o => !o.stackable && !o.isExclusive)
+    .sort((a, b) => b.totalValue - a.totalValue)[0];
+
+  const stackableSubset = validOffers.filter(o => o.stackable !== false && !o.isExclusive);
+  const bestStackableByType = { PRODUCT: null, CART: null, DELIVERY: null };
+  
+  for (const offer of stackableSubset) {
+    const type = offer.benefitType || 'CART';
+    if (!bestStackableByType[type] || offer.totalValue > bestStackableByType[type].totalValue) {
+      bestStackableByType[type] = offer;
     }
   }
 
-  // If coupon was provided, it replaces the best offer of its scope
-  if (couponOffer) {
-    if (couponOffer.scope === 'admin') {
-      bestAdmin = couponOffer;
-      bestAdminDiscount = couponDiscount;
-      log(`=> Overwriting bestAdmin with couponOffer`);
+  // Force explicit coupon into the mix to respect user interaction
+  if (explicitCoupon) {
+    if (explicitCoupon.isExclusive || explicitCoupon.stackable === false) {
+      // It will override everything
     } else {
-      bestMerchant = couponOffer;
-      bestMerchantDiscount = couponDiscount;
-      log(`=> Overwriting bestMerchant with couponOffer`);
+      const type = explicitCoupon.benefitType || 'CART';
+      bestStackableByType[type] = explicitCoupon;
+    }
+  }
+
+  const stackedCombination = Object.values(bestStackableByType).filter(Boolean);
+  const stackedValue = stackedCombination.reduce((sum, o) => sum + o.totalValue, 0);
+
+  let winningOffers = [];
+  let maxVal = 0;
+
+  if (bestExclusive && bestExclusive.totalValue > maxVal) {
+    maxVal = bestExclusive.totalValue;
+    winningOffers = [bestExclusive];
+  }
+
+  if (bestNonStackable && bestNonStackable.totalValue > maxVal) {
+    maxVal = bestNonStackable.totalValue;
+    winningOffers = [bestNonStackable];
+  }
+
+  if (stackedValue >= maxVal && stackedCombination.length > 0) {
+    maxVal = stackedValue;
+    winningOffers = stackedCombination;
+  }
+
+  // User input absolute override
+  if (explicitCoupon) {
+    if (explicitCoupon.isExclusive || explicitCoupon.stackable === false) {
+      winningOffers = [explicitCoupon];
+    } else {
+      winningOffers = stackedCombination;
     }
   }
 
   const finalResult = {
-    adminOffer: bestAdmin ? {
-      ...bestAdmin,
-      discountAmount: bestAdminDiscount,
-    } : null,
-    merchantOffer: bestMerchant ? {
-      ...bestMerchant,
-      discountAmount: bestMerchantDiscount,
-    } : null,
-    totalDiscount: bestAdminDiscount + bestMerchantDiscount,
-    freeDelivery: !!((bestAdmin && bestAdmin.freeDelivery) || (bestMerchant && bestMerchant.freeDelivery)),
+    appliedOffers: winningOffers,
+    totalDiscount: winningOffers.reduce((sum, o) => sum + o.discountAmount, 0),
+    freeDelivery: winningOffers.some(o => o.freeDelivery),
   };
   
-  log(`--- FINAL RESULT: ${JSON.stringify(finalResult)}\n`);
-  logStream.end();
+  log(`--- FINAL RESULT: ${JSON.stringify(finalResult)}`);
+  log(`--- END REQUEST ---`);
 
   return finalResult;
 };

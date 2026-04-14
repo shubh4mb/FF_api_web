@@ -46,8 +46,11 @@ export const resolveNearbyMerchants = async (req, res, next) => {
     const lat = parseFloat(req.query.lat || req.body?.lat);
     const lng = parseFloat(req.query.lng || req.body?.lng);
 
+    console.log(`[NearbyMiddleware] Incoming Coords - Lat: ${lat}, Lng: ${lng}`);
+
     // No coords → No merchants are "nearby"
     if (isNaN(lat) || isNaN(lng)) {
+      console.log(`[NearbyMiddleware] Lat/Lng is NaN. Returning empty nearbyMerchantIds.`);
       req.nearbyMerchantIds = [];
       return next();
     }
@@ -70,7 +73,6 @@ export const resolveNearbyMerchants = async (req, res, next) => {
       }
     } catch (cacheErr) {
       console.error("[NearbyMerchants] Redis read error:", cacheErr);
-      // If cache is corrupted, delete it
       await redis.del(cacheKey).catch(() => {});
     }
 
@@ -85,6 +87,8 @@ export const resolveNearbyMerchants = async (req, res, next) => {
         .select("_id address.location")
         .lean();
 
+      console.log(`[NearbyMiddleware] Total active/verified merchants in DB: ${allMerchants.length}`);
+
       const nearbyMerchants = filterMerchantsByDistance(
         allMerchants,
         [Number(lng), Number(lat)], // [lng, lat]
@@ -98,7 +102,7 @@ export const resolveNearbyMerchants = async (req, res, next) => {
       try {
         await redis.set(cacheKey, JSON.stringify(cachedIds), { EX: CACHE_TTL_SEC });
       } catch (writeErr) {
-        console.error("[NearbyMerchants] Redis write error:", writeErr);
+        console.error("[NearbyMiddleware] Redis write error:", writeErr);
       }
     }
 
@@ -109,8 +113,7 @@ export const resolveNearbyMerchants = async (req, res, next) => {
 
     next();
   } catch (err) {
-    console.error("[NearbyMerchants] Middleware error:", err);
-    // Don't block the request — fall through without filtering
+    console.error("[NearbyMiddleware] Middleware error:", err);
     req.nearbyMerchantIds = null;
     next();
   }

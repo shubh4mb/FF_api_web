@@ -25,7 +25,7 @@ const router = express.Router();
  * @swagger
  * /api/courier/orders/initiate:
  *   post:
- *     summary: Initiate a courier order (Mock Payment Creation)
+ *     summary: Initiate a courier order (creates real Razorpay order)
  *     tags: [Courier Orders]
  *     security: [{ bearerAuth: [] }]
  *     requestBody:
@@ -39,17 +39,19 @@ const router = express.Router();
  *               merchantId: { type: string }
  *               addressId: { type: string }
  *               deliveryTip: { type: number }
+ *               couponCode: { type: string }
  *     responses:
  *       200:
- *         description: Order initiated. Mock Razorpay ID returned.
+ *         description: Order initiated. Razorpay order ID returned.
  */
+
 router.post('/orders/initiate', authMiddleware, initiateCourierOrder);
 
 /**
  * @swagger
  * /api/courier/orders/verify:
  *   post:
- *     summary: Verify courier order payment (Mock)
+ *     summary: Verify courier order payment (Razorpay signature verification)
  *     tags: [Courier Orders]
  *     security: [{ bearerAuth: [] }]
  *     requestBody:
@@ -58,14 +60,17 @@ router.post('/orders/initiate', authMiddleware, initiateCourierOrder);
  *         application/json:
  *           schema:
  *             type: object
- *             required: [razorpayOrderId]
+ *             required: [razorpay_order_id, razorpay_payment_id, razorpay_signature]
  *             properties:
- *               razorpayOrderId: { type: string }
- *               razorpayPaymentId: { type: string }
+ *               razorpay_order_id: { type: string }
+ *               razorpay_payment_id: { type: string }
+ *               razorpay_signature: { type: string }
+ *               orderId: { type: string }
  *     responses:
  *       200:
- *         description: Order verified and placed.
+ *         description: Payment verified. Order confirmed.
  */
+
 router.post('/orders/verify', authMiddleware, verifyCourierOrderPayment);
 
 /**

@@ -85,6 +85,11 @@ export const orderRequestForMerchant = async (req, res) => {
     const order = await Order.findById(orderId).populate('merchantId', 'shopName address');
     if (!order) return res.status(404).json({ message: "Order not found" });
 
+    // Authorization check
+    if (order.merchantId._id.toString() !== req.merchantId.toString()) {
+      return res.status(403).json({ message: "Forbidden: You do not own this order" });
+    }
+
     if (status === "accept") {
       order.orderStatus = "accepted";
 
@@ -211,6 +216,12 @@ export const orderPacked = async (req, res) => {
   try {
     const order = await Order.findById(orderId);
     if (!order) return res.status(404).json({ message: "Order not found" });
+
+    // Authorization check
+    if (order.merchantId.toString() !== req.merchantId.toString()) {
+      return res.status(403).json({ message: "Forbidden: You do not own this order" });
+    }
+
     order.orderStatus = "packed";
     order.otp = generateOTP();
     await order.save();

@@ -113,7 +113,13 @@ export const settleOrder = async (order, providedSession = null) => {
         
         return true;
     } catch (error) {
-        console.error("Order settlement failed:", error);
+        console.error(`[Settlement Error] Order ID: ${order._id} - Details:`, {
+            message: error.message,
+            stack: error.stack,
+            orderStatus: order.orderStatus,
+            merchantId: order.merchantId,
+            riderId: order.deliveryRiderId
+        });
         
         if (!providedSession) {
             await session.abortTransaction();

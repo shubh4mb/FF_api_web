@@ -42,6 +42,7 @@ const offerSchema = new mongoose.Schema({
       'CART_VALUE',
       'CATEGORY',
       'FLASH_SALE',
+      'COLLECTION',
       'VENDOR_DISCOUNT',
       'VENDOR_MIN_ORDER',
       'VENDOR_CLEARANCE',
@@ -54,6 +55,21 @@ const offerSchema = new mongoose.Schema({
     enum: ['admin', 'merchant'],
     required: true,
     index: true,
+  },
+
+  // ── Stacking Logic ──
+  benefitType: {
+    type: String,
+    enum: ['PRODUCT', 'CART', 'DELIVERY'],
+    default: 'CART', // e.g. CART_VALUE, FIRST_TIME_USER
+  },
+  stackable: {
+    type: Boolean,
+    default: true,
+  },
+  isExclusive: {
+    type: Boolean,
+    default: false,
   },
 
   // ── Ownership ──
@@ -95,6 +111,7 @@ const offerSchema = new mongoose.Schema({
     categoryIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Category' }],  // Category-Based
     subCategoryIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Category' }],
     productIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Product' }],    // Product-specific
+    collectionId: { type: mongoose.Schema.Types.ObjectId, ref: 'Collection' }, // Collection-specific
     genders: [{ type: String, enum: ['MEN', 'WOMEN', 'KIDS'] }],              // Gender targeting
     firstTimeUserOnly: { type: Boolean, default: false },  // First-Time User
     minOrderValue: { type: Number, default: 0 },           // Vendor Min Order

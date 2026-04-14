@@ -1,5 +1,5 @@
 import express from 'express';
-import { register, verifyOTP, savePersonalDetails, uploadDocuments, saveBankDetails, getRider, addPushToken } from '../controllers/deliveryRiderController/auth.controllers.js';
+import { register, verifyOTP, savePersonalDetails, uploadDocuments, saveBankDetails, getRider, addPushToken, refreshRiderToken } from '../controllers/deliveryRiderController/auth.controllers.js';
 import { authMiddlewareRider } from '../middleware/jwtAuth.js';
 import upload from '../middleware/multer.js';
 import { handleMulterError } from '../middleware/multer.js';
@@ -23,6 +23,7 @@ const router = express.Router();
 router.post('/register', register);
 router.get('/getRiderById', authMiddlewareRider, getRider);
 router.post("/auth/verify-otp", verifyOTP);
+router.post("/auth/refresh", refreshRiderToken);
 router.put("/push-token", authMiddlewareRider, addPushToken);
 router.post("/registration/personal-details", authMiddlewareRider, savePersonalDetails);
 router.post(

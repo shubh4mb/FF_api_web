@@ -263,6 +263,7 @@ export const getFilteredProducts = async (req, res) => {
       selectedColors = [],
       selectedStores = [],
       sortBy = 'newest',
+      collectionId,
     } = req.body;
 
     const pageNum = Math.max(1, parseInt(page));
@@ -388,6 +389,11 @@ export const getFilteredProducts = async (req, res) => {
       if (validSubIds.length > 0) {
         match.subCategoryId = { $in: validSubIds };
       }
+    }
+
+    /* ─── 6.5 Collection filter ─── */
+    if (collectionId && mongoose.Types.ObjectId.isValid(collectionId)) {
+      match.collectionIds = new mongoose.Types.ObjectId(collectionId);
     }
 
     /* ─── 7. Aggregation pipeline ─── */
@@ -1044,6 +1050,49 @@ export const getRelatedProducts = async (req, res) => {
     res.status(500).json({ message: '❌ ' + error.message });
   }
 };
+
+// ── Get Products by Collection ──
+export const getCollectionProductsByMerchant = async (req, res) => {
+  try {
+    const { merchantId, collectionId } = req.query;
+
+    if (!merchantId || !collectionId) {
+      return res.status(400).json({ success: false, message: 'merchantId and collectionId are required' });
+    }
+
+    const products = await Product.find({
+      merchantId,
+      collectionIds: collectionId,
+      isActive: true,
+    })
+    .select('name brandId ratings numReviews variants collectionIds')
+    .populate('brandId', 'name')
+    .lean();
+
+    const trimmed = products.map(p => {
+      const v = p.variants?.[0];
+      return {
+        _id: p._id,
+        name: p.name,
+        brandName: p.brandId?.name,
+        ratings: p.ratings,
+        numReviews: p.numReviews,
+        variantId: v?._id,
+        price: v?.price,
+        mrp: v?.mrp,
+        discount: v?.discount || 0,
+        images: v?.images,
+        color: v?.color,
+      };
+    });
+
+    res.status(200).json({ success: true, products: trimmed });
+  } catch (error) {
+    console.error('[User] Get collection products error:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+};
+
 
 
 
