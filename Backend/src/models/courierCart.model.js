@@ -43,6 +43,11 @@ const courierCartSchema = new mongoose.Schema({
     unique: true,
   },
   items: [courierCartItemSchema],
+  selectedOffers: [{
+    offerId: { type: mongoose.Schema.Types.ObjectId, ref: 'Offer' },
+    targetItemIds: [{ type: mongoose.Schema.Types.ObjectId }]
+  }],
+  couponCode: { type: String, default: null },
   updatedAt: { type: Date, default: Date.now },
 });
 

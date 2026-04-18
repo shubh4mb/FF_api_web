@@ -305,7 +305,9 @@ export const getCart = async (req, res) => {
             merchantTotals,
             totalDeliveryCharge: mDeliveryCharge,
             totalReturnCharge: mReturnCharge,
-          }
+          },
+          cart.couponCode,
+          cart.selectedOffers
         );
         if (mAppliedOffers && mAppliedOffers.freeDelivery) {
           mTotals.totalDeliveryCharge = 0;
@@ -508,14 +510,52 @@ export const moveToCourier = async (req, res) => {
     res.status(500).json({ success: false, message: "Server error" });
   }
 };
+// --- Manual Offer Selection ---
 
+export const selectOffer = async (req, res) => {
+  const userId = req.user.userId;
+  const { offerId, targetItemIds } = req.body;
 
+  if (!offerId) {
+    return res.status(400).json({ success: false, message: 'offerId is required' });
+  }
 
+  try {
+    const cart = await Cart.findOne({ userId });
+    if (!cart) return res.status(404).json({ success: false, message: 'Cart not found' });
 
+    // Ensure we don't have duplicates for the same offer
+    const exists = cart.selectedOffers.find(o => o.offerId.toString() === offerId.toString());
+    if (!exists) {
+      cart.selectedOffers.push({ offerId, targetItemIds: targetItemIds || [] });
+      await cart.save();
+    }
 
+    res.status(200).json({ success: true, message: 'Offer selected', selectedOffers: cart.selectedOffers });
+  } catch (error) {
+    console.error("Select offer error:", error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+};
 
+export const deselectOffer = async (req, res) => {
+  const userId = req.user.userId;
+  const { offerId } = req.body;
 
+  if (!offerId) {
+    return res.status(400).json({ success: false, message: 'offerId is required' });
+  }
 
+  try {
+    const cart = await Cart.findOne({ userId });
+    if (!cart) return res.status(404).json({ success: false, message: 'Cart not found' });
 
+    cart.selectedOffers = cart.selectedOffers.filter(o => o.offerId.toString() !== offerId.toString());
+    await cart.save();
 
-
+    res.status(200).json({ success: true, message: 'Offer deselected', selectedOffers: cart.selectedOffers });
+  } catch (error) {
+    console.error("Deselect offer error:", error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+};

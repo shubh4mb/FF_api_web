@@ -52,6 +52,7 @@ export const newArrivals = async (req, res) => {
         discount: v?.discount || 0,
         images: v?.images,
         color: v?.color,
+        isTriable: p.isTriable,
       };
     });
 
@@ -72,7 +73,7 @@ export const productsDetails = async (req, res) => {
       .populate('subCategoryId', 'name')
       .populate('subSubCategoryId', 'name')
       .populate('subSubCategoryId', 'name')
-      .populate({ path: 'merchantId', select: 'shopName isVerified isActive', match: { isVerified: true, isActive: true } })
+      .populate({ path: 'merchantId', select: 'shopName isVerified isActive address', match: { isVerified: true, isActive: true } })
       .lean();
 
     if (!product || !product.merchantId) {
@@ -131,6 +132,7 @@ export const trendingProducts = async (req, res) => {
         discount: v?.discount || 0,
         images: v?.images,
         color: v?.color,
+        isTriable: p.isTriable,
       };
     });
 
@@ -233,6 +235,7 @@ export const recommendedProducts = async (req, res) => {
         discount: v?.discount || 0,
         images: v?.images,
         color: v?.color,
+        isTriable: p.isTriable,
       };
     });
 
@@ -493,6 +496,7 @@ export const getFilteredProducts = async (req, res) => {
       priceHighToLow: { price: -1 },
       discount: { discount: -1 },
       rating: { ratings: -1 },
+      trending: { numReviews: -1, ratings: -1 },
       relevance: { _id: -1 },
       price_low: { price: 1 },
       price_high: { price: -1 },
@@ -545,8 +549,8 @@ export const getSearchSuggestions = async (req, res) => {
 
     const regex = new RegExp(query, 'i');
 
-    // Run 3 parallel queries for speed
-    const [productNames, brandNames, categoryNames] = await Promise.all([
+    // Run parallel queries for speed
+    const [productNames, brandNames, categoryNames, merchants] = await Promise.all([
       // Product name matches
       Product.find({ name: regex, isActive: true })
         .select('name')
@@ -566,20 +570,28 @@ export const getSearchSuggestions = async (req, res) => {
         .project({ name: 1 })
         .limit(4)
         .toArray(),
+      
+      // Merchant (Shop) matches
+      Merchant.find({ shopName: regex, isActive: true, isVerified: true })
+        .select('shopName address.city')
+        .limit(4)
+        .lean(),
     ]);
 
     const suggestions = [];
     const seen = new Set();
 
-    // Deduplicate by lowercase text
-    const addSuggestion = (text, type) => {
+    // Deduplicate by lowercase text only to avoid double entries for the same name across types
+    const addSuggestion = (text, type, id = null, city = null) => {
       const key = text.toLowerCase();
       if (!seen.has(key)) {
         seen.add(key);
-        suggestions.push({ text, type });
+        suggestions.push({ text, type, id, city });
       }
     };
 
+    // Prioritize merchants first so they "win" if a product/brand has the same name
+    merchants.forEach(m => addSuggestion(m.shopName, 'merchant', m._id, m.address?.city));
     productNames.forEach(p => addSuggestion(p.name, 'product'));
     brandNames.forEach(b => addSuggestion(b.name, 'brand'));
     categoryNames.forEach(c => addSuggestion(c.name, 'category'));
@@ -636,6 +648,7 @@ export const getProductsByMerchantId = async (req, res) => {
         ratings: product.ratings,
         numReviews: product.numReviews,
         discount: mainVariant.discount || 0,
+        isTriable: product.isTriable,
         isMainVariant: true
       };
     }).filter(Boolean);
@@ -806,7 +819,8 @@ export const getProductsBatch = async (req, res) => {
           price: { $arrayElemAt: ['$products.variants.price', 0] },
           mrp: { $arrayElemAt: ['$products.variants.mrp', 0] },
           discount: { $arrayElemAt: ['$products.variants.discount', 0] },
-          images: { $arrayElemAt: ['$products.variants.images', 0] }
+          images: { $arrayElemAt: ['$products.variants.images', 0] },
+          isTriable: '$products.isTriable'
         }
       },
       // Populate category and brand names

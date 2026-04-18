@@ -1,5 +1,6 @@
 import CourierCart from "../../models/courierCart.model.js";
 import Product from "../../models/product.model.js";
+import { findBestOffers } from '../../services/offerEngine.js';
 
 /**
  * Add item to Courier Cart
@@ -102,12 +103,38 @@ export const getCourierCart = async (req, res) => {
     });
 
     const courierDeliveryCharge = 40; // flat rate
+
+    let mAppliedOffers = { appliedOffers: [], availableOffers: [], totalDiscount: 0, freeDelivery: false };
+    try {
+      const merchantTotals = {};
+      itemsWithDetails.forEach(item => {
+        const mKey = item.merchantId?._id?.toString() || item.merchantId?.toString();
+        if(mKey) merchantTotals[mKey] = (merchantTotals[mKey] || 0) + (item.price * item.quantity);
+      });
+      mAppliedOffers = await findBestOffers(
+        userId,
+        {
+          items: itemsWithDetails,
+          subtotal,
+          merchantTotals,
+          totalDeliveryCharge: courierDeliveryCharge,
+          totalReturnCharge: 0,
+        },
+        cart.couponCode,
+        cart.selectedOffers
+      );
+    } catch (e) {
+      console.error('Offer engine error in courier cart:', e.message);
+    }
+
+    const finalDeliveryCharge = mAppliedOffers.freeDelivery ? 0 : courierDeliveryCharge;
+
     const totals = {
       subtotal,
       mrpTotal,
-      discount: mrpTotal - subtotal,
-      courierDeliveryCharge,
-      totalPayable: subtotal + courierDeliveryCharge,
+      discount: (mrpTotal - subtotal) + (mAppliedOffers.totalDiscount || 0),
+      courierDeliveryCharge: finalDeliveryCharge,
+      totalPayable: subtotal - (mAppliedOffers.totalDiscount || 0) + finalDeliveryCharge,
     };
 
     res.status(200).json({
@@ -115,6 +142,7 @@ export const getCourierCart = async (req, res) => {
       totalItems: itemsWithDetails.length,
       items: itemsWithDetails,
       totals,
+      appliedOffers: mAppliedOffers,
     });
   } catch (err) {
     console.error("Get courier cart error:", err);
@@ -227,5 +255,54 @@ export const getCourierCartCount = async (req, res) => {
   } catch (err) {
     console.error("Get courier cart count error:", err.message);
     res.status(500).json({ message: "Server error" });
+  }
+};
+
+// --- Manual Offer Selection ---
+
+export const selectOfferCourier = async (req, res) => {
+  const userId = req.user.userId;
+  const { offerId, targetItemIds } = req.body;
+
+  if (!offerId) {
+    return res.status(400).json({ success: false, message: 'offerId is required' });
+  }
+
+  try {
+    const cart = await CourierCart.findOne({ userId });
+    if (!cart) return res.status(404).json({ success: false, message: 'Cart not found' });
+
+    const exists = cart.selectedOffers.find(o => o.offerId.toString() === offerId.toString());
+    if (!exists) {
+      cart.selectedOffers.push({ offerId, targetItemIds: targetItemIds || [] });
+      await cart.save();
+    }
+
+    res.status(200).json({ success: true, message: 'Offer selected', selectedOffers: cart.selectedOffers });
+  } catch (error) {
+    console.error("Select offer error:", error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+};
+
+export const deselectOfferCourier = async (req, res) => {
+  const userId = req.user.userId;
+  const { offerId } = req.body;
+
+  if (!offerId) {
+    return res.status(400).json({ success: false, message: 'offerId is required' });
+  }
+
+  try {
+    const cart = await CourierCart.findOne({ userId });
+    if (!cart) return res.status(404).json({ success: false, message: 'Cart not found' });
+
+    cart.selectedOffers = cart.selectedOffers.filter(o => o.offerId.toString() !== offerId.toString());
+    await cart.save();
+
+    res.status(200).json({ success: true, message: 'Offer deselected', selectedOffers: cart.selectedOffers });
+  } catch (error) {
+    console.error("Deselect offer error:", error);
+    res.status(500).json({ success: false, message: 'Server error' });
   }
 };

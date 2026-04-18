@@ -228,9 +228,9 @@ export const getApplicableAmount = (offer, cartContext) => {
 };
 
 // ────────────────────────────────────────
-// Find best offers (one admin + one merchant)
+// Calculate offers for cart based on selected offers
 // ────────────────────────────────────────
-export const findBestOffers = async (userId, cartContext, couponCode = null) => {
+export const findBestOffers = async (userId, cartContext, couponCode = null, selectedOffers = []) => {
   const now = new Date();
   const log = (msg) => {
     console.log(`[OFFER_DEBUG] ${msg}`);
@@ -286,71 +286,31 @@ export const findBestOffers = async (userId, cartContext, couponCode = null) => 
     validOffers.push(processedOffer);
   }
 
-  // Evaluate the three scenarios:
-  // A. The best 'isExclusive' offer
-  // B. The best 'stackable: false' offer
-  // C. The best combination of 'stackable: true' offers (max 1 per benefitType)
-
-  const bestExclusive = validOffers
-    .filter(o => o.isExclusive)
-    .sort((a, b) => b.totalValue - a.totalValue)[0];
-
-  const bestNonStackable = validOffers
-    .filter(o => !o.stackable && !o.isExclusive)
-    .sort((a, b) => b.totalValue - a.totalValue)[0];
-
-  const stackableSubset = validOffers.filter(o => o.stackable !== false && !o.isExclusive);
-  const bestStackableByType = { PRODUCT: null, CART: null, DELIVERY: null };
-  
-  for (const offer of stackableSubset) {
-    const type = offer.benefitType || 'CART';
-    if (!bestStackableByType[type] || offer.totalValue > bestStackableByType[type].totalValue) {
-      bestStackableByType[type] = offer;
-    }
-  }
-
-  // Force explicit coupon into the mix to respect user interaction
-  if (explicitCoupon) {
-    if (explicitCoupon.isExclusive || explicitCoupon.stackable === false) {
-      // It will override everything
-    } else {
-      const type = explicitCoupon.benefitType || 'CART';
-      bestStackableByType[type] = explicitCoupon;
-    }
-  }
-
-  const stackedCombination = Object.values(bestStackableByType).filter(Boolean);
-  const stackedValue = stackedCombination.reduce((sum, o) => sum + o.totalValue, 0);
-
+  // --- NEW LOGIC: Manual Selection ---
+  // We no longer auto-apply the "best" stack. We only apply what the user selected.
   let winningOffers = [];
-  let maxVal = 0;
+  let availableOffers = [...validOffers]; // Return all that are eligible
 
-  if (bestExclusive && bestExclusive.totalValue > maxVal) {
-    maxVal = bestExclusive.totalValue;
-    winningOffers = [bestExclusive];
-  }
+  const selectedOfferIdsStr = selectedOffers.map(so => {
+    if (typeof so === 'string') return so;
+    return so.offerId?.toString() || so._id?.toString();
+  });
 
-  if (bestNonStackable && bestNonStackable.totalValue > maxVal) {
-    maxVal = bestNonStackable.totalValue;
-    winningOffers = [bestNonStackable];
-  }
-
-  if (stackedValue >= maxVal && stackedCombination.length > 0) {
-    maxVal = stackedValue;
-    winningOffers = stackedCombination;
-  }
-
-  // User input absolute override
-  if (explicitCoupon) {
-    if (explicitCoupon.isExclusive || explicitCoupon.stackable === false) {
-      winningOffers = [explicitCoupon];
-    } else {
-      winningOffers = stackedCombination;
+  // Filter valid offers by what the user explicitly selected
+  for (const offer of validOffers) {
+    if (selectedOfferIdsStr.includes(offer._id.toString())) {
+      winningOffers.push(offer);
     }
+  }
+
+  // Always apply explicit coupon if valid
+  if (explicitCoupon && !winningOffers.find(o => o._id.toString() === explicitCoupon._id.toString())) {
+    winningOffers.push(explicitCoupon);
   }
 
   const finalResult = {
     appliedOffers: winningOffers,
+    availableOffers: availableOffers,
     totalDiscount: winningOffers.reduce((sum, o) => sum + o.discountAmount, 0),
     freeDelivery: winningOffers.some(o => o.freeDelivery),
   };

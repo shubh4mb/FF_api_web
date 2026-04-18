@@ -2,8 +2,8 @@ import express from 'express';
 import { googleLogin, signup } from '../controllers/userControllers/authControllers.js';
 import { newArrivals, productsDetails, getFilteredProducts, getRelatedProducts, getSearchSuggestions, getProductsByMerchantId, getYouMayLikeProducts, getProductsBatch, trendingProducts, recommendedProducts, getCourierProducts, getCollectionProductsByMerchant } from '../controllers/userControllers/product.controllers.js';
 import { phoneLogin, addPushToken } from '../controllers/userControllers/authControllers.js';
-import { addToCart, getCart, clearCart, updateCartQuantity, deleteCartItem, getCartCount, moveToCourier } from '../controllers/userControllers/cart.controllers.js';
-import { addToCourierCart, getCourierCart, clearCourierCart, updateCourierCartQuantity, deleteCourierCartItem, getCourierCartCount } from '../controllers/userControllers/courierCart.controllers.js';
+import { addToCart, getCart, clearCart, updateCartQuantity, deleteCartItem, getCartCount, moveToCourier, selectOffer, deselectOffer } from '../controllers/userControllers/cart.controllers.js';
+import { addToCourierCart, getCourierCart, clearCourierCart, updateCourierCartQuantity, deleteCourierCartItem, getCourierCartCount, selectOfferCourier, deselectOfferCourier } from '../controllers/userControllers/courierCart.controllers.js';
 import { authMiddleware } from '../middleware/jwtAuth.js';
 import { getAllOrders, initiateReturn, getOrderById, createRazorpayOrder, verifyPayment, razorpayWebhook, createFinalPaymentRazorpayOrder, verifyFinalPayment, cancelOrder } from '../controllers/userControllers/order.controllers.js';
 import { body } from 'express-validator'
@@ -333,6 +333,9 @@ router.put('/cart/updatequantity', authMiddleware, updateCartQuantity);
 router.delete('/cart/clear', authMiddleware, clearCart)
 router.post('/cart/move-to-courier', authMiddleware, moveToCourier);
 router.delete('/cart/delete/:itemId', deleteCartItem);
+router.post('/cart/offers/select', authMiddleware, selectOffer);
+router.post('/cart/offers/deselect', authMiddleware, deselectOffer);
+
 
 /**
  * @swagger
@@ -450,5 +453,7 @@ router.get('/courier-cart/count', authMiddleware, getCourierCartCount);
 router.put('/courier-cart/updatequantity', authMiddleware, updateCourierCartQuantity);
 router.delete('/courier-cart/clear', authMiddleware, clearCourierCart);
 router.delete('/courier-cart/delete/:itemId', authMiddleware, deleteCourierCartItem);
+router.post('/courier-cart/offers/select', authMiddleware, selectOfferCourier);
+router.post('/courier-cart/offers/deselect', authMiddleware, deselectOfferCourier);
 
 export default router;

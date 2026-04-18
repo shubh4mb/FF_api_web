@@ -29,7 +29,7 @@ export const getNearbyMerchants = async (req, res) => {
     }
 
     const merchants = await Merchant.find(filter)
-      .select('shopName logo genderCategory shipsWithinHours isOnline zoneId isZoneLive')
+      .select('shopName logo genderCategory shipsWithinHours isOnline zoneId isZoneLive address')
       .lean();
 
     const nearbySet = new Set(req.nearbyMerchantIds?.map(id => id.toString()) || []);
