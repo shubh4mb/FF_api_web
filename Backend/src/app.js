@@ -47,11 +47,7 @@ app.use('/api/', apiLimiter);
 
 // ---- CORS ----
 app.use(cors({
-  origin: function (origin, callback) {
-    if (!origin) return callback(null, true);
-    if (allowedOrigins.includes(origin)) return callback(null, true);
-    return callback(new Error("Blocked by CORS"));
-  },
+  origin: allowedOrigins,
   credentials: true,
   methods: "GET,POST,PUT,PATCH,DELETE,OPTIONS",
   allowedHeaders: "Content-Type,Authorization,ngrok-skip-browser-warning"

@@ -28,6 +28,7 @@ import AttributeManagement from '../pages/admin/AttributeManagement';
 import Hubs from '../pages/admin/Hubs';
 import OffersManagement from '../pages/admin/OffersManagement';
 import CollectionManagement from '../pages/admin/CollectionManagement';
+import Zones from '../pages/admin/Zones';
 
 const AppRoutes = () => {
   return (
@@ -54,6 +55,7 @@ const AppRoutes = () => {
             <Route path="variants/:productId" element={<Variants />} />
             <Route path="add-title-banner" element={<Title_Banner />} />
             <Route path="merchants/:merchantId" element={<EditMerchant />} />
+            <Route path="zones" element={<Zones />} />
             <Route path="create-zone" element={<CreateZone />} />
             <Route path="banners" element={<BannersPage />} />
             <Route path="attributes" element={<AttributeManagement />} />

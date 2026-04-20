@@ -147,6 +147,19 @@ function Sidebar() {
             </li>
             <li>
               <NavLink
+                to="/admin/zones"
+                className={({ isActive }) =>
+                  `block px-4 py-2 rounded-lg transition-colors ${isActive
+                    ? 'bg-sky-400 text-slate-800 font-semibold'
+                    : 'hover:bg-sky-700 hover:text-sky-400'
+                  }`
+                }
+              >
+                Zones
+              </NavLink>
+            </li>
+            <li>
+              <NavLink
                 to="/admin/offers"
                 className={({ isActive }) =>
                   `block px-4 py-2 rounded-lg transition-colors ${isActive

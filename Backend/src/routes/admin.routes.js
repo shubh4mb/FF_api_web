@@ -6,7 +6,7 @@ import upload, { handleMulterError } from '../middleware/multer.js';
 import { getBaseProducts, getVariants, getBaseProductById, addVariant, getProductsByMerchantId, updateMatchingProducts } from '../controllers/adminControllers/product.controllers.js';
 import { addTitleBanner } from '../controllers/adminControllers/titleBanner.controllers.js';
 import { addCart, getCart } from '../controllers/adminControllers/cart.controllers.js';
-import { addZone, getAllZones, checkZoneOverlap } from '../controllers/adminControllers/zone.controllers.js';
+import { addZone, getAllZones, checkZoneOverlap, updateZone, deleteZone } from '../controllers/adminControllers/zone.controllers.js';
 import { getAppConfig, updateAppConfig } from '../controllers/adminControllers/appConfig.controllers.js';
 import { verifyAdmin } from '../middleware/adminAuth.middleware.js';
 import adminBannerRoutes from './adminBanner.routes.js';
@@ -74,6 +74,8 @@ router.get('/cart', verifyAdmin, getCart);
 router.post('/zone/add', verifyAdmin, addZone);
 router.get('/zone', verifyAdmin, getAllZones);
 router.post('/zone/check-overlap', verifyAdmin, checkZoneOverlap);
+router.put('/zone/:id', verifyAdmin, updateZone);
+router.delete('/zone/:id', verifyAdmin, deleteZone);
 
 // ── App Config ──
 router.get('/config', verifyAdmin, getAppConfig);

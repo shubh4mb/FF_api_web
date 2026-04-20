@@ -28,7 +28,7 @@ useEffect(() => {
     const loadZones = async () => {
       // const res = await fetch('http://localhost:5000/api/zones');
       const data = await getZones();
-      setExistingZones(data.data || []);
+      setExistingZones(data.zones || []);
     };
     loadZones();
   }, []);
@@ -94,7 +94,7 @@ console.log(res);
           city,
         state,
         zoneName,
-      centerCoordinaties: {
+      centerCoordinates: {
         type: 'Point',
         coordinates: [center[1], center[0]],
       },

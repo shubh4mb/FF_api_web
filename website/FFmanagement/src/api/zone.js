@@ -38,13 +38,23 @@ export const getZones = async () => {
     }
 };
 
-// export const deleteZone = async (id) => {
-//     try {
-//         const response = await axiosInstance.delete(`/admin/zone/${id}`);
-//         return response.data;
-//     } catch (error) {
-//         console.error("Error deleting zone:", error);
-//         throw error;
-//     }
-// };
+export const updateZone = async (id, formData) => {
+    try {
+        const response = await axiosInstance.put(`/admin/zone/${id}`, formData);
+        return response.data;
+    } catch (error) {
+        console.error("Error updating zone:", error);
+        throw error;
+    }
+};
+
+export const deleteZone = async (id) => {
+    try {
+        const response = await axiosInstance.delete(`/admin/zone/${id}`);
+        return response.data;
+    } catch (error) {
+        console.error("Error deleting zone:", error);
+        throw error;
+    }
+};
 
