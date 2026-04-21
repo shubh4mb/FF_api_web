@@ -1,40 +1,30 @@
-// ----------------------------
-// Haversine Distance Calculator
-// ----------------------------
-function calculateDistanceKm(lat1, lon1, lat2, lon2) {
-  const R = 6371; // earth radius (km)
-  const dLat = (lat2 - lat1) * Math.PI / 180;
-  const dLon = (lon2 - lon1) * Math.PI / 180;
+import { getRoadDistance } from './orsHelper.js';
+import { haversineDistance } from './geoHelpers.js';
 
-  const a =
-    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos(lat1 * Math.PI / 180) *
-    Math.cos(lat2 * Math.PI / 180) *
-    Math.sin(dLon / 2) *
-    Math.sin(dLon / 2);
-
-  return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
-}
-
-// ----------------------------
-// DELIVERY CHARGE HELPER
-// ----------------------------
-// Formula:
-// One-way → ₹15/km
-// Return  → ₹7.5/km
-// Waiting → ₹10 fixed
-// total = distance * 22.5 + 10
-// ----------------------------
-
-export function calculateDeliveryCharge({
+/**
+ * DELIVERY CHARGE HELPER
+ * 
+ * Logic:
+ * 1. Displacement (Haversine) is used for serviceability range checks (e.g., 7km threshold).
+ * 2. Road Distance (ORS) is used for actual pricing and rider info.
+ */
+export async function calculateDeliveryCharge({
   userCoords,
   merchantCoords,
   deliveryPerKmRate = 12,
   returnPerKmRate = 7,
-  waitingCharge = 10
+  waitingCharge = 10,
+  maxServiceableRadius = 15 // Absolute hard limit for ORS calls
 }) {
   if (!userCoords?.length || !merchantCoords?.length) {
-    return { distanceKm: 0, deliveryCharge: 0, returnCharge: 0, estimatedTime: 0 };
+    return { 
+      displacementKm: 0,
+      roadDistanceKm: 0, 
+      deliveryCharge: 0, 
+      returnCharge: 0, 
+      estimatedTime: 0, 
+      calculationMethod: "none" 
+    };
   }
 
   const userLat = userCoords[1];
@@ -42,28 +32,50 @@ export function calculateDeliveryCharge({
   const shopLat = merchantCoords[1];
   const shopLng = merchantCoords[0];
 
-  // Distance Calculation
-  const distanceKm = calculateDistanceKm(userLat, userLng, shopLat, shopLng);
-  const roundedDistance = Number(distanceKm.toFixed(2));
+  // 1. 🛩️ Calculate Displacement (Haversine) — FREE and used for range check
+  const displacementKm = Number(haversineDistance(userLat, userLng, shopLat, shopLng).toFixed(2));
 
-  // Charge Calculation using config
-  const dCharge = roundedDistance * deliveryPerKmRate + waitingCharge;
+  // 2. 🛣️ Try road distance with ORS (only if within a reasonable delivery range)
+  let roadDistanceKm = null;
+  let calculationMethod = "road";
+  let roadDurationMins = null;
+
+  if (displacementKm <= maxServiceableRadius) {
+    const roadResult = await getRoadDistance(userCoords, merchantCoords);
+    roadDistanceKm = roadResult?.distanceKm ?? null;
+    roadDurationMins = roadResult?.durationMins ?? null;
+  }
+
+  // 3. 🛩️ Fallback to Haversine for pricing if ORS is skipped, fails, or returns no route
+  if (roadDistanceKm === null) {
+     roadDistanceKm = displacementKm;
+     calculationMethod = "haversine (fallback)";
+  }
+
+  const finalizedRoadDistance = Number(roadDistanceKm.toFixed(2));
+
+  // Charge Calculation (using Road Distance)
+  const dCharge = finalizedRoadDistance * deliveryPerKmRate + waitingCharge;
   const deliveryCharge = Math.ceil(dCharge);
 
-  const rCharge = roundedDistance * returnPerKmRate;
+  const rCharge = finalizedRoadDistance * returnPerKmRate;
   const returnCharge = Math.ceil(rCharge);
 
-  // Estimated Time Calculation (minutes)
-  // Rider to pickup: 15 mins base + 3 mins per km
-  // Pickup to delivery: 20 mins base + 4 mins per km
+  // Estimated Time Calculation
   const riderToPickupTime = 15;
-  const pickupToDeliveryTime = Math.ceil(20 + (roundedDistance * 4));
-  const estimatedTime = riderToPickupTime + pickupToDeliveryTime;
+  const deliveryLegTime = roadDurationMins 
+    ? roadDurationMins 
+    : Math.ceil(20 + (finalizedRoadDistance * 4));
+    
+  const estimatedTime = riderToPickupTime + deliveryLegTime;
 
   return {
-    distanceKm: roundedDistance,
+    displacementKm,      // Use this for "is within 7km"
+    roadDistanceKm: finalizedRoadDistance, // Use this for pricing
     deliveryCharge,
     returnCharge,
-    estimatedTime
+    estimatedTime,
+    calculationMethod
   };
 }
+

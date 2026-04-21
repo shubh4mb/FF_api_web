@@ -87,7 +87,7 @@ export const createRazorpayOrder = async (req, res) => {
     const config = await AppConfig.getConfig();
 
     // === DELIVERY CHARGE USING HELPER ===
-    let { distanceKm, deliveryCharge, returnCharge, estimatedTime } = calculateDeliveryCharge({
+    let { roadDistanceKm, deliveryCharge, returnCharge, estimatedTime } = await calculateDeliveryCharge({
       userCoords,
       merchantCoords,
       deliveryPerKmRate: config.deliveryPerKmRate,
@@ -210,7 +210,7 @@ export const createRazorpayOrder = async (req, res) => {
       discount: offerDiscount,
       deliveryCharge,
       totalPayable: finalPayable,
-      deliveryDistance: distanceKm,
+      deliveryDistance: roadDistanceKm,
       returnCharge,
       estimatedTime,
       appliedOffers,
@@ -579,7 +579,7 @@ export const getOrderForMerchant = async (req, res) => {
 export const getOrderForDeliveryBoy = async (req, res) => {
   const { deliveryBoyId } = req.params;
   const orders = await Order.find({ deliveryBoyId })
-    .select('orderStatus items totalAmount deliveryRiderStatus deliveryLocation pickupLocation createdAt')
+    .select('orderStatus items totalAmount deliveryRiderStatus deliveryLocation pickupLocation createdAt deliveryDistance')
     .sort({ createdAt: -1 })
     .lean();
   return res.status(200).json({ orders });

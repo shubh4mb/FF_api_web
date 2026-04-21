@@ -4,6 +4,7 @@ import { getIO } from "../config/socket.js";
 import Order from "../models/order.model.js";
 import { startRiderTimeout } from "./riderTimeoutHelper.js";
 import { notifyOrderEvent } from "./notificationHelper.js";
+import { getRoadDistance } from "./orsHelper.js";
 
 // GEOADD wrapper – UPDATED for zone
 async function geoAdd(zoneId = 'global', lng, lat, member) {  // NEW: zoneId param, default 'global'
@@ -143,6 +144,24 @@ async function assignNearestRider(zoneId = 'global', pickupLocation, orderId, or
         console.log(fullOrder, orderId, "fullOrder");
 
         if (fullOrder) {
+          // 🛣️ NEW: Calculate road distance from rider's current location to the merchant
+          let riderToShopKm = null;
+          let riderToShopMins = null;
+          try {
+            const pos = await redis.geoPos(`riders:geo:${zoneId}`, riderId);
+            if (pos && pos[0]) {
+              const riderCoords = [parseFloat(pos[0].longitude), parseFloat(pos[0].latitude)];
+              const merchantCoords = fullOrder.pickupLocation.coordinates;
+              const road = await getRoadDistance(riderCoords, merchantCoords);
+              if (road) {
+                riderToShopKm = road.distanceKm;
+                riderToShopMins = road.durationMins;
+              }
+            }
+          } catch (err) {
+            console.error("Failed to calculate rider-to-shop road distance:", err.message);
+          }
+
           // This matches EXACTLY what your frontend expects
           const riderPayload = {
             _id: fullOrder._id,
@@ -162,6 +181,11 @@ async function assignNearestRider(zoneId = 'global', pickupLocation, orderId, or
               }
               : null,
             cutomerAddress: fullOrder.deliveryLocation?.addressLine1 || "No address",
+            // 🆕 New road distance fields
+            deliveryDistance: fullOrder.deliveryDistance || 0,
+            estimatedTimeToCustomer: fullOrder.estimatedTime || 0,
+            riderToShopKm: riderToShopKm ? Number(riderToShopKm.toFixed(2)) : null,
+            riderToShopMins: riderToShopMins,
           };
 
           const io = getIO();

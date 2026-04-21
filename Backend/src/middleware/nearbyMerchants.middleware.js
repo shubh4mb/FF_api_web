@@ -60,7 +60,7 @@ export const resolveNearbyMerchants = async (req, res, next) => {
     const tryAndBuyRadius = config.tryAndBuyRadius || 7;
 
     // 2. Compute geohash cache key
-    const geoHash = encodeGeohash(lat, lng, 6);
+    const geoHash = encodeGeohash(lat, lng, 7);
     const cacheKey = `tb:merchants:${geoHash}`;
 
     // 2. Check Redis cache
