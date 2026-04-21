@@ -263,18 +263,18 @@ router.get('/products/getYouMayLikeProducts', resolveNearbyMerchants, getYouMayL
  *       200:
  *         description: Product details
  */
-router.get('/products/:id', productsDetails)
+router.get('/products/:id', resolveNearbyMerchants, productsDetails)
 router.get('/products/:id/related', resolveNearbyMerchants, getRelatedProducts)
-router.get('/products/merchant/:merchantId', getProductsByMerchantId)
-router.get('/products/collection', getCollectionProductsByMerchant);
+router.get('/products/merchant/:merchantId', resolveNearbyMerchants, getProductsByMerchantId)
+router.get('/products/collection', resolveNearbyMerchants, getCollectionProductsByMerchant);
 router.get('/collections/home', resolveNearbyMerchants, getCollectionsForHome);
-router.get('/merchants/nearby', resolveNearbyMerchants, getNearbyMerchants)
 router.post(
   '/products/batch',
   [
     body('merchantIds').isArray({ min: 1 }).withMessage('merchantIds must be a non-empty array'),
     body('merchantIds.*').isString().withMessage('Each merchantId must be a string')
   ],
+  resolveNearbyMerchants,
   getProductsBatch
 );
 

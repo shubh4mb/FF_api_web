@@ -1,6 +1,6 @@
 /**
- * Middleware: Resolve nearby T&B merchants within 7km.
- * Uses Redis geohash-based caching (precision 5 ≈ 4.9km cells, TTL 15 min).
+ * Middleware: Resolve nearby T&B merchants within dynamic radius.
+ * Uses Redis geohash-based caching (precision 7 ≈ 150m cells, TTL 15 min).
  *
  * Attaches `req.nearbyMerchantIds` (array of ObjectIds) or null (no filtering).
  */
@@ -57,7 +57,7 @@ export const resolveNearbyMerchants = async (req, res, next) => {
 
     // 1. Fetch configurable radius
     const config = await AppConfig.getConfig();
-    const tryAndBuyRadius = config.tryAndBuyRadius || 7;
+    const tryAndBuyRadius = config.tryAndBuyRadius;
 
     // 2. Compute geohash cache key
     const geoHash = encodeGeohash(lat, lng, 7);

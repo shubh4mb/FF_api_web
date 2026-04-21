@@ -8,7 +8,7 @@ import AddCategory from '../pages/admin/AddCategory';
 import Category from '../pages/admin/Category';
 import AddProducts from '../pages/admin/AddProducts';
 import MerchantDashboard from '../pages/merchant/MerchantDashboard';
-import AddProduct from '../pages/merchant/AddProduct'; ``
+import AddProduct from '../pages/merchant/AddProduct';
 import NotFound from '../pages/NotFound';
 import AddMerchants from '../pages/admin/AddMerchants';
 import AddBrand from '../pages/admin/AddBrand';
@@ -34,6 +34,7 @@ const AppRoutes = () => {
   return (
     <Router>
       <Routes>
+        <Route path="/" element={<Navigate to="/admin" replace />} />
         {/* Admin Public Routes */}
         <Route path="/admin/login" element={<AdminLogin />} />
         <Route path="/admin/register" element={<AdminRegister />} />

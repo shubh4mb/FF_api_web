@@ -205,7 +205,7 @@ export const getCart = async (req, res) => {
             returnPerKmRate: config.returnPerKmRate,
             waitingCharge: config.waitingCharge
           });
-          const TRY_BUY_RADIUS = config.deliveryRadius || 7;
+          const TRY_BUY_RADIUS = config.tryAndBuyRadius;
           const isEligibleForTryBuy = displacementKm <= TRY_BUY_RADIUS;
           deliveryInfo = {
             merchantId: merchant._id,

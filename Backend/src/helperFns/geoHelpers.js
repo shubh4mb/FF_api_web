@@ -4,8 +4,6 @@
  */
 
 const EARTH_RADIUS_KM = 6371;
-const DEFAULT_TB_RADIUS_KM = 7;
-
 /**
  * Convert degrees to radians
  */
@@ -15,11 +13,6 @@ function toRad(deg) {
 
 /**
  * Calculate distance between two points using Haversine formula.
- * @param {number} lat1
- * @param {number} lon1
- * @param {number} lat2
- * @param {number} lon2
- * @returns {number} Distance in km
  */
 export function haversineDistance(lat1, lon1, lat2, lon2) {
   const dLat = toRad(lat2 - lat1);
@@ -32,14 +25,15 @@ export function haversineDistance(lat1, lon1, lat2, lon2) {
 }
 
 /**
- * Check if user is within the T&B radius of a merchant.
+ * Check if user is within a specific radius of a merchant.
  * @param {{ latitude: number, longitude: number } | [number, number]} userCoords
  *   Object with lat/lng OR MongoDB-style [lng, lat] array
  * @param {{ latitude: number, longitude: number } | [number, number]} merchantCoords
- * @param {number} radiusKm - default 7
+ * @param {number} radiusKm - radius in km
  * @returns {boolean}
  */
-export function isWithinTBRadius(userCoords, merchantCoords, radiusKm = DEFAULT_TB_RADIUS_KM) {
+export function isWithinTBRadius(userCoords, merchantCoords, radiusKm) {
+  if (radiusKm == null) throw new Error("radiusKm is required for isWithinTBRadius");
   const [uLat, uLon] = normalizeCoords(userCoords);
   const [mLat, mLon] = normalizeCoords(merchantCoords);
   const dist = haversineDistance(uLat, uLon, mLat, mLon);
@@ -47,14 +41,14 @@ export function isWithinTBRadius(userCoords, merchantCoords, radiusKm = DEFAULT_
 }
 
 /**
- * Filter an array of merchants to only those within T&B radius.
- * Each merchant must have `address.location.coordinates` or `address.latitude/longitude`.
+ * Filter an array of merchants to only those within a specific radius.
  * @param {Array} merchants
  * @param {{ latitude: number, longitude: number } | [number, number]} userCoords
  * @param {number} radiusKm
  * @returns {Array} Merchants with added `_distance` field (km)
  */
-export function filterMerchantsByDistance(merchants, userCoords, radiusKm = DEFAULT_TB_RADIUS_KM) {
+export function filterMerchantsByDistance(merchants, userCoords, radiusKm) {
+  if (radiusKm == null) throw new Error("radiusKm is required for filterMerchantsByDistance");
   const [uLat, uLon] = normalizeCoords(userCoords);
 
   return merchants

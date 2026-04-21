@@ -5,6 +5,21 @@ import Merchant from '../../models/merchant.model.js';
 import mongoose from 'mongoose';
 import { body, validationResult } from 'express-validator'
 
+/**
+ * Helper to check if a product is instant buyable (within T&B radius and merchant active/online).
+ */
+const calculateIsInstantBuyable = (productId, merchantId, nearbyMerchantIds, merchantStatus = {}) => {
+  const nearbySet = new Set(nearbyMerchantIds?.map(id => id.toString()) || []);
+  const isNearby = nearbySet.has(merchantId?.toString());
+  
+  // If merchantStatus is provided (e.g. from populate), use it. 
+  // Otherwise, if nearby, we assume it's true (since resolveNearbyMerchants already filters by status).
+  const isOnline = merchantStatus.isOnline !== undefined ? merchantStatus.isOnline : true;
+  const isZoneLive = merchantStatus.isZoneLive !== undefined ? merchantStatus.isZoneLive : true;
+  
+  return isNearby && isOnline && isZoneLive;
+};
+
 export const newArrivals = async (req, res) => {
   try {
     const { gender } = req.query;
@@ -36,6 +51,8 @@ export const newArrivals = async (req, res) => {
       .select('name merchantId brandId ratings numReviews variants')
       .lean();
 
+    const nearbySet = new Set(req.nearbyMerchantIds?.map(id => id.toString()) || []);
+
     // Return only first variant card-level data
     const trimmed = products.map(p => {
       const v = p.variants?.[0];
@@ -53,6 +70,7 @@ export const newArrivals = async (req, res) => {
         images: v?.images,
         color: v?.color,
         isTriable: p.isTriable,
+        isInstantBuyable: calculateIsInstantBuyable(p._id, p.merchantId, req.nearbyMerchantIds)
       };
     });
 
@@ -72,15 +90,23 @@ export const productsDetails = async (req, res) => {
       .populate('categoryId', 'name')
       .populate('subCategoryId', 'name')
       .populate('subSubCategoryId', 'name')
-      .populate('subSubCategoryId', 'name')
-      .populate({ path: 'merchantId', select: 'shopName isVerified isActive address', match: { isVerified: true, isActive: true } })
+      .populate({ 
+        path: 'merchantId', 
+        select: 'shopName isVerified isActive address isOnline isZoneLive', 
+        match: { isVerified: true, isActive: true } 
+      })
       .lean();
 
     if (!product || !product.merchantId) {
       return res.status(404).json({ message: 'Product from unverified or inactive shop' });
     }
 
-    res.status(200).json(product);
+    const isInstantBuyable = calculateIsInstantBuyable(product._id, product.merchantId._id, req.nearbyMerchantIds, {
+      isOnline: product.merchantId.isOnline,
+      isZoneLive: product.merchantId.isZoneLive
+    });
+
+    res.status(200).json({ ...product, isInstantBuyable });
   } catch (error) {
     console.error('Error in productsDetails:', error.message);
     res.status(500).json({ message: '❌ ' + error.message });
@@ -133,6 +159,7 @@ export const trendingProducts = async (req, res) => {
         images: v?.images,
         color: v?.color,
         isTriable: p.isTriable,
+        isInstantBuyable: calculateIsInstantBuyable(p._id, p.merchantId, req.nearbyMerchantIds)
       };
     });
 
@@ -236,6 +263,7 @@ export const recommendedProducts = async (req, res) => {
         images: v?.images,
         color: v?.color,
         isTriable: p.isTriable,
+        isInstantBuyable: calculateIsInstantBuyable(p._id, p.merchantId, req.nearbyMerchantIds)
       };
     });
 
@@ -525,7 +553,12 @@ export const getFilteredProducts = async (req, res) => {
     const totalCount = result?.countResult?.[0]?.totalCount || 0;
     const totalPages = Math.ceil(totalCount / limitNum);
 
-    res.json({ products, totalCount, page: pageNum, totalPages });
+    const enrichedProducts = products.map(p => ({
+      ...p,
+      isInstantBuyable: calculateIsInstantBuyable(p._id, p.merchantId, req.nearbyMerchantIds)
+    }));
+
+    res.json({ products: enrichedProducts, totalCount, page: pageNum, totalPages });
   } catch (err) {
     console.error('Error in getFilteredProducts:', err);
     res.status(500).json({ error: 'Server error' });
@@ -649,7 +682,10 @@ export const getProductsByMerchantId = async (req, res) => {
         numReviews: product.numReviews,
         discount: mainVariant.discount || 0,
         isTriable: product.isTriable,
-        isMainVariant: true
+        isMainVariant: true,
+        isInstantBuyable: req.nearbyMerchantIds?.some(id => id.toString() === merchantId.toString()) && 
+                          merchant.isOnline && 
+                          merchant.isZoneLive
       };
     }).filter(Boolean);
 
@@ -875,9 +911,12 @@ export const getProductsBatch = async (req, res) => {
       }
     ]);
 
+    const nearbySet = new Set(req.nearbyMerchantIds?.map(id => id.toString()) || []);
+
     // Format as { merchantId1: [products], ... }
     const productsByMerchant = products.reduce((acc, group) => {
-      acc[group._id.toString()] = group.products;
+      const isInstantBuyable = nearbySet.has(group._id.toString());
+      acc[group._id.toString()] = group.products.map(p => ({ ...p, isInstantBuyable }));
       return acc;
     }, {});
 
@@ -950,6 +989,9 @@ export const getCourierProducts = async (req, res) => {
       const merchant = p.merchantId;
       const merchantIdStr = merchant?._id?.toString() || p.merchantId?.toString();
       const isNearby = req.nearbyMerchantIds?.some(id => id.toString() === merchantIdStr) || false;
+      const isInstantBuyable = calculateIsInstantBuyable(p._id, merchantIdStr, req.nearbyMerchantIds, {
+        isOnline: merchant?.isOnline
+      });
 
       return {
         _id: p._id,
@@ -967,6 +1009,7 @@ export const getCourierProducts = async (req, res) => {
         color: v?.color,
         isCourier: true,
         isNearby: isNearby,
+        isInstantBuyable: isInstantBuyable,
         isOnline: merchant?.isOnline || false,
       };
     });
@@ -1097,6 +1140,7 @@ export const getCollectionProductsByMerchant = async (req, res) => {
         discount: v?.discount || 0,
         images: v?.images,
         color: v?.color,
+        isInstantBuyable: calculateIsInstantBuyable(p._id, p.merchantId, req.nearbyMerchantIds)
       };
     });
 

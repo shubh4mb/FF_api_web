@@ -248,7 +248,7 @@ export const checkDeliveryAvailability = asyncHandler(async (req, res) => {
 
   try {
     const config = await AppConfig.getConfig();
-    const radius = config.tryAndBuyRadius || 7;
+    const radius = config.tryAndBuyRadius;
     
     const { filterMerchantsByDistance } = await import("../../helperFns/geoHelpers.js");
     
