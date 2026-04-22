@@ -6,5 +6,6 @@ export const allowedOrigins = [
   "https://ff-api-web.onrender.com",
   "https://ff-api-web-2.onrender.com",
   "https://merchant-module-nine.vercel.app",
-  "https://ff-admin-7mp8gqw6i-shubhambiswas9899-gmailcoms-projects.vercel.app"
+  "https://ff-admin-7mp8gqw6i-shubhambiswas9899-gmailcoms-projects.vercel.app",
+  "https://ff-admin-smoky.vercel.app"
 ];
