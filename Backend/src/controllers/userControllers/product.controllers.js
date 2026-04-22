@@ -821,8 +821,7 @@ export const getProductsBatch = async (req, res) => {
       {
         $match: {
           merchantId: { $in: merchantIds.map(id => new mongoose.Types.ObjectId(id)) },
-          isActive: true,
-          isVerified: true // Ensure only verified batch products are returned
+          isActive: true
         }
       },
       // Group by merchantId to apply limit per merchant

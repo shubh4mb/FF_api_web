@@ -180,6 +180,7 @@ router.post('/signup', signup);
  */
 router.post('/phoneLogin', phoneLogin)
 router.post('/checkDeliveryAvailability', checkDeliveryAvailability);
+router.get('/merchants', resolveNearbyMerchants, getNearbyMerchants);
 
 router.put('/push-token', authMiddleware, addPushToken);
 
