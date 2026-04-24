@@ -28,6 +28,20 @@ const appConfigSchema = new mongoose.Schema(
             default: 7, // default 7km for Try & Buy
             min: 0,
         },
+
+        // ── Payout Configuration ──
+        payoutDay: {
+            type: Number,
+            default: 2,    // 0=Sun, 1=Mon, 2=Tue (default), 3=Wed, 4=Thu, 5=Fri, 6=Sat
+            min: 0,
+            max: 6,
+        },
+        payoutHourIST: {
+            type: Number,
+            default: 2,    // 2 AM IST
+            min: 0,
+            max: 23,
+        },
     },
     { timestamps: true }
 );

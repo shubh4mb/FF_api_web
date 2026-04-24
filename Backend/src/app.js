@@ -12,6 +12,7 @@ import adminRoutes from './routes/admin.routes.js';
 import merchantRoutes from './routes/merchant.routes.js';
 import deliveryRiderRoutes from './routes/deliveryRider.routes.js';
 import courierOrderRoutes from './routes/courierOrder.routes.js';
+import cronRoutes from './routes/cron.routes.js';
 import { allowedOrigins } from './config/cors.js';
 import { getIO } from './config/socket.js';
 import swaggerUi from 'swagger-ui-express';
@@ -90,6 +91,7 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/merchant', merchantRoutes);
 app.use('/api/deliveryRider', deliveryRiderRoutes);
 app.use('/api/courier', courierOrderRoutes);
+app.use('/api/cron', cronRoutes);
 
 app.get('/', (req, res) => {
   res.send('Backend is working!');

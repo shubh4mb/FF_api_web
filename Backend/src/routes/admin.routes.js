@@ -14,6 +14,8 @@ import { createAttribute, getAttributes, updateAttribute, deleteAttribute } from
 import { addHub, getAllHubs, updateHub, deleteHub } from '../controllers/adminControllers/hub.controllers.js';
 import { createOffer, getAllOffers, getOfferById, updateOffer, toggleOffer, deleteOffer, getAllOffersOverview } from '../controllers/adminControllers/offer.controllers.js';
 import { createCollection, getAllCollections, updateCollection, deleteCollection } from '../controllers/adminControllers/collection.controllers.js';
+import { createIncentive, getAllIncentives, updateIncentive, toggleIncentive, deleteIncentive } from '../controllers/adminControllers/incentive.controllers.js';
+import { getPayouts, triggerPayout, getPayoutById } from '../controllers/adminControllers/payout.controllers.js';
 
 const router = express.Router();
 
@@ -101,5 +103,17 @@ router.get('/offers/:id', verifyAdmin, getOfferById);
 router.put('/offers/:id', verifyAdmin, updateOffer);
 router.patch('/offers/:id/toggle', verifyAdmin, toggleOffer);
 router.delete('/offers/:id', verifyAdmin, deleteOffer);
+
+// ── Rider Incentives ──
+router.post('/incentives', verifyAdmin, createIncentive);
+router.get('/incentives', verifyAdmin, getAllIncentives);
+router.put('/incentives/:id', verifyAdmin, updateIncentive);
+router.patch('/incentives/:id/toggle', verifyAdmin, toggleIncentive);
+router.delete('/incentives/:id', verifyAdmin, deleteIncentive);
+
+// ── Weekly Payouts ──
+router.get('/payouts', verifyAdmin, getPayouts);
+router.get('/payouts/:id', verifyAdmin, getPayoutById);
+router.post('/payouts/trigger', verifyAdmin, triggerPayout);
 
 export default router;

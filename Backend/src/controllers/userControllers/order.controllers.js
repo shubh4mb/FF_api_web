@@ -94,6 +94,8 @@ export const createRazorpayOrder = async (req, res) => {
       returnPerKmRate: config.returnPerKmRate,
       waitingCharge: config.waitingCharge
     });
+    const baseDeliveryCharge = deliveryCharge;
+    const baseReturnCharge = returnCharge;
 
     // === CALCULATE TOTAL ===
     let totalAmount = 0;
@@ -156,6 +158,7 @@ export const createRazorpayOrder = async (req, res) => {
             discountType: offer.discountType,
             discountValue: offer.discountValue,
             discountApplied: offer.discountAmount,
+            freeDelivery: offer.freeDelivery || false,
           });
           offerDiscount += offer.discountAmount;
         }
@@ -209,6 +212,8 @@ export const createRazorpayOrder = async (req, res) => {
       deliveryTip,
       discount: offerDiscount,
       deliveryCharge,
+      originalDeliveryCharge: baseDeliveryCharge, 
+      originalReturnCharge: baseReturnCharge,     
       totalPayable: finalPayable,
       deliveryDistance: roadDistanceKm,
       returnCharge,

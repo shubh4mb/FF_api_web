@@ -164,4 +164,145 @@ router.get("/wallet", authMiddlewareRider, async (req, res) => {
   }
 });
 
+// ── Weekly Earnings ──
+import WeeklyPayout from "../models/weeklyPayout.model.js";
+import DailyPayout from "../models/dailyPayout.model.js";
+import RiderIncentive from "../models/riderIncentive.model.js";
+import { getCurrentWeekBounds, getDayStartIST } from "../helperFns/weeklyPayoutHelper.js";
+import { findHighestSlab } from "../helperFns/incentiveEngine.js";
+
+// GET /api/rider/earnings/current-week
+router.get("/earnings/current-week", authMiddlewareRider, async (req, res) => {
+  try {
+    const { weekStart, weekEnd } = getCurrentWeekBounds();
+
+    const payout = await WeeklyPayout.findOne({
+      ownerType: "rider",
+      ownerId: req.riderId,
+      weekStart,
+    }).lean();
+
+    // Get daily breakdowns for this week
+    const dailyPayouts = await DailyPayout.find({
+      riderId: req.riderId,
+      date: { $gte: weekStart, $lte: weekEnd },
+    })
+      .sort({ date: 1 })
+      .lean();
+
+    return res.status(200).json({
+      success: true,
+      weekStart,
+      weekEnd,
+      payout: payout || {
+        totalEarnings: 0,
+        totalDeductions: 0,
+        netPayout: 0,
+        completedOrders: 0,
+        cancelledOrders: 0,
+        totalIncentive: 0,
+        finalAmount: 0,
+        status: "accumulating",
+        orders: [],
+      },
+      dailyBreakdown: dailyPayouts,
+    });
+  } catch (err) {
+    console.error("Get current week earnings error:", err);
+    return res.status(500).json({ message: "Failed to fetch earnings" });
+  }
+});
+
+// GET /api/rider/earnings/history
+router.get("/earnings/history", authMiddlewareRider, async (req, res) => {
+  try {
+    const { page = 1, limit = 10 } = req.query;
+
+    const payouts = await WeeklyPayout.find({
+      ownerType: "rider",
+      ownerId: req.riderId,
+      status: { $in: ["paid", "failed"] },
+    })
+      .sort({ weekStart: -1 })
+      .skip((page - 1) * limit)
+      .limit(parseInt(limit))
+      .lean();
+
+    const total = await WeeklyPayout.countDocuments({
+      ownerType: "rider",
+      ownerId: req.riderId,
+      status: { $in: ["paid", "failed"] },
+    });
+
+    return res.status(200).json({
+      success: true,
+      payouts,
+      pagination: { page: parseInt(page), limit: parseInt(limit), total },
+    });
+  } catch (err) {
+    console.error("Get earnings history error:", err);
+    return res.status(500).json({ message: "Failed to fetch earnings history" });
+  }
+});
+
+// GET /api/rider/incentives — Active incentive programs + rider's progress
+router.get("/incentives", authMiddlewareRider, async (req, res) => {
+  try {
+    const now = new Date();
+    const incentives = await RiderIncentive.find({
+      isActive: true,
+      effectiveFrom: { $lte: now },
+      $or: [{ effectiveTo: null }, { effectiveTo: { $gt: now } }],
+    }).lean();
+
+    const { weekStart } = getCurrentWeekBounds();
+    const dayStart = getDayStartIST();
+
+    // Get rider's current stats
+    const weeklyPayout = await WeeklyPayout.findOne({
+      ownerType: "rider",
+      ownerId: req.riderId,
+      weekStart,
+    }).lean();
+
+    const dailyPayout = await DailyPayout.findOne({
+      riderId: req.riderId,
+      date: dayStart,
+    }).lean();
+
+    const result = incentives.map((inc) => {
+      const stats =
+        inc.type === "weekly"
+          ? {
+              completedOrders: weeklyPayout?.completedOrders || 0,
+              cancelledOrders: weeklyPayout?.cancelledOrders || 0,
+            }
+          : {
+              completedOrders: dailyPayout?.completedOrders || 0,
+              cancelledOrders: dailyPayout?.cancelledOrders || 0,
+            };
+
+      const currentSlab = findHighestSlab(inc.slabs, stats.completedOrders);
+      const nextSlab = inc.slabs.find((s) => s.minOrders > stats.completedOrders);
+
+      return {
+        ...inc,
+        progress: {
+          ...stats,
+          currentSlab: currentSlab || null,
+          nextSlab: nextSlab || null,
+          ordersToNextSlab: nextSlab
+            ? nextSlab.minOrders - stats.completedOrders
+            : 0,
+        },
+      };
+    });
+
+    return res.status(200).json({ success: true, incentives: result });
+  } catch (err) {
+    console.error("Get rider incentives error:", err);
+    return res.status(500).json({ message: "Failed to fetch incentives" });
+  }
+});
+
 export default router;

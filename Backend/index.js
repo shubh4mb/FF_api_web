@@ -22,6 +22,10 @@ const PORT = process.env.PORT || 5000;
 // Connect DB
 connectDB();
 
+// Initialize internal cron jobs
+import { initPayoutCron } from './src/cron/payoutCron.js';
+initPayoutCron();
+
 // Create HTTP server
 const server = createServer(app);
 

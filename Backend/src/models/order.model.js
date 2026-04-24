@@ -131,6 +131,7 @@ const OrderSchema = new mongoose.Schema({
     discountType: { type: String, enum: ['flat', 'percentage'] },
     discountValue: Number,
     discountApplied: Number,    // Actual ₹ deducted
+    freeDelivery: { type: Boolean, default: false },
   }],
   deliveryLocation: {
     name: String,
@@ -174,6 +175,8 @@ const OrderSchema = new mongoose.Schema({
     }
   ],
   returnCharge: { type: Number, default: 0 },
+  originalDeliveryCharge: { type: Number, default: 0 },
+  originalReturnCharge: { type: Number, default: 0 },
   otp: {
     type: String,
     default: null

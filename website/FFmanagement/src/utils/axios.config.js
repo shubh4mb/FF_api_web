@@ -2,7 +2,7 @@ import axios from 'axios';
 import toast from 'react-hot-toast';
 
 const axiosInstance = axios.create({
-  baseURL: 'https://ff-api-web-2.onrender.com/api/',
+  baseURL: 'https://4932-2409-40f3-27-43b4-d0a2-fdbc-2b1e-95ab.ngrok-free.app/api/',
   timeout: 60000,
   withCredentials: true,
 });
