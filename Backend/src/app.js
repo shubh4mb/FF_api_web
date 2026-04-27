@@ -41,7 +41,13 @@ app.use(
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 500, // limit each IP to 500 requests per windowMs
-  message: 'Too many requests from this IP, please try again after 15 minutes'
+  message: 'Too many requests from this IP, please try again after 15 minutes',
+  skip: (req) => {
+    const authHeader = req.headers.authorization;
+    const expectedSecret = process.env.CRON_SECRET_KEY;
+    // Skip rate limiting if the request has the valid cron secret
+    return expectedSecret && authHeader === `Bearer ${expectedSecret}`;
+  }
 });
 // Apply the rate limiter to all api requests
 app.use('/api/', apiLimiter);
