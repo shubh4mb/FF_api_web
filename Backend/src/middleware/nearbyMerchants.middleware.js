@@ -10,7 +10,7 @@ import { filterMerchantsByDistance } from "../helperFns/geoHelpers.js";
 import AppConfig from "../models/appConfig.model.js";
 
 const CACHE_TTL_SEC = 15 * 60; // 15 minutes
-const GEOHASH_PRECISION = 7;   // ~150m cells
+const GEOHASH_PRECISION = 6;   // ~1.2km cells
 
 /* ── Lightweight geohash (no external dependency) ── */
 const BASE32 = "0123456789bcdefghjkmnpqrstuvwxyz";
@@ -60,7 +60,7 @@ export const resolveNearbyMerchants = async (req, res, next) => {
     const tryAndBuyRadius = config.tryAndBuyRadius;
 
     // 2. Compute geohash cache key
-    const geoHash = encodeGeohash(lat, lng, 7);
+    const geoHash = encodeGeohash(lat, lng, GEOHASH_PRECISION);
     const cacheKey = `tb:merchants:${geoHash}`;
 
     // 2. Check Redis cache

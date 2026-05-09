@@ -1,8 +1,10 @@
 import axios from 'axios';
 import toast from 'react-hot-toast';
 
+const API_URL = import.meta.env.VITE_API_URL || 'https://4932-2409-40f3-27-43b4-d0a2-fdbc-2b1e-95ab.ngrok-free.app/api/';
+
 const axiosInstance = axios.create({
-  baseURL: 'https://4932-2409-40f3-27-43b4-d0a2-fdbc-2b1e-95ab.ngrok-free.app/api/',
+  baseURL: API_URL,
   timeout: 60000,
   withCredentials: true,
 });
@@ -62,7 +64,7 @@ axiosInstance.interceptors.response.use(
       isRefreshing = true;
 
       try {
-        const res = await axios.post('https://ff-api-web-2.onrender.com/api/auth/admin/refresh', {}, { withCredentials: true });
+        const res = await axios.post(`${API_URL}auth/admin/refresh`, {}, { withCredentials: true });
         
         const token = res.data?.token || res.data?.data?.token;
 

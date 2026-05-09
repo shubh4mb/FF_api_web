@@ -29,6 +29,8 @@ import Hubs from '../pages/admin/Hubs';
 import OffersManagement from '../pages/admin/OffersManagement';
 import CollectionManagement from '../pages/admin/CollectionManagement';
 import Zones from '../pages/admin/Zones';
+import IncentiveManagement from '../pages/admin/IncentiveManagement';
+import PayoutManagement from '../pages/admin/PayoutManagement';
 
 const AppRoutes = () => {
   return (
@@ -63,6 +65,8 @@ const AppRoutes = () => {
             <Route path="hubs" element={<Hubs />} />
             <Route path="offers" element={<OffersManagement />} />
             <Route path="collections" element={<CollectionManagement />} />
+            <Route path="incentives" element={<IncentiveManagement />} />
+            <Route path="payouts" element={<PayoutManagement />} />
           </Route>
         </Route>
 

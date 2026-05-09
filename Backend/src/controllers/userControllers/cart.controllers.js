@@ -300,12 +300,25 @@ export const getCart = async (req, res) => {
 
 export const clearCart = async (req, res) => {
   const userId = req.user.userId;
+  const { merchantId } = req.query;
+
   try {
     const cart = await Cart.findOne({ userId });
     if (!cart) return res.status(404).json({ success: false, message: 'Cart not found' });
-    cart.items = [];
+
+    if (merchantId) {
+      // Clear only items for this specific merchant
+      cart.items = cart.items.filter(item => item.merchantId.toString() !== merchantId.toString());
+      // Also clear any selected offers that are only for these items (optional/future)
+    } else {
+      // Clear entire cart
+      cart.items = [];
+      cart.selectedOffers = [];
+      cart.couponCode = null;
+    }
+
     await cart.save();
-    res.status(200).json({ success: true, message: 'Cart cleared' });
+    res.status(200).json({ success: true, message: merchantId ? 'Merchant items cleared' : 'Cart cleared' });
   } catch (error) {
     console.error('Error clearing cart:', error);
     res.status(500).json({ success: false, message: 'Server error' });

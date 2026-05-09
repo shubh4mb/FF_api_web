@@ -92,7 +92,7 @@ export const productsDetails = async (req, res) => {
       .populate('subSubCategoryId', 'name')
       .populate({ 
         path: 'merchantId', 
-        select: 'shopName isVerified isActive address isOnline isZoneLive', 
+        select: 'shopName logo isVerified isActive address isOnline isZoneLive', 
         match: { isVerified: true, isActive: true } 
       })
       .lean();
@@ -101,12 +101,15 @@ export const productsDetails = async (req, res) => {
       return res.status(404).json({ message: 'Product from unverified or inactive shop' });
     }
 
+    const nearbySet = new Set(req.nearbyMerchantIds?.map(id => id.toString()) || []);
+    const isNearby = nearbySet.has(product.merchantId._id.toString());
+
     const isInstantBuyable = calculateIsInstantBuyable(product._id, product.merchantId._id, req.nearbyMerchantIds, {
       isOnline: product.merchantId.isOnline,
       isZoneLive: product.merchantId.isZoneLive
     });
 
-    res.status(200).json({ ...product, isInstantBuyable });
+    res.status(200).json({ ...product, isInstantBuyable, isNearby });
   } catch (error) {
     console.error('Error in productsDetails:', error.message);
     res.status(500).json({ message: '❌ ' + error.message });
@@ -773,6 +776,16 @@ export const getYouMayLikeProducts = async (req, res) => {
           merchantId: 1,
           brand: '$brand.name',
           merchant: '$merchant.shopName',
+          isNearby: {
+            $in: ['$merchantId', req.nearbyMerchantIds || []]
+          },
+          isInstantBuyable: {
+            $and: [
+              { $in: ['$merchantId', req.nearbyMerchantIds || []] },
+              { $eq: ['$merchant.isOnline', true] },
+              { $eq: ['$merchant.isZoneLive', true] }
+            ]
+          },
           // First variant only
           variantId: { $arrayElemAt: ['$variants._id', 0] },
           price: { $arrayElemAt: ['$variants.price', 0] },
@@ -1089,6 +1102,9 @@ export const getRelatedProducts = async (req, res) => {
             ]
           },
           isCourierAvailable: { $ifNull: ['$merchant.enableCourierDelivery', false] },
+          isNearby: {
+            $in: ['$merchantId', req.nearbyMerchantIds || []]
+          },
           variantId: { $arrayElemAt: ['$variants._id', 0] },
           price: { $arrayElemAt: ['$variants.price', 0] },
           mrp: { $arrayElemAt: ['$variants.mrp', 0] },
