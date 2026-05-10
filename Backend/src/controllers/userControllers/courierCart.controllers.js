@@ -129,11 +129,14 @@ export const getCourierCart = async (req, res) => {
 
     const finalDeliveryCharge = mAppliedOffers.freeDelivery ? 0 : courierDeliveryCharge;
 
+    const serviceGST = 0;
+
     const totals = {
       subtotal,
       mrpTotal,
       discount: (mrpTotal - subtotal) + (mAppliedOffers.totalDiscount || 0),
       courierDeliveryCharge: finalDeliveryCharge,
+      serviceGST,
       totalPayable: subtotal - (mAppliedOffers.totalDiscount || 0) + finalDeliveryCharge,
     };
 

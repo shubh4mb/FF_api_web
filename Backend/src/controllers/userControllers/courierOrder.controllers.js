@@ -31,9 +31,6 @@ export const initiateCourierOrder = async (req, res) => {
     if (!merchant.enableCourierDelivery) {
       return res.status(400).json({ success: false, message: `Merchant ${merchantId} does not support courier delivery.` });
     }
-    if (merchant.isOnline === false) {
-      return res.status(400).json({ success: false, message: "This merchant is currently offline and not accepting orders. Please try again later." });
-    }
 
     // 2. Validate Address
     const deliveryAddress = await Address.findOne({ _id: addressId, user: userId });
@@ -87,7 +84,7 @@ export const initiateCourierOrder = async (req, res) => {
       });
     }
 
-    const serviceGST = parseFloat(((COURIER_DELIVERY_CHARGE + deliveryTip) * 0.18).toFixed(2));
+    const serviceGST = 0; // Removed GST as requested
 
     // === COMPUTE BEST OFFERS ===
     let appliedOffers = [];
@@ -119,7 +116,7 @@ export const initiateCourierOrder = async (req, res) => {
       console.error('Offer engine error (non-blocking):', offerErr.message);
     }
 
-    const totalPayable = totalAmount - offerDiscount + COURIER_DELIVERY_CHARGE + serviceGST + deliveryTip;
+    const totalPayable = totalAmount - offerDiscount + COURIER_DELIVERY_CHARGE + deliveryTip;
     const amountInPaise = Math.round(totalPayable * 100);
 
     // 5. Create real Razorpay order
