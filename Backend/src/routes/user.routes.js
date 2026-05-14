@@ -457,4 +457,45 @@ router.delete('/courier-cart/delete/:itemId', authMiddleware, deleteCourierCartI
 router.post('/courier-cart/offers/select', authMiddleware, selectOfferCourier);
 router.post('/courier-cart/offers/deselect', authMiddleware, deselectOfferCourier);
 
+// ── Support Tickets ──
+import SupportTicket from '../models/supportTicket.model.js';
+
+router.post('/support/ticket', authMiddleware, async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const { category, orderId, message, phone } = req.body;
+
+    if (!category) {
+      return res.status(400).json({ message: "category is required" });
+    }
+
+    const ticket = await SupportTicket.create({
+      userId,
+      phone: phone || "N/A",
+      category,
+      orderId: orderId || null,
+      message: message || "",
+    });
+
+    return res.status(201).json({ success: true, ticket });
+  } catch (err) {
+    console.error("Create support ticket error:", err);
+    return res.status(500).json({ message: "Failed to create support ticket" });
+  }
+});
+
+router.get('/support/tickets', authMiddleware, async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const tickets = await SupportTicket.find({ userId })
+      .sort({ createdAt: -1 })
+      .limit(20)
+      .lean();
+    return res.status(200).json({ success: true, tickets });
+  } catch (err) {
+    console.error("Get support tickets error:", err);
+    return res.status(500).json({ message: "Failed to fetch tickets" });
+  }
+});
+
 export default router;

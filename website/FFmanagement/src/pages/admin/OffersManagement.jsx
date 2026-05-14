@@ -244,6 +244,11 @@ function OfferRow({ offer, onToggle, onEdit, onDelete }) {
           {isExpired && <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-red-50 text-red-500">EXPIRED</span>}
           {offer.conditions?.firstTimeUserOnly && <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-green-50 text-green-600">1ST ORDER</span>}
           {offer.benefitType === 'PRODUCT' && <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-blue-50 text-blue-600">PRODUCT BENEFIT</span>}
+          {offer.applicableTo && offer.applicableTo !== 'both' && (
+            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${offer.applicableTo === 'try_and_buy' ? 'bg-green-50 text-green-700' : 'bg-purple-50 text-purple-700'}`}>
+              {offer.applicableTo === 'try_and_buy' ? 'TRY & BUY' : 'COURIER'}
+            </span>
+          )}
         </div>
         <div className="flex items-center gap-3 mt-1.5 text-[10px] text-slate-400 font-medium">
           <span className="flex items-center gap-1"><Clock size={10} /> Ends {new Date(offer.endDate).toLocaleDateString()}</span>
@@ -298,6 +303,7 @@ function OfferFormModal({ offer, submitting, categories, collections, onSubmit, 
     benefitType: offer?.benefitType || (offer?.type === 'COLLECTION' ? 'PRODUCT' : 'CART'),
     stackable: offer?.stackable !== undefined ? offer.stackable : true,
     isExclusive: offer?.isExclusive || false,
+    applicableTo: offer?.applicableTo || 'both',
   });
 
   const update = (key, value) => {
@@ -377,6 +383,31 @@ function OfferFormModal({ offer, submitting, categories, collections, onSubmit, 
                     <div className="text-xs font-bold text-slate-700">{t.label}</div>
                     <div className="text-[10px] text-slate-400 font-medium">{t.description}</div>
                   </div>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Applicable To */}
+          <div>
+            <label className="text-xs font-bold text-slate-500 mb-2 block tracking-tight uppercase">Applicable To</label>
+            <div className="grid grid-cols-3 gap-2">
+              {[
+                { value: 'both', label: 'Both', color: '#475569', bg: '#F1F5F9', description: 'Try & Buy + Courier' },
+                { value: 'try_and_buy', label: 'Try & Buy', color: '#16A34A', bg: '#F0FDF4', description: 'Platform delivery' },
+                { value: 'courier', label: 'Standard Cart', color: '#7C3AED', bg: '#F5F3FF', description: 'Courier delivery' },
+              ].map((opt) => (
+                <button
+                  key={opt.value} type="button"
+                  onClick={() => update('applicableTo', opt.value)}
+                  className={`p-3 rounded-xl border-2 transition-all text-left ${form.applicableTo === opt.value ? 'shadow-sm' : 'border-slate-50'}`}
+                  style={{
+                    borderColor: form.applicableTo === opt.value ? opt.color : undefined,
+                    background: form.applicableTo === opt.value ? opt.bg : '#F8FAFC',
+                  }}
+                >
+                  <div className="text-xs font-bold text-slate-700">{opt.label}</div>
+                  <div className="text-[10px] text-slate-400 font-medium">{opt.description}</div>
                 </button>
               ))}
             </div>

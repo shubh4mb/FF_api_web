@@ -15,7 +15,7 @@ import {
 export const getAvailableOffers = async (req, res) => {
   try {
     const userId = req.user?.userId || null;
-    const { subtotal, merchantId } = req.query;
+    const { subtotal, merchantId, orderType } = req.query;
 
     // Build a minimal cart context from query params
     const cartContext = {
@@ -23,7 +23,7 @@ export const getAvailableOffers = async (req, res) => {
       subtotal: Number(subtotal) || 0,
     };
 
-    const offers = await getAvailableOffersForUser(userId, cartContext);
+    const offers = await getAvailableOffersForUser(userId, cartContext, orderType || null);
 
     // If merchantId filter, also include that merchant's offers
     let filteredOffers = offers;
@@ -48,13 +48,13 @@ export const getAvailableOffers = async (req, res) => {
 export const applyCoupon = async (req, res) => {
   try {
     const userId = req.user.userId;
-    const { couponCode, cartContext } = req.body;
+    const { couponCode, cartContext, orderType } = req.body;
 
     if (!couponCode) {
       return res.status(400).json({ success: false, message: 'Coupon code is required' });
     }
 
-    const result = await validateCouponCode(couponCode, userId, cartContext || { items: [], subtotal: 0 });
+    const result = await validateCouponCode(couponCode, userId, cartContext || { items: [], subtotal: 0 }, orderType || null);
 
     if (!result.valid) {
       return res.status(400).json({
@@ -132,9 +132,9 @@ export const getFlashSales = async (req, res) => {
 export const getBestOffersForCart = async (req, res) => {
   try {
     const userId = req.user.userId;
-    const { cartContext, couponCode } = req.body;
+    const { cartContext, couponCode, orderType } = req.body;
 
-    const result = await findBestOffers(userId, cartContext || { items: [], subtotal: 0 }, couponCode || null);
+    const result = await findBestOffers(userId, cartContext || { items: [], subtotal: 0 }, couponCode || null, [], orderType || null);
 
     return res.status(200).json({
       success: true,

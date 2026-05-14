@@ -42,11 +42,11 @@ export function calculateFinalBilling({
   // Deduction only if all items are kept
   const returnChargeDeduction = allItemsKept ? returnCharge : 0;
 
-  // === STEP 4: GST on items (5% for now as an example, or keep 0) ===
-  const gst = parseFloat((baseAmount * 0.05).toFixed(2)); 
+  // === STEP 4: No GST on items — service tax is only on delivery (handled upfront) ===
+  const gst = 0;
 
   // === STEP 5: Final total for THIS payment ===
-  const totalBeforeDeduction = baseAmount + gst + overtimePenalty;
+  const totalBeforeDeduction = baseAmount + overtimePenalty;
   const totalPayable = Math.max(0, totalBeforeDeduction - returnChargeDeduction - discountToApply);
 
   return {

@@ -293,27 +293,17 @@ export const updateMerchantShopDetails = async (req, res) => {
         });
       }
     } else {
-      // Outside Try & Buy Zone: Must rely on Hubs. Check if the pin code is within ANY serviceable hub
+      // Outside Try & Buy Zone: Try to find a hub, but allow even if not found
       const postalCode = addressObj.postalCode || req.body["address[postalCode]"];
-      if (!postalCode) {
-        return res.status(400).json({
-          success: false,
-          message: "Postal code is required to verify serviceability since your location is outside standard Try & Buy zones.",
-        });
-      }
-
       const hub = await Hub.findOne({ "serviceablePincodes.code": postalCode });
-      if (!hub) {
-        return res.status(400).json({
-          success: false,
-          message: "Your shop location is outside our serviceable zones. We currently do not onboard merchants from this area.",
-          debug: { postalCode, lat: latNum, lng: lngNum },
-        });
+
+      if (hub) {
+        zoneName = "Courier Only - " + hub.name;
+      } else {
+        zoneName = "Courier Only (Pan India)";
       }
 
-      // Outside Try & Buy Zone but inside Hub
-      zoneName = "Courier Only - " + hub.name;
-      enableCourierDelivery = true; // Force ON
+      enableCourierDelivery = true; // Force ON for merchants outside Try & Buy zones
 
       // Enforce mandatory requirements for out-of-zone
       if (!shipsWithinHours || !acceptsReturns) {
@@ -418,7 +408,7 @@ export const activateMerchant = async (req, res) => {
     const { merchantId } = req.params;
     const merchant = await Merchant.findByIdAndUpdate(
       merchantId,
-      { $set: { isActive: true } },
+      { $set: { status: 'pending_verification' } },
       { new: true }
     );
     res.json({ success: true, merchant });
@@ -477,13 +467,13 @@ export const loginMerchant = async (req, res) => {
     // ==== Response ====
     return res.json({
       token,
-      refreshToken,
       merchant: {
         id: merchant._id,
         shopName: merchant.shopName,
         email: merchant.email,
         phoneNumber: merchant.phoneNumber,
         isActive: merchant.isActive,
+        status: merchant.status,
         zoneId: merchant.zoneId
       },
     });
@@ -542,6 +532,7 @@ export const registerMerchant = async (req, res) => {
         email: merchant.email,
         phoneNumber: merchant.phoneNumber,
         isActive: merchant.isActive,
+        status: merchant.status,
         zoneId: merchant.zoneId,
       }
     });
@@ -627,8 +618,34 @@ export const refreshMerchantToken = async (req, res) => {
         maxAge: 30 * 24 * 60 * 60 * 1000
     });
 
-    return res.status(200).json({ token, refreshToken: newRefreshToken, message: "Merchant token refreshed successfully" });
+    return res.status(200).json({ 
+      token, 
+      merchant: {
+        id: merchant._id,
+        shopName: merchant.shopName,
+        email: merchant.email,
+        phoneNumber: merchant.phoneNumber,
+        isActive: merchant.isActive,
+        status: merchant.status,
+        zoneId: merchant.zoneId
+      },
+      message: "Merchant token refreshed successfully" 
+    });
   } catch (error) {
     return res.status(401).json({ message: "Invalid or expired merchant refresh token" });
+  }
+};
+
+export const logoutMerchant = async (req, res) => {
+  try {
+    res.clearCookie('refreshToken', {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+    });
+    return res.status(200).json({ success: true, message: "Logged out successfully" });
+  } catch (error) {
+    console.error("Logout error:", error);
+    res.status(500).json({ message: "Server error" });
   }
 };

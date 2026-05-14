@@ -42,6 +42,13 @@ const appConfigSchema = new mongoose.Schema(
             min: 0,
             max: 23,
         },
+
+        // ── Merchant Fees ──
+        merchantRegistrationFee: {
+            type: Number,
+            default: 1000,
+            min: 0,
+        },
     },
     { timestamps: true }
 );

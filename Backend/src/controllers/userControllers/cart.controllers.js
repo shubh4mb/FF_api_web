@@ -257,7 +257,8 @@ export const getCart = async (req, res) => {
           userId,
           { items: enrichedItems, subtotal: mSubtotal, merchantTotals, totalDeliveryCharge: mDeliveryCharge, totalReturnCharge: mReturnCharge },
           cart.couponCode,
-          cart.selectedOffers
+          cart.selectedOffers,
+          'try_and_buy'
         );
         if (mAppliedOffers && mAppliedOffers.freeDelivery) {
           mTotals.totalDeliveryCharge = 0;

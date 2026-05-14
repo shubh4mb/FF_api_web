@@ -79,6 +79,7 @@ export const createOffer = async (req, res) => {
       benefitType: req.body.benefitType || (type === 'COLLECTION' ? 'PRODUCT' : 'CART'),
       stackable: req.body.stackable !== undefined ? req.body.stackable : true,
       isExclusive: req.body.isExclusive || false,
+      applicableTo: req.body.applicableTo || 'both',
       isActive: true,
     });
 

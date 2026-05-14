@@ -92,6 +92,7 @@ export const orderRequestForMerchant = async (req, res) => {
 
     if (status === "accept") {
       order.orderStatus = "accepted";
+      order.customerDeliveryStatus = "accepted";
 
       // Validate that order has required coordinates
       if (!order.pickupLocation?.coordinates?.length || !order.deliveryLocation?.coordinates?.length) {
@@ -152,6 +153,7 @@ export const orderRequestForMerchant = async (req, res) => {
 
     if (status === "reject") {
       order.orderStatus = "rejected";
+      order.customerDeliveryStatus = "cancelled";
       order.reason = req.body.reason || "Merchant rejected the order";
 
       // 💰 Refund full upfront amount to customer wallet

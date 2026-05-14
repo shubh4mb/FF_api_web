@@ -67,8 +67,12 @@ export const settleOrder = async (order, providedSession = null) => {
 
         // 3. Handle Rider Payout & Free Delivery Costing
         // Rider always gets paid the original charges (even if customer got free delivery)
+        // Tip is always passed through to rider regardless of offers
         const hasReturns = order.items.some(i => i.tryStatus === "returned");
-        const riderPayout = (order.originalDeliveryCharge || 0) + (hasReturns ? (order.originalReturnCharge || 0) : 0);
+        const tipAmount = order.finalBilling?.deliveryTip || 0;
+        const riderPayout = (order.originalDeliveryCharge || 0) 
+            + (hasReturns ? (order.originalReturnCharge || 0) : 0)
+            + tipAmount;
 
         if (riderPayout > 0) {
             // Who pays for this? (Check if any applied offer gave free delivery)

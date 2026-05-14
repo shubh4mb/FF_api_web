@@ -1,6 +1,7 @@
 import Order from "../../models/order.model.js";
 import Product from "../../models/product.model.js";
 import Cart from '../../models/cart.model.js';
+import CourierOrder from "../../models/courierOrder.model.js";
 import DeliveryRider from '../../models/deliveryRider.model.js';
 import Merchant from '../../models/merchant.model.js';
 import { emitOrderUpdate } from "../../sockets/order.socket.js";
@@ -72,19 +73,19 @@ export const createRazorpayOrder = async (req, res) => {
     }
 
     const merchantCoords = merchant.address.location.coordinates;
-
-    // === TRY & BUY 7 KM RADIUS VALIDATION ===
-    if (!isWithinTBRadius(userCoords, merchantCoords)) {
-      return res.status(400).json({
-        success: false,
-        serviceable: false,
-        message: "Try & Buy is not available for this location. The merchant is beyond the 7 km delivery radius.",
-      });
-    }
-
+    
     // === FETCH APP CONFIG ===
     const AppConfig = (await import("../../models/appConfig.model.js")).default;
     const config = await AppConfig.getConfig();
+
+    // === TRY & BUY RADIUS VALIDATION ===
+    if (!isWithinTBRadius(userCoords, merchantCoords, config.tryAndBuyRadius)) {
+      return res.status(400).json({
+        success: false,
+        serviceable: false,
+        message: `Try & Buy is not available for this location. The merchant is beyond the ${config.tryAndBuyRadius} km delivery radius.`,
+      });
+    }
 
     // === DELIVERY CHARGE USING HELPER ===
     let { roadDistanceKm, deliveryCharge, returnCharge, estimatedTime } = await calculateDeliveryCharge({
@@ -146,7 +147,9 @@ export const createRazorpayOrder = async (req, res) => {
       const bestOffers = await findBestOffers(
         userId,
         { items: orderItems, subtotal: totalAmount, merchantTotals },
-        req.body.couponCode || null
+        req.body.couponCode || null,
+        [],
+        'try_and_buy'
       );
 
       if (bestOffers.appliedOffers && bestOffers.appliedOffers.length > 0) {
@@ -200,17 +203,15 @@ export const createRazorpayOrder = async (req, res) => {
       userId,
       merchantId,
       merchantDetails: {
-        name: merchant.name,
-        phone: merchant.phone,
+        name: merchant.shopName,
+        phone: merchant.phoneNumber,
       },
       items: orderItems,
       totalAmount,
-      baseAmount: totalAmount,
-      tryAndBuyFee: 0,
-      gst: 0,
-      serviceGST,
-      deliveryTip,
-      discount: offerDiscount,
+      finalBilling: {
+        deliveryTip,
+        serviceGST,
+      },
       deliveryCharge,
       originalDeliveryCharge: baseDeliveryCharge, 
       originalReturnCharge: baseReturnCharge,     
@@ -293,7 +294,7 @@ export const createRazorpayOrder = async (req, res) => {
     returnCharge,
     deliveryTip,
     serviceGST,
-    deliveryDistance: distanceKm,
+    deliveryDistance: roadDistanceKm,
     estimatedTime,
     contact: deliveryAddress.phone,
     name: deliveryAddress.name,
@@ -432,38 +433,93 @@ export const razorpayWebhook = async (req, res) => {
   const secret = process.env.RAZORPAY_WEBHOOK_SECRET;
   const signature = req.headers["x-razorpay-signature"];
 
+  if (!signature) {
+    return res.status(400).json({ message: "Signature missing" });
+  }
+
   const shasum = crypto.createHmac("sha256", secret);
   shasum.update(JSON.stringify(req.body));
   const digest = shasum.digest("hex");
 
   if (digest !== signature) {
+    console.error("[Webhook] Invalid signature");
     return res.status(400).json({ message: "Invalid signature" });
   }
 
   const event = req.body.event;
-  const payment = req.body.payload.payment?.entity;
+  const payload = req.body.payload;
+  const payment = payload.payment?.entity;
+
+  console.log(`[Webhook] Received event: ${event} for order: ${payment?.order_id}`);
 
   if (event === "payment.captured" && payment) {
-    const order = await Order.findOne({ razorpayOrderId: payment.order_id });
+    const rzpOrderId = payment.order_id;
+
+    // 1. Check if it's a Try & Buy Order
+    const order = await Order.findOne({ razorpayOrderId: rzpOrderId });
     if (order) {
-      order.razorpayPaymentId = payment.id;
-      order.paymentStatus = "paid";
-
-      // Detect if this was final payment (has finalBilling.totalPayable > deliveryCharge)
-      if (order.finalBilling?.totalPayable > order.deliveryCharge) {
-        order.orderStatus = "confirmed_purchase";
-        order.customerDeliveryStatus = "completed";
-
-        // Dynamically import and run settlement
-        import("../../helperFns/orderSettlement.js").then(({ settleOrder }) => {
-          settleOrder(order).catch(err => console.error("Webhook Settlement failed", err));
-        });
-
-      } else {
-        order.orderStatus = "placed"; // advance payment
+      if (order.paymentStatus === "paid" || order.paymentStatus === "delivery_fee_paid" && !order.finalBilling?.totalPayable) {
+        console.log(`[Webhook] Order ${order._id} already processed.`);
+        return res.status(200).json({ status: "ok" });
       }
+
+      order.razorpayPaymentId = payment.id;
+      
+      // Determine if this is Upfront or Final payment
+      if (order.finalBilling?.totalPayable > 0) {
+        // This is the Final Payment
+        order.paymentStatus = "paid";
+        order.orderStatus = "selection_made";
+        order.customerDeliveryStatus = "completed";
+        
+        // Run settlement
+        import("../../helperFns/orderSettlement.js").then(({ settleOrder }) => {
+          settleOrder(order).catch(err => console.error("[Webhook] Settlement failed", err));
+        });
+      } else {
+        // This is the Upfront Payment
+        order.paymentStatus = "delivery_fee_paid";
+        order.orderStatus = "placed";
+      }
+
       await order.save();
+      console.log(`[Webhook] Order ${order._id} updated successfully.`);
+      return res.status(200).json({ status: "ok" });
     }
+
+    // 2. Check if it's a Courier Order
+    const courierOrder = await CourierOrder.findOne({ razorpayOrderId: rzpOrderId });
+    if (courierOrder) {
+      if (courierOrder.paymentStatus === 'paid') {
+        return res.status(200).json({ status: "ok" });
+      }
+
+      courierOrder.paymentStatus = 'paid';
+      courierOrder.razorpayPaymentId = payment.id;
+      courierOrder.orderStatus = 'confirmed';
+      await courierOrder.save();
+      
+      console.log(`[Webhook] CourierOrder ${courierOrder._id} updated successfully.`);
+      return res.status(200).json({ status: "ok" });
+    }
+
+    // 3. Check if it's a Merchant Registration Fee
+    const merchant = await Merchant.findOne({ razorpayOrderId: rzpOrderId });
+    if (merchant) {
+      if (merchant.isRegistrationFeePaid) {
+        return res.status(200).json({ status: "ok" });
+      }
+
+      merchant.isRegistrationFeePaid = true;
+      merchant.status = 'active';
+      merchant.isActive = true;
+      await merchant.save();
+      
+      console.log(`[Webhook] Merchant ${merchant._id} activated via webhook.`);
+      return res.status(200).json({ status: "ok" });
+    }
+
+    console.warn(`[Webhook] No record found for Razorpay Order ID: ${rzpOrderId}`);
   }
 
   res.status(200).json({ status: "ok" });
@@ -531,7 +587,7 @@ export const reachedPickupLocation = async (req, res) => {
   const order = await Order.findById(orderId);
   if (!order) return res.status(404).json({ message: "Order not found" });
 
-  order.deliveryBoyStatus = "arrived at pickup";
+  order.deliveryBoyStatus = "at_pickup";
   await order.save();
   return res.status(200).json({ message: "Delivery boy reached pickup location" });
 };
@@ -542,8 +598,8 @@ export const orderPickedUp = async (req, res) => {
   const order = await Order.findById(orderId);
   if (!order) return res.status(404).json({ message: "Order not found" });
 
-  order.deliveryBoyStatus = "picked & verified order";
-  order.orderStatus = "out_for_delivery";
+  order.deliveryBoyStatus = "picked_up";
+  order.orderStatus = "in_transit";
   await order.save();
   return res.status(200).json({ message: "Order picked up" });
 };
@@ -554,8 +610,8 @@ export const reachedDeliveryLocation = async (req, res) => {
   const order = await Order.findById(orderId);
   if (!order) return res.status(404).json({ message: "Order not found" });
 
-  order.deliveryBoyStatus = "arrived at delivery";
-  order.orderStatus = "arrived at delivery";
+  order.deliveryBoyStatus = "at_delivery";
+  order.orderStatus = "in_transit";
   await order.save();
   return res.status(200).json({ message: "Delivery boy reached delivery location" });
 };
@@ -566,8 +622,8 @@ export const handoverOrder = async (req, res) => {
   const order = await Order.findById(orderId);
   if (!order) return res.status(404).json({ message: "Order not found" });
 
-  order.deliveryBoyStatus = "try phase";
-  order.orderStatus = "try phase";
+  order.deliveryBoyStatus = "try_phase";
+  order.orderStatus = "try_phase";
   await order.save();
   return res.status(200).json({ message: "Order handover" });
 };
@@ -677,17 +733,16 @@ export const initiateReturn = async (req, res) => {
 
     // Determine final order status
     if (returnedItemsCount === order.items.length) {
-      order.orderStatus = "returned";
+      order.orderStatus = "selection_made";
       order.customerDeliveryStatus = "completed";
-
-      order.deliveryRiderStatus = "completed try phase"; // Rider will pick up all
+      order.deliveryRiderStatus = "try_phase"; // Rider will pick up all returns
     } else if (keptItemsCount === order.items.length) {
-      order.orderStatus = "confirmed_purchase";
-      order.deliveryRiderStatus = "confirmed purchase";
-      order.customerDeliveryStatus = "trial_phase_ended"
-
+      order.orderStatus = "selection_made";
+      order.deliveryRiderStatus = "try_phase";
+      order.customerDeliveryStatus = "awaiting_payment";
     } else {
-      order.orderStatus = "partially_returned";
+      order.orderStatus = "selection_made";
+      order.customerDeliveryStatus = "awaiting_payment";
     }
 
     // Mark try phase as completed
@@ -779,21 +834,20 @@ export const createFinalPaymentRazorpayOrder = async (req, res) => {
     );
 
     if (acceptedItems.length === 0) {
-      console.log(acceptedItems, "wwwwwqqqqq");
-
       // All items returned - no payment needed
-      order.orderStatus = "completed try phase";
+      order.orderStatus = "selection_made";
+      order.customerDeliveryStatus = 'completed';
+      order.deliveryRiderStatus = "returning";
 
-      order.customerDeliveryStatus = 'trial_phase_ended';
-      order.deliveryRiderStatus = "completed try phase";
-
-      // Clear rider's currentOrderId since order is completed
-      // if (order.deliveryRiderId) {
-      //   await DeliveryRider.findByIdAndUpdate(
-      //     order.deliveryRiderId,
-      //     { currentOrderId: null }
-      //   );
-      // }
+      // === SETTLE RIDER even when all items returned ===
+      // Rider still did the delivery + return trip and deserves payment
+      try {
+        const { settleOrder } = await import("../../helperFns/orderSettlement.js");
+        await settleOrder(order);
+      } catch (settleErr) {
+        console.error("Settlement error (all returned, non-fatal):", settleErr.message);
+        order.settlementStatus = 'failed';
+      }
 
       await order.save();
       const io = getIO();
@@ -972,9 +1026,9 @@ export const verifyFinalPayment = async (req, res) => {
       order.deliveryRiderStatus = "completed";
     } else {
       // Partial/full return — rider still needs to go back to merchant
-      order.orderStatus = "completed try phase";
-      order.customerDeliveryStatus = "trial_phase_ended";
-      order.deliveryRiderStatus = "completed try phase";
+      order.orderStatus = "return_in_progress";
+      order.customerDeliveryStatus = "completed";
+      order.deliveryRiderStatus = "returning";
     }
 
     // === Deduct stock ONLY for accepted/kept items ===
@@ -1001,18 +1055,18 @@ export const verifyFinalPayment = async (req, res) => {
       }, { session });
     }
 
-    // === SETTLE WALLETS FOR MERCHANT, RIDER, ADMIN ===
-    // Import dynamically to avoid circular dependencies if any
-    const { settleOrder } = await import("../../helperFns/orderSettlement.js");
-    await settleOrder(order, session).catch(err => {
-      console.error("Settlement failed non-fatally", err);
-      order.settlementStatus = 'failed';
-    });
-
     await order.save({ session });
     
     await session.commitTransaction();
     session.endSession();
+
+    // === SETTLE WALLETS FOR MERCHANT, RIDER, ADMIN ===
+    // Import dynamically to avoid circular dependencies if any
+    const { settleOrder } = await import("../../helperFns/orderSettlement.js");
+    // Run settlement asynchronously without passing the session so it doesn't abort the main payment flow
+    settleOrder(order).catch(err => {
+      console.error("Settlement failed asynchronously:", err);
+    });
 
     const io = getIO();
     emitOrderUpdate(io, orderId, order);
@@ -1098,6 +1152,7 @@ export const cancelOrder = async (req, res) => {
     }
 
     order.orderStatus = "cancelled";
+    order.customerDeliveryStatus = "cancelled";
     await order.save({ session });
 
     // Remove from pending orders queue if it exists

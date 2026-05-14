@@ -121,7 +121,8 @@ export const getCourierCart = async (req, res) => {
           totalReturnCharge: 0,
         },
         cart.couponCode,
-        cart.selectedOffers
+        cart.selectedOffers,
+        'courier'
       );
     } catch (e) {
       console.error('Offer engine error in courier cart:', e.message);

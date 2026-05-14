@@ -31,6 +31,7 @@ import CollectionManagement from '../pages/admin/CollectionManagement';
 import Zones from '../pages/admin/Zones';
 import IncentiveManagement from '../pages/admin/IncentiveManagement';
 import PayoutManagement from '../pages/admin/PayoutManagement';
+import SupportTickets from '../pages/admin/SupportTickets';
 
 const AppRoutes = () => {
   return (
@@ -67,6 +68,7 @@ const AppRoutes = () => {
             <Route path="collections" element={<CollectionManagement />} />
             <Route path="incentives" element={<IncentiveManagement />} />
             <Route path="payouts" element={<PayoutManagement />} />
+            <Route path="support" element={<SupportTickets />} />
           </Route>
         </Route>
 

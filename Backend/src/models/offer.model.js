@@ -57,6 +57,14 @@ const offerSchema = new mongoose.Schema({
     index: true,
   },
 
+  // ── Order Type Targeting ──
+  applicableTo: {
+    type: String,
+    enum: ['try_and_buy', 'courier', 'both'],
+    default: 'both',
+    index: true,
+  },
+
   // ── Stacking Logic ──
   benefitType: {
     type: String,

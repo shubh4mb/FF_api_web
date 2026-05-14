@@ -4,7 +4,7 @@ import { addBaseProduct, addVariant, getBaseProducts, getVariants, updateVariant
 import { deleteVariant, addBrand, getBrands, getBaseProductById, getProductsByMerchantId, uploadProductImage, deleteImage, deleteProduct, updatePrice, editProduct, editVariant, updateVariantSizeStock, updateMultipleVariantSizes, getAllBrands } from '../controllers/merchantController/product.controllers.js';
 
 import { addMerchant } from '../controllers/merchantController/merchant.controller.js';
-import { loginMerchant, registerMerchant, updateMerchantShopDetails, updateMerchantBankDetails, updateMerchantKYC, updateMerchantOperatingHours, activateMerchant, registerPhone, sendEmailOtp, verifyEmailOtp, getMerchantByEmail, toggleMerchantOnlineStatus, refreshMerchantToken } from '../controllers/merchantController/authControllers.js';
+import { loginMerchant, registerMerchant, updateMerchantShopDetails, updateMerchantBankDetails, updateMerchantKYC, updateMerchantOperatingHours, activateMerchant, registerPhone, sendEmailOtp, verifyEmailOtp, getMerchantByEmail, toggleMerchantOnlineStatus, refreshMerchantToken, logoutMerchant } from '../controllers/merchantController/authControllers.js';
 import { getAllOrder, saveProductDetails } from '../controllers/merchantController/order.controllers.js';
 import { authMiddlewareMerchant } from '../middleware/jwtAuth.js';
 import { getWalletDetails } from '../helperFns/walletHelper.js';
@@ -77,6 +77,7 @@ router.post('/auth/verify-email-otp', verifyEmailOtp);
  *     tags: [Merchant]
  */
 router.post('/auth/refresh', refreshMerchantToken);
+router.post('/auth/logout', logoutMerchant);
 
 /**
  * @swagger
@@ -106,6 +107,10 @@ router.put("/:merchantId/kyc", authMiddlewareMerchant, upload.fields([
 router.put("/:merchantId/operating-hours", authMiddlewareMerchant, updateMerchantOperatingHours);
 router.put("/:merchantId/activate", activateMerchant);
 router.patch("/:merchantId/toggle-online", authMiddlewareMerchant, toggleMerchantOnlineStatus);
+
+import { createRegistrationFeeOrder, verifyRegistrationFeePayment } from '../controllers/merchantController/payment.controllers.js';
+router.post('/:merchantId/registration-fee/create-order', authMiddlewareMerchant, createRegistrationFeeOrder);
+router.post('/:merchantId/registration-fee/verify', authMiddlewareMerchant, verifyRegistrationFeePayment);
 
 /**
  * @swagger

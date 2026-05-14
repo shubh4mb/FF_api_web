@@ -89,6 +89,7 @@ export const initiateCourierOrder = async (req, res) => {
     // === COMPUTE BEST OFFERS ===
     let appliedOffers = [];
     let offerDiscount = 0;
+    let offerFreeDelivery = false;
     try {
       const merchantTotals = {};
       merchantTotals[merchantId.toString()] = totalAmount;
@@ -96,7 +97,9 @@ export const initiateCourierOrder = async (req, res) => {
       const bestOffers = await findBestOffers(
         userId,
         { items: orderItems, subtotal: totalAmount, merchantTotals },
-        req.body.couponCode || null
+        req.body.couponCode || null,
+        [],
+        'courier'
       );
 
       if (bestOffers.appliedOffers && bestOffers.appliedOffers.length > 0) {
@@ -112,11 +115,16 @@ export const initiateCourierOrder = async (req, res) => {
           offerDiscount += offer.discountAmount;
         }
       }
+
+      if (bestOffers.freeDelivery) {
+        offerFreeDelivery = true;
+      }
     } catch (offerErr) {
       console.error('Offer engine error (non-blocking):', offerErr.message);
     }
 
-    const totalPayable = totalAmount - offerDiscount + COURIER_DELIVERY_CHARGE + deliveryTip;
+    const finalDeliveryCharge = offerFreeDelivery ? 0 : COURIER_DELIVERY_CHARGE;
+    const totalPayable = totalAmount - offerDiscount + finalDeliveryCharge + deliveryTip;
     const amountInPaise = Math.round(totalPayable * 100);
 
     // 5. Create real Razorpay order

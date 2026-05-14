@@ -230,13 +230,13 @@ export const getApplicableAmount = (offer, cartContext) => {
 // ────────────────────────────────────────
 // Calculate offers for cart based on selected offers
 // ────────────────────────────────────────
-export const findBestOffers = async (userId, cartContext, couponCode = null, selectedOffers = []) => {
+export const findBestOffers = async (userId, cartContext, couponCode = null, selectedOffers = [], orderType = null) => {
   const now = new Date();
   const log = (msg) => {
     console.log(`[OFFER_DEBUG] ${msg}`);
   };
   
-  log(`--- NEW REQUEST: findBestOffers userId: ${userId}, couponCode: ${couponCode}`);
+  log(`--- NEW REQUEST: findBestOffers userId: ${userId}, couponCode: ${couponCode}, orderType: ${orderType}`);
   log(`Cart Context: ${JSON.stringify(cartContext)}`);
 
   const query = {
@@ -251,6 +251,14 @@ export const findBestOffers = async (userId, cartContext, couponCode = null, sel
   let explicitCoupon = null;
 
   for (const offer of offers) {
+    // Filter by order type applicability
+    if (orderType && offer.applicableTo && offer.applicableTo !== 'both') {
+      if (offer.applicableTo !== orderType) {
+        log(`Offer ${offer.title} skipped: applicableTo=${offer.applicableTo} doesn't match orderType=${orderType}`);
+        continue;
+      }
+    }
+
     if (offer.requiresCoupon && offer.couponCode !== couponCode) {
       continue;
     }
@@ -325,7 +333,7 @@ export const findBestOffers = async (userId, cartContext, couponCode = null, sel
 // Get all available offers for a user
 // (for the "Offers" screen in customer app)
 // ────────────────────────────────────────
-export const getAvailableOffersForUser = async (userId, cartContext = null) => {
+export const getAvailableOffersForUser = async (userId, cartContext = null, orderType = null) => {
   const now = new Date();
 
   const offers = await Offer.find({
@@ -341,10 +349,18 @@ export const getAvailableOffersForUser = async (userId, cartContext = null) => {
   for (const offer of offers) {
     const validation = await validateOfferEligibility(offer, userId, cartContext || { items: [], subtotal: 0 });
 
+    // Check order type applicability
+    let applicableToOrder = true;
+    if (orderType && offer.applicableTo && offer.applicableTo !== 'both') {
+      applicableToOrder = offer.applicableTo === orderType;
+    }
+
     result.push({
       ...offer,
-      eligible: validation.eligible,
-      reason: validation.reason || null,
+      eligible: validation.eligible && applicableToOrder,
+      reason: !applicableToOrder
+        ? `This offer is only for ${offer.applicableTo === 'try_and_buy' ? 'Try & Buy' : 'Standard Delivery'} orders`
+        : (validation.reason || null),
     });
   }
 
@@ -354,7 +370,7 @@ export const getAvailableOffersForUser = async (userId, cartContext = null) => {
 // ────────────────────────────────────────
 // Validate a specific coupon code
 // ────────────────────────────────────────
-export const validateCouponCode = async (couponCode, userId, cartContext) => {
+export const validateCouponCode = async (couponCode, userId, cartContext, orderType = null) => {
   const now = new Date();
 
   const offer = await Offer.findOne({
@@ -366,6 +382,14 @@ export const validateCouponCode = async (couponCode, userId, cartContext) => {
 
   if (!offer) {
     return { valid: false, reason: 'Invalid coupon code' };
+  }
+
+  // Check order type applicability
+  if (orderType && offer.applicableTo && offer.applicableTo !== 'both') {
+    if (offer.applicableTo !== orderType) {
+      const label = offer.applicableTo === 'try_and_buy' ? 'Try & Buy' : 'Standard Delivery';
+      return { valid: false, reason: `This coupon is only valid for ${label} orders` };
+    }
   }
 
   const validation = await validateOfferEligibility(offer, userId, cartContext);

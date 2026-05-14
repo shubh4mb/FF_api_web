@@ -28,9 +28,9 @@ export const getMerchantAnalytics = async (req, res) => {
                     },
                     totalOrders: { $sum: 1 },
                     deliveredOrders: { $sum: { $cond: [{ $in: ["$orderStatus", ["delivered", "completed"]] }, 1, 0] } },
-                    pendingOrders: { $sum: { $cond: [{ $in: ["$orderStatus", ["placed", "accepted", "packed", "out_for_delivery", "try phase"]] }, 1, 0] } },
+                    pendingOrders: { $sum: { $cond: [{ $in: ["$orderStatus", ["placed", "accepted", "packed", "in_transit", "try_phase", "selection_made", "return_in_progress"]] }, 1, 0] } },
                     cancelledOrders: { $sum: { $cond: [{ $eq: ["$orderStatus", "cancelled"] }, 1, 0] } },
-                    returnedOrders: { $sum: { $cond: [{ $in: ["$orderStatus", ["returned", "partially_returned"]] }, 1, 0] } },
+                    returnedOrders: { $sum: { $cond: [{ $eq: ["$orderStatus", "return_in_progress"] }, 1, 0] } },
                 }
             }
         ]);
@@ -48,7 +48,7 @@ export const getMerchantAnalytics = async (req, res) => {
                     },
                     orders: { $sum: 1 },
                     delivered: { $sum: { $cond: [{ $in: ["$orderStatus", ["delivered", "completed"]] }, 1, 0] } },
-                    returns: { $sum: { $cond: [{ $in: ["$orderStatus", ["returned", "partially_returned"]] }, 1, 0] } },
+                    returns: { $sum: { $cond: [{ $eq: ["$orderStatus", "return_in_progress"] }, 1, 0] } },
                 }
             },
             { $sort: { _id: 1 } }

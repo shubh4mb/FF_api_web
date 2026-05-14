@@ -97,6 +97,13 @@ const merchantSchema = new mongoose.Schema(
     acceptsReturns: { type: Boolean, default: false },
     isVerified: { type: Boolean, default: false },
     isActive: { type: Boolean, default: false },
+    status: {
+      type: String,
+      enum: ['incomplete', 'pending_verification', 'pending_payment', 'active', 'rejected', 'suspended'],
+      default: 'incomplete'
+    },
+    isRegistrationFeePaid: { type: Boolean, default: false },
+    razorpayOrderId: { type: String, default: null },
     operatingHours: {
       open: { type: String },
       close: { type: String },

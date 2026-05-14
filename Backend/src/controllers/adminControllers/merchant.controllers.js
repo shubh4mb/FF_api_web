@@ -46,8 +46,11 @@ export const addMerchant = asyncHandler(async (req, res) => {
 });
 
 export const getMerchants = asyncHandler(async (req, res) => {
-  const merchants = await Merchant.find({ isActive: true })
-    .select('shopName phoneNumber email isActive logo rating reviewCount address operatingHours genderCategory zoneName zoneId stats isOnline isVerified')
+  const { status } = req.query;
+  const query = status ? { status } : {};
+
+  const merchants = await Merchant.find(query)
+    .select('shopName phoneNumber email isActive status logo rating reviewCount address operatingHours genderCategory zoneName zoneId stats isOnline isVerified')
     .lean();
   return res.status(200).json(new ApiResponse(200, { merchants }, "Merchants retrieved successfully"));
 });
@@ -106,7 +109,14 @@ export const verifyMerchant = asyncHandler(async (req, res) => {
   const { isVerified, kycVerifications } = req.body;
 
   let updateQuery = {};
-  if (isVerified !== undefined) updateQuery.isVerified = !!isVerified;
+  if (isVerified !== undefined) {
+    updateQuery.isVerified = !!isVerified;
+    if (!!isVerified) {
+      updateQuery.status = 'pending_payment';
+    } else {
+      updateQuery.status = 'rejected';
+    }
+  }
 
   if (kycVerifications) {
     if (kycVerifications.pan !== undefined) updateQuery['kyc.pan.verified'] = !!kycVerifications.pan;

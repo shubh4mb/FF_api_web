@@ -14,12 +14,20 @@ const Merchants = () => {
     { header: "Email", accessor: "email" },
     {
       header: "Status",
-      accessor: "isActive",
-      render: (value) => (
-        <span className={`px-2 py-1 rounded text-xs ${value ? "bg-green-100 text-green-600" : "bg-red-100 text-red-600"}`}>
-          {value ? "Active" : "Inactive"}
-        </span>
-      ),
+      accessor: "status",
+      render: (value) => {
+        let badgeColor = "bg-gray-100 text-gray-600";
+        if (value === "active") badgeColor = "bg-green-100 text-green-600";
+        else if (value === "pending_verification") badgeColor = "bg-yellow-100 text-yellow-600";
+        else if (value === "pending_payment") badgeColor = "bg-blue-100 text-blue-600";
+        else if (value === "rejected") badgeColor = "bg-red-100 text-red-600";
+        
+        return (
+          <span className={`px-2 py-1 rounded text-xs font-medium uppercase ${badgeColor}`}>
+            {value ? value.replace('_', ' ') : 'UNKNOWN'}
+          </span>
+        );
+      },
     },
     {
       header: "Verified",

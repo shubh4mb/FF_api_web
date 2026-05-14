@@ -116,4 +116,74 @@ router.get('/payouts', verifyAdmin, getPayouts);
 router.get('/payouts/:id', verifyAdmin, getPayoutById);
 router.post('/payouts/trigger', verifyAdmin, triggerPayout);
 
+// ── Support Tickets ──
+import SupportTicket from '../models/supportTicket.model.js';
+
+router.get('/support/tickets', verifyAdmin, async (req, res) => {
+  try {
+    const { status, page = 1, limit = 30 } = req.query;
+    const filter = {};
+    if (status) filter.status = status;
+
+    const [tickets, total] = await Promise.all([
+      SupportTicket.find(filter)
+        .sort({ createdAt: -1 })
+        .skip((page - 1) * limit)
+        .limit(parseInt(limit))
+        .populate("userId", "name phone")
+        .populate("orderId", "orderStatus totalAmount")
+        .lean(),
+      SupportTicket.countDocuments(filter),
+    ]);
+
+    return res.status(200).json({
+      success: true,
+      tickets,
+      pagination: {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total,
+        totalPages: Math.ceil(total / parseInt(limit)),
+      },
+    });
+  } catch (err) {
+    console.error("Admin get support tickets error:", err);
+    return res.status(500).json({ message: "Failed to fetch support tickets" });
+  }
+});
+
+router.patch('/support/tickets/:id', verifyAdmin, async (req, res) => {
+  try {
+    const { status } = req.body;
+    if (!["open", "in_progress", "resolved", "closed"].includes(status)) {
+      return res.status(400).json({ message: "Invalid status" });
+    }
+    const ticket = await SupportTicket.findByIdAndUpdate(
+      req.params.id,
+      { status },
+      { new: true }
+    );
+    if (!ticket) return res.status(404).json({ message: "Ticket not found" });
+    return res.status(200).json({ success: true, ticket });
+  } catch (err) {
+    console.error("Admin update ticket error:", err);
+    return res.status(500).json({ message: "Failed to update ticket" });
+  }
+});
+
+router.get('/support/stats', verifyAdmin, async (req, res) => {
+  try {
+    const [open, inProgress, resolved, total] = await Promise.all([
+      SupportTicket.countDocuments({ status: "open" }),
+      SupportTicket.countDocuments({ status: "in_progress" }),
+      SupportTicket.countDocuments({ status: "resolved" }),
+      SupportTicket.countDocuments({}),
+    ]);
+    return res.status(200).json({ success: true, stats: { open, inProgress, resolved, total } });
+  } catch (err) {
+    console.error("Admin support stats error:", err);
+    return res.status(500).json({ message: "Failed to fetch stats" });
+  }
+});
+
 export default router;

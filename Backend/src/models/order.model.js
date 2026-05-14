@@ -48,35 +48,30 @@ const OrderSchema = new mongoose.Schema({
   orderStatus: {
     type: String,
     enum: [
-      'pending',
-      'placed',
-      'accepted',
-      'packed',
-      'out_for_delivery',
-      'arrived at delivery',
-      'try phase',
-      'completed try phase',
-      'otp-verified-return',
-      'reached return merchant',
-      'merchant-return-otp-verified',
-      'confirmed_purchase',
-      'returned',
-      'partially_returned',
-      'delivered',
-      'cancelled',
-      'completed',
-      'rejected'
+      'pending',                   // Razorpay order created, awaiting payment
+      'placed',                    // Payment verified, awaiting merchant
+      'accepted',                  // Merchant accepted
+      'packed',                    // Merchant packed, rider has pickup OTP
+      'in_transit',                // Rider picked up, heading to customer
+      'try_phase',                 // Customer trying items
+      'selection_made',            // Customer selected keep/return items & paid
+      'return_in_progress',        // Rider returning items to merchant
+      'completed',                 // Terminal: order done
+      'cancelled',                 // Terminal: cancelled
+      'rejected'                   // Terminal: merchant rejected
     ],
     default: 'placed'
   },
   customerDeliveryStatus: {
     type: String,
     enum: [
-      'trial_phase_ended',
-      'completed',
-      'cancelled',
-      'rejected',
-      'placed'
+      'placed',                    // Order placed
+      'accepted',                  // Merchant confirmed
+      'on_the_way',                // Rider is bringing items
+      'try_your_fits',             // Customer trying clothes
+      'awaiting_payment',          // Customer selecting items & paying
+      'completed',                 // Order complete
+      'cancelled'                  // Order cancelled
     ],
     default: 'placed'
   },
@@ -87,25 +82,19 @@ const OrderSchema = new mongoose.Schema({
   deliveryRiderStatus: {
     type: String,
     enum: [
-      'queued',
-      'unassigned',               // Initial state
-      'assigned',                 // Delivery boy assigned
-      'en route to pickup',       // On the way to merchant
-      'arrived at pickup',        // Reached merchant location
-      'picked & verified order',          // Order picked
-      'en route to delivery',     // Going to customer
-      'arrived at delivery',      // Reached customer location
-      // 'waiting for customer',     // Waiting while user tries (Try & Buy)
-      'try phase',    // Try phase ongoing
-      'waiting for customer selection', // Timer ended, awaiting customer item choice
-      'completed try phase',
-      'otp-verified-return',     // Delivery boy marks try phase completed
-      'reached return merchant',
-      'confirmed return',         // Items returned
-      'confirmed purchase',       // Customer accepted items
-      'delivered',
-      'completed',               // Final confirmation
-      'cancelled',                // Cancelled for any reason
+      'unassigned',                // No rider yet
+      'queued',                    // In queue, looking for rider
+      'assigned',                  // Rider accepted the job
+      'en_route_pickup',           // Heading to merchant
+      'at_pickup',                 // Arrived at merchant
+      'picked_up',                 // OTP verified, has the items
+      'en_route_delivery',         // Heading to customer
+      'at_delivery',               // Reached customer location
+      'try_phase',                 // Waiting while customer tries
+      'returning',                 // Heading back to merchant with returns
+      'at_merchant_return',        // Reached merchant for return handover
+      'completed',                 // Rider done, freed
+      'cancelled'                  // Cancelled
     ],
     default: 'unassigned'
   },
@@ -194,6 +183,7 @@ const OrderSchema = new mongoose.Schema({
   trialPhaseDuration: { type: Number, default: 0 },
   razorpayOrderId: { type: String },
   razorpayPaymentId: { type: String },
+  overtimePenalty: { type: Number, default: 0 },
   settlementStatus: {
     type: String,
     enum: ['unsettled', 'settled', 'failed'],
