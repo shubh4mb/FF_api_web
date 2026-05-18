@@ -28,9 +28,9 @@ export const initiateCourierOrder = async (req, res) => {
     if (!merchant) {
       return res.status(404).json({ success: false, message: "Merchant not found" });
     }
-    if (!merchant.enableCourierDelivery) {
-      return res.status(400).json({ success: false, message: `Merchant ${merchantId} does not support courier delivery.` });
-    }
+    // if (!merchant.enableCourierDelivery) {
+    //   return res.status(400).json({ success: false, message: `Merchant ${merchantId} does not support courier delivery.` });
+    // }
 
     // 2. Validate Address
     const deliveryAddress = await Address.findOne({ _id: addressId, user: userId });
