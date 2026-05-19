@@ -1,4 +1,6 @@
 import Offer from '../../models/offer.model.js';
+import Cart from '../../models/cart.model.js';
+import CourierCart from '../../models/courierCart.model.js';
 import {
   getAvailableOffersForUser,
   findBestOffers,
@@ -63,6 +65,41 @@ export const applyCoupon = async (req, res) => {
       });
     }
 
+    // Save the coupon code to the database cart(s) based on applicability and active cart selection
+    const targetType = result.offer.applicableTo || 'both';
+    const normalizedCode = couponCode.toUpperCase();
+
+    if (orderType) {
+      if (orderType === 'try_and_buy') {
+        await Cart.findOneAndUpdate(
+          { userId },
+          { couponCode: normalizedCode, selectedOffers: [] },
+          { upsert: true, new: true }
+        );
+      } else if (orderType === 'courier') {
+        await CourierCart.findOneAndUpdate(
+          { userId },
+          { couponCode: normalizedCode, selectedOffers: [] },
+          { upsert: true, new: true }
+        );
+      }
+    } else {
+      if (targetType === 'try_and_buy' || targetType === 'both') {
+        await Cart.findOneAndUpdate(
+          { userId },
+          { couponCode: normalizedCode, selectedOffers: [] },
+          { upsert: true, new: true }
+        );
+      }
+      if (targetType === 'courier' || targetType === 'both') {
+        await CourierCart.findOneAndUpdate(
+          { userId },
+          { couponCode: normalizedCode, selectedOffers: [] },
+          { upsert: true, new: true }
+        );
+      }
+    }
+
     return res.status(200).json({
       success: true,
       message: 'Coupon applied successfully',
@@ -79,6 +116,19 @@ export const applyCoupon = async (req, res) => {
     });
   } catch (error) {
     console.error('[User] Apply coupon error:', error);
+    return res.status(500).json({ success: false, message: 'Server error' });
+  }
+};
+
+// ── Remove Coupon Code ──
+export const removeCoupon = async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    await Cart.findOneAndUpdate({ userId }, { couponCode: null });
+    await CourierCart.findOneAndUpdate({ userId }, { couponCode: null });
+    return res.status(200).json({ success: true, message: 'Coupon removed successfully' });
+  } catch (error) {
+    console.error('[User] Remove coupon error:', error);
     return res.status(500).json({ success: false, message: 'Server error' });
   }
 };

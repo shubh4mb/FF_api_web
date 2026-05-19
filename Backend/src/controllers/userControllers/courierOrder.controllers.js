@@ -16,7 +16,7 @@ const COURIER_DELIVERY_CHARGE = 40;
  */
 export const initiateCourierOrder = async (req, res) => {
   const userId = req.user.userId;
-  const { merchantId, addressId, deliveryTip = 0 } = req.body;
+  const { merchantId, addressId, deliveryTip = 0, deliveryCharge } = req.body;
 
   if (!merchantId || !addressId) {
     return res.status(400).json({ success: false, message: "merchantId and addressId are required" });
@@ -86,33 +86,78 @@ export const initiateCourierOrder = async (req, res) => {
 
     const serviceGST = 0; // Removed GST as requested
 
-    // === COMPUTE BEST OFFERS ===
+    // === COMPUTE BEST OFFERS ON GLOBAL COURIER CART ===
     let appliedOffers = [];
     let offerDiscount = 0;
     let offerFreeDelivery = false;
     try {
-      const merchantTotals = {};
-      merchantTotals[merchantId.toString()] = totalAmount;
+      let globalSubtotal = 0;
+      const globalOrderItems = [];
+      const globalMerchantTotals = {};
+
+      for (const item of cart.items) {
+        const product = item.productId;
+        if (!product) continue;
+
+        const variant = product.variants?.id(item.variantId);
+        if (!variant) continue;
+
+        const price = variant.price;
+        globalSubtotal += price * item.quantity;
+        
+        const mIdStr = item.merchantId?.toString();
+        if (mIdStr) {
+          globalMerchantTotals[mIdStr] = (globalMerchantTotals[mIdStr] || 0) + price * item.quantity;
+        }
+
+        globalOrderItems.push({
+          productId: item.productId._id || item.productId,
+          variantId: item.variantId,
+          name: product.name,
+          quantity: item.quantity,
+          price,
+          size: item.size,
+          image: item.image?.url || item.image,
+          merchantId: item.merchantId,
+        });
+      }
+
+      const globalDeliveryCharge = 40;
 
       const bestOffers = await findBestOffers(
         userId,
-        { items: orderItems, subtotal: totalAmount, merchantTotals },
-        req.body.couponCode || null,
-        [],
+        {
+          items: globalOrderItems,
+          subtotal: globalSubtotal,
+          merchantTotals: globalMerchantTotals,
+          totalDeliveryCharge: globalDeliveryCharge,
+          totalReturnCharge: 0,
+        },
+        req.body.couponCode || cart.couponCode || null,
+        cart.selectedOffers || [],
         'courier'
       );
 
       if (bestOffers.appliedOffers && bestOffers.appliedOffers.length > 0) {
         for (const offer of bestOffers.appliedOffers) {
-          appliedOffers.push({
-            offerId: offer._id,
-            title: offer.title,
-            scope: offer.scope,
-            discountType: offer.discountType,
-            discountValue: offer.discountValue,
-            discountApplied: offer.discountAmount,
-          });
-          offerDiscount += offer.discountAmount;
+          let distributedDiscount = 0;
+          if (offer.scope === 'merchant' && offer.merchantId?.toString() === merchantId.toString()) {
+            distributedDiscount = offer.discountAmount;
+          } else if (offer.scope === 'admin') {
+            distributedDiscount = Math.round((totalAmount / globalSubtotal) * offer.discountAmount);
+          }
+
+          if (distributedDiscount > 0) {
+            appliedOffers.push({
+              offerId: offer._id,
+              title: offer.title,
+              scope: offer.scope,
+              discountType: offer.discountType,
+              discountValue: offer.discountValue,
+              discountApplied: distributedDiscount,
+            });
+            offerDiscount += distributedDiscount;
+          }
         }
       }
 
@@ -123,9 +168,9 @@ export const initiateCourierOrder = async (req, res) => {
       console.error('Offer engine error (non-blocking):', offerErr.message);
     }
 
-    const finalDeliveryCharge = offerFreeDelivery ? 0 : COURIER_DELIVERY_CHARGE;
-    const totalPayable = totalAmount - offerDiscount + finalDeliveryCharge + deliveryTip;
-    const amountInPaise = Math.round(totalPayable * 100);
+    const finalDeliveryCharge = offerFreeDelivery ? 0 : (deliveryCharge !== undefined ? Number(deliveryCharge) : COURIER_DELIVERY_CHARGE);
+    const totalPayable = Math.round(totalAmount - offerDiscount + finalDeliveryCharge + deliveryTip);
+    const amountInPaise = totalPayable * 100;
 
     // 5. Create real Razorpay order
     let razorpayOrderId;
@@ -228,13 +273,291 @@ export const initiateCourierOrder = async (req, res) => {
   }
 };
 
+export const initiateCourierCheckout = async (req, res) => {
+  const userId = req.user.userId;
+  const { addressId, deliveryTip = 0 } = req.body;
+
+  if (!addressId) {
+    return res.status(400).json({ success: false, message: "addressId is required" });
+  }
+
+  try {
+    // 1. Fetch address
+    const deliveryAddress = await Address.findOne({ _id: addressId, user: userId });
+    if (!deliveryAddress) {
+      return res.status(404).json({ success: false, message: "Delivery address not found" });
+    }
+
+    // 2. Fetch active courier cart items
+    const cart = await CourierCart.findOne({ userId }).populate("items.productId");
+    if (!cart || !cart.items || cart.items.length === 0) {
+      return res.status(400).json({ success: false, message: "Courier cart is empty" });
+    }
+
+    // 3. Group items by merchant
+    const itemsByMerchant = {};
+    for (const item of cart.items) {
+      const product = item.productId;
+      if (!product) continue;
+      const merchantId = item.merchantId?.toString();
+      if (!itemsByMerchant[merchantId]) {
+        itemsByMerchant[merchantId] = [];
+      }
+      itemsByMerchant[merchantId].push(item);
+    }
+
+    const merchantIds = Object.keys(itemsByMerchant);
+    if (merchantIds.length === 0) {
+      return res.status(400).json({ success: false, message: "No valid items in courier cart" });
+    }
+
+    // Calculate global cart properties first (for best offers and to get global totals)
+    const globalOrderItems = [];
+    const globalMerchantTotals = {};
+    let globalSubtotal = 0;
+
+    for (const merchantId of merchantIds) {
+      const items = itemsByMerchant[merchantId];
+      for (const item of items) {
+        const product = item.productId;
+        const variant = product?.variants?.find(
+          (v) => v._id.toString() === item.variantId.toString()
+        );
+        const price = variant?.price || 0;
+        globalSubtotal += price * item.quantity;
+        globalMerchantTotals[merchantId] = (globalMerchantTotals[merchantId] || 0) + price * item.quantity;
+
+        globalOrderItems.push({
+          productId: product._id,
+          variantId: item.variantId,
+          name: product.name,
+          quantity: item.quantity,
+          price,
+          size: item.size,
+          image: item.image?.url || item.image,
+          merchantId: item.merchantId,
+        });
+      }
+    }
+
+    // Best offers evaluation
+    let offerFreeDelivery = false;
+    let bestOffers = { appliedOffers: [], totalDiscount: 0, freeDelivery: false };
+    try {
+      bestOffers = await findBestOffers(
+        userId,
+        {
+          items: globalOrderItems,
+          subtotal: globalSubtotal,
+          merchantTotals: globalMerchantTotals,
+          totalDeliveryCharge: 40,
+          totalReturnCharge: 0,
+        },
+        cart.couponCode || null,
+        cart.selectedOffers || [],
+        'courier'
+      );
+      if (bestOffers.freeDelivery) {
+        offerFreeDelivery = true;
+      }
+    } catch (offerErr) {
+      console.error('Offer engine error in initiateCourierCheckout:', offerErr.message);
+    }
+
+    // Create unique receipt / order tracking
+    const grandRazorpayOrderId = `courier_${Date.now()}`;
+    let paymentStatus = 'pending';
+    let grandTotalPayable = 0;
+
+    const createdOrders = [];
+
+    // Distribute charges & create orders
+    for (let index = 0; index < merchantIds.length; index++) {
+      const merchantId = merchantIds[index];
+      const items = itemsByMerchant[merchantId];
+      const merchant = await Merchant.findById(merchantId);
+      if (!merchant) continue;
+
+      let totalAmount = 0;
+      const orderItems = [];
+
+      for (const item of items) {
+        const product = item.productId;
+        const variant = product?.variants?.find(
+          (v) => v._id.toString() === item.variantId.toString()
+        );
+        const price = variant?.price || 0;
+        totalAmount += price * item.quantity;
+
+        orderItems.push({
+          productId: product._id,
+          variantId: item.variantId,
+          name: product.name,
+          quantity: item.quantity,
+          price,
+          size: item.size,
+          image: item.image?.url || item.image,
+        });
+      }
+
+      // Distribute coupon/offer discount proportionally
+      let offerDiscount = 0;
+      const appliedOffers = [];
+
+      if (bestOffers.appliedOffers && bestOffers.appliedOffers.length > 0) {
+        for (const offer of bestOffers.appliedOffers) {
+          let distributedDiscount = 0;
+          if (offer.scope === 'merchant' && offer.merchantId?.toString() === merchantId) {
+            distributedDiscount = offer.discountAmount;
+          } else if (offer.scope === 'admin') {
+            distributedDiscount = Math.round((totalAmount / globalSubtotal) * offer.discountAmount);
+          }
+
+          if (distributedDiscount > 0) {
+            appliedOffers.push({
+              offerId: offer._id,
+              title: offer.title,
+              scope: offer.scope,
+              discountType: offer.discountType,
+              discountValue: offer.discountValue,
+              discountApplied: distributedDiscount,
+            });
+            offerDiscount += distributedDiscount;
+          }
+        }
+      }
+
+      // First merchant order gets the tip and the delivery fee (if not free)
+      const isFirst = index === 0;
+      const merchantDeliveryCharge = offerFreeDelivery ? 0 : (isFirst ? 40 : 0);
+      const merchantTip = isFirst ? Number(deliveryTip) : 0;
+      const serviceGST = 0;
+
+      const totalPayable = Math.round(totalAmount - offerDiscount + merchantDeliveryCharge + merchantTip);
+      grandTotalPayable += totalPayable;
+
+      const courierOrder = new CourierOrder({
+        userId,
+        merchantId,
+        merchantDetails: {
+          name: merchant.shopName,
+          phone: merchant.phoneNumber,
+        },
+        items: orderItems,
+        totalAmount,
+        discount: offerDiscount,
+        deliveryCharge: merchantDeliveryCharge,
+        serviceGST,
+        deliveryTip: merchantTip,
+        totalPayable,
+        appliedOffers,
+        deliveryLocation: {
+          name: deliveryAddress.name,
+          phone: deliveryAddress.phone,
+          addressLine1: deliveryAddress.addressLine1,
+          addressLine2: deliveryAddress.addressLine2,
+          landmark: deliveryAddress.landmark,
+          area: deliveryAddress.area,
+          city: deliveryAddress.city,
+          state: deliveryAddress.state,
+          pincode: deliveryAddress.pincode,
+          country: deliveryAddress.country,
+          addressType: deliveryAddress.addressType,
+          deliveryInstructions: deliveryAddress.deliveryInstructions,
+          coordinates: deliveryAddress.location.coordinates,
+        },
+        razorpayOrderId: grandRazorpayOrderId,
+        paymentStatus,
+        orderStatus: 'placed',
+      });
+
+      await courierOrder.save();
+      createdOrders.push(courierOrder);
+
+      // Record offer usages
+      try {
+        for (const offer of appliedOffers) {
+          await recordOfferUsage(
+            userId,
+            offer.offerId,
+            courierOrder._id,
+            'CourierOrder',
+            offer.discountApplied
+          );
+        }
+      } catch (usageErr) {
+        console.error('Offer usage recording error (non-blocking):', usageErr.message);
+      }
+    }
+
+    grandTotalPayable = Math.round(grandTotalPayable);
+    const amountInPaise = grandTotalPayable * 100;
+
+    let finalRazorpayOrderId = grandRazorpayOrderId;
+
+    if (amountInPaise > 0) {
+      const razorpayOrder = await razorpay.orders.create({
+        amount: amountInPaise,
+        currency: "INR",
+        receipt: `courier_${Date.now()}`,
+        payment_capture: 1,
+      });
+      finalRazorpayOrderId = razorpayOrder.id;
+
+      // Update all orders with the real Razorpay Order ID
+      for (const order of createdOrders) {
+        order.razorpayOrderId = finalRazorpayOrderId;
+        order.orderStatus = 'placed';
+        await order.save();
+      }
+    } else {
+      // Free order
+      paymentStatus = 'paid';
+      for (const order of createdOrders) {
+        order.razorpayOrderId = `free_courier_${Date.now()}`;
+        order.paymentStatus = 'paid';
+        order.orderStatus = 'confirmed';
+        await order.save();
+      }
+
+      // Clear courier cart
+      const cartDoc = await CourierCart.findOne({ userId });
+      if (cartDoc) {
+        cartDoc.items = [];
+        cartDoc.couponCode = null;
+        cartDoc.selectedOffers = [];
+        await cartDoc.save();
+      }
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: paymentStatus === 'paid' ? "Free order placed successfully" : "Orders initiated — proceed to payment",
+      razorpayOrderId: finalRazorpayOrderId,
+      amount: amountInPaise,
+      key_id: process.env.RAZORPAY_KEY_ID,
+      totalPayable: grandTotalPayable,
+      orderId: createdOrders[0]._id,
+      contact: deliveryAddress.phone,
+      name: deliveryAddress.name,
+      email: req.user.email || "customer@example.com",
+      isFreeOrder: paymentStatus === 'paid',
+    });
+
+  } catch (err) {
+    console.error("Initiate courier checkout error:", err);
+    res.status(500).json({ success: false, message: "Server error", error: err.message });
+  }
+};
+
+
 /**
  * 2. Verify Courier Payment — validates Razorpay signature
  * Finalizes the order, deducts stock, and clears items from Courier Cart.
  */
 export const verifyCourierOrderPayment = async (req, res) => {
   const userId = req.user.userId;
-  const { razorpay_order_id, razorpay_payment_id, razorpay_signature, orderId } = req.body;
+  const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = req.body;
 
   if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
     return res.status(400).json({ success: false, message: "razorpay_order_id, razorpay_payment_id, and razorpay_signature are required" });
@@ -255,40 +578,53 @@ export const verifyCourierOrderPayment = async (req, res) => {
   session.startTransaction();
 
   try {
-    const order = await CourierOrder.findOne({ razorpayOrderId: razorpay_order_id, userId }).session(session);
-    if (!order) {
+    const orders = await CourierOrder.find({ razorpayOrderId: razorpay_order_id, userId }).session(session);
+    if (!orders || orders.length === 0) {
       await session.abortTransaction();
       session.endSession();
-      return res.status(404).json({ success: false, message: "Order not found" });
+      return res.status(404).json({ success: false, message: "Orders not found" });
     }
 
-    if (order.paymentStatus === 'paid') {
+    const allPaid = orders.every(o => o.paymentStatus === 'paid');
+    if (allPaid) {
       await session.commitTransaction();
       session.endSession();
-      return res.status(200).json({ success: true, message: "Already paid", orderId: order._id });
+      return res.status(200).json({ success: true, message: "Already paid", orderId: orders[0]._id });
     }
 
-    // === STEP 2: Update Order Status ===
-    order.paymentStatus = 'paid';
-    order.razorpayPaymentId = razorpay_payment_id;
-    order.orderStatus = 'confirmed';
-    await order.save({ session });
+    const merchantIdsToClear = [];
 
-    // === STEP 3: Deduct Stock ===
-    for (const item of order.items) {
-      await Product.updateOne(
-        { _id: item.productId, "variants._id": item.variantId },
-        { $inc: { "variants.$[variant].sizes.$[size].stock": -item.quantity } },
-        { arrayFilters: [{ "variant._id": item.variantId }, { "size.size": item.size }], session }
-      );
+    // === STEP 2: Update Order Statuses ===
+    for (const order of orders) {
+      if (order.paymentStatus !== 'paid') {
+        order.paymentStatus = 'paid';
+        order.razorpayPaymentId = razorpay_payment_id;
+        order.orderStatus = 'confirmed';
+        await order.save({ session });
+
+        // === STEP 3: Deduct Stock ===
+        for (const item of order.items) {
+          await Product.updateOne(
+            { _id: item.productId, "variants._id": item.variantId },
+            { $inc: { "variants.$[variant].sizes.$[size].stock": -item.quantity } },
+            { arrayFilters: [{ "variant._id": item.variantId }, { "size.size": item.size }], session }
+          );
+        }
+
+        merchantIdsToClear.push(order.merchantId.toString());
+      }
     }
 
     // === STEP 4: Clear Items from Courier Cart ===
     const cart = await CourierCart.findOne({ userId }).session(session);
-    if (cart) {
+    if (cart && merchantIdsToClear.length > 0) {
       cart.items = cart.items.filter(
-        item => item.merchantId.toString() !== order.merchantId.toString()
+        item => !merchantIdsToClear.includes(item.merchantId.toString())
       );
+      if (cart.items.length === 0) {
+        cart.couponCode = null;
+        cart.selectedOffers = [];
+      }
       await cart.save({ session });
     }
 
@@ -297,8 +633,8 @@ export const verifyCourierOrderPayment = async (req, res) => {
 
     res.status(200).json({
       success: true,
-      message: "Payment verified. Order confirmed.",
-      orderId: order._id,
+      message: "Payment verified. Orders confirmed.",
+      orderId: orders[0]._id,
     });
 
   } catch (err) {

@@ -1,6 +1,7 @@
 import CourierCart from "../../models/courierCart.model.js";
 import Product from "../../models/product.model.js";
 import { findBestOffers } from '../../services/offerEngine.js';
+import Offer from "../../models/offer.model.js";
 
 /**
  * Add item to Courier Cart
@@ -102,15 +103,15 @@ export const getCourierCart = async (req, res) => {
       };
     });
 
-    const courierDeliveryCharge = 40; // flat rate
+    const merchantTotals = {};
+    itemsWithDetails.forEach(item => {
+      const mKey = item.merchantId?._id?.toString() || item.merchantId?.toString();
+      if(mKey) merchantTotals[mKey] = (merchantTotals[mKey] || 0) + (item.price * item.quantity);
+    });
+    const courierDeliveryCharge = 40;
 
     let mAppliedOffers = { appliedOffers: [], availableOffers: [], totalDiscount: 0, freeDelivery: false };
     try {
-      const merchantTotals = {};
-      itemsWithDetails.forEach(item => {
-        const mKey = item.merchantId?._id?.toString() || item.merchantId?.toString();
-        if(mKey) merchantTotals[mKey] = (merchantTotals[mKey] || 0) + (item.price * item.quantity);
-      });
       mAppliedOffers = await findBestOffers(
         userId,
         {
@@ -135,10 +136,10 @@ export const getCourierCart = async (req, res) => {
     const totals = {
       subtotal,
       mrpTotal,
-      discount: (mrpTotal - subtotal) + (mAppliedOffers.totalDiscount || 0),
+      discount: Math.round((mrpTotal - subtotal) + (mAppliedOffers.totalDiscount || 0)),
       courierDeliveryCharge: finalDeliveryCharge,
       serviceGST,
-      totalPayable: subtotal - (mAppliedOffers.totalDiscount || 0) + finalDeliveryCharge,
+      totalPayable: Math.round(subtotal - (mAppliedOffers.totalDiscount || 0) + finalDeliveryCharge),
     };
 
     res.status(200).json({
@@ -276,11 +277,11 @@ export const selectOfferCourier = async (req, res) => {
     const cart = await CourierCart.findOne({ userId });
     if (!cart) return res.status(404).json({ success: false, message: 'Cart not found' });
 
-    const exists = cart.selectedOffers.find(o => o.offerId.toString() === offerId.toString());
-    if (!exists) {
-      cart.selectedOffers.push({ offerId, targetItemIds: targetItemIds || [] });
-      await cart.save();
-    }
+    // Clear coupon and enforce single selected offer
+    cart.couponCode = null;
+    cart.selectedOffers = [{ offerId, targetItemIds: targetItemIds || [] }];
+    
+    await cart.save();
 
     res.status(200).json({ success: true, message: 'Offer selected', selectedOffers: cart.selectedOffers });
   } catch (error) {
@@ -302,6 +303,13 @@ export const deselectOfferCourier = async (req, res) => {
     if (!cart) return res.status(404).json({ success: false, message: 'Cart not found' });
 
     cart.selectedOffers = cart.selectedOffers.filter(o => o.offerId.toString() !== offerId.toString());
+
+    // Also clear couponCode if this is the active coupon offer
+    const offer = await Offer.findById(offerId);
+    if (offer && offer.requiresCoupon && cart.couponCode && cart.couponCode.toUpperCase() === offer.couponCode.toUpperCase()) {
+      cart.couponCode = null;
+    }
+
     await cart.save();
 
     res.status(200).json({ success: true, message: 'Offer deselected', selectedOffers: cart.selectedOffers });

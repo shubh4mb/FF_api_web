@@ -47,7 +47,7 @@ export function calculateFinalBilling({
 
   // === STEP 5: Final total for THIS payment ===
   const totalBeforeDeduction = baseAmount + overtimePenalty;
-  const totalPayable = Math.max(0, totalBeforeDeduction - returnChargeDeduction - discountToApply);
+  const totalPayable = Math.max(0, Math.round(totalBeforeDeduction - returnChargeDeduction - discountToApply));
 
   return {
     baseAmount,

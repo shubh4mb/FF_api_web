@@ -439,9 +439,10 @@ router.delete('/review/:reviewId', authMiddleware, deleteReview);
 router.get('/reviews/:targetType/:targetId', getReviews); // public
 
 // ── Offers ──
-import { getAvailableOffers, applyCoupon, getOffersByMerchant, getFlashSales, getBestOffersForCart, getPromotionalBanners } from '../controllers/userControllers/offer.controllers.js';
+import { getAvailableOffers, applyCoupon, removeCoupon, getOffersByMerchant, getFlashSales, getBestOffersForCart, getPromotionalBanners } from '../controllers/userControllers/offer.controllers.js';
 router.get('/offers', authMiddleware, getAvailableOffers);
 router.post('/offers/apply', authMiddleware, applyCoupon);
+router.post('/offers/remove', authMiddleware, removeCoupon);
 router.post('/offers/best-for-cart', authMiddleware, getBestOffersForCart);
 router.get('/offers/flash-sales', getFlashSales);
 router.get('/offers/merchant/:merchantId', getOffersByMerchant);

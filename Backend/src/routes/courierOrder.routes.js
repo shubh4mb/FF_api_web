@@ -2,6 +2,7 @@ import express from 'express';
 import { authMiddleware } from '../middleware/jwtAuth.js';
 import {
   initiateCourierOrder,
+  initiateCourierCheckout,
   verifyCourierOrderPayment,
   getUserCourierOrders,
   getCourierOrderById,
@@ -45,6 +46,7 @@ const router = express.Router();
  *         description: Order initiated. Razorpay order ID returned.
  */
 
+router.post('/orders/checkout', authMiddleware, initiateCourierCheckout);
 router.post('/orders/initiate', authMiddleware, initiateCourierOrder);
 
 /**

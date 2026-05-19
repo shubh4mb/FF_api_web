@@ -1,7 +1,43 @@
 import axios from 'axios';
 import toast from 'react-hot-toast';
 
-const API_URL = import.meta.env.VITE_API_URL || 'https://4932-2409-40f3-27-43b4-d0a2-fdbc-2b1e-95ab.ngrok-free.app/api/';
+let API_URL = 'http://192.168.0.102:5000/api/';
+
+// Only use VITE_API_URL if we are not running on localhost (e.g. in production)
+if (typeof window !== 'undefined' && window.location.hostname !== 'localhost') {
+  if (import.meta.env.VITE_API_URL) {
+    API_URL = import.meta.env.VITE_API_URL;
+  }
+}
+
+// 1. Decode any URL encoded characters (e.g., %22 -> ")
+try {
+  API_URL = decodeURIComponent(API_URL);
+} catch (e) {}
+
+// 2. Clean up ALL combinations of leading/trailing quotes and spaces
+if (API_URL) {
+  API_URL = API_URL.replace(/^['"\s]+|['"\s]+$/g, '');
+  
+  // 3. Fallback: If it still starts with literal '%22' characters, strip them
+  if (API_URL.startsWith('%22')) {
+    API_URL = API_URL.substring(3);
+  }
+  if (API_URL.endsWith('%22')) {
+    API_URL = API_URL.substring(0, API_URL.length - 3);
+  }
+  
+  // 4. Ensure the base URL ends with /api/
+  if (!API_URL.endsWith('/api/')) {
+    if (API_URL.endsWith('/')) {
+      API_URL += 'api/';
+    } else {
+      API_URL += '/api/';
+    }
+  }
+}
+
+console.log('Final Sanitized Backend API Base URL:', API_URL);
 
 const axiosInstance = axios.create({
   baseURL: API_URL,

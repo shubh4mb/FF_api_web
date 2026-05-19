@@ -147,7 +147,7 @@ export const createRazorpayOrder = async (req, res) => {
       const bestOffers = await findBestOffers(
         userId,
         { items: orderItems, subtotal: totalAmount, merchantTotals },
-        req.body.couponCode || null,
+        req.body.couponCode || cart.couponCode || null,
         [],
         'try_and_buy'
       );
@@ -176,20 +176,20 @@ export const createRazorpayOrder = async (req, res) => {
     }
 
     // === SERVICE GST (18% on delivery + tip) ===
-    const serviceGST = parseFloat(((deliveryCharge + deliveryTip) * 0.18).toFixed(2));
+    const serviceGST = Math.round((deliveryCharge + deliveryTip) * 0.18);
 
     // === FINAL PAYABLE ===
     // Customer pays delivery + return charge + tip + service GST upfront.
-    const upfrontPayable = deliveryCharge + returnCharge + deliveryTip + serviceGST;
-    const finalPayable = totalAmount - offerDiscount + upfrontPayable;
+    const upfrontPayable = Math.round(deliveryCharge + returnCharge + deliveryTip + serviceGST);
+    const finalPayable = Math.round(totalAmount - offerDiscount + upfrontPayable);
 
     let razorpayOrderId = `free_${Date.now()}`;
     let paymentStatus = "delivery_fee_paid";
     
-    if (Math.round(upfrontPayable * 100) > 0) {
+    if (upfrontPayable > 0) {
       // === RAZORPAY ORDER ===
       const razorpayOrder = await razorpay.orders.create({
-        amount: Math.round(upfrontPayable * 100), // Only pay delivery-related fees upfront
+        amount: upfrontPayable * 100, // Only pay delivery-related fees upfront
         currency: "INR",
         receipt: `receipt_${Date.now()}`,
         payment_capture: 1,
@@ -264,10 +264,16 @@ export const createRazorpayOrder = async (req, res) => {
     
     // Clear only this merchant's items from cart (not the whole cart)
     const merchantItemIds = merchantItems.map(i => i._id);
-    await Cart.updateOne(
+    const updatedCartDoc = await Cart.findOneAndUpdate(
       { userId },
-      { $pull: { items: { _id: { $in: merchantItemIds } } } }
+      { $pull: { items: { _id: { $in: merchantItemIds } } } },
+      { new: true }
     );
+    if (updatedCartDoc && updatedCartDoc.items.length === 0) {
+      updatedCartDoc.couponCode = null;
+      updatedCartDoc.selectedOffers = [];
+      await updatedCartDoc.save();
+    }
 
     // Notify Merchant
     try {
@@ -379,11 +385,20 @@ export const verifyPayment = async (req, res) => {
         .filter(i => (i.merchantId?.toString()) === orderMerchantId)
         .map(i => i._id);
       if (itemIdsToRemove.length > 0) {
-        await Cart.updateOne(
-          { userId: order.userId },
-          { $pull: { items: { _id: { $in: itemIdsToRemove } } } },
-          { session }
-        );
+        const remainingItems = userCart.items.filter(i => (i.merchantId?.toString()) !== orderMerchantId);
+        if (remainingItems.length === 0) {
+          await Cart.updateOne(
+            { userId: order.userId },
+            { $pull: { items: { _id: { $in: itemIdsToRemove } } }, $set: { couponCode: null, selectedOffers: [] } },
+            { session }
+          );
+        } else {
+          await Cart.updateOne(
+            { userId: order.userId },
+            { $pull: { items: { _id: { $in: itemIdsToRemove } } } },
+            { session }
+          );
+        }
       }
     }
 
@@ -726,9 +741,8 @@ export const initiateReturn = async (req, res) => {
       }
     }
 
-    // Update final billing only for kept ("accepted") items
-    order.finalBilling.baseAmount = baseAmount;
-    order.finalBilling.totalPayable = baseAmount; // You can add fee/GST later if needed
+    order.finalBilling.baseAmount = Math.round(baseAmount);
+    order.finalBilling.totalPayable = Math.round(baseAmount); // You can add fee/GST later if needed
     // Optionally add tryAndBuyFee, GST, etc. here if applicable
 
     // Determine final order status
