@@ -49,6 +49,11 @@ export const createRazorpayOrder = async (req, res) => {
       return res.status(400).json({ message: "No items found for this merchant in your cart" });
     }
 
+    const totalMerchantItemsQuantity = merchantItems.reduce((acc, item) => acc + item.quantity, 0);
+    if (totalMerchantItemsQuantity > 6) {
+      return res.status(400).json({ message: "You can only checkout a maximum of 6 Try & Buy items per merchant." });
+    }
+
     // === VALIDATE ADDRESS ===
     const deliveryAddress = await Address.findOne({ _id: addressId, user: userId });
     if (!deliveryAddress) {

@@ -588,7 +588,7 @@ export const getProductsByMerchantId = async (req, res) => {
     const { merchantId } = req.params;
     console.log(merchantId);
 
-    const products = await Product.find({ merchantId })
+    const products = await Product.find({ merchantId, isDeleted: { $ne: true } })
       .populate("brandId", "name")
       .populate("categoryId", "name")
       .populate("subCategoryId", "name")
@@ -708,7 +708,11 @@ export const deleteProduct = async (req, res) => {
   try {
     const { productId } = req.params;
 
-    const deleted = await Product.findOneAndDelete({ _id: productId, merchantId: req.merchantId });
+    const deleted = await Product.findOneAndUpdate(
+      { _id: productId, merchantId: req.merchantId },
+      { isDeleted: true },
+      { new: true }
+    );
 
     if (!deleted) {
       return res.status(404).json({

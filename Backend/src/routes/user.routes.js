@@ -420,7 +420,7 @@ router.delete("/address/:id", authMiddleware, deleteAddress);
 
 // ── Recently Viewed ──
 router.post('/recently-viewed/add', authMiddleware, addToRecentlyViewed);
-router.get('/recently-viewed/my', authMiddleware, getMyRecentlyViewed);
+router.get('/recently-viewed/my', authMiddleware, resolveNearbyMerchants, getMyRecentlyViewed);
 
 
 // ── Reviews ──

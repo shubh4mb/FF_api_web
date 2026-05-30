@@ -52,11 +52,17 @@ export const getMyRecentlyViewed = asyncHandler(async (req, res) => {
   const recentlyViewedItems = await RecentlyViewed.find({ userId })
     .populate({
       path: 'productId',
-      select: 'name brandId ratings isTriable variants',
-      populate: {
-        path: 'brandId',
-        select: 'name',
-      },
+      select: 'name brandId merchantId ratings isTriable variants',
+      populate: [
+        {
+          path: 'brandId',
+          select: 'name',
+        },
+        {
+          path: 'merchantId',
+          select: 'isOnline isZoneLive',
+        }
+      ],
     })
     .sort({ updatedAt: -1 })
     .limit(20);
@@ -67,6 +73,14 @@ export const getMyRecentlyViewed = asyncHandler(async (req, res) => {
     .map(item => {
       const product = item.productId;
       const variant = product.variants.id(item.variantId) || product.variants[0];
+
+      const nearbySet = new Set(req.nearbyMerchantIds?.map(id => id.toString()) || []);
+      const isNearby = product.merchantId ? nearbySet.has(product.merchantId._id.toString()) : false;
+      
+      const isOnline = product.merchantId?.isOnline !== undefined ? product.merchantId.isOnline : true;
+      const isZoneLive = product.merchantId?.isZoneLive !== undefined ? product.merchantId.isZoneLive : true;
+      
+      const isInstantBuyable = isNearby && isOnline && isZoneLive;
 
       return {
         _id: product._id,
@@ -79,6 +93,8 @@ export const getMyRecentlyViewed = asyncHandler(async (req, res) => {
         ratings: product.ratings,
         isTriable: product.isTriable,
         variantId: item.variantId,
+        isNearby,
+        isInstantBuyable,
       };
     });
 

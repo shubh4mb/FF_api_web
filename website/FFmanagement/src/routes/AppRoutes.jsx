@@ -32,6 +32,7 @@ import Zones from '../pages/admin/Zones';
 import IncentiveManagement from '../pages/admin/IncentiveManagement';
 import PayoutManagement from '../pages/admin/PayoutManagement';
 import SupportTickets from '../pages/admin/SupportTickets';
+import ZipCoverRequests from '../pages/admin/ZipCoverRequests';
 
 const AppRoutes = () => {
   return (
@@ -69,6 +70,7 @@ const AppRoutes = () => {
             <Route path="incentives" element={<IncentiveManagement />} />
             <Route path="payouts" element={<PayoutManagement />} />
             <Route path="support" element={<SupportTickets />} />
+            <Route path="zip-covers" element={<ZipCoverRequests />} />
           </Route>
         </Route>
 

@@ -236,6 +236,19 @@ function Sidebar() {
               Settings
             </NavLink>
           </li>
+          <li>
+            <NavLink
+              to="/admin/zip-covers"
+              className={({ isActive }) =>
+                `block px-4 py-2 rounded-lg transition-colors ${isActive
+                  ? 'bg-sky-400 text-slate-800 font-semibold'
+                  : 'hover:bg-sky-700 hover:text-sky-400'
+                }`
+              }
+            >
+              Zip Cover Requests
+            </NavLink>
+          </li>
         </ul>
       </nav>
 

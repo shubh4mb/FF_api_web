@@ -8,6 +8,7 @@ import { addTitleBanner } from '../controllers/adminControllers/titleBanner.cont
 import { addCart, getCart } from '../controllers/adminControllers/cart.controllers.js';
 import { addZone, getAllZones, checkZoneOverlap, updateZone, deleteZone } from '../controllers/adminControllers/zone.controllers.js';
 import { getAppConfig, updateAppConfig } from '../controllers/adminControllers/appConfig.controllers.js';
+import { getDashboardStats } from '../controllers/adminControllers/dashboard.controllers.js';
 import { verifyAdmin } from '../middleware/adminAuth.middleware.js';
 import adminBannerRoutes from './adminBanner.routes.js';
 import { createAttribute, getAttributes, updateAttribute, deleteAttribute } from '../controllers/adminControllers/attribute.controllers.js';
@@ -20,6 +21,9 @@ import { getPayouts, triggerPayout, getPayoutById } from '../controllers/adminCo
 const router = express.Router();
 
 router.use('/banners', adminBannerRoutes);
+
+// ── Dashboard Stats ──
+router.get('/dashboard/stats', verifyAdmin, getDashboardStats);
 
 // ── Categories ──
 router.post('/addCategory', verifyAdmin, upload.fields([
@@ -186,4 +190,9 @@ router.get('/support/stats', verifyAdmin, async (req, res) => {
   }
 });
 
+// ── Zip Covers ──
+import zipCoverRoutes from './adminRoutes/zipCover.routes.js';
+router.use('/zip-covers', verifyAdmin, zipCoverRoutes);
+
 export default router;
+

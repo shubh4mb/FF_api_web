@@ -286,10 +286,10 @@ export const updateMerchantShopDetails = async (req, res) => {
       zoneId = zone._id;
 
       // If they optionally chose courier delivery, ensure they provided the required conditions
-      if (enableCourierDelivery && (!shipsWithinHours || !acceptsReturns)) {
+      if (enableCourierDelivery && !shipsWithinHours) {
         return res.status(400).json({
           success: false,
-          message: "To enable Courier Delivery, you must specify shipping hours and accept returns."
+          message: "To enable Courier Delivery, you must specify shipping hours."
         });
       }
     } else {
@@ -306,11 +306,11 @@ export const updateMerchantShopDetails = async (req, res) => {
       enableCourierDelivery = true; // Force ON for merchants outside Try & Buy zones
 
       // Enforce mandatory requirements for out-of-zone
-      if (!shipsWithinHours || !acceptsReturns) {
+      if (!shipsWithinHours) {
         return res.status(400).json({
           success: false,
           requiresOutOfZoneDetails: true,
-          message: "Merchants outside Try & Buy zones must support courier shipping, specify max shipping hours, and accept returns."
+          message: "Merchants outside Try & Buy zones must support courier shipping and specify max shipping hours."
         });
       }
     }

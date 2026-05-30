@@ -34,6 +34,20 @@ export const addToCart = async (req, res) => {
 
     let cart = await Cart.findOne({ userId });
 
+    if (cart) {
+      const currentMerchantQty = cart.items
+        .filter(item => item.merchantId.toString() === merchantId.toString())
+        .reduce((sum, item) => sum + item.quantity, 0);
+
+      if (currentMerchantQty + quantity > 6) {
+        return res.status(400).json({ message: "You can only have up to 6 Try & Buy items per merchant." });
+      }
+    } else {
+      if (quantity > 6) {
+        return res.status(400).json({ message: "You can only have up to 6 Try & Buy items per merchant." });
+      }
+    }
+
     if (!cart) {
       cart = new Cart({
         userId,
@@ -349,6 +363,16 @@ export const updateCartQuantity = async (req, res) => {
     if (!cart) return res.status(404).json({ success: false, message: 'Cart not found' });
     const item = cart.items.id(cartId);
     if (!item) return res.status(404).json({ success: false, message: 'Item not found in cart' });
+
+    const merchantId = item.merchantId.toString();
+    const currentMerchantQtyExcludingThisItem = cart.items
+      .filter(i => i.merchantId.toString() === merchantId && i._id.toString() !== cartId)
+      .reduce((sum, i) => sum + i.quantity, 0);
+
+    if (currentMerchantQtyExcludingThisItem + quantity > 6) {
+      return res.status(400).json({ success: false, message: "You can only have up to 6 Try & Buy items per merchant." });
+    }
+
     item.quantity = quantity;
     await cart.save();
     return res.status(200).json({ success: true, message: 'Quantity updated', updatedItem: item });

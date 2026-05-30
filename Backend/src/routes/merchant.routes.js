@@ -246,4 +246,9 @@ router.put('/offers/:id', authMiddlewareMerchant, updateMerchantOffer);
 router.patch('/offers/:id/toggle', authMiddlewareMerchant, toggleMerchantOffer);
 router.delete('/offers/:id', authMiddlewareMerchant, deleteMerchantOffer);
 
+// ── Zip Covers ──
+import zipCoverRoutes from './merchantRoutes/zipCover.routes.js';
+router.use('/zip-covers', zipCoverRoutes);
+
+
 export default router;
