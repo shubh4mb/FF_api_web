@@ -279,11 +279,13 @@ export const updateMerchantShopDetails = async (req, res) => {
 
     let zoneName = null;
     let zoneId = null;
+    let isZoneLive = false;
 
     if (zone) {
       // Inside Try & Buy Zone
       zoneName = zone.zoneName;
       zoneId = zone._id;
+      isZoneLive = zone.status === "Active";
 
       // If they optionally chose courier delivery, ensure they provided the required conditions
       if (enableCourierDelivery && !shipsWithinHours) {
@@ -342,6 +344,7 @@ export const updateMerchantShopDetails = async (req, res) => {
           address: finalAddress,
           zoneName,
           zoneId,
+          isZoneLive,
           enableCourierDelivery,
           shipsWithinHours,
           acceptsReturns,

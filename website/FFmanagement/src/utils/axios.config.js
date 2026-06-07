@@ -1,7 +1,6 @@
 import axios from 'axios';
 import toast from 'react-hot-toast';
-
-let API_URL = 'http://192.168.0.102:5000/api/';
+let API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api/';
 
 // Only use VITE_API_URL if we are not running on localhost (e.g. in production)
 if (typeof window !== 'undefined' && window.location.hostname !== 'localhost') {

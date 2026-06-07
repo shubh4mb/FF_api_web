@@ -10,7 +10,7 @@ import { ApiError } from "../../utils/ApiError.js";
  * @route POST /api/zones
  */
 export const addZone = asyncHandler(async (req, res) => {
-  const { zoneName, city, state, boundary, centerCoordinates } = req.body;
+  const { zoneName, city, state, boundary, centerCoordinates, status } = req.body;
 
   // 1️⃣ Convert to Turf polygon
   const turfPolygon = turf.polygon(boundary.coordinates);
@@ -28,6 +28,7 @@ export const addZone = asyncHandler(async (req, res) => {
     boundary,                         // original
     deliveryBoundary: bufferedPolygon.geometry, // 🔥 new
     centerCoordinates,
+    status,
   });
 
   // 4️⃣ Auto-sync merchants within this zone
