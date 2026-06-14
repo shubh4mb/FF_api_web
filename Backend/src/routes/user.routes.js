@@ -20,6 +20,7 @@ import { getNearbyMerchants } from '../controllers/userControllers/merchant.cont
 import { checkDeliveryAvailability } from '../controllers/adminControllers/zone.controllers.js';
 import { resolveNearbyMerchants } from '../middleware/nearbyMerchants.middleware.js';
 import Notification from "../models/notification.model.js";
+import User from "../models/user.model.js";
 import { getWalletDetails } from "../helperFns/walletHelper.js";
 
 import userBannerRoutes from './userBanner.routes.js';
@@ -183,6 +184,47 @@ router.post('/checkDeliveryAvailability', checkDeliveryAvailability);
 router.get('/merchants/nearby', resolveNearbyMerchants, getNearbyMerchants);
 
 router.put('/push-token', authMiddleware, addPushToken);
+
+router.get("/profile", authMiddleware, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.userId).select("-password");
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+    return res.status(200).json({ success: true, user });
+  } catch (err) {
+    console.error("Get profile error:", err);
+    return res.status(500).json({ message: "Failed to fetch profile" });
+  }
+});
+
+router.put("/profile/phone", authMiddleware, async (req, res) => {
+  try {
+    const { phoneNumber } = req.body;
+    if (!phoneNumber || phoneNumber.length !== 10) {
+      return res.status(400).json({ message: "Valid 10-digit phone number is required" });
+    }
+    
+    // Check if phone number is already taken
+    const existingUser = await User.findOne({ phoneNumber });
+    if (existingUser) {
+      return res.status(400).json({ message: "Phone number is already registered to another account" });
+    }
+
+    const user = await User.findByIdAndUpdate(
+      req.user.userId,
+      { phoneNumber },
+      { new: true }
+    );
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+    return res.status(200).json({ success: true, user, message: "Phone number updated successfully" });
+  } catch (err) {
+    console.error("Update phone error:", err);
+    return res.status(500).json({ message: "Failed to update phone number" });
+  }
+});
 
 /**
  * @swagger

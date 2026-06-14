@@ -1,6 +1,7 @@
 import express from 'express';
 import { sendOTP, verifyOTP, refreshUserToken } from '../controllers/auth.controllers.js';
 import { adminLogin, registerAdmin, refreshAdminToken } from '../controllers/adminAuth.controllers.js';
+import { googleLogin } from '../controllers/googleAuth.controllers.js';
 
 const router = express.Router();
 
@@ -72,6 +73,31 @@ router.post('/verify-otp', verifyOTP);
  *     tags: [Auth]
  */
 router.post('/refresh', refreshUserToken);
+
+/**
+ * @swagger
+ * /api/auth/google-login:
+ *   post:
+ *     summary: Authenticate user via Google Sign-In
+ *     tags: [Auth]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - idToken
+ *             properties:
+ *               idToken:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Login successful
+ *       401:
+ *         description: Invalid Google token
+ */
+router.post('/google-login', googleLogin);
 
 /**
  * @swagger

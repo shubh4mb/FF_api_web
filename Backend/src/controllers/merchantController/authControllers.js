@@ -96,6 +96,7 @@ export const verifyEmailOtp = async (req, res) => {
 
     res.status(200).json({
       message: "Email verified successfully",
+      refreshToken,
       merchant: {
         _id: merchant._id,
         email: merchant.email,
@@ -470,6 +471,7 @@ export const loginMerchant = async (req, res) => {
     // ==== Response ====
     return res.json({
       token,
+      refreshToken,
       merchant: {
         id: merchant._id,
         shopName: merchant.shopName,
@@ -623,6 +625,7 @@ export const refreshMerchantToken = async (req, res) => {
 
     return res.status(200).json({ 
       token, 
+      refreshToken: newRefreshToken,
       merchant: {
         id: merchant._id,
         shopName: merchant.shopName,

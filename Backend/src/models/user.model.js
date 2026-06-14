@@ -18,6 +18,16 @@ const userSchema = new mongoose.Schema({
   phoneNumber: {
     type: String,
     unique: true,
+    sparse: true,
+  },
+  googleId: {
+    type: String,
+    unique: true,
+    sparse: true,
+  },
+  profilePicture: {
+    type: String,
+    default: '',
   },
   name: {
     type: String,

@@ -202,15 +202,52 @@ export const orderRequestForMerchant = async (req, res) => {
 };
 export const getAllOrder = async (req, res) => {
   try {
-    const orders = await Order.find({ merchantId: req.merchantId })
-      .select('orderStatus items totalAmount deliveryRiderStatus createdAt deliveryRiderDetails deliveryLocation userId otp')
+    const orders = await Order.find({ merchantId: req.merchantId, orderStatus: { $ne: 'pending' } })
+      .select('orderStatus items totalAmount deliveryRiderStatus createdAt updatedAt deliveryRiderId deliveryRiderDetails deliveryLocation userId otp cancellationRequest cancellationRequestReason')
       .sort({ createdAt: -1 })
       .lean();
     return res.status(200).json({ orders });
   } catch (error) {
     return res.status(500).json({ message: "Error fetching orders" });
   }
-}
+};
+
+export const requestOrderCancellation = async (req, res) => {
+  const { orderId } = req.params;
+  const { reason } = req.body;
+
+  try {
+    const order = await Order.findById(orderId);
+    if (!order) {
+      return res.status(404).json({ message: "Order not found" });
+    }
+
+    if (order.merchantId.toString() !== req.merchantId.toString()) {
+      return res.status(403).json({ message: "Forbidden: You do not own this order" });
+    }
+
+    const terminalStatuses = ["completed", "cancelled", "rejected"];
+    if (terminalStatuses.includes(order.orderStatus)) {
+      return res.status(400).json({ message: `Cannot request cancellation for order in ${order.orderStatus} state` });
+    }
+
+    order.cancellationRequest = 'pending';
+    order.cancellationRequestReason = reason || "Merchant requested cancellation";
+    await order.save();
+
+    const io = getIO();
+    emitOrderUpdate(io, orderId, order);
+
+    return res.status(200).json({
+      success: true,
+      message: "Cancellation request submitted to admin",
+      order
+    });
+  } catch (error) {
+    console.error("Request Cancellation Error:", error);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+};
 
 export const orderPacked = async (req, res) => {
   const io = getIO();

@@ -5,6 +5,10 @@ export const registerOrderSockets = (io, socket) => {
     socket.join(orderId);
   });
 
+  socket.on("leaveOrderRoom", (orderId) => {
+    socket.leave(orderId);
+  });
+
   socket.on("disconnect", () => {
     // cleanup handled by socket.io automatically
   });

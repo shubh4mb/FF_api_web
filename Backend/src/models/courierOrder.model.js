@@ -77,6 +77,34 @@ const CourierOrderSchema = new mongoose.Schema({
     enum: ['pending', 'paid', 'failed', 'refunded'],
     default: 'pending'
   },
+  returnRequest: {
+    status: {
+      type: String,
+      enum: ['none', 'pending', 'picked', 'shipped', 'received', 'rejected'],
+      default: 'none'
+    },
+    reason: { type: String, default: null },
+    faultType: {
+      type: String,
+      enum: ['merchant_fault', 'customer_choice'],
+      default: null
+    },
+    returnCharge: { type: Number, default: 0 },
+    items: [
+      {
+        productId: { type: mongoose.Schema.Types.ObjectId, ref: 'Product' },
+        variantId: { type: mongoose.Schema.Types.ObjectId },
+        name: String,
+        quantity: Number,
+        price: Number,
+        size: String,
+        image: String,
+      }
+    ],
+    requestedAt: { type: Date, default: null },
+    processedAt: { type: Date, default: null },
+    images: [{ type: String }],
+  },
   trackingDetails: {
     trackingId: { type: String, default: null },
     courierPartner: { type: String, default: null },

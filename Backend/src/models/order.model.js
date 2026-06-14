@@ -189,6 +189,15 @@ const OrderSchema = new mongoose.Schema({
     enum: ['unsettled', 'settled', 'failed'],
     default: 'unsettled'
   },
+  cancellationRequest: {
+    type: String,
+    enum: ['none', 'pending', 'approved', 'rejected'],
+    default: 'none'
+  },
+  cancellationRequestReason: {
+    type: String,
+    default: null
+  },
 
 }, { timestamps: true });
 

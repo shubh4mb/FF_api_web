@@ -5,13 +5,13 @@ import { deleteVariant, addBrand, getBrands, getBaseProductById, getProductsByMe
 
 import { addMerchant } from '../controllers/merchantController/merchant.controller.js';
 import { loginMerchant, registerMerchant, updateMerchantShopDetails, updateMerchantBankDetails, updateMerchantKYC, updateMerchantOperatingHours, activateMerchant, registerPhone, sendEmailOtp, verifyEmailOtp, getMerchantByEmail, toggleMerchantOnlineStatus, refreshMerchantToken, logoutMerchant } from '../controllers/merchantController/authControllers.js';
-import { getAllOrder, saveProductDetails } from '../controllers/merchantController/order.controllers.js';
+import { getAllOrder, saveProductDetails, requestOrderCancellation } from '../controllers/merchantController/order.controllers.js';
 import { authMiddlewareMerchant } from '../middleware/jwtAuth.js';
 import { getWalletDetails } from '../helperFns/walletHelper.js';
 import { getPlacedOrder, orderRequestForMerchant, orderPacked } from '../controllers/merchantController/order.controllers.js';
 import { getMerchantById } from '../controllers/merchantController/merchant.controller.js';
 import { getMerchantAnalytics } from '../controllers/merchantController/analytics.controller.js';
-import { getMerchantCourierOrders, updateCourierOrderStatus } from '../controllers/userControllers/courierOrder.controllers.js';
+import { getMerchantCourierOrders, updateCourierOrderStatus, updateCourierOrderReturnStatus } from '../controllers/userControllers/courierOrder.controllers.js';
 import { getAllCollections } from '../controllers/adminControllers/collection.controllers.js';
 
 const router = express.Router();
@@ -208,12 +208,14 @@ router.get('/getAllOrders', authMiddlewareMerchant, getAllOrder)
 router.put('/orderRequestForMerchant/:orderId', authMiddlewareMerchant, orderRequestForMerchant)
 router.get('/getPlacedOrder', authMiddlewareMerchant, getPlacedOrder)
 router.post('/order/packed/:orderId', authMiddlewareMerchant, orderPacked)
+router.put('/order/:orderId/request-cancellation', authMiddlewareMerchant, requestOrderCancellation)
 
 router.put('/products/:id/details', authMiddlewareMerchant, saveProductDetails);
 
 // ── Courier Orders ──
 router.get('/courier/getAllOrders', authMiddlewareMerchant, getMerchantCourierOrders);
 router.patch('/courier/order/:orderId/status', authMiddlewareMerchant, updateCourierOrderStatus);
+router.patch('/courier/order/:orderId/return/status', authMiddlewareMerchant, updateCourierOrderReturnStatus);
 
 // router.post('/updateOrderStatus',updateOrderStatus);
 // router.post('orderPacked',authMiddlewareMerchant,orderPacked)  

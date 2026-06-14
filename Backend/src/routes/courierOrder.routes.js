@@ -1,5 +1,6 @@
 import express from 'express';
 import { authMiddleware } from '../middleware/jwtAuth.js';
+import upload from '../middleware/multer.js';
 import {
   initiateCourierOrder,
   initiateCourierCheckout,
@@ -9,6 +10,8 @@ import {
   getMerchantCourierOrders,
   updateCourierOrderStatus,
   cancelCourierOrder,
+  getCourierOrderReturnCharge,
+  requestCourierOrderReturn,
 } from '../controllers/userControllers/courierOrder.controllers.js';
 
 const router = express.Router();
@@ -123,6 +126,8 @@ router.get('/orders/:orderId', authMiddleware, getCourierOrderById);
  *         description: Order cancelled
  */
 router.post('/orders/cancel/:orderId', authMiddleware, cancelCourierOrder);
+router.post('/orders/:orderId/return', authMiddleware, upload.array('images', 5), requestCourierOrderReturn);
+router.get('/orders/:orderId/return-charge', authMiddleware, getCourierOrderReturnCharge);
 
 // ── Merchant Routes ──
 

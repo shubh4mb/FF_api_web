@@ -7,6 +7,7 @@ import mongoose from "mongoose";
 import crypto from "crypto";
 import razorpay from "../../config/RazorPay.js";
 import { findBestOffers, recordOfferUsage } from '../../services/offerEngine.js';
+import { v2 as cloudinary } from 'cloudinary';
 
 const COURIER_DELIVERY_CHARGE = 40;
 
@@ -690,7 +691,7 @@ export const getMerchantCourierOrders = async (req, res) => {
   const merchantId = req.merchantId || req.params.merchantId;
 
   try {
-    const orders = await CourierOrder.find({ merchantId })
+    const orders = await CourierOrder.find({ merchantId, paymentStatus: { $ne: 'pending' } })
       .sort({ createdAt: -1 })
       .lean();
 
@@ -764,5 +765,281 @@ export const cancelCourierOrder = async (req, res) => {
   } catch (err) {
     console.error("Cancel courier order error:", err);
     res.status(500).json({ success: false, message: "Server error" });
+  }
+};
+
+/**
+ * Helper to calculate return charge based on delivery vs merchant address
+ */
+export const calculateReturnCharge = (deliveryLocation, merchantAddress) => {
+  if (!deliveryLocation || !merchantAddress) return 120; // Default fallback
+
+  const deliveryCity = (deliveryLocation.city || "").trim().toLowerCase();
+  const deliveryState = (deliveryLocation.state || "").trim().toLowerCase();
+  const merchantCity = (merchantAddress.city || "").trim().toLowerCase();
+  const merchantState = (merchantAddress.state || "").trim().toLowerCase();
+
+  if (deliveryCity && merchantCity && deliveryCity === merchantCity) {
+    return 50;
+  } else if (deliveryState && merchantState && deliveryState === merchantState) {
+    return 80;
+  } else {
+    return 120;
+  }
+};
+
+/**
+ * Preview/get return charge for a courier order (User side)
+ */
+export const getCourierOrderReturnCharge = async (req, res) => {
+  const { orderId } = req.params;
+  const userId = req.user.userId;
+
+  try {
+    const order = await CourierOrder.findOne({ _id: orderId, userId });
+    if (!order) {
+      return res.status(404).json({ success: false, message: "Order not found" });
+    }
+
+    const merchant = await Merchant.findById(order.merchantId);
+    if (!merchant) {
+      return res.status(404).json({ success: false, message: "Merchant not found" });
+    }
+
+    const returnCharge = calculateReturnCharge(order.deliveryLocation, merchant.address);
+
+    return res.status(200).json({ success: true, returnCharge });
+  } catch (err) {
+    console.error("Get courier order return charge error:", err);
+    return res.status(500).json({ success: false, message: "Server error", error: err.message });
+  }
+};
+
+/**
+ * Submit return request for items on a delivered courier order (User side)
+ */
+export const requestCourierOrderReturn = async (req, res) => {
+  const { orderId } = req.params;
+  const userId = req.user.userId;
+  const { items, reason, faultType } = req.body;
+
+  let parsedItems = items;
+  if (typeof items === 'string') {
+    try {
+      parsedItems = JSON.parse(items);
+    } catch (e) {
+      return res.status(400).json({ success: false, message: "Invalid JSON format for items" });
+    }
+  }
+
+  if (!parsedItems || !Array.isArray(parsedItems) || parsedItems.length === 0) {
+    return res.status(400).json({ success: false, message: "Items to return are required" });
+  }
+  if (!reason) {
+    return res.status(400).json({ success: false, message: "Return reason is required" });
+  }
+  if (!faultType || !['merchant_fault', 'customer_choice'].includes(faultType)) {
+    return res.status(400).json({ success: false, message: "Valid faultType is required" });
+  }
+
+  try {
+    const order = await CourierOrder.findOne({ _id: orderId, userId });
+    if (!order) {
+      return res.status(404).json({ success: false, message: "Order not found" });
+    }
+
+    if (order.orderStatus !== 'delivered') {
+      return res.status(400).json({ success: false, message: "Only delivered orders can be returned" });
+    }
+
+    if (order.returnRequest && order.returnRequest.status !== 'none') {
+      return res.status(400).json({ success: false, message: "A return request has already been initiated/processed" });
+    }
+
+    const returnItems = [];
+    for (const reqItem of parsedItems) {
+      const orderItem = order.items.find(
+        oi => oi.productId.toString() === reqItem.productId.toString() &&
+              oi.variantId.toString() === reqItem.variantId.toString()
+      );
+      if (!orderItem) {
+        return res.status(400).json({ success: false, message: `Item with product ${reqItem.productId} not found in this order` });
+      }
+      if (reqItem.quantity <= 0 || reqItem.quantity > orderItem.quantity) {
+        return res.status(400).json({ success: false, message: `Invalid return quantity for item ${orderItem.name}` });
+      }
+      returnItems.push({
+        productId: orderItem.productId,
+        variantId: orderItem.variantId,
+        name: orderItem.name,
+        quantity: reqItem.quantity,
+        price: orderItem.price,
+        size: orderItem.size,
+        image: orderItem.image
+      });
+    }
+
+    // Upload return evidence images to Cloudinary
+    const uploadedImages = [];
+    if (req.files && req.files.length > 0) {
+      for (const file of req.files) {
+        const result = await new Promise((resolve, reject) => {
+          const stream = cloudinary.uploader.upload_stream(
+            {
+              folder: `flashfits/courier-returns/${orderId}`,
+              resource_type: "image",
+            },
+            (error, result) => {
+              if (error) reject(error);
+              else resolve(result);
+            }
+          );
+          stream.end(file.buffer);
+        });
+        uploadedImages.push(result.secure_url);
+      }
+    }
+
+    const merchant = await Merchant.findById(order.merchantId);
+    if (!merchant) {
+      return res.status(404).json({ success: false, message: "Merchant not found" });
+    }
+
+    const returnCharge = calculateReturnCharge(order.deliveryLocation, merchant.address);
+
+    order.returnRequest = {
+      status: 'pending',
+      reason,
+      faultType,
+      returnCharge,
+      items: returnItems,
+      requestedAt: new Date(),
+      images: uploadedImages
+    };
+
+    await order.save();
+
+    return res.status(200).json({ success: true, message: "Return request submitted successfully", order });
+  } catch (err) {
+    console.error("Request courier order return error:", err);
+    return res.status(500).json({ success: false, message: "Server error", error: err.message });
+  }
+};
+
+/**
+ * Update courier order return status (Merchant side)
+ * Supports transitioning: pending -> picked -> shipped -> received/rejected
+ */
+export const updateCourierOrderReturnStatus = async (req, res) => {
+  const { orderId } = req.params;
+  const merchantId = req.merchantId;
+  const { status, rejectReason } = req.body;
+
+  const validStatuses = ['picked', 'shipped', 'received', 'rejected'];
+  if (!status || !validStatuses.includes(status)) {
+    return res.status(400).json({ success: false, message: "Invalid or missing status" });
+  }
+
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
+  try {
+    const order = await CourierOrder.findById(orderId).session(session);
+    if (!order) {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(404).json({ success: false, message: "Order not found" });
+    }
+
+    if (order.merchantId.toString() !== merchantId.toString()) {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(403).json({ success: false, message: "Forbidden: You do not own this order" });
+    }
+
+    if (!order.returnRequest || order.returnRequest.status === 'none') {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(400).json({ success: false, message: "No return request exists for this order" });
+    }
+
+    if (['received', 'rejected'].includes(order.returnRequest.status)) {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(400).json({ success: false, message: "Return has already been processed" });
+    }
+
+    if (status === 'received') {
+      // Process refund calculations
+      let totalReturnItemAmount = 0;
+      for (const item of order.returnRequest.items) {
+        totalReturnItemAmount += item.price * item.quantity;
+      }
+
+      const isMerchantFault = order.returnRequest.faultType === 'merchant_fault';
+      const returnCharge = order.returnRequest.returnCharge || 0;
+      let refundAmount = totalReturnItemAmount;
+
+      if (!isMerchantFault) {
+        // Customer bears return charge (deducted from refund)
+        refundAmount = Math.max(0, totalReturnItemAmount - returnCharge);
+      }
+
+      const { creditWallet, debitWallet } = await import("../../helperFns/walletHelper.js");
+
+      if (refundAmount > 0) {
+        const desc = isMerchantFault
+          ? `Refund for returned items in courier order ${order._id} (merchant fault)`
+          : `Refund for returned items in courier order ${order._id} (Return charge: ₹${returnCharge} deducted)`;
+        await creditWallet({
+          ownerType: "user",
+          ownerId: order.userId,
+          amount: refundAmount,
+          description: desc,
+          orderId: order._id,
+          session
+        });
+      }
+
+      if (isMerchantFault && returnCharge > 0) {
+        await debitWallet({
+          ownerType: "merchant",
+          ownerId: order.merchantId,
+          amount: returnCharge,
+          description: `Return charge for merchant-fault return in courier order ${order._id}`,
+          orderId: order._id,
+          session,
+          allowNegative: true
+        });
+      }
+
+      order.returnRequest.status = 'received';
+      order.returnRequest.processedAt = new Date();
+      order.orderStatus = 'returned';
+      order.customerDeliveryStatus = 'returned';
+      order.paymentStatus = 'refunded';
+
+    } else if (status === 'rejected') {
+      order.returnRequest.status = 'rejected';
+      order.returnRequest.processedAt = new Date();
+      if (rejectReason) {
+        order.returnRequest.reason = `${order.returnRequest.reason} (Rejected reason: ${rejectReason})`;
+      }
+    } else {
+      // Just update status to picked or shipped
+      order.returnRequest.status = status;
+    }
+
+    await order.save({ session });
+    await session.commitTransaction();
+    session.endSession();
+
+    return res.status(200).json({ success: true, message: `Return status updated to ${status}`, order });
+
+  } catch (err) {
+    await session.abortTransaction();
+    session.endSession();
+    console.error("Update courier order return status error:", err);
+    return res.status(500).json({ success: false, message: "Server error", error: err.message });
   }
 };

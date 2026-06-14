@@ -17,6 +17,7 @@ import { createOffer, getAllOffers, getOfferById, updateOffer, toggleOffer, dele
 import { createCollection, getAllCollections, updateCollection, deleteCollection } from '../controllers/adminControllers/collection.controllers.js';
 import { createIncentive, getAllIncentives, updateIncentive, toggleIncentive, deleteIncentive } from '../controllers/adminControllers/incentive.controllers.js';
 import { getPayouts, triggerPayout, getPayoutById } from '../controllers/adminControllers/payout.controllers.js';
+import { getCancellationRequests, adminCancelOrder } from '../controllers/adminControllers/order.controllers.js';
 
 const router = express.Router();
 
@@ -189,6 +190,10 @@ router.get('/support/stats', verifyAdmin, async (req, res) => {
     return res.status(500).json({ message: "Failed to fetch stats" });
   }
 });
+
+// ── Order Cancellations ──
+router.get('/orders/cancellation-requests', verifyAdmin, getCancellationRequests);
+router.patch('/orders/:orderId/cancel', verifyAdmin, adminCancelOrder);
 
 // ── Zip Covers ──
 import zipCoverRoutes from './adminRoutes/zipCover.routes.js';
