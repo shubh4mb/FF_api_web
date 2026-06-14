@@ -118,6 +118,7 @@ const CourierOrderSchema = new mongoose.Schema({
     enum: ['unsettled', 'settled', 'failed'],
     default: 'unsettled'
   },
+  deliveredAt: { type: Date, default: null },
 }, { timestamps: true });
 
 // ── Performance Indexes ──

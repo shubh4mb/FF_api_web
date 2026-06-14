@@ -730,6 +730,9 @@ export const updateCourierOrderStatus = async (req, res) => {
     if (['shipped', 'delivered', 'cancelled'].includes(status)) {
         order.customerDeliveryStatus = status;
     }
+    if (status === 'delivered') {
+        order.deliveredAt = new Date();
+    }
 
     await order.save();
 
@@ -850,6 +853,16 @@ export const requestCourierOrderReturn = async (req, res) => {
 
     if (order.orderStatus !== 'delivered') {
       return res.status(400).json({ success: false, message: "Only delivered orders can be returned" });
+    }
+
+    // Enforce 3-day return limit from the delivered date
+    const deliveryDate = order.deliveredAt || order.updatedAt;
+    if (deliveryDate) {
+      const diffTime = Math.abs(new Date().getTime() - new Date(deliveryDate).getTime());
+      const diffDays = diffTime / (1000 * 60 * 60 * 24);
+      if (diffDays > 3) {
+        return res.status(400).json({ success: false, message: "Returns can only be initiated within 3 days of delivery" });
+      }
     }
 
     if (order.returnRequest && order.returnRequest.status !== 'none') {
