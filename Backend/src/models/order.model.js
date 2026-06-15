@@ -194,6 +194,11 @@ const OrderSchema = new mongoose.Schema({
     enum: ['none', 'pending', 'approved', 'rejected'],
     default: 'none'
   },
+  paymentMethod: {
+    type: String,
+    enum: ['online', 'cod'],
+    default: 'online'
+  },
   cancellationRequestReason: {
     type: String,
     default: null

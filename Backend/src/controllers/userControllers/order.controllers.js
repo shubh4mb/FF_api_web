@@ -18,13 +18,15 @@ import { notifyOrderEvent } from "../../helperFns/notificationHelper.js";
 import mongoose from 'mongoose';
 import { findBestOffers, recordOfferUsage, validateOfferEligibility, getApplicableAmount, calculateDiscount } from '../../services/offerEngine.js';
 import Offer from '../../models/offer.model.js';
+import Zone from "../../models/zone.model.js";
+import { inferZone } from "../../utils/zoneInfer.js";
 
 
 
 export const createRazorpayOrder = async (req, res) => {
   try {
     const userId = req.user.userId;
-    const { addressId, deliveryTip = 0, merchantId: requestedMerchantId } = req.body;
+    const { addressId, deliveryTip = 0, merchantId: requestedMerchantId, paymentMethod = 'online' } = req.body;
 
     if (!requestedMerchantId) {
       return res.status(400).json({ message: "merchantId is required for multi-cart checkout" });
@@ -100,6 +102,24 @@ export const createRazorpayOrder = async (req, res) => {
       returnPerKmRate: config.returnPerKmRate,
       waitingCharge: config.waitingCharge
     });
+    // === ENFORCE ZONED PENDING ORDERS LIMIT ===
+    const zoneId = await inferZone(merchantCoords[1], merchantCoords[0]);
+    const zoneDoc = await Zone.findOne({ zoneName: { $regex: new RegExp("^" + zoneId + "$", "i") } });
+    const maxPendingOrders = zoneDoc?.maxPendingOrders ?? 5;
+
+    const PendingOrder = (await import("../../models/pendingOrders.model.js")).default;
+    const currentPendingCount = await PendingOrder.countDocuments({
+      zoneName: zoneId,
+      status: { $in: ["queued", "assigned"] }
+    });
+
+    if (currentPendingCount >= maxPendingOrders) {
+      return res.status(400).json({
+        success: false,
+        message: "High traffic in this zone. All our delivery partners are currently busy. Please try placing your order after some time."
+      });
+    }
+
     const baseDeliveryCharge = deliveryCharge;
     const baseReturnCharge = returnCharge;
 
@@ -246,6 +266,7 @@ export const createRazorpayOrder = async (req, res) => {
       razorpayOrderId: razorpayOrderId,
       paymentStatus: paymentStatus,
       orderStatus: paymentStatus === "delivery_fee_paid" ? "placed" : "pending",
+      paymentMethod: paymentMethod,
     });
 
   await pendingOrder.save();
@@ -1131,6 +1152,208 @@ export const verifyFinalPayment = async (req, res) => {
   }
 };
 
+export const verifyFinalPaymentCod = async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
+  try {
+    const { orderId, items } = req.body;
+    const userId = req.user.userId;
+
+    let cleanOrderId = orderId;
+    if (cleanOrderId && typeof cleanOrderId === 'string') {
+      cleanOrderId = cleanOrderId.replace(/^["']|["']$/g, '').trim();
+    }
+
+    const order = await Order.findOne({ _id: cleanOrderId, userId }).session(session);
+    if (!order) {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(404).json({ message: "Order not found" });
+    }
+
+    if (order.paymentStatus === "paid") {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(200).json({
+        success: true,
+        message: "Payment already verified",
+        orderId: order._id,
+      });
+    }
+
+    // === STEP 1: Update item tryStatus ===
+    for (const payloadItem of items) {
+      const orderItem = order.items.id(payloadItem.itemId);
+      if (!orderItem) continue;
+
+      if (payloadItem.tryStatus === "keep" || payloadItem.tryStatus === "accepted") {
+        orderItem.tryStatus = "accepted";
+        orderItem.returnReason = null;
+      } else if (payloadItem.tryStatus === "return" || payloadItem.tryStatus === "returned") {
+        orderItem.tryStatus = "returned";
+        orderItem.returnReason = payloadItem.returnReason || "Not liked";
+      }
+    }
+
+    const acceptedItems = order.items.filter(
+      item => item.tryStatus === "accepted" || item.tryStatus === "not-triable"
+    );
+
+    // === Recalculate Offers ===
+    let recalculatedDiscount = 0;
+    if (order.appliedOffers && order.appliedOffers.length > 0) {
+      const acceptedSubtotal = acceptedItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+      const merchantTotals = {};
+      const midStr = order.merchantId?._id ? order.merchantId._id.toString() : order.merchantId.toString();
+      merchantTotals[midStr] = acceptedSubtotal;
+      
+      const cartContext = {
+        items: acceptedItems,
+        subtotal: acceptedSubtotal,
+        merchantTotals,
+      };
+
+      for (let i = 0; i < order.appliedOffers.length; i++) {
+        const appliedOffer = order.appliedOffers[i];
+        try {
+          const offerDoc = await Offer.findById(appliedOffer.offerId).lean();
+          if (offerDoc) {
+            let isStillValid = true;
+            if (offerDoc.conditions?.minCartValue > 0 && acceptedSubtotal < offerDoc.conditions.minCartValue) {
+              isStillValid = false;
+            }
+            if (offerDoc.conditions?.minOrderValue > 0 && acceptedSubtotal < offerDoc.conditions.minOrderValue) {
+              isStillValid = false;
+            }
+
+            if (isStillValid) {
+              const applicableAmount = getApplicableAmount(offerDoc, cartContext);
+              if (applicableAmount > 0) {
+                const discount = calculateDiscount(offerDoc, applicableAmount);
+                recalculatedDiscount += discount;
+                order.appliedOffers[i].discountApplied = discount;
+              } else {
+                order.appliedOffers[i].discountApplied = 0;
+              }
+            } else {
+              order.appliedOffers[i].discountApplied = 0;
+            }
+          }
+        } catch (e) {
+          console.error('Failed to recalculate offer for final billing (COD):', e);
+        }
+      }
+    }
+
+    const billing = calculateFinalBilling({
+      orderItems: order.items,
+      returnCharge: order.returnCharge,
+      trialPhaseStart: order.trialPhaseStart,
+      trialPhaseEnd: order.trialPhaseEnd,
+      discountToApply: recalculatedDiscount
+    });
+
+    // Enforce 1000 limit for kept items cash payment
+    if (billing.totalPayable > 1000) {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(400).json({
+        success: false,
+        message: "Liquid cash is not available for amounts greater than ₹1000. Only online payment is allowed."
+      });
+    }
+
+    order.finalBilling.baseAmount = billing.baseAmount;
+    order.finalBilling.gst = billing.gst;
+    order.finalBilling.discount = recalculatedDiscount + billing.returnChargeDeduction;
+    order.finalBilling.totalPayable = billing.totalPayable;
+    order.overtimePenalty = billing.overtimePenalty;
+
+    order.paymentStatus = "paid";
+    order.razorpayPaymentId = `cod_cash_${Date.now()}`;
+
+    const returnedItems = order.items.filter(item => item.tryStatus === 'returned');
+    const allItemsAccepted = returnedItems.length === 0;
+
+    if (allItemsAccepted) {
+      order.orderStatus = "completed";
+      order.customerDeliveryStatus = "completed";
+      order.deliveryRiderStatus = "completed";
+    } else {
+      order.orderStatus = "return_in_progress";
+      order.customerDeliveryStatus = "completed";
+      order.deliveryRiderStatus = "returning";
+    }
+
+    // === Deduct stock for accepted items ===
+    const stockUpdateErrors = [];
+    for (const item of acceptedItems) {
+      const result = await Product.updateOne(
+        { _id: item.productId, "variants._id": item.variantId },
+        { $inc: { "variants.$[variant].sizes.$[size].stock": -item.quantity } },
+        { arrayFilters: [{ "variant._id": item.variantId }, { "size.size": item.size }], session }
+      );
+      if (result.modifiedCount === 0) {
+        stockUpdateErrors.push(item.productId);
+      }
+    }
+
+    // === Free up rider if all accepted ===
+    if (allItemsAccepted && order.deliveryRiderId) {
+      await DeliveryRider.findByIdAndUpdate(order.deliveryRiderId, {
+        currentOrderId: null,
+        isBusy: false,
+        isAvailable: true,
+      }, { session });
+    }
+
+    await order.save({ session });
+    
+    await session.commitTransaction();
+    session.endSession();
+
+    // Settle wallets
+    const { settleOrder } = await import("../../helperFns/orderSettlement.js");
+    settleOrder(order).catch(err => console.error("Settlement failed asynchronously (COD):", err));
+
+    const io = getIO();
+    emitOrderUpdate(io, order._id.toString(), order);
+
+    notifyOrderEvent("customer", "payment_confirmed", {
+      userId: order.userId,
+      orderId: order._id,
+    });
+
+    if (allItemsAccepted) {
+      notifyOrderEvent("customer", "delivery_complete", {
+        userId: order.userId,
+        orderId: order._id,
+      });
+    } else if (order.deliveryRiderId) {
+      notifyOrderEvent("rider", "return_started", {
+        riderId: order.deliveryRiderId,
+        orderId: order._id,
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: allItemsAccepted
+        ? "Selection confirmed. Please hand over the cash to the rider."
+        : "Selection confirmed. Please hand over the cash to the rider. Rider will return the remaining items.",
+      orderId: order._id,
+      hasReturnItems: !allItemsAccepted,
+      stockWarnings: stockUpdateErrors.length > 0 ? stockUpdateErrors : undefined,
+    });
+
+  } catch (error) {
+    console.error("Verify Final Payment COD Error:", error);
+    await session.abortTransaction();
+    session.endSession();
+    return res.status(500).json({ message: "Server error", error: error.message });
+  }
+};
 
 export const cancelOrder = async (req, res) => {
   const session = await mongoose.startSession();

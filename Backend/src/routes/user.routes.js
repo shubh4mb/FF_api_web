@@ -5,7 +5,7 @@ import { phoneLogin, addPushToken } from '../controllers/userControllers/authCon
 import { addToCart, getCart, clearCart, updateCartQuantity, deleteCartItem, getCartCount, moveToCourier, selectOffer, deselectOffer } from '../controllers/userControllers/cart.controllers.js';
 import { addToCourierCart, getCourierCart, clearCourierCart, updateCourierCartQuantity, deleteCourierCartItem, getCourierCartCount, selectOfferCourier, deselectOfferCourier } from '../controllers/userControllers/courierCart.controllers.js';
 import { authMiddleware } from '../middleware/jwtAuth.js';
-import { getAllOrders, initiateReturn, getOrderById, createRazorpayOrder, verifyPayment, razorpayWebhook, createFinalPaymentRazorpayOrder, verifyFinalPayment, cancelOrder } from '../controllers/userControllers/order.controllers.js';
+import { getAllOrders, initiateReturn, getOrderById, createRazorpayOrder, verifyPayment, razorpayWebhook, createFinalPaymentRazorpayOrder, verifyFinalPayment, verifyFinalPaymentCod, cancelOrder } from '../controllers/userControllers/order.controllers.js';
 import { body } from 'express-validator'
 import { createAddress, getAllAddresses, getSingleAddress, updateAddress, deleteAddress } from '../controllers/userControllers/address.controllers.js';
 import {
@@ -441,6 +441,7 @@ router.post('/order/initiateReturn/:orderId', authMiddleware, initiateReturn);
 
 router.post('/order/createFinalPaymentOrder/:orderId', authMiddleware, createFinalPaymentRazorpayOrder);
 router.post('/order/verifyFinalPayment', authMiddleware, verifyFinalPayment);
+router.post('/order/verifyFinalPaymentCod', authMiddleware, verifyFinalPaymentCod);
 router.post('/order/cancel/:orderId', authMiddleware, cancelOrder);
 
 /**

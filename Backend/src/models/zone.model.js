@@ -20,6 +20,10 @@ const zoneSchema = new mongoose.Schema({
       type: String, 
       enum: ['Active', 'Inactive', 'Onboarding'], 
       default: 'Inactive' 
+    },
+    maxPendingOrders: {
+      type: Number,
+      default: 5
     }
 
 })
