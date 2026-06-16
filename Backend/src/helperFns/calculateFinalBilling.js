@@ -3,7 +3,8 @@ export function calculateFinalBilling({
   orderItems, 
   returnCharge = 0, 
   trialPhaseStart, 
-  trialPhaseEnd 
+  trialPhaseEnd,
+  discountToApply = 0
 }) {
 
   // === STEP 1: Accepted (kept or non-triable) items ===
@@ -23,7 +24,7 @@ export function calculateFinalBilling({
     const start = new Date(trialPhaseStart);
     const end = new Date(trialPhaseEnd);
     const minutes = Math.floor((end - start) / (1000 * 60));
-    if (minutes > 10) overtimePenalty = minutes - 10; // ₹1/min over 10 mins
+    if (minutes > 10) overtimePenalty = (minutes - 10) * 2; // ₹2/min over 10 mins
   }
 
   // === STEP 3: Return logic ===
@@ -41,12 +42,12 @@ export function calculateFinalBilling({
   // Deduction only if all items are kept
   const returnChargeDeduction = allItemsKept ? returnCharge : 0;
 
-  // === STEP 4: GST on items (5% for now as an example, or keep 0) ===
-  const gst = parseFloat((baseAmount * 0.05).toFixed(2)); 
+  // === STEP 4: No GST on items — service tax is only on delivery (handled upfront) ===
+  const gst = 0;
 
   // === STEP 5: Final total for THIS payment ===
-  const totalBeforeDeduction = baseAmount + gst + overtimePenalty;
-  const totalPayable = Math.max(0, totalBeforeDeduction - returnChargeDeduction);
+  const totalBeforeDeduction = baseAmount + overtimePenalty;
+  const totalPayable = Math.max(0, Math.round(totalBeforeDeduction - returnChargeDeduction - discountToApply));
 
   return {
     baseAmount,

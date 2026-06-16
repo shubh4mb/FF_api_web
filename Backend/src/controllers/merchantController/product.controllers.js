@@ -4,7 +4,7 @@ import Category from '../../models/category.model.js';
 import { productSchema } from '../../utils/validators/product.validator.js';
 import Brand from "../../models/brand.model.js";
 import Merchant from "../../models/merchant.model.js";
-import { uploadToCloudinary, deleteFromCloudinary } from '../../config/cloudinary.config.js';
+import { storageService } from '../../services/storage.service.js';
 
 export const addVariant = async (req, res) => {
   try {
@@ -67,11 +67,10 @@ export const addVariant = async (req, res) => {
         // New local file
         const file = req.files[fileIndex];
         if (file) {
-          const upload = await uploadToCloudinary(file.buffer, "products");
-          finalImages.push({
-            public_id: upload.public_id,
-            url: upload.secure_url,
-          });
+          const result = await storageService.uploadSingle(file, "products");
+          if (result) {
+            finalImages.push(result);
+          }
         }
         fileIndex++;
       }
@@ -88,11 +87,15 @@ export const addVariant = async (req, res) => {
     };
 
     // Save to DB
-    const updatedProduct = await Product.findByIdAndUpdate(
-      productId,
+    const updatedProduct = await Product.findOneAndUpdate(
+      { _id: productId, merchantId: req.merchantId },
       { $push: { variants: newVariant } },
       { new: true }
     );
+
+    if (!updatedProduct) {
+      return res.status(404).json({ success: false, message: "Product not found or unauthorized" });
+    }
 
     return res.json({
       success: true,
@@ -146,6 +149,7 @@ export const updateVariant = async (req, res) => {
     // ----------------------------
     const product = await Product.findOne({
       _id: productId,
+      merchantId: req.merchantId,
       "variants._id": variantId,
     });
 
@@ -196,11 +200,10 @@ export const updateVariant = async (req, res) => {
       if (img.url.startsWith("blob")) {
         const file = req.files?.[fileIndex];
         if (file) {
-          const upload = await uploadToCloudinary(file.buffer, "products");
-          finalImages.push({
-            public_id: upload.public_id,
-            url: upload.secure_url,
-          });
+           const result = await storageService.uploadSingle(file, "products");
+           if (result) {
+              finalImages.push(result);
+           }
         }
         fileIndex++; // increase only for blob
       }
@@ -211,11 +214,7 @@ export const updateVariant = async (req, res) => {
     // ----------------------------
     for (const img of deletedImages) {
       if (img.public_id) {
-        try {
-          await deleteFromCloudinary(img.public_id);
-        } catch (err) {
-          console.warn("Failed to delete image:", img.public_id);
-        }
+          await storageService.deleteFile(img.public_id);
       }
     }
 
@@ -234,7 +233,7 @@ export const updateVariant = async (req, res) => {
     // 7) Update database
     // ----------------------------
     const updatedProduct = await Product.findOneAndUpdate(
-      { _id: productId, "variants._id": variantId },
+      { _id: productId, merchantId: req.merchantId, "variants._id": variantId },
       { $set: updateData },
       { new: true, runValidators: true }
     );
@@ -265,7 +264,7 @@ export const updateSize = async (req, res) => {
     if (sizeId) {
       // ✅ Update existing size by _id
       updatedProduct = await Product.findOneAndUpdate(
-        { _id: productId, "variants._id": variantId, "variants.sizes._id": sizeId },
+        { _id: productId, merchantId: req.merchantId, "variants._id": variantId, "variants.sizes._id": sizeId },
         { $set: { "variants.$[v].sizes.$[s].stock": safeStock } },
         {
           new: true,
@@ -278,7 +277,7 @@ export const updateSize = async (req, res) => {
     } else {
       // ✅ Add new size
       updatedProduct = await Product.findOneAndUpdate(
-        { _id: productId, "variants._id": variantId },
+        { _id: productId, merchantId: req.merchantId, "variants._id": variantId },
         { $push: { "variants.$.sizes": { size, stock: safeStock } } },
         { new: true }
       );
@@ -316,6 +315,7 @@ export const updateSizeCount = async (req, res) => {
     const updatedProduct = await Product.findOneAndUpdate(
       {
         _id: productId,
+        merchantId: req.merchantId,
         "variants._id": variantId,
         "variants.sizes._id": sizeId
       },
@@ -361,7 +361,7 @@ export const updatePrice = async (req, res) => {
     const safeDiscount = isNaN(Number(discount)) ? 0 : Number(discount);
 
     const updatedProduct = await Product.findOneAndUpdate(
-      { _id: productId, "variants._id": variantId },
+      { _id: productId, merchantId: req.merchantId, "variants._id": variantId },
       {
         $set: {
           "variants.$.mrp": safeMRP,
@@ -393,7 +393,7 @@ export const deleteVariantSizes = async (req, res) => {
 
     // ✅ Pull a specific size by _id
     const updatedProduct = await Product.findOneAndUpdate(
-      { _id: productId, "variants._id": variantId },
+      { _id: productId, merchantId: req.merchantId, "variants._id": variantId },
       { $pull: { "variants.$.sizes": { _id: sizeId } } },
       { new: true }
     );
@@ -425,11 +425,14 @@ export const addBaseProduct = async (req, res) => {
     }
 
     // Auto-create or find brand based on merchant's shopName
+    // FORCE merchantId from auth token to prevent IDOR
+    value.merchantId = req.merchantId;
+
     if (value.merchantId) {
       const merchant = await Merchant.findById(value.merchantId);
       if (merchant) {
         const brandName = merchant.shopName || merchant.ownerName || "Default Brand";
-
+        
         // Auto-assign soldBy
         value.soldBy = merchant.shopName || merchant.ownerName || "Default Store";
 
@@ -515,15 +518,8 @@ export const addBrand = async (req, res) => {
 
     // If a logo file is uploaded, send it to Cloudinary
     if (req.file) {
-      const uploadResult = await uploadToCloudinary(req.file.buffer, {
-        folder: 'brands',
-        resource_type: 'image',
-      });
-
-      logoData = {
-        public_id: uploadResult.public_id,
-        url: uploadResult.secure_url,
-      };
+      const result = await storageService.uploadSingle(req.file, 'brands');
+      if (result) logoData = result;
     }
 
     // Create the brand
@@ -592,7 +588,7 @@ export const getProductsByMerchantId = async (req, res) => {
     const { merchantId } = req.params;
     console.log(merchantId);
 
-    const products = await Product.find({ merchantId })
+    const products = await Product.find({ merchantId, isDeleted: { $ne: true } })
       .populate("brandId", "name")
       .populate("categoryId", "name")
       .populate("subCategoryId", "name")
@@ -654,14 +650,8 @@ export const uploadProductImage = async (req, res) => {
     }
 
     // Upload to cloudinary
-    const uploadedImages = [];
-    for (const file of req.files) {
-      const result = await uploadToCloudinary(file.buffer, "products");
-      uploadedImages.push({
-        public_id: result.public_id,
-        url: result.secure_url,
-      });
-    }
+    const results = await storageService.uploadMultiple(req.files || [], "products");
+    const uploadedImages = results;
 
     // ✅ Update product variant images in DB
     const product = await Product.findById(productId);
@@ -718,7 +708,11 @@ export const deleteProduct = async (req, res) => {
   try {
     const { productId } = req.params;
 
-    const deleted = await Product.findByIdAndDelete(productId);
+    const deleted = await Product.findOneAndUpdate(
+      { _id: productId, merchantId: req.merchantId },
+      { isDeleted: true },
+      { new: true }
+    );
 
     if (!deleted) {
       return res.status(404).json({
@@ -747,8 +741,8 @@ export const deleteVariant = async (req, res) => {
     const { productId, variantId } = req.params;
 
     // Pull variant by ID
-    const updatedProduct = await Product.findByIdAndUpdate(
-      productId,
+    const updatedProduct = await Product.findOneAndUpdate(
+      { _id: productId, merchantId: req.merchantId },
       { $pull: { variants: { _id: variantId } } },
       { new: true }
     );
@@ -796,8 +790,8 @@ export const editProduct = async (req, res) => {
       }
     }
 
-    const updatedProduct = await Product.findByIdAndUpdate(
-      id,
+    const updatedProduct = await Product.findOneAndUpdate(
+      { _id: id, merchantId: req.merchantId },
       { $set: updateData },
       { new: true, runValidators: true }
     );

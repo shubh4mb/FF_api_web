@@ -1,8 +1,10 @@
 import Merchant from "../../models/merchant.model.js";
-import { uploadToCloudinary } from "../../config/cloudinary.config.js";
+import Zone from "../../models/zone.model.js";
+import { storageService } from "../../services/storage.service.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { ApiError } from "../../utils/ApiError.js";
 import { ApiResponse } from "../../utils/ApiResponse.js";
+import { sendVerificationEmail } from "../../services/mail.service.js";
 
 
 
@@ -19,39 +21,22 @@ export const addMerchant = asyncHandler(async (req, res) => {
   }
 
   const merchant = new Merchant(req.body);
+  
+  if (req.body.zoneId) {
+    const zone = await Zone.findById(req.body.zoneId).lean();
+    if (zone) {
+      merchant.isZoneLive = zone.status === 'Active';
+    }
+  }
   if (!req.files || !req.files['logo']) {
     throw new ApiError(400, "Logo is required");
   }
 
-  let imageDetails = null; // ✅ Declare outside try block
+  const imageDetails = await storageService.uploadSingle(req.files['logo'], 'merchant/logo');
   let bgImageDetails = null;
 
-  try {
-    const logoFile = req.files['logo'][0];
-    const imageResult = await uploadToCloudinary(logoFile.buffer, {
-      folder: 'merchant/logo',
-      resource_type: 'auto'
-    });
-
-    imageDetails = {
-      public_id: imageResult.public_id,
-      url: imageResult.secure_url
-    };
-
-    if (req.files['backgroundImage']) {
-      const bgFile = req.files['backgroundImage'][0];
-      const bgResult = await uploadToCloudinary(bgFile.buffer, {
-        folder: 'merchant/background',
-        resource_type: 'auto'
-      });
-      bgImageDetails = {
-        public_id: bgResult.public_id,
-        url: bgResult.secure_url
-      };
-    }
-  } catch (uploadError) {
-    console.log(uploadError);
-    throw new ApiError(500, "Error uploading image to Cloudinary", [uploadError.message]);
+  if (req.files['backgroundImage']) {
+    bgImageDetails = await storageService.uploadSingle(req.files['backgroundImage'], 'merchant/background');
   }
 
   merchant.logo = imageDetails;
@@ -61,15 +46,17 @@ export const addMerchant = asyncHandler(async (req, res) => {
 });
 
 export const getMerchants = asyncHandler(async (req, res) => {
-  const merchants = await Merchant.find({ isActive: true })
-    .select('shopName phoneNumber email isActive logo rating reviewCount address operatingHours genderCategory zoneName zoneId stats isOnline')
+  const { status } = req.query;
+  const query = status ? { status } : {};
+
+  const merchants = await Merchant.find(query)
+    .select('shopName phoneNumber email isActive status logo rating reviewCount address operatingHours genderCategory zoneName zoneId stats isOnline isVerified')
     .lean();
   return res.status(200).json(new ApiResponse(200, { merchants }, "Merchants retrieved successfully"));
 });
 
 export const getMerchantById = asyncHandler(async (req, res) => {
   const merchant = await Merchant.findById(req.params.id)
-    .select('shopName logo backgroundImage rating reviewCount address operatingHours genderCategory zoneName zoneId stats isOnline shopDescription phoneNumber ownerName')
     .lean();
   if (!merchant) {
     throw new ApiError(404, "Merchant not found");
@@ -82,37 +69,13 @@ export const updateMerchantById = asyncHandler(async (req, res) => {
   let bgImageDetails = null;
 
   if (req.files && req.files['logo']) {
-    try {
-      const imageResult = await uploadToCloudinary(req.files['logo'][0].buffer, {
-        folder: 'merchant/logo',
-        resource_type: 'auto'
-      });
-
-      imageDetails = {
-        public_id: imageResult.public_id,
-        url: imageResult.secure_url
-      };
-      req.body.logo = imageDetails;
-    } catch (uploadError) {
-      throw new ApiError(500, "Error uploading logo to Cloudinary", [uploadError.message]);
-    }
+    const imageDetails = await storageService.uploadSingle(req.files['logo'], 'merchant/logo');
+    if (imageDetails) req.body.logo = imageDetails;
   }
 
   if (req.files && req.files['backgroundImage']) {
-    try {
-      const bgResult = await uploadToCloudinary(req.files['backgroundImage'][0].buffer, {
-        folder: 'merchant/background',
-        resource_type: 'auto'
-      });
-
-      bgImageDetails = {
-        public_id: bgResult.public_id,
-        url: bgResult.secure_url
-      };
-      req.body.backgroundImage = bgImageDetails;
-    } catch (uploadError) {
-      throw new ApiError(500, "Error uploading background image to Cloudinary", [uploadError.message]);
-    }
+    const bgImageDetails = await storageService.uploadSingle(req.files['backgroundImage'], 'merchant/background');
+    if (bgImageDetails) req.body.backgroundImage = bgImageDetails;
   }
 
   // Sanitize genderCategory: handle array or comma-separated string
@@ -129,5 +92,61 @@ export const updateMerchantById = asyncHandler(async (req, res) => {
     throw new ApiError(404, "Merchant not found");
   }
 
+  // If zone changed, sync the isZoneLive status
+  if (req.body.zoneId) {
+    const zone = await Zone.findById(req.body.zoneId).lean();
+    if (zone) {
+      merchant.isZoneLive = zone.status === 'Active';
+      await merchant.save();
+    }
+  }
+
   return res.status(200).json(new ApiResponse(200, { merchant }, "Merchant updated successfully"));
+});
+
+export const verifyMerchant = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const { isVerified, kycVerifications } = req.body;
+
+  let updateQuery = {};
+  if (isVerified !== undefined) {
+    updateQuery.isVerified = !!isVerified;
+    if (!!isVerified) {
+      updateQuery.status = 'pending_payment';
+    } else {
+      updateQuery.status = 'rejected';
+    }
+  }
+
+  if (kycVerifications) {
+    if (kycVerifications.pan !== undefined) updateQuery['kyc.pan.verified'] = !!kycVerifications.pan;
+    if (kycVerifications.gst !== undefined) updateQuery['kyc.gst.verified'] = !!kycVerifications.gst;
+    if (kycVerifications.businessProof !== undefined) updateQuery['kyc.businessProof.verified'] = !!kycVerifications.businessProof;
+    if (kycVerifications.bankProof !== undefined) updateQuery['kyc.bankProof.verified'] = !!kycVerifications.bankProof;
+    if (kycVerifications.bankDetails !== undefined) updateQuery['bankDetails.isBankVerified'] = !!kycVerifications.bankDetails;
+  }
+
+  const merchant = await Merchant.findByIdAndUpdate(
+    id,
+    { $set: updateQuery },
+    { new: true }
+  );
+
+  if (!merchant) {
+    throw new ApiError(404, "Merchant not found");
+  }
+
+  // Trigger email notification if verified
+  if (isVerified) {
+    try {
+      await sendVerificationEmail(merchant.email, merchant.shopName);
+    } catch (emailError) {
+      console.error("Failed to send verification email:", emailError);
+      // We don't throw here to avoid failing the verification itself
+    }
+  }
+
+  return res.status(200).json(
+    new ApiResponse(200, { merchant }, `Merchant ${isVerified ? "verified" : "unverified"} successfully`)
+  );
 });

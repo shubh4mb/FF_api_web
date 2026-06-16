@@ -42,6 +42,11 @@ export const acceptOrder = async (req, res) => {
       return res.status(403).json({ message: 'Order already assigned to another rider' });
     }
 
+    // Guard: only allow acceptance when order is merchant-approved
+    if (order.orderStatus !== 'accepted') {
+      return res.status(400).json({ message: `Order cannot be accepted in "${order.orderStatus}" status` });
+    }
+
     // Update order fields — rider assignment only
     // Delivery charge & billing are already set during order creation (appConfig-based)
     order.deliveryRiderId = rider._id;
@@ -133,7 +138,7 @@ export const reachedPickupLocation = async (req, res) => {
 
 
     // Update order status
-    order.deliveryRiderStatus = 'arrived at pickup';
+    order.deliveryRiderStatus = 'at_pickup';
     await order.save();
     await PendingOrder.findOneAndDelete({ orderId: orderId });
 
@@ -162,8 +167,10 @@ export const verifyOtp = async (req, res) => {
     }
     console.log(order, "order");
 
-    order.deliveryRiderStatus = "en route to delivery";
-    order.orderStatus = "out_for_delivery";
+    order.deliveryRiderStatus = "en_route_delivery";
+    order.orderStatus = "in_transit";
+    order.customerDeliveryStatus = "on_the_way";
+    order.otp = null; // Clear OTP after use
     await order.save();
     emitOrderUpdate(req.io, orderId, order);
 
@@ -215,10 +222,16 @@ export const reachedCustomerLocation = async (req, res) => {
       }
     }
 
-    order.deliveryRiderStatus = "arrived at delivery";
-    order.orderStatus = "arrived at delivery";
+    order.deliveryRiderStatus = "at_delivery";
+    order.orderStatus = "in_transit";
     await order.save();
     emitOrderUpdate(req.io, orderId, order);
+
+    // 📱 Customer notification: "Rider at your location"
+    notifyOrderEvent("customer", "rider_reached_location", {
+      userId: order.userId,
+      orderId: order._id,
+    });
 
     res.status(200).json({ message: "Rider confirmed at customer location" });
   } catch (error) {
@@ -234,8 +247,9 @@ export const handOutProducts = async (req, res) => {
     if (!order) return res.status(404).json({ message: "Order not found" });
 
     // Update order status and set trial phase details
-    order.orderStatus = "try phase";
-    order.deliveryRiderStatus = "try phase";
+    order.orderStatus = "try_phase";
+    order.deliveryRiderStatus = "try_phase";
+    order.customerDeliveryStatus = "try_your_fits";
     order.trialPhaseStart = new Date(); // Set start time to current time
     order.trialPhaseEnd = null; // Reset end time
     order.trialPhaseDuration = 30; // Set trial phase duration (e.g., 30 minutes)
@@ -267,7 +281,7 @@ export const endTrialPhase = async (req, res) => {
     if (!order) return res.status(404).json({ message: "Order not found" });
 
     // Fixed: status string uses space, not underscore
-    if (order.orderStatus !== "try phase") {
+    if (order.orderStatus !== "try_phase") {
       return res.status(400).json({
         message: `Order is not in trial phase (current: ${order.orderStatus})`
       });
@@ -284,7 +298,8 @@ export const endTrialPhase = async (req, res) => {
     order.trialPhaseDuration = durationMinutes;
     // The customer side decides items → sets actual final status
     // Rider just signals end of wait; customer app takes over selection
-    order.deliveryRiderStatus = "waiting for customer selection";
+    order.deliveryRiderStatus = "try_phase";
+    order.customerDeliveryStatus = "awaiting_payment";
 
     await order.save();
     emitOrderUpdate(req.io, orderId, order);
@@ -308,9 +323,10 @@ export const verifyOtpOnReturn = async (req, res) => {
     if (!order) return res.status(404).json({ message: "Order not found" });
     if (order.otp !== otp) return res.status(400).json({ message: "Invalid OTP" });
 
-    order.deliveryRiderStatus = "otp-verified-return";
-    order.orderStatus = "otp-verified-return";
-    order.customerDeliveryStatus="completed"
+    order.deliveryRiderStatus = "returning";
+    order.orderStatus = "return_in_progress";
+    order.customerDeliveryStatus = "completed";
+    order.otp = null; // Clear OTP after use
 
     await order.save();
     emitOrderUpdate(req.io, orderId, order);
@@ -368,8 +384,8 @@ export const reachedReturnMerchant = async (req, res) => {
     }
 
     // Correct statuses for return arrival at merchant
-    order.deliveryRiderStatus = "reached return merchant";
-    order.orderStatus = "reached return merchant";
+    order.deliveryRiderStatus = "at_merchant_return";
+    order.orderStatus = "return_in_progress";
     await order.save();
 
     emitOrderUpdate(req.io, orderId, order);
@@ -395,8 +411,9 @@ export const verifyMerchantReturnOtp= async (req, res) => {
     if (!order) return res.status(404).json({ message: "Order not found" });
     if (order.otp !== otp) return res.status(400).json({ message: "Invalid OTP" });
 
-    order.deliveryRiderStatus = "completed"
-    order.orderStatus = "merchant-return-otp-verified";
+    order.deliveryRiderStatus = "completed";
+    order.orderStatus = "completed";
+    order.otp = null; // Clear OTP after use
 
     await order.save();
     emitOrderUpdate(req.io, orderId, order);

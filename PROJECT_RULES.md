@@ -169,6 +169,7 @@ GSD-STYLE.md              # Style and conventions
 ├── SPEC.md               # Requirements (must be FINALIZED)
 ├── ROADMAP.md            # Phases and progress
 ├── STATE.md              # Session memory
+├── GLOSSARY.md           # Business terminology and definitions
 ├── templates/            # Document templates
 └── examples/             # Usage examples
 

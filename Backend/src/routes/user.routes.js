@@ -1,10 +1,11 @@
 import express from 'express';
 import { googleLogin, signup } from '../controllers/userControllers/authControllers.js';
-import { newArrivals, productsDetails, getFilteredProducts, getProductsByMerchantId, getYouMayLikeProducts, getProductsBatch, trendingProducts, recommendedProducts } from '../controllers/userControllers/product.controllers.js';
+import { newArrivals, productsDetails, getFilteredProducts, getRelatedProducts, getSearchSuggestions, getProductsByMerchantId, getYouMayLikeProducts, getProductsBatch, trendingProducts, recommendedProducts, getCourierProducts, getCollectionProductsByMerchant } from '../controllers/userControllers/product.controllers.js';
 import { phoneLogin, addPushToken } from '../controllers/userControllers/authControllers.js';
-import { addToCart, getCart, clearCart, updateCartQuantity, deleteCartItem, getCartCount } from '../controllers/userControllers/cart.controllers.js';
+import { addToCart, getCart, clearCart, updateCartQuantity, deleteCartItem, getCartCount, moveToCourier, selectOffer, deselectOffer } from '../controllers/userControllers/cart.controllers.js';
+import { addToCourierCart, getCourierCart, clearCourierCart, updateCourierCartQuantity, deleteCourierCartItem, getCourierCartCount, selectOfferCourier, deselectOfferCourier } from '../controllers/userControllers/courierCart.controllers.js';
 import { authMiddleware } from '../middleware/jwtAuth.js';
-import { getAllOrders, initiateReturn, getOrderById, createRazorpayOrder, verifyPayment, razorpayWebhook, createFinalPaymentRazorpayOrder, verifyFinalPayment } from '../controllers/userControllers/order.controllers.js';
+import { getAllOrders, initiateReturn, getOrderById, createRazorpayOrder, verifyPayment, razorpayWebhook, createFinalPaymentRazorpayOrder, verifyFinalPayment, verifyFinalPaymentCod, cancelOrder } from '../controllers/userControllers/order.controllers.js';
 import { body } from 'express-validator'
 import { createAddress, getAllAddresses, getSingleAddress, updateAddress, deleteAddress } from '../controllers/userControllers/address.controllers.js';
 import {
@@ -13,19 +14,42 @@ import {
   getMyWishlist,
   getMyWishlistIds,
 } from '../controllers/userControllers/wishlist.controllers.js';
+import { addToRecentlyViewed, getMyRecentlyViewed } from '../controllers/userControllers/recentlyViewed.controllers.js';
+import { getNearbyMerchants } from '../controllers/userControllers/merchant.controllers.js';
+
 import { checkDeliveryAvailability } from '../controllers/adminControllers/zone.controllers.js';
+import { resolveNearbyMerchants } from '../middleware/nearbyMerchants.middleware.js';
 import Notification from "../models/notification.model.js";
+import User from "../models/user.model.js";
 import { getWalletDetails } from "../helperFns/walletHelper.js";
 
 import userBannerRoutes from './userBanner.routes.js';
+import { getCollectionsForHome } from '../controllers/userControllers/collection.controllers.js';
 
 const router = express.Router();
 
-router.use('/banners', userBannerRoutes);
+/**
+ * @swagger
+ * tags:
+ *   name: User
+ *   description: User-facing APIs for products, cart, wishlist, and orders
+ */
 
+router.use('/banners', userBannerRoutes);
 
 // ── Notifications ──
 
+/**
+ * @swagger
+ * /api/user/notifications:
+ *   get:
+ *     summary: Get user notifications
+ *     tags: [User]
+ *     security: [{ bearerAuth: [] }]
+ *     responses:
+ *       200:
+ *         description: List of notifications
+ */
 router.get("/notifications", authMiddleware, async (req, res) => {
   try {
     const userId = req.user.userId;
@@ -69,6 +93,17 @@ router.patch("/notifications/read-all", authMiddleware, async (req, res) => {
 
 // ── Wallet ──
 
+/**
+ * @swagger
+ * /api/user/wallet:
+ *   get:
+ *     summary: Get user wallet details
+ *     tags: [User]
+ *     security: [{ bearerAuth: [] }]
+ *     responses:
+ *       200:
+ *         description: Wallet details
+ */
 router.get("/wallet", authMiddleware, async (req, res) => {
   try {
     const details = await getWalletDetails("user", req.user.userId);
@@ -79,67 +114,357 @@ router.get("/wallet", authMiddleware, async (req, res) => {
   }
 });
 
+/**
+ * @swagger
+ * /api/user/googleLogin:
+ *   post:
+ *     summary: User login with Google
+ *     tags: [User]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [idToken]
+ *             properties:
+ *               idToken:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Login successful
+ */
 router.post('/googleLogin', googleLogin);
+
+/**
+ * @swagger
+ * /api/user/signup:
+ *   post:
+ *     summary: User registration
+ *     tags: [User]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [name, email, password]
+ *             properties:
+ *               name: { type: string }
+ *               email: { type: string }
+ *               password: { type: string }
+ *     responses:
+ *       201:
+ *         description: User registered
+ */
 router.post('/signup', signup);
+
+/**
+ * @swagger
+ * /api/user/phoneLogin:
+ *   post:
+ *     summary: User login with phone
+ *     tags: [User]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [phone, otp]
+ *             properties:
+ *               phone: { type: string }
+ *               otp: { type: string }
+ *     responses:
+ *       200:
+ *         description: Login successful
+ */
 router.post('/phoneLogin', phoneLogin)
 router.post('/checkDeliveryAvailability', checkDeliveryAvailability);
+router.get('/merchants/nearby', resolveNearbyMerchants, getNearbyMerchants);
 
 router.put('/push-token', authMiddleware, addPushToken);
 
-router.get('/products/newArrivals', newArrivals)
-router.get('/products/trending', trendingProducts);
-router.get('/products/recommended', authMiddleware, recommendedProducts); // requires auth for cart/wishlist
-router.post('/products/filtered', getFilteredProducts)
-router.get('/products/getYouMayLikeProducts', getYouMayLikeProducts);
-router.get('/products/:id', productsDetails)
-router.get('/products/merchant/:merchantId', getProductsByMerchantId)
+router.get("/profile", authMiddleware, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.userId).select("-password");
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+    return res.status(200).json({ success: true, user });
+  } catch (err) {
+    console.error("Get profile error:", err);
+    return res.status(500).json({ message: "Failed to fetch profile" });
+  }
+});
+
+router.put("/profile/phone", authMiddleware, async (req, res) => {
+  try {
+    const { phoneNumber } = req.body;
+    if (!phoneNumber || phoneNumber.length !== 10) {
+      return res.status(400).json({ message: "Valid 10-digit phone number is required" });
+    }
+    
+    // Check if phone number is already taken
+    const existingUser = await User.findOne({ phoneNumber });
+    if (existingUser) {
+      return res.status(400).json({ message: "Phone number is already registered to another account" });
+    }
+
+    const user = await User.findByIdAndUpdate(
+      req.user.userId,
+      { phoneNumber },
+      { new: true }
+    );
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+    return res.status(200).json({ success: true, user, message: "Phone number updated successfully" });
+  } catch (err) {
+    console.error("Update phone error:", err);
+    return res.status(500).json({ message: "Failed to update phone number" });
+  }
+});
+
+/**
+ * @swagger
+ * /api/user/products/newArrivals:
+ *   get:
+ *     summary: Get new arrival products
+ *     tags: [User]
+ *     responses:
+ *       200:
+ *         description: List of new arrivals
+ */
+router.get('/products/newArrivals', resolveNearbyMerchants, newArrivals)
+
+/**
+ * @swagger
+ * /api/user/products/trending:
+ *   get:
+ *     summary: Get trending products
+ *     tags: [User]
+ *     responses:
+ *       200:
+ *         description: List of trending products
+ */
+router.get('/products/trending', resolveNearbyMerchants, trendingProducts);
+
+/**
+ * @swagger
+ * /api/user/products/courier:
+ *   get:
+ *     summary: Get products from courier-enabled merchants
+ *     tags: [User]
+ *     parameters:
+ *       - in: query
+ *         name: gender
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: List of courier-available products
+ */
+router.get('/products/courier', resolveNearbyMerchants, getCourierProducts);
+
+/**
+ * @swagger
+ * /api/user/products/recommended:
+ *   get:
+ *     summary: Get recommended products for the user
+ *     tags: [User]
+ *     security: [{ bearerAuth: [] }]
+ *     responses:
+ *       200:
+ *         description: List of recommended products
+ */
+router.get('/products/recommended', authMiddleware, resolveNearbyMerchants, recommendedProducts); // requires auth for cart/wishlist
+router.get('/products/search-suggestions', getSearchSuggestions);
+router.post('/products/filtered', resolveNearbyMerchants, getFilteredProducts)
+router.get('/products/getYouMayLikeProducts', resolveNearbyMerchants, getYouMayLikeProducts);
+
+/**
+ * @swagger
+ * /api/user/products/{id}:
+ *   get:
+ *     summary: Get product details by ID
+ *     tags: [User]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: Product details
+ */
+router.get('/products/:id', resolveNearbyMerchants, productsDetails)
+router.get('/products/:id/related', resolveNearbyMerchants, getRelatedProducts)
+router.get('/products/merchant/:merchantId', resolveNearbyMerchants, getProductsByMerchantId)
+router.get('/products/collection', resolveNearbyMerchants, getCollectionProductsByMerchant);
+router.get('/collections/home', resolveNearbyMerchants, getCollectionsForHome);
 router.post(
   '/products/batch',
   [
     body('merchantIds').isArray({ min: 1 }).withMessage('merchantIds must be a non-empty array'),
     body('merchantIds.*').isString().withMessage('Each merchantId must be a string')
   ],
+  resolveNearbyMerchants,
   getProductsBatch
 );
 
+/**
+ * @swagger
+ * /api/user/cart/add:
+ *   post:
+ *     summary: Add item to cart
+ *     tags: [User]
+ *     security: [{ bearerAuth: [] }]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [productId, variantId, sizeId, quantity]
+ *             properties:
+ *               productId: { type: string }
+ *               variantId: { type: string }
+ *               sizeId: { type: string }
+ *               quantity: { type: number }
+ *     responses:
+ *       200:
+ *         description: Added to cart
+ */
 router.post('/cart/add', authMiddleware, addToCart);
+
+/**
+ * @swagger
+ * /api/user/cartCount:
+ *   get:
+ *     summary: Get cart item count
+ *     tags: [User]
+ *     security: [{ bearerAuth: [] }]
+ *     responses:
+ *       200:
+ *         description: Cart count
+ */
 router.get('/cartCount', authMiddleware, getCartCount);
+
+/**
+ * @swagger
+ * /api/user/cart:
+ *   post:
+ *     summary: Get user cart
+ *     tags: [User]
+ *     security: [{ bearerAuth: [] }]
+ *     responses:
+ *       200:
+ *         description: Cart items
+ */
 router.post('/cart', authMiddleware, getCart);
 
 router.put('/cart/updatequantity', authMiddleware, updateCartQuantity);
 router.delete('/cart/clear', authMiddleware, clearCart)
+router.post('/cart/move-to-courier', authMiddleware, moveToCourier);
 router.delete('/cart/delete/:itemId', deleteCartItem);
+router.post('/cart/offers/select', authMiddleware, selectOffer);
+router.post('/cart/offers/deselect', authMiddleware, deselectOffer);
 
-// Add product to wishlist
+
+/**
+ * @swagger
+ * /api/user/wishlist/add:
+ *   post:
+ *     summary: Add product to wishlist
+ *     tags: [User]
+ *     security: [{ bearerAuth: [] }]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [productId, variantId]
+ *             properties:
+ *               productId: { type: string }
+ *               variantId: { type: string }
+ *     responses:
+ *       200:
+ *         description: Added to wishlist
+ */
 router.post('/wishlist/add', authMiddleware, addToWishlist);
-// Remove product from wishlist
 router.delete('/wishlist/delete/:wishlistItemId', authMiddleware, removeFromWishlist);
-// Get current user's full wishlist
+
+/**
+ * @swagger
+ * /api/user/wishlist/my:
+ *   get:
+ *     summary: Get user wishlist
+ *     tags: [User]
+ *     security: [{ bearerAuth: [] }]
+ *     responses:
+ *       200:
+ *         description: Wishlist items
+ */
 router.get('/wishlist/my', authMiddleware, getMyWishlist);
 
 router.get('/wishlist/ids', authMiddleware, getMyWishlistIds);
-// Check if a product is already in wishlist (for heart icon)
-// router.get('/wishlist/check/:productId',authMiddleware, isProductInWishlist);
 
 // router.post('/order/create', authMiddleware, createOrder);
 router.post('/order/create', authMiddleware, createRazorpayOrder);
 router.post('/order/verifyPayment', authMiddleware, verifyPayment);
 router.post('/webhook/razorpay', razorpayWebhook);
+
+/**
+ * @swagger
+ * /api/user/order/getAllOrders:
+ *   get:
+ *     summary: Get all user orders
+ *     tags: [User]
+ *     security: [{ bearerAuth: [] }]
+ *     responses:
+ *       200:
+ *         description: List of orders
+ */
 router.get('/order/getAllOrders', authMiddleware, getAllOrders)
 router.get('/order/:orderId', authMiddleware, getOrderById);
 router.post('/order/initiateReturn/:orderId', authMiddleware, initiateReturn);
-// router.post('/order/orderRequestForMerchant', authMiddleware, orderRequestForMerchant);
 
 router.post('/order/createFinalPaymentOrder/:orderId', authMiddleware, createFinalPaymentRazorpayOrder);
 router.post('/order/verifyFinalPayment', authMiddleware, verifyFinalPayment);
+router.post('/order/verifyFinalPaymentCod', authMiddleware, verifyFinalPaymentCod);
+router.post('/order/cancel/:orderId', authMiddleware, cancelOrder);
 
-// router.delete('/cart/delete/:itemId', deleteCartItem);
-
+/**
+ * @swagger
+ * /api/user/address/getAllAddress:
+ *   get:
+ *     summary: Get all user addresses
+ *     tags: [User]
+ *     security: [{ bearerAuth: [] }]
+ *     responses:
+ *       200:
+ *         description: List of addresses
+ */
 router.post("/address/add", authMiddleware, createAddress);
 router.get("/address/getAllAddress", authMiddleware, getAllAddresses);
 router.get("/address/:id", authMiddleware, getSingleAddress);
 router.put("/address/:id", authMiddleware, updateAddress);
 router.delete("/address/:id", authMiddleware, deleteAddress);
+
+// ── Recently Viewed ──
+router.post('/recently-viewed/add', authMiddleware, addToRecentlyViewed);
+router.get('/recently-viewed/my', authMiddleware, resolveNearbyMerchants, getMyRecentlyViewed);
+
 
 // ── Reviews ──
 import {
@@ -155,5 +480,66 @@ router.get('/reviews/my', authMiddleware, getMyReviews);
 router.get('/reviews/reviewable', authMiddleware, getReviewableItems);
 router.delete('/review/:reviewId', authMiddleware, deleteReview);
 router.get('/reviews/:targetType/:targetId', getReviews); // public
+
+// ── Offers ──
+import { getAvailableOffers, applyCoupon, removeCoupon, getOffersByMerchant, getFlashSales, getBestOffersForCart, getPromotionalBanners } from '../controllers/userControllers/offer.controllers.js';
+router.get('/offers', authMiddleware, getAvailableOffers);
+router.post('/offers/apply', authMiddleware, applyCoupon);
+router.post('/offers/remove', authMiddleware, removeCoupon);
+router.post('/offers/best-for-cart', authMiddleware, getBestOffersForCart);
+router.get('/offers/flash-sales', getFlashSales);
+router.get('/offers/merchant/:merchantId', getOffersByMerchant);
+router.get('/offers/promotional-banners', getPromotionalBanners);
+
+// ── Courier Cart ──
+router.post('/courier-cart/add', authMiddleware, addToCourierCart);
+router.get('/courier-cart', authMiddleware, getCourierCart);
+router.get('/courier-cart/count', authMiddleware, getCourierCartCount);
+router.put('/courier-cart/updatequantity', authMiddleware, updateCourierCartQuantity);
+router.delete('/courier-cart/clear', authMiddleware, clearCourierCart);
+router.delete('/courier-cart/delete/:itemId', authMiddleware, deleteCourierCartItem);
+router.post('/courier-cart/offers/select', authMiddleware, selectOfferCourier);
+router.post('/courier-cart/offers/deselect', authMiddleware, deselectOfferCourier);
+
+// ── Support Tickets ──
+import SupportTicket from '../models/supportTicket.model.js';
+
+router.post('/support/ticket', authMiddleware, async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const { category, orderId, message, phone } = req.body;
+
+    if (!category) {
+      return res.status(400).json({ message: "category is required" });
+    }
+
+    const ticket = await SupportTicket.create({
+      userId,
+      phone: phone || "N/A",
+      category,
+      orderId: orderId || null,
+      message: message || "",
+    });
+
+    return res.status(201).json({ success: true, ticket });
+  } catch (err) {
+    console.error("Create support ticket error:", err);
+    return res.status(500).json({ message: "Failed to create support ticket" });
+  }
+});
+
+router.get('/support/tickets', authMiddleware, async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const tickets = await SupportTicket.find({ userId })
+      .sort({ createdAt: -1 })
+      .limit(20)
+      .lean();
+    return res.status(200).json({ success: true, tickets });
+  } catch (err) {
+    console.error("Get support tickets error:", err);
+    return res.status(500).json({ message: "Failed to fetch tickets" });
+  }
+});
 
 export default router;

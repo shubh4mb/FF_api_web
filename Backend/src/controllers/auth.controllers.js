@@ -1,89 +1,240 @@
-// src/controllers/authController.js
+// src/controllers/auth.controllers.js
 import twilio from 'twilio';
 import otpGenerator from 'otp-generator';
 import User from '../models/user.model.js';
-import OTPModel from '../models/otp.model.js'; // Store OTP records temporarily
+import OTPModel from '../models/otp.model.js';
 import jwt from 'jsonwebtoken';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { ApiError } from '../utils/ApiError.js';
 import { ApiResponse } from '../utils/ApiResponse.js';
-// Twilio client setup
-const client = new twilio(process.env.TWILIO_SID, process.env.TWILIO_AUTH_TOKEN);
 
-// Send OTP to user phone number
-const sendOTP = asyncHandler(async (req, res) => {
-  const { phoneNumber } = req.body;
+// ── Twilio client (lazy init to fail gracefully if creds missing) ────
+let twilioClient = null;
+const getTwilioClient = () => {
+  if (!twilioClient) {
+    const sid = process.env.TWILIO_ACCOUNT_SID;
+    const token = process.env.TWILIO_AUTH_TOKEN;
+    if (!sid || !token) {
+      throw new ApiError(500, "Twilio credentials are not configured on the server");
+    }
+    twilioClient = new twilio(sid, token);
+  }
+  return twilioClient;
+};
 
-  if (!phoneNumber) {
+// ── Phone format validation (Indian: +91 followed by 10 digits) ──────
+const PHONE_REGEX = /^\+91[6-9]\d{9}$/;
+
+const validatePhone = (phone) => {
+  if (!phone || typeof phone !== 'string') {
     throw new ApiError(400, "Phone number is required");
   }
+  const cleaned = phone.replace(/\s+/g, '');
+  if (!PHONE_REGEX.test(cleaned)) {
+    throw new ApiError(400, "Invalid phone number format. Expected: +91XXXXXXXXXX (10-digit Indian mobile number)");
+  }
+  return cleaned;
+};
 
-  let user = await User.findOne({ phoneNumber });
-  if (user) {
-    throw new ApiError(400, "User already exists");
+// ── Constants ─────────────────────────────────────────────────────────
+const OTP_LENGTH = 6;
+const OTP_EXPIRY_MINUTES = 5;
+const MAX_OTP_ATTEMPTS = 5;
+const OTP_COOLDOWN_SECONDS = 30; // Minimum gap between OTP requests
+
+// ══════════════════════════════════════════════════════════════════════
+//  SEND OTP
+// ══════════════════════════════════════════════════════════════════════
+const sendOTP = asyncHandler(async (req, res) => {
+  const { phone } = req.body;
+  const cleanPhone = validatePhone(phone);
+
+  // ── Rate limit: prevent spamming OTP requests ─────────────────────
+  const recentOtp = await OTPModel.findOne({ phone: cleanPhone })
+    .sort({ createdAt: -1 })
+    .lean();
+
+  if (recentOtp) {
+    const secondsSinceLast = (Date.now() - new Date(recentOtp.createdAt).getTime()) / 1000;
+    if (secondsSinceLast < OTP_COOLDOWN_SECONDS) {
+      const waitTime = Math.ceil(OTP_COOLDOWN_SECONDS - secondsSinceLast);
+      throw new ApiError(429, `Please wait ${waitTime} seconds before requesting a new OTP`);
+    }
   }
 
-  // Generate OTP (6 digits)
-  const otp = otpGenerator.generate(6, { upperCase: false, specialChars: false });
+  // ── Clean up old OTPs for this phone ──────────────────────────────
+  await OTPModel.deleteMany({ phone: cleanPhone });
 
-  // Save OTP in the database with an expiration time
-  const otpRecord = new OTPModel({
-    phoneNumber,
-    otp,
-    expiresAt: Date.now() + 5 * 60 * 1000, // OTP expires in 5 minutes
+  // ── Generate OTP (digits only) ────────────────────────────────────
+  const otp = otpGenerator.generate(OTP_LENGTH, {
+    digits: true,
+    lowerCaseAlphabets: false,
+    upperCaseAlphabets: false,
+    specialChars: false,
   });
-  await otpRecord.save();
 
+  // ── Store in DB ───────────────────────────────────────────────────
+  await OTPModel.create({
+    phone: cleanPhone,
+    otp,
+    expiresAt: new Date(Date.now() + OTP_EXPIRY_MINUTES * 60 * 1000),
+    attempts: 0,
+  });
+
+  // ── Send via Twilio ───────────────────────────────────────────────
   try {
-    // Send OTP via Twilio SMS
+    const client = getTwilioClient();
     await client.messages.create({
-      body: `Your OTP is: ${otp}`,
-      to: phoneNumber,
-      from: process.env.TWILIO_PHONE_NUMBER, // Your Twilio number
+      body: `Your FlashFits verification code is: ${otp}. Valid for ${OTP_EXPIRY_MINUTES} minutes. Do not share this code.`,
+      to: cleanPhone,
+      from: process.env.TWILIO_PHONE_NUMBER,
     });
-    return res.status(200).json(new ApiResponse(200, {}, "OTP sent successfully"));
   } catch (error) {
-    console.error('Error sending OTP:', error);
-    throw new ApiError(500, "Failed to send OTP", [error.message]);
+    // Clean up the OTP record since SMS failed
+    await OTPModel.deleteMany({ phone: cleanPhone });
+
+    console.error('Twilio SMS error:', error.message, error.code);
+
+    // Provide user-friendly messages for common Twilio errors
+    if (error.code === 21211 || error.code === 21614) {
+      throw new ApiError(400, "This phone number is invalid or cannot receive SMS");
+    }
+    if (error.code === 21608 || error.code === 21610) {
+      throw new ApiError(400, "This phone number has been blocked or unsubscribed from SMS");
+    }
+    if (error.code === 20003) {
+      throw new ApiError(500, "SMS service authentication failed. Please contact support.");
+    }
+    throw new ApiError(500, "Failed to send verification code. Please try again later.");
   }
+
+  return res.status(200).json(
+    new ApiResponse(200, { phone: cleanPhone }, "Verification code sent successfully")
+  );
 });
 
-// Verify OTP and authenticate user
+// ══════════════════════════════════════════════════════════════════════
+//  VERIFY OTP
+// ══════════════════════════════════════════════════════════════════════
 const verifyOTP = asyncHandler(async (req, res) => {
-  const { phoneNumber, otp } = req.body;
+  const { phone, otp } = req.body;
+  const cleanPhone = validatePhone(phone);
 
-  if (!phoneNumber || !otp) {
-    throw new ApiError(400, "Phone number and OTP are required");
+  if (!otp || typeof otp !== 'string') {
+    throw new ApiError(400, "Verification code is required");
   }
 
-  // Find the OTP record for the user
-  const otpRecord = await OTPModel.findOne({ phoneNumber });
+  if (otp.length !== OTP_LENGTH) {
+    throw new ApiError(400, `Verification code must be ${OTP_LENGTH} digits`);
+  }
+
+  // ── Find OTP record ───────────────────────────────────────────────
+  const otpRecord = await OTPModel.findOne({ phone: cleanPhone });
 
   if (!otpRecord) {
-    throw new ApiError(400, "OTP not sent or expired");
+    throw new ApiError(400, "No verification code found. Please request a new one.");
   }
 
-  // Check if OTP is valid and not expired
+  // ── Check expiry ──────────────────────────────────────────────────
+  if (otpRecord.expiresAt < new Date()) {
+    await OTPModel.deleteMany({ phone: cleanPhone });
+    throw new ApiError(410, "Verification code has expired. Please request a new one.");
+  }
+
+  // ── Check brute-force attempts ────────────────────────────────────
+  if (otpRecord.attempts >= MAX_OTP_ATTEMPTS) {
+    await OTPModel.deleteMany({ phone: cleanPhone });
+    throw new ApiError(429, "Too many failed attempts. Please request a new verification code.");
+  }
+
+  // ── Check OTP match ───────────────────────────────────────────────
   if (otpRecord.otp !== otp) {
-    throw new ApiError(400, "Invalid OTP");
-  }
-  if (otpRecord.expiresAt < Date.now()) {
-    throw new ApiError(400, "OTP has expired");
+    otpRecord.attempts += 1;
+    await otpRecord.save();
+
+    const remaining = MAX_OTP_ATTEMPTS - otpRecord.attempts;
+    if (remaining <= 0) {
+      await OTPModel.deleteMany({ phone: cleanPhone });
+      throw new ApiError(429, "Too many failed attempts. Please request a new verification code.");
+    }
+
+    throw new ApiError(400, `Invalid verification code. ${remaining} attempt${remaining > 1 ? 's' : ''} remaining.`);
   }
 
-  // OTP is valid, check if user exists
-  let user = await User.findOne({ phoneNumber });
+  // ── OTP is valid — find or create user ────────────────────────────
+  let user = await User.findOne({ phoneNumber: cleanPhone });
+  let isNewUser = false;
+
   if (!user) {
-    // If user doesn't exist, create a new user
-    user = new User({ phoneNumber });
+    user = await User.create({
+      phoneNumber: cleanPhone,
+      isVerified: true,
+    });
+    isNewUser = true;
+  } else {
+    // Update existing user
+    user.isVerified = true;
+    user.lastLogin = new Date();
     await user.save();
   }
 
-  // Generate JWT token
-  const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET, { expiresIn: '1h' });
+  // ── Clean up OTP ──────────────────────────────────────────────────
+  await OTPModel.deleteMany({ phone: cleanPhone });
 
-  // Send token to the client
-  return res.status(200).json(new ApiResponse(200, { token }, "Authentication successful"));
+  // ── Generate JWT (15 minutes for access, 30 days for refresh) ──────────
+  const token = jwt.sign(
+    { userId: user._id, phoneNumber: user.phoneNumber },
+    process.env.JWT_SECRET,
+    { expiresIn: '15m' }
+  );
+
+  const refreshToken = jwt.sign(
+    { userId: user._id },
+    process.env.JWT_SECRET,
+    { expiresIn: '30d' }
+  );
+
+  return res.status(200).json(
+    new ApiResponse(200, {
+      token,
+      refreshToken,
+      userId: user._id,
+      isNewUser,
+    }, "Authentication successful")
+  );
+});
+
+export const refreshUserToken = asyncHandler(async (req, res) => {
+  const refreshToken = req.cookies?.refreshToken || req.body?.refreshToken;
+  if (!refreshToken) {
+    throw new ApiError(401, "Refresh token is required");
+  }
+
+  try {
+    const decoded = jwt.verify(refreshToken, process.env.JWT_SECRET);
+    const user = await User.findById(decoded.userId || decoded.id); // depending on how it was signed
+
+    if (!user) {
+      throw new ApiError(401, "User not found");
+    }
+
+    const token = jwt.sign(
+      { userId: user._id, phoneNumber: user.phoneNumber },
+      process.env.JWT_SECRET,
+      { expiresIn: '15m' }
+    );
+    const newRefreshToken = jwt.sign(
+      { userId: user._id },
+      process.env.JWT_SECRET,
+      { expiresIn: '30d' }
+    );
+
+    return res.status(200).json(
+      new ApiResponse(200, { token, refreshToken: newRefreshToken }, "Token refreshed successfully")
+    );
+  } catch (error) {
+    throw new ApiError(401, "Invalid or expired refresh token");
+  }
 });
 
 export { sendOTP, verifyOTP };

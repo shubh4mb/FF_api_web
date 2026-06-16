@@ -5,18 +5,20 @@ import { log } from "console";
 import Address from '../../models/address.model.js'
 import { calculateDeliveryCharge } from '../../helperFns/deliveryChargeFns.js'
 import AppConfig from "../../models/appConfig.model.js";
+import CourierCart from "../../models/courierCart.model.js";
+import { findBestOffers } from '../../services/offerEngine.js';
+
+import Offer from "../../models/offer.model.js";
 
 export const addToCart = async (req, res) => {
-  const userId = req.user.userId; // from JWT middleware
+  const userId = req.user.userId;
   const { productId, variantId, size, quantity, merchantId, image } = req.body;
-
 
   if (!productId || !variantId || !size || !quantity || !merchantId || !image) {
     return res.status(400).json({ message: "Missing required fields" });
   }
 
   try {
-    // 1. ✅ Validate product and stock
     const product = await Product.findById(productId);
     if (!product) return res.status(404).json({ message: "Product not found" });
 
@@ -30,10 +32,22 @@ export const addToCart = async (req, res) => {
       return res.status(400).json({ message: `Only ${sizeObj.stock} items left in stock` });
     }
 
-    // 2. ✅ Check if user already has a cart
     let cart = await Cart.findOne({ userId });
 
-    // 3. 🧠 If no cart, create new
+    if (cart) {
+      const currentMerchantQty = cart.items
+        .filter(item => item.merchantId.toString() === merchantId.toString())
+        .reduce((sum, item) => sum + item.quantity, 0);
+
+      if (currentMerchantQty + quantity > 6) {
+        return res.status(400).json({ message: "You can only have up to 6 Try & Buy items per merchant." });
+      }
+    } else {
+      if (quantity > 6) {
+        return res.status(400).json({ message: "You can only have up to 6 Try & Buy items per merchant." });
+      }
+    }
+
     if (!cart) {
       cart = new Cart({
         userId,
@@ -44,11 +58,10 @@ export const addToCart = async (req, res) => {
           quantity,
           stockQuantity: sizeObj.stock,
           merchantId,
-          image,
+          image: typeof image === 'string' ? { url: image } : image,
         }],
       });
     } else {
-      // 4. 🔁 If cart exists, check if item already present
       const existingItem = cart.items.find(item =>
         item.productId.toString() === productId &&
         item.variantId.toString() === variantId &&
@@ -56,14 +69,12 @@ export const addToCart = async (req, res) => {
       );
 
       if (existingItem) {
-        // ➕ Update quantity
         if ((existingItem.quantity + quantity) > sizeObj.stock) {
           return res.status(400).json({ message: `Only ${sizeObj.stock} items left in stock` });
         }
         existingItem.quantity += quantity;
-        existingItem.stockQuantity = sizeObj.stock; // Update stock info too if it might change
+        existingItem.stockQuantity = sizeObj.stock;
       } else {
-        // ➕ Add new item
         cart.items.push({
           productId,
           variantId,
@@ -71,10 +82,9 @@ export const addToCart = async (req, res) => {
           quantity,
           stockQuantity: sizeObj.stock,
           merchantId,
-          image,
+          image: typeof image === 'string' ? { url: image } : image,
         });
       }
-
       cart.updatedAt = new Date();
     }
 
@@ -86,15 +96,12 @@ export const addToCart = async (req, res) => {
   }
 };
 
-
 export const getCartCount = async (req, res) => {
   const userId = req.user.userId;
-
   try {
     const cart = await Cart.findOne({ userId })
-      .populate("items.productId", "variants")
+      .populate("items.productId", "name variants images")
       .lean();
-
     if (!cart) {
       return res.status(200).json({
         success: true,
@@ -103,23 +110,21 @@ export const getCartCount = async (req, res) => {
         items: [],
       });
     }
-
     const itemsWithVariant = cart.items.map((item) => {
       const product = item.productId;
       const variant = product?.variants?.find(
         (v) => v._id.toString() === item.variantId.toString()
       );
-
       return {
         ...item,
         price: variant?.price || null,
         mrp: variant?.mrp || null,
       };
     });
-
+    const merchantSet = new Set(cart.items.map(i => i.merchantId?.toString()));
     res.status(200).json({
       success: true,
-      totalCarts: 1,
+      totalCarts: merchantSet.size,
       totalItems: itemsWithVariant.length,
       items: itemsWithVariant,
     });
@@ -129,144 +134,208 @@ export const getCartCount = async (req, res) => {
   }
 };
 
-
-
-
 export const getCart = async (req, res) => {
   const userId = req.user.userId;
-  const { addressId, serviceable } = req.body;
-
+  const { addressId, latitude, longitude, serviceable, deliveryTip = 0 } = req.body;
 
   try {
-    // 1️⃣ Fetch cart
     const cart = await Cart.findOne({ userId })
-      .populate("items.productId", "name variants")
-      .populate("items.merchantId", "shopName address.location");
+      .populate({
+        path: "items.productId",
+        select: "name variants images categoryId subCategoryId brandId gender tags collectionIds",
+      })
+      .populate("items.merchantId", "shopName address isOnline logo");
 
-    if (!cart) {
+    if (!cart || cart.items.length === 0) {
       return res.status(200).json({
         success: true,
         totalItems: 0,
+        merchantCarts: [],
         items: [],
         deliveryDetails: null,
       });
     }
 
-    // If no addressId provided, return just the cart items without delivery calculations
-    if (!addressId && !serviceable) {
-      const itemsWithVariant = cart.items.map((item) => {
-        const product = item.productId;
-        const variant = product?.variants?.find(
-          (v) => v._id.toString() === item.variantId.toString()
-        );
-
-        return {
-          ...item.toObject(),
-          price: variant?.price || null,
-          mrp: variant?.mrp || null,
-          merchantDelivery: null, // No delivery info available
-        };
-      });
-
-      return res.status(200).json({
-        success: true,
-        totalItems: itemsWithVariant.length,
-        items: itemsWithVariant,
-        deliveryDetails: null,
-        address: null,
-        serviceable
-      });
-    }
-
-    // 2️⃣ Fetch delivery address (only if addressId is provided)
-    const selectedAddress = await Address.findById(addressId);
-    if (!selectedAddress) {
-      console.log("Selected address not found");
-      return res.status(400).json({
-        success: false,
-        message: "Selected address not found",
-      });
-    }
-
-    const userLat = selectedAddress.location.coordinates[1];
-    const userLng = selectedAddress.location.coordinates[0];
-
-    // 2.5️⃣ Fetch App Config for rates
     const config = await AppConfig.getConfig();
+    let selectedAddress = null;
+    if (addressId) {
+      selectedAddress = await Address.findById(addressId).lean();
+    }
+    if (!selectedAddress && latitude !== undefined && longitude !== undefined) {
+      selectedAddress = {
+        _id: "temporary",
+        addressType: "Current Location",
+        location: {
+          type: "Point",
+          coordinates: [Number(longitude), Number(latitude)]
+        },
+        latitude: Number(latitude),
+        longitude: Number(longitude)
+      };
+    }
 
-    // 3️⃣ Build items with variant price + merchant delivery charge
-    let merchantDeliveryMap = {};
-
-    const itemsWithVariant = cart.items.map((item) => {
+    const merchantGroupMap = {};
+    for (const item of cart.items) {
       const product = item.productId;
       const merchant = item.merchantId;
-
+      const merchantKey = merchant?._id?.toString() || item.merchantId?.toString() || 'unknown';
       const variant = product?.variants?.find(
         (v) => v._id.toString() === item.variantId.toString()
       );
+      const price = variant?.price || 0;
+      const mrp = variant?.mrp || 0;
+      if (!merchantGroupMap[merchantKey]) {
+        merchantGroupMap[merchantKey] = { merchant, items: [] };
+      }
+      merchantGroupMap[merchantKey].items.push({ ...item.toObject(), price, mrp });
+    }
 
-      if (!merchantDeliveryMap[merchant._id]) {
-        const userCoords = [userLng, userLat];
-        const merchantCoords = [merchant.address.location.coordinates[0], merchant.address.location.coordinates[1]];
+    const merchantCarts = [];
+    let globalTotalItems = 0;
+    const allItems = [];
+    const allDeliveryDetails = [];
 
-        const { distanceKm, deliveryCharge, returnCharge } = calculateDeliveryCharge({
-          userCoords,
-          merchantCoords,
-          deliveryPerKmRate: config.deliveryPerKmRate,
-          returnPerKmRate: config.returnPerKmRate,
-          waitingCharge: config.waitingCharge
-        });
+    for (const [merchantKey, group] of Object.entries(merchantGroupMap)) {
+      const { merchant, items } = group;
+      globalTotalItems += items.length;
 
-        merchantDeliveryMap[merchant._id] = {
-          merchantId: merchant._id,
-          shopName: merchant.shopName,
-          distanceKm,
-          deliveryCharge,
-          returnCharge, // Added returnCharge for frontend visibility
-        };
+      let deliveryInfo = null;
+      if (selectedAddress && merchant && merchant.address) {
+        let userCoords = selectedAddress.location?.coordinates;
+        if (!userCoords || userCoords.length < 2) {
+          if (selectedAddress.longitude !== undefined && selectedAddress.latitude !== undefined) {
+            userCoords = [selectedAddress.longitude, selectedAddress.latitude];
+          }
+        }
+        let merchantCoords = merchant.address?.location?.coordinates;
+        if (!merchantCoords || merchantCoords.length < 2) {
+          if (merchant.address?.longitude !== undefined && merchant.address?.latitude !== undefined) {
+            merchantCoords = [merchant.address.longitude, merchant.address.latitude];
+          }
+        }
+        if (userCoords && merchantCoords && userCoords.length >= 2 && merchantCoords.length >= 2) {
+          const { displacementKm, roadDistanceKm, deliveryCharge, returnCharge, estimatedTime } = await calculateDeliveryCharge({
+            userCoords,
+            merchantCoords,
+            deliveryPerKmRate: config.deliveryPerKmRate,
+            returnPerKmRate: config.returnPerKmRate,
+            waitingCharge: config.waitingCharge
+          });
+          const TRY_BUY_RADIUS = config.tryAndBuyRadius;
+          const isEligibleForTryBuy = roadDistanceKm <= TRY_BUY_RADIUS;
+          deliveryInfo = {
+            merchantId: merchant._id,
+            shopName: merchant.shopName,
+            distanceKm: roadDistanceKm,
+            deliveryCharge,
+            returnCharge,
+            estimatedTime,
+            isEligibleForTryBuy,
+            message: isEligibleForTryBuy ? null : `Merchant is beyond ${TRY_BUY_RADIUS}km for Try & Buy`
+          };
+          allDeliveryDetails.push(deliveryInfo);
+        }
       }
 
-      return {
-        ...item.toObject(),
-        price: variant?.price || null,
-        mrp: variant?.mrp || null,
-        merchantDelivery: merchantDeliveryMap[merchant._id],
-      };
-    });
+      const enrichedItems = items.map(item => ({ ...item, merchantDelivery: deliveryInfo }));
+      allItems.push(...enrichedItems);
 
-    // 4️⃣ Response
-    res.status(200).json({
+      let mSubtotal = 0;
+      let mMrpTotal = 0;
+      for (const item of items) {
+        mSubtotal += item.price * item.quantity;
+        mMrpTotal += item.mrp * item.quantity;
+      }
+
+      const mDeliveryCharge = Math.round(deliveryInfo?.deliveryCharge || 0);
+      const mReturnCharge = Math.round(deliveryInfo?.returnCharge || 0);
+      const tip = Math.round(Number(deliveryTip) || 0);
+      const mServiceGST = Math.round((mDeliveryCharge + tip) * 0.18);
+      const mUpfrontPayable = Math.round(mDeliveryCharge + mReturnCharge + tip + mServiceGST);
+
+      const mTotals = {
+        subtotal: Math.round(mSubtotal),
+        mrpTotal: Math.round(mMrpTotal),
+        discount: Math.round(mMrpTotal - mSubtotal),
+        totalDeliveryCharge: mDeliveryCharge,
+        totalReturnCharge: mReturnCharge,
+        deliveryTip: tip,
+        serviceGST: mServiceGST,
+        totalUpfrontPayable: mUpfrontPayable,
+        finalTotal: Math.round(mSubtotal + mUpfrontPayable),
+      };
+
+      let mAppliedOffers = { appliedOffers: [], totalDiscount: 0, freeDelivery: false };
+      try {
+        const merchantTotals = {};
+        merchantTotals[merchantKey] = mSubtotal;
+        mAppliedOffers = await findBestOffers(
+          userId,
+          { items: enrichedItems, subtotal: mSubtotal, merchantTotals, totalDeliveryCharge: mDeliveryCharge, totalReturnCharge: mReturnCharge },
+          cart.couponCode,
+          cart.selectedOffers,
+          'try_and_buy'
+        );
+        if (mAppliedOffers && mAppliedOffers.freeDelivery) {
+          mTotals.totalDeliveryCharge = 0;
+          mTotals.totalReturnCharge = 0;
+          mTotals.serviceGST = Math.round((0 + tip) * 0.18);
+          mTotals.totalUpfrontPayable = Math.round(0 + 0 + tip + mTotals.serviceGST);
+          mTotals.finalTotal = Math.round(mSubtotal - mAppliedOffers.totalDiscount + mTotals.totalUpfrontPayable);
+        } else {
+          mTotals.finalTotal = Math.round(mSubtotal - (mAppliedOffers.totalDiscount || 0) + mTotals.totalUpfrontPayable);
+        }
+        mTotals.discount = Math.round((mMrpTotal - mSubtotal) + (mAppliedOffers.totalDiscount || 0));
+      } catch (offerErr) {
+        console.error('Offer engine error:', offerErr.message);
+      }
+
+      merchantCarts.push({
+        merchantId: merchantKey,
+        merchantDetails: { _id: merchant?._id, shopName: merchant?.shopName, isOnline: merchant?.isOnline, logo: merchant?.logo },
+        items: enrichedItems,
+        deliveryDetails: deliveryInfo,
+        totals: mTotals,
+        appliedOffers: mAppliedOffers,
+      });
+    }
+
+    return res.status(200).json({
       success: true,
-      totalItems: itemsWithVariant.length,
-      items: itemsWithVariant,
-      deliveryDetails: Object.values(merchantDeliveryMap),
+      totalItems: globalTotalItems,
+      merchantCarts,
+      items: allItems,
+      deliveryDetails: allDeliveryDetails.length > 0 ? allDeliveryDetails : null,
       address: selectedAddress,
-      serviceable
+      serviceable: !!(selectedAddress && serviceable),
     });
   } catch (err) {
     console.error("Get cart error:", err);
-    res.status(500).json({
-      success: false,
-      message: "Server error"
-    });
+    res.status(500).json({ success: false, message: "Server error" });
   }
 };
 
 export const clearCart = async (req, res) => {
   const userId = req.user.userId;
-  // console.log(userId,'logloglog');
+  const { merchantId } = req.query;
+
   try {
     const cart = await Cart.findOne({ userId });
+    if (!cart) return res.status(404).json({ success: false, message: 'Cart not found' });
 
-    if (!cart) {
-      return res.status(404).json({ success: false, message: 'Cart not found' });
+    if (merchantId) {
+      // Clear only items for this specific merchant
+      cart.items = cart.items.filter(item => item.merchantId.toString() !== merchantId.toString());
+      // Also clear any selected offers that are only for these items (optional/future)
+    } else {
+      // Clear entire cart
+      cart.items = [];
+      cart.selectedOffers = [];
+      cart.couponCode = null;
     }
 
-    // Clear items array
-    cart.items = [];
     await cart.save();
-
-    res.status(200).json({ success: true, message: 'Cart cleared' });
+    res.status(200).json({ success: true, message: merchantId ? 'Merchant items cleared' : 'Cart cleared' });
   } catch (error) {
     console.error('Error clearing cart:', error);
     res.status(500).json({ success: false, message: 'Server error' });
@@ -276,30 +345,9 @@ export const clearCart = async (req, res) => {
 export const deleteCartItem = async (req, res) => {
   try {
     const { itemId } = req.params;
-
-
-
-    const updatedCart = await Cart.findOneAndUpdate(
-      { "items._id": itemId },      // Filter cart that contains that specific item _id
-      {
-        $pull: { items: { _id: itemId } } // Remove by item _id
-      },
-      { new: true }
-    );
-
-    if (!updatedCart) {
-      return res.status(404).json({
-        success: false,
-        message: "No matching item found in cart.",
-      });
-    }
-
-    return res.status(200).json({
-      success: true,
-      message: "Item removed from cart successfully",
-      updatedCart,
-    });
-
+    const updatedCart = await Cart.findOneAndUpdate({ "items._id": itemId }, { $pull: { items: { _id: itemId } } }, { new: true });
+    if (!updatedCart) return res.status(404).json({ success: false, message: "No matching item found in cart." });
+    return res.status(200).json({ success: true, message: "Item removed from cart successfully", updatedCart });
   } catch (error) {
     console.error("Error deleting cart item:", error);
     res.status(500).json({ success: false, error: error.message });
@@ -308,52 +356,102 @@ export const deleteCartItem = async (req, res) => {
 
 export const updateCartQuantity = async (req, res) => {
   try {
-    const userId = req.user.userId; // assuming authMiddleware sets this
+    const userId = req.user.userId;
     const { cartId, quantity } = req.body;
-
-
-
-
-    if (!cartId || typeof quantity !== "number" || quantity < 1) {
-      return res.status(400).json({ success: false, message: 'Missing or invalid cartId or quantity' });
-    }
-
-    // Find the user's cart
+    if (!cartId || typeof quantity !== "number" || quantity < 1) return res.status(400).json({ success: false, message: 'Missing or invalid cartId or quantity' });
     const cart = await Cart.findOne({ userId });
-    if (!cart) {
-      return res.status(404).json({ success: false, message: 'Cart not found' });
+    if (!cart) return res.status(404).json({ success: false, message: 'Cart not found' });
+    const item = cart.items.id(cartId);
+    if (!item) return res.status(404).json({ success: false, message: 'Item not found in cart' });
+
+    const merchantId = item.merchantId.toString();
+    const currentMerchantQtyExcludingThisItem = cart.items
+      .filter(i => i.merchantId.toString() === merchantId && i._id.toString() !== cartId)
+      .reduce((sum, i) => sum + i.quantity, 0);
+
+    if (currentMerchantQtyExcludingThisItem + quantity > 6) {
+      return res.status(400).json({ success: false, message: "You can only have up to 6 Try & Buy items per merchant." });
     }
 
-    // Find item by subdocument ID (cart.items._id)
-    const item = cart.items.id(cartId); // Mongoose shortcut
-
-    if (!item) {
-      return res.status(404).json({ success: false, message: 'Item not found in cart' });
-    }
-
-    // Update quantity
     item.quantity = quantity;
     await cart.save();
-
-    // Optionally, also return the updated cart total/value if needed for UI
-    return res.status(200).json({
-      success: true,
-      message: 'Quantity updated',
-      updatedItem: item
-    });
+    return res.status(200).json({ success: true, message: 'Quantity updated', updatedItem: item });
   } catch (error) {
     console.error('Error updating cart quantity:', error);
     return res.status(500).json({ success: false, message: 'Server error' });
   }
 };
 
+export const moveToCourier = async (req, res) => {
+  const userId = req.user.userId;
+  const { merchantId, itemId } = req.body;
+  try {
+    let cart = await Cart.findOne({ userId });
+    if (!cart) return res.status(404).json({ success: false, message: "Cart not found" });
+    let itemsToMove = [];
+    if (merchantId) {
+      itemsToMove = cart.items.filter(item => item.merchantId.toString() === merchantId);
+      cart.items = cart.items.filter(item => item.merchantId.toString() !== merchantId);
+    } else if (itemId) {
+      const itemIndex = cart.items.findIndex(item => item._id.toString() === itemId);
+      if (itemIndex > -1) { itemsToMove = [cart.items[itemIndex]]; cart.items.splice(itemIndex, 1); }
+    }
+    if (itemsToMove.length === 0) return res.status(404).json({ success: false, message: "No items found to move" });
+    let courierCart = await CourierCart.findOne({ userId });
+    if (!courierCart) courierCart = new CourierCart({ userId, items: [] });
+    for (const item of itemsToMove) {
+      const existingItem = courierCart.items.find(ci => ci.productId.toString() === item.productId.toString() && ci.variantId.toString() === item.variantId.toString() && ci.size === item.size);
+      if (existingItem) existingItem.quantity += item.quantity;
+      else courierCart.items.push({ productId: item.productId, variantId: item.variantId, size: item.size, quantity: item.quantity, merchantId: item.merchantId, image: item.image, stockQuantity: item.stockQuantity });
+    }
+    await cart.save();
+    await courierCart.save();
+    res.status(200).json({ success: true, message: "Items moved to courier cart" });
+  } catch (error) {
+    console.error("Move to courier error:", error);
+    res.status(500).json({ success: false, message: "Server error" });
+  }
+};
 
+export const selectOffer = async (req, res) => {
+  const userId = req.user.userId;
+  const { offerId, targetItemIds } = req.body;
+  if (!offerId) return res.status(400).json({ success: false, message: 'offerId is required' });
+  try {
+    const cart = await Cart.findOne({ userId });
+    if (!cart) return res.status(404).json({ success: false, message: 'Cart not found' });
+    
+    // Clear coupon and enforce single selected offer
+    cart.couponCode = null;
+    cart.selectedOffers = [{ offerId, targetItemIds: targetItemIds || [] }];
+    
+    await cart.save();
+    res.status(200).json({ success: true, message: 'Offer selected', selectedOffers: cart.selectedOffers });
+  } catch (error) {
+    console.error("Select offer error:", error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+};
 
+export const deselectOffer = async (req, res) => {
+  const userId = req.user.userId;
+  const { offerId } = req.body;
+  if (!offerId) return res.status(400).json({ success: false, message: 'offerId is required' });
+  try {
+    const cart = await Cart.findOne({ userId });
+    if (!cart) return res.status(404).json({ success: false, message: 'Cart not found' });
+    cart.selectedOffers = cart.selectedOffers.filter(o => o.offerId.toString() !== offerId.toString());
 
+    // Also clear couponCode if this is the active coupon offer
+    const offer = await Offer.findById(offerId);
+    if (offer && offer.requiresCoupon && cart.couponCode && cart.couponCode.toUpperCase() === offer.couponCode.toUpperCase()) {
+      cart.couponCode = null;
+    }
 
-
-
-
-
-
-
+    await cart.save();
+    res.status(200).json({ success: true, message: 'Offer deselected', selectedOffers: cart.selectedOffers });
+  } catch (error) {
+    console.error("Deselect offer error:", error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+};

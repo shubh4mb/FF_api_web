@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { getMerchants } from '@/api/merchants';
+import { getMerchants, verifyMerchant } from '@/api/merchants';
 import { useNavigate } from 'react-router-dom';
 import ReusableAdminTable from '@/components/admin/Table';
 
@@ -14,10 +14,27 @@ const Merchants = () => {
     { header: "Email", accessor: "email" },
     {
       header: "Status",
-      accessor: "isActive",
+      accessor: "status",
+      render: (value) => {
+        let badgeColor = "bg-gray-100 text-gray-600";
+        if (value === "active") badgeColor = "bg-green-100 text-green-600";
+        else if (value === "pending_verification") badgeColor = "bg-yellow-100 text-yellow-600";
+        else if (value === "pending_payment") badgeColor = "bg-blue-100 text-blue-600";
+        else if (value === "rejected") badgeColor = "bg-red-100 text-red-600";
+        
+        return (
+          <span className={`px-2 py-1 rounded text-xs font-medium uppercase ${badgeColor}`}>
+            {value ? value.replace('_', ' ') : 'UNKNOWN'}
+          </span>
+        );
+      },
+    },
+    {
+      header: "Verified",
+      accessor: "isVerified",
       render: (value) => (
-        <span className={`px-2 py-1 rounded text-xs ${value ? "bg-green-100 text-green-600" : "bg-red-100 text-red-600"}`}>
-          {value ? "Active" : "Inactive"}
+        <span className={`px-2 py-1 rounded text-xs font-bold ${value ? "bg-blue-100 text-blue-600" : "bg-orange-100 text-orange-600"}`}>
+          {value ? "VERIFIED" : "PENDING"}
         </span>
       ),
     },
@@ -38,6 +55,18 @@ const Merchants = () => {
       label: "Delete",
       onClick: (row) => console.log("Delete", row),
       className: "text-red-600 hover:underline text-sm",
+    },
+    {
+      label: (row) => row.isVerified ? "Unverify" : "Verify",
+      onClick: async (row) => {
+        try {
+          await verifyMerchant(row._id, !row.isVerified);
+          window.location.reload(); // Quick refresh to show status
+        } catch (err) {
+          alert("Error updating verification: " + err.message);
+        }
+      },
+      className: (row) => row.isVerified ? "text-orange-600 hover:underline text-sm font-bold" : "text-green-600 hover:underline text-sm font-bold",
     },
   ];
 

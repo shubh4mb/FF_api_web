@@ -4,6 +4,7 @@ const otpSchema = new mongoose.Schema({
   phone: {
     type: String,
     required: true,
+    index: true,
   },
   otp: {
     type: String,
@@ -13,6 +14,11 @@ const otpSchema = new mongoose.Schema({
     type: Date,
     required: true,
   },
+  attempts: {
+    type: Number,
+    default: 0,
+    max: 5,
+  },
   verified: {
     type: Boolean,
     default: false,
@@ -21,7 +27,7 @@ const otpSchema = new mongoose.Schema({
   timestamps: true,
 });
 
-// Optional: TTL Index to auto-delete expired OTPs
-otpSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
+// TTL Index — auto-delete expired OTPs after 10 minutes grace period
+otpSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 600 });
 
 export default mongoose.models.Otp || mongoose.model('Otp', otpSchema);

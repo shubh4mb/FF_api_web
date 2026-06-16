@@ -32,7 +32,7 @@ async function syncRating(targetId, targetType) {
 }
 
 // ─── VALID COMPLETED STATUSES ────────────────────────────────────
-const COMPLETED_STATUSES = ["completed", "confirmed_purchase", "delivered", "partially_returned"];
+const COMPLETED_STATUSES = ["completed", "selection_made", "return_in_progress"];
 
 // ─── CREATE / UPDATE REVIEW (Customer) ───────────────────────────
 export const createReview = async (req, res) => {

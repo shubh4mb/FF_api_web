@@ -113,6 +113,13 @@ const productSchema = new mongoose.Schema({
 
   tags: [String],
 
+  collectionIds: [
+    {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Collection',
+    }
+  ],
+
   variants: [variantSchema], // key for fashion variants (sizes, colors, etc.)
 
   isTriable: { type: Boolean, default: true },
@@ -121,6 +128,7 @@ const productSchema = new mongoose.Schema({
   numReviews: { type: Number, default: 0 },
 
   isActive: { type: Boolean, default: true },
+  isDeleted: { type: Boolean, default: false },
   createdAt: { type: Date, default: Date.now },
 }, { timestamps: true });
 

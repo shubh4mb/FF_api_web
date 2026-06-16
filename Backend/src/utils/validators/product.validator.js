@@ -8,6 +8,7 @@ export const productSchema = Joi.object({
   categoryId: Joi.string().hex().length(24).required(),
   subCategoryId: Joi.string().hex().length(24).optional(),
   tags: Joi.array().items(Joi.string()).optional(),
+  collectionIds: Joi.array().items(Joi.string().hex().length(24)).optional(),
   merchantId: Joi.string().hex().length(24).required(),
 
   soldBy: Joi.string().optional(),

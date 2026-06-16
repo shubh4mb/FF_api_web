@@ -30,9 +30,15 @@ export const adminLogin = asyncHandler(async (req, res) => {
     }
 
     const token = jwt.sign(
+        { adminId: adminUser._id, id: adminUser._id, role: adminUser.role },
+        process.env.JWT_SECRET,
+        { expiresIn: '15m' } 
+    );
+
+    const refreshToken = jwt.sign(
         { adminId: adminUser._id, role: adminUser.role },
         process.env.JWT_SECRET,
-        { expiresIn: '1d' } // 1 day expiration for admin
+        { expiresIn: '30d' } 
     );
 
     adminUser.lastLogin = new Date();
@@ -40,13 +46,60 @@ export const adminLogin = asyncHandler(async (req, res) => {
 
     const loggedInAdmin = await Admin.findById(adminUser._id).select('-password');
 
+    res.cookie('refreshToken', refreshToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'strict',
+        maxAge: 30 * 24 * 60 * 60 * 1000
+    });
+
     return res.status(200).json(
         new ApiResponse(
             200,
-            { admin: loggedInAdmin, token },
+            { admin: loggedInAdmin, token, refreshToken },
             "Admin logged in successfully"
         )
     );
+});
+
+export const refreshAdminToken = asyncHandler(async (req, res) => {
+    const refreshToken = req.cookies?.refreshToken || req.body?.refreshToken;
+    if (!refreshToken) {
+        throw new ApiError(401, "Refresh token is required");
+    }
+
+    try {
+        const decoded = jwt.verify(refreshToken, process.env.JWT_SECRET);
+        const adminUser = await Admin.findById(decoded.adminId || decoded.id);
+
+        if (!adminUser) {
+            throw new ApiError(401, "Admin not found");
+        }
+
+        const token = jwt.sign(
+            { adminId: adminUser._id, id: adminUser._id, role: adminUser.role },
+            process.env.JWT_SECRET,
+            { expiresIn: '15m' }
+        );
+        const newRefreshToken = jwt.sign(
+            { adminId: adminUser._id, role: adminUser.role },
+            process.env.JWT_SECRET,
+            { expiresIn: '30d' }
+        );
+
+        res.cookie('refreshToken', newRefreshToken, {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production',
+            sameSite: 'strict',
+            maxAge: 30 * 24 * 60 * 60 * 1000
+        });
+
+        return res.status(200).json(
+            new ApiResponse(200, { token, refreshToken: newRefreshToken }, "Admin token refreshed successfully")
+        );
+    } catch (error) {
+        throw new ApiError(401, "Invalid or expired admin refresh token");
+    }
 });
 
 // @desc    Admin registration

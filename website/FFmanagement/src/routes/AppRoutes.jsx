@@ -8,7 +8,7 @@ import AddCategory from '../pages/admin/AddCategory';
 import Category from '../pages/admin/Category';
 import AddProducts from '../pages/admin/AddProducts';
 import MerchantDashboard from '../pages/merchant/MerchantDashboard';
-import AddProduct from '../pages/merchant/AddProduct'; ``
+import AddProduct from '../pages/merchant/AddProduct';
 import NotFound from '../pages/NotFound';
 import AddMerchants from '../pages/admin/AddMerchants';
 import AddBrand from '../pages/admin/AddBrand';
@@ -25,11 +25,21 @@ import AdminRegister from '../pages/admin/AdminRegister';
 import ProtectedAdminRoute from '../components/ProtectedAdminRoute';
 import Settings from '../pages/admin/Settings';
 import AttributeManagement from '../pages/admin/AttributeManagement';
+import Hubs from '../pages/admin/Hubs';
+import OffersManagement from '../pages/admin/OffersManagement';
+import CollectionManagement from '../pages/admin/CollectionManagement';
+import Zones from '../pages/admin/Zones';
+import IncentiveManagement from '../pages/admin/IncentiveManagement';
+import PayoutManagement from '../pages/admin/PayoutManagement';
+import SupportTickets from '../pages/admin/SupportTickets';
+import ZipCoverRequests from '../pages/admin/ZipCoverRequests';
+import OrderCancellations from '../pages/admin/OrderCancellations';
 
 const AppRoutes = () => {
   return (
     <Router>
       <Routes>
+        <Route path="/" element={<Navigate to="/admin" replace />} />
         {/* Admin Public Routes */}
         <Route path="/admin/login" element={<AdminLogin />} />
         <Route path="/admin/register" element={<AdminRegister />} />
@@ -51,9 +61,18 @@ const AppRoutes = () => {
             <Route path="variants/:productId" element={<Variants />} />
             <Route path="add-title-banner" element={<Title_Banner />} />
             <Route path="merchants/:merchantId" element={<EditMerchant />} />
+            <Route path="zones" element={<Zones />} />
             <Route path="create-zone" element={<CreateZone />} />
             <Route path="banners" element={<BannersPage />} />
             <Route path="attributes" element={<AttributeManagement />} />
+            <Route path="hubs" element={<Hubs />} />
+            <Route path="offers" element={<OffersManagement />} />
+            <Route path="collections" element={<CollectionManagement />} />
+            <Route path="incentives" element={<IncentiveManagement />} />
+            <Route path="payouts" element={<PayoutManagement />} />
+            <Route path="support" element={<SupportTickets />} />
+            <Route path="zip-covers" element={<ZipCoverRequests />} />
+            <Route path="order-cancellations" element={<OrderCancellations />} />
           </Route>
         </Route>
 

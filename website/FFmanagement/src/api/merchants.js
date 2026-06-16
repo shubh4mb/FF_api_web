@@ -50,3 +50,13 @@ export const getMerchantById = async (id) => {
         throw error.response ? error.response.data : new Error('Network Error');
     }
 }
+
+export const verifyMerchant = async (id, isVerified, kycVerifications) => {
+    try {
+        const response = await axiosInstance.patch(`/admin/updateMerchant/${id}/verify`, { isVerified, kycVerifications });
+        return response.data;
+    } catch (error) {
+        console.log(error)
+        throw error.response ? error.response.data : new Error('Network Error');
+    }
+}

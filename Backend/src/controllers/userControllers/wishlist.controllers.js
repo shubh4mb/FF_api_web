@@ -128,10 +128,11 @@ export const getMyWishlistIds = asyncHandler(async (req, res) => {
   const userId = req.user.userId;
 
   const wishlist = await Wishlist.find({ userId })
-    .select('productId variantId')
+    .select('_id productId variantId')
     .sort({ createdAt: -1 });
 
   const result = wishlist.map(item => ({
+    _id: item._id,
     productId: item.productId,
     variantId: item.variantId,
   }));

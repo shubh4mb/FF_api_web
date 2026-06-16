@@ -9,14 +9,13 @@ export const registerDeliveryRiderSockets = (io, socket) => {
 
   socket.on("registerRider", async ({ riderId }) => {
     // map socket -> rider room and store socketId in meta
-    const rider = await DeliveryRider.findById(riderId);
+    const rider = await DeliveryRider.findByIdAndUpdate(riderId, { isAvailable: true });
     if (!rider) {
       return socket.emit("error", "Rider not found");
     }
-    rider.isAvailable = true;
-    await rider.save();
     socket.join(`riderSocket:${riderId}`);    // join a personal socket room
     socket.join(`rider:${riderId}`);
+    socket.data.riderId = riderId; // Save riderId for O(1) lookup on disconnect
     // await geoAdd("riders:geo", lng, lat, riderId);       // alternative room for fallback messages
 
     const currentMeta = await getRiderMeta(riderId);
@@ -38,7 +37,7 @@ export const registerDeliveryRiderSockets = (io, socket) => {
       try {
         const fullOrder = await Order.findById(keepOrder).populate('merchantId', 'shopName address').lean();
 
-        if (fullOrder && (fullOrder.deliveryRiderId?.toString() === riderId || fullOrder.deliveryRiderStatus !== 'completed')) {
+        if (fullOrder && fullOrder.deliveryRiderId?.toString() === riderId && !["completed", "cancelled"].includes(fullOrder.deliveryRiderStatus)) {
           const riderPayload = {
             _id: fullOrder._id,
             orderId: fullOrder._id.toString(),
@@ -167,13 +166,12 @@ export const registerDeliveryRiderSockets = (io, socket) => {
   socket.on("disconnect", async () => {
     console.log("Rider disconnected:", socket.id);
 
-    const keys = await redis.keys("rider:*:meta");
-    for (const key of keys) {
-      const meta = await redis.hGetAll(key);
-      if (meta.socketId === socket.id) {
-        const riderId = key.split(":")[1];
+    const riderId = socket.data.riderId;
+    
+    if (riderId) {
+      const meta = await getRiderMeta(riderId);
+      if (meta) {
         const zoneId = meta.zoneId || 'global'; // ← get from stored meta
-
         const keepOrder = meta.assignedOrderId ? meta.assignedOrderId : "";
 
         await setRiderMeta(riderId, zoneId, {
@@ -182,12 +180,10 @@ export const registerDeliveryRiderSockets = (io, socket) => {
           assignedOrderId: keepOrder,
         });
 
-
         console.log(`Rider ${riderId} marked OFFLINE in zone ${zoneId}`);
         if (!keepOrder) {
           io.emit(`riderFreed:${zoneId}`, { zoneId, riderId }); // ← trigger matcher!
         }
-        break;
       }
     }
   });

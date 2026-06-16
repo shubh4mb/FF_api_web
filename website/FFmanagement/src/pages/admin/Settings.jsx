@@ -8,6 +8,8 @@ const Settings = () => {
         returnPerKmRate: 7,
         waitingCharge: 10,
         deliveryRadius: 5,
+        tryAndBuyRadius: 7,
+        merchantRegistrationFee: 1000,
     });
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
@@ -29,6 +31,8 @@ const Settings = () => {
                     returnPerKmRate: data.config.returnPerKmRate,
                     waitingCharge: data.config.waitingCharge,
                     deliveryRadius: data.config.deliveryRadius ?? 5,
+                    tryAndBuyRadius: data.config.tryAndBuyRadius ?? 7,
+                    merchantRegistrationFee: data.config.merchantRegistrationFee ?? 1000,
                 });
             }
         } catch (err) {
@@ -176,6 +180,42 @@ const Settings = () => {
                                 placeholder="e.g. 5"
                             />
                             <p className="text-xs text-gray-500">Maximum delivery distance in kilometers</p>
+                        </div>
+
+                        <div className="space-y-2">
+                            <label className="text-sm font-medium text-gray-700 block">
+                                Try & Buy Radius (Km)
+                            </label>
+                            <input
+                                type="number"
+                                name="tryAndBuyRadius"
+                                value={config.tryAndBuyRadius}
+                                onChange={handleChange}
+                                min="0"
+                                step="0.1"
+                                required
+                                className="w-full px-4 py-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
+                                placeholder="e.g. 7"
+                            />
+                            <p className="text-xs text-gray-500">Threshold distance for Try & Buy availability</p>
+                        </div>
+
+                        <div className="space-y-2">
+                            <label className="text-sm font-medium text-gray-700 block">
+                                Merchant Registration Fee (₹)
+                            </label>
+                            <input
+                                type="number"
+                                name="merchantRegistrationFee"
+                                value={config.merchantRegistrationFee}
+                                onChange={handleChange}
+                                min="0"
+                                step="1"
+                                required
+                                className="w-full px-4 py-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
+                                placeholder="e.g. 1000"
+                            />
+                            <p className="text-xs text-gray-500">One-time fee for new merchants</p>
                         </div>
                     </div>
 

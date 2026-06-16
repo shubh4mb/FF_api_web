@@ -8,6 +8,7 @@ import { enqueueOrder } from '../../helperFns/orderFns.js';
 import Merchant from "../../models/merchant.model.js";
 import { creditWallet } from "../../helperFns/walletHelper.js";
 import { notifyOrderEvent } from "../../helperFns/notificationHelper.js";
+import { inferZone } from "../../utils/zoneInfer.js";
 
 const generateOTP = () => Math.floor(1000 + Math.random() * 9000);
 
@@ -84,8 +85,14 @@ export const orderRequestForMerchant = async (req, res) => {
     const order = await Order.findById(orderId).populate('merchantId', 'shopName address');
     if (!order) return res.status(404).json({ message: "Order not found" });
 
+    // Authorization check
+    if (order.merchantId._id.toString() !== req.merchantId.toString()) {
+      return res.status(403).json({ message: "Forbidden: You do not own this order" });
+    }
+
     if (status === "accept") {
       order.orderStatus = "accepted";
+      order.customerDeliveryStatus = "accepted";
 
       // Validate that order has required coordinates
       if (!order.pickupLocation?.coordinates?.length || !order.deliveryLocation?.coordinates?.length) {
@@ -105,8 +112,8 @@ export const orderRequestForMerchant = async (req, res) => {
       };
 
       const merchant = await Merchant.findById(order.merchantId);
-      // Normalize zone name exactly like inferZone does (lowercase, no spaces)
-      const zoneId = (merchant.zoneName || 'global').toLowerCase().replace(/\s+/g, '');
+      // Dynamic zone inference ensures perfect sync with Rider's inference
+      const zoneId = await inferZone(pickupLocation.lat, pickupLocation.lng);
 
       queueResult = await enqueueOrder({
         orderId: order._id.toString(),
@@ -146,17 +153,21 @@ export const orderRequestForMerchant = async (req, res) => {
 
     if (status === "reject") {
       order.orderStatus = "rejected";
+      order.customerDeliveryStatus = "cancelled";
       order.reason = req.body.reason || "Merchant rejected the order";
 
-      // 💰 Refund delivery fee to customer wallet
-      const refundAmount = order.deliveryCharge || 0;
+      // 💰 Refund full upfront amount to customer wallet
+      const refundAmount = (order.deliveryCharge || 0) + (order.returnCharge || 0) + (order.finalBilling?.deliveryTip || 0) + (order.finalBilling?.serviceGST || 0);
+
       if (refundAmount > 0) {
         await creditWallet({
-          userId: order.userId,
+          ownerType: "user",
+          ownerId: order.userId,
           amount: refundAmount,
           description: `Refund: Merchant declined order #${orderId.toString().slice(-5).toUpperCase()}`,
           orderId: order._id,
         });
+        order.paymentStatus = "refunded";
 
         // 📱 Customer notification: "Refund credited"
         notifyOrderEvent("customer", "order_rejected", {
@@ -191,15 +202,52 @@ export const orderRequestForMerchant = async (req, res) => {
 };
 export const getAllOrder = async (req, res) => {
   try {
-    const orders = await Order.find({ merchantId: req.merchantId })
-      .select('orderStatus items totalAmount deliveryRiderStatus createdAt deliveryRiderDetails deliveryLocation userId otp')
+    const orders = await Order.find({ merchantId: req.merchantId, orderStatus: { $ne: 'pending' } })
+      .select('orderStatus items totalAmount deliveryRiderStatus createdAt updatedAt deliveryRiderId deliveryRiderDetails deliveryLocation userId otp cancellationRequest cancellationRequestReason')
       .sort({ createdAt: -1 })
       .lean();
     return res.status(200).json({ orders });
   } catch (error) {
     return res.status(500).json({ message: "Error fetching orders" });
   }
-}
+};
+
+export const requestOrderCancellation = async (req, res) => {
+  const { orderId } = req.params;
+  const { reason } = req.body;
+
+  try {
+    const order = await Order.findById(orderId);
+    if (!order) {
+      return res.status(404).json({ message: "Order not found" });
+    }
+
+    if (order.merchantId.toString() !== req.merchantId.toString()) {
+      return res.status(403).json({ message: "Forbidden: You do not own this order" });
+    }
+
+    const terminalStatuses = ["completed", "cancelled", "rejected"];
+    if (terminalStatuses.includes(order.orderStatus)) {
+      return res.status(400).json({ message: `Cannot request cancellation for order in ${order.orderStatus} state` });
+    }
+
+    order.cancellationRequest = 'pending';
+    order.cancellationRequestReason = reason || "Merchant requested cancellation";
+    await order.save();
+
+    const io = getIO();
+    emitOrderUpdate(io, orderId, order);
+
+    return res.status(200).json({
+      success: true,
+      message: "Cancellation request submitted to admin",
+      order
+    });
+  } catch (error) {
+    console.error("Request Cancellation Error:", error);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+};
 
 export const orderPacked = async (req, res) => {
   const io = getIO();
@@ -207,6 +255,12 @@ export const orderPacked = async (req, res) => {
   try {
     const order = await Order.findById(orderId);
     if (!order) return res.status(404).json({ message: "Order not found" });
+
+    // Authorization check
+    if (order.merchantId.toString() !== req.merchantId.toString()) {
+      return res.status(403).json({ message: "Forbidden: You do not own this order" });
+    }
+
     order.orderStatus = "packed";
     order.otp = generateOTP();
     await order.save();

@@ -1,5 +1,5 @@
 import Product from '../../models/product.model.js';
-import { uploadToCloudinary } from '../../config/cloudinary.config.js';
+import { storageService } from '../../services/storage.service.js';
 import { asyncHandler } from '../../utils/asyncHandler.js';
 import { ApiError } from '../../utils/ApiError.js';
 import { ApiResponse } from '../../utils/ApiResponse.js';
@@ -66,13 +66,8 @@ export const addVariant = asyncHandler(async (req, res) => {
 
   if (req.files && req.files.length > 0) {
     const filesToUpload = req.files.slice(0, MAX_IMAGES);
-    for (const file of filesToUpload) {
-      const result = await uploadToCloudinary(file.buffer, 'products');
-      uploadedImages.push({
-        public_id: result.public_id,
-        url: result.secure_url,
-      });
-    }
+    const results = await storageService.uploadMultiple(filesToUpload, 'products');
+    uploadedImages.push(...results);
   }
 
   // Construct the new variant object
