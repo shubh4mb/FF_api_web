@@ -85,15 +85,6 @@ export const createRazorpayOrder = async (req, res) => {
     const AppConfig = (await import("../../models/appConfig.model.js")).default;
     const config = await AppConfig.getConfig();
 
-    // === TRY & BUY RADIUS VALIDATION ===
-    if (!isWithinTBRadius(userCoords, merchantCoords, config.tryAndBuyRadius)) {
-      return res.status(400).json({
-        success: false,
-        serviceable: false,
-        message: `Try & Buy is not available for this location. The merchant is beyond the ${config.tryAndBuyRadius} km delivery radius.`,
-      });
-    }
-
     // === DELIVERY CHARGE USING HELPER ===
     let { roadDistanceKm, deliveryCharge, returnCharge, estimatedTime } = await calculateDeliveryCharge({
       userCoords,
@@ -102,6 +93,15 @@ export const createRazorpayOrder = async (req, res) => {
       returnPerKmRate: config.returnPerKmRate,
       waitingCharge: config.waitingCharge
     });
+
+    // === TRY & BUY RADIUS VALIDATION ===
+    if (roadDistanceKm > config.tryAndBuyRadius) {
+      return res.status(400).json({
+        success: false,
+        serviceable: false,
+        message: `Try & Buy is not available for this location. The merchant is beyond the ${config.tryAndBuyRadius} km road distance.`,
+      });
+    }
     // === ENFORCE ZONED PENDING ORDERS LIMIT ===
     const zoneId = await inferZone(merchantCoords[1], merchantCoords[0]);
     const zoneDoc = await Zone.findOne({ zoneName: { $regex: new RegExp("^" + zoneId + "$", "i") } });
@@ -1093,6 +1093,17 @@ export const verifyFinalPayment = async (req, res) => {
         isBusy: false,
         isAvailable: true,
       }, { session });
+
+      try {
+        const { setRiderMeta, getRiderMeta } = await import("../../helperFns/deliveryRiderFns.js");
+        const meta = await getRiderMeta(order.deliveryRiderId.toString());
+        await setRiderMeta(order.deliveryRiderId.toString(), meta?.zoneId || 'global', {
+          isBusy: "false",
+          assignedOrderId: "",
+        });
+      } catch (redisErr) {
+        console.error("Redis meta cleanup error in verifyFinalPayment (non-fatal):", redisErr);
+      }
     }
 
     await order.save({ session });
@@ -1306,6 +1317,17 @@ export const verifyFinalPaymentCod = async (req, res) => {
         isBusy: false,
         isAvailable: true,
       }, { session });
+
+      try {
+        const { setRiderMeta, getRiderMeta } = await import("../../helperFns/deliveryRiderFns.js");
+        const meta = await getRiderMeta(order.deliveryRiderId.toString());
+        await setRiderMeta(order.deliveryRiderId.toString(), meta?.zoneId || 'global', {
+          isBusy: "false",
+          assignedOrderId: "",
+        });
+      } catch (redisErr) {
+        console.error("Redis meta cleanup error in verifyFinalPaymentCod (non-fatal):", redisErr);
+      }
     }
 
     await order.save({ session });

@@ -37,7 +37,7 @@ export const registerDeliveryRiderSockets = (io, socket) => {
       try {
         const fullOrder = await Order.findById(keepOrder).populate('merchantId', 'shopName address').lean();
 
-        if (fullOrder && (fullOrder.deliveryRiderId?.toString() === riderId || fullOrder.deliveryRiderStatus !== 'completed')) {
+        if (fullOrder && fullOrder.deliveryRiderId?.toString() === riderId && !["completed", "cancelled"].includes(fullOrder.deliveryRiderStatus)) {
           const riderPayload = {
             _id: fullOrder._id,
             orderId: fullOrder._id.toString(),
