@@ -250,7 +250,7 @@ export const getCart = async (req, res) => {
       const mDeliveryCharge = Math.round(deliveryInfo?.deliveryCharge || 0);
       const mReturnCharge = Math.round(deliveryInfo?.returnCharge || 0);
       const tip = Math.round(Number(deliveryTip) || 0);
-      const mServiceGST = Math.round((mDeliveryCharge + tip) * 0.18);
+      const mServiceGST = 0;
       const mUpfrontPayable = Math.round(mDeliveryCharge + mReturnCharge + tip + mServiceGST);
 
       const mTotals = {
@@ -279,7 +279,7 @@ export const getCart = async (req, res) => {
         if (mAppliedOffers && mAppliedOffers.freeDelivery) {
           mTotals.totalDeliveryCharge = 0;
           mTotals.totalReturnCharge = 0;
-          mTotals.serviceGST = Math.round((0 + tip) * 0.18);
+          mTotals.serviceGST = 0;
           mTotals.totalUpfrontPayable = Math.round(0 + 0 + tip + mTotals.serviceGST);
           mTotals.finalTotal = Math.round(mSubtotal - mAppliedOffers.totalDiscount + mTotals.totalUpfrontPayable);
         } else {

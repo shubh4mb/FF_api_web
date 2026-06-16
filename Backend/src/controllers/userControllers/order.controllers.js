@@ -201,7 +201,7 @@ export const createRazorpayOrder = async (req, res) => {
     }
 
     // === SERVICE GST (18% on delivery + tip) ===
-    const serviceGST = Math.round((deliveryCharge + deliveryTip) * 0.18);
+    const serviceGST = 0;
 
     // === FINAL PAYABLE ===
     // Customer pays delivery + return charge + tip + service GST upfront.
