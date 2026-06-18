@@ -251,7 +251,7 @@ export const checkDeliveryAvailability = asyncHandler(async (req, res) => {
     const config = await AppConfig.getConfig();
     const radius = config.tryAndBuyRadius;
     
-    const { filterMerchantsByDistance } = await import("../../helperFns/geoHelpers.js");
+    const { filterMerchantsByRoadDistance } = await import("../../helperFns/geoHelpers.js");
     
     // Fetch all potentially eligible merchants (ignore isOnline for now)
     const allPossibleMerchants = await Merchant.find({
@@ -261,7 +261,7 @@ export const checkDeliveryAvailability = asyncHandler(async (req, res) => {
       "address.location.coordinates": { $exists: true },
     }).select("address.location shopName isOnline").lean();
 
-    const nearbyMerchants = filterMerchantsByDistance(
+    const nearbyMerchants = await filterMerchantsByRoadDistance(
       allPossibleMerchants,
       [Number(lng), Number(lat)], // [lng, lat] — MongoDB format
       radius

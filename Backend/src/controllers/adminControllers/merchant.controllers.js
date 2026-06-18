@@ -5,6 +5,9 @@ import { asyncHandler } from "../../utils/asyncHandler.js";
 import { ApiError } from "../../utils/ApiError.js";
 import { ApiResponse } from "../../utils/ApiResponse.js";
 import { sendVerificationEmail } from "../../services/mail.service.js";
+import { getRoadDistance } from "../../helperFns/orsHelper.js";
+import { haversineDistance } from "../../helperFns/geoHelpers.js";
+import AppConfig from "../../models/appConfig.model.js";
 
 
 
@@ -61,6 +64,43 @@ export const getMerchantById = asyncHandler(async (req, res) => {
   if (!merchant) {
     throw new ApiError(404, "Merchant not found");
   }
+
+  // Calculate distance if lat and lng are provided in request query
+  const lat = parseFloat(req.query.lat);
+  const lng = parseFloat(req.query.lng);
+
+  if (!isNaN(lat) && !isNaN(lng) && merchant.address?.location?.coordinates) {
+    const userCoords = [lng, lat]; // [longitude, latitude]
+    const merchantCoords = merchant.address.location.coordinates; // [longitude, latitude]
+    
+    // 1. Quick straight-line displacement check (Haversine)
+    const displacementKm = haversineDistance(lat, lng, merchantCoords[1], merchantCoords[0]);
+    
+    let roadDistanceKm = null;
+    let durationMins = null;
+    
+    // Only query ORS if within a reasonable distance (e.g. 30km)
+    if (displacementKm <= 30) {
+      const roadResult = await getRoadDistance(userCoords, merchantCoords);
+      roadDistanceKm = roadResult?.distanceKm ?? null;
+      durationMins = roadResult?.durationMins ?? null;
+    }
+    
+    // Fallback if ORS fails or is skipped
+    if (roadDistanceKm === null) {
+      roadDistanceKm = displacementKm;
+      durationMins = Math.ceil(20 + (displacementKm * 4));
+    }
+    
+    const config = await AppConfig.getConfig();
+    const tryAndBuyRadius = config.tryAndBuyRadius;
+    const isNearby = roadDistanceKm <= tryAndBuyRadius;
+
+    merchant.distanceKm = Number(roadDistanceKm.toFixed(2));
+    merchant.durationMins = durationMins;
+    merchant.isNearby = isNearby && merchant.isOnline && merchant.isZoneLive;
+  }
+
   return res.status(200).json(new ApiResponse(200, { merchant }, "Merchant retrieved successfully"));
 });
 

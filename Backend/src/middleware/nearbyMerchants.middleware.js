@@ -6,7 +6,7 @@
  */
 import mongoose from "mongoose";
 import { redis } from "../config/redisConfig.js";
-import { filterMerchantsByDistance } from "../helperFns/geoHelpers.js";
+import { filterMerchantsByRoadDistance } from "../helperFns/geoHelpers.js";
 import AppConfig from "../models/appConfig.model.js";
 
 const CACHE_TTL_SEC = 15 * 60; // 15 minutes
@@ -89,7 +89,7 @@ export const resolveNearbyMerchants = async (req, res, next) => {
 
       console.log(`[NearbyMiddleware] Total active/verified merchants in DB: ${allMerchants.length}`);
 
-      const nearbyMerchants = filterMerchantsByDistance(
+      const nearbyMerchants = await filterMerchantsByRoadDistance(
         allMerchants,
         [Number(lng), Number(lat)], // [lng, lat]
         tryAndBuyRadius

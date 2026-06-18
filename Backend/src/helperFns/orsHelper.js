@@ -1,5 +1,5 @@
 /**
- * OpenRouteService Helper for Road Distance and Time Calculations
+ * OSRM Helper for Road Distance and Time Calculations (Self-hosted)
  */
 
 /**
@@ -9,53 +9,47 @@
  * @returns {Promise<{distanceKm: number, durationMins: number}|null>} 
  */
 export async function getRoadDistance(startCoords, endCoords) {
-  const apiKey = process.env.OPEN_ROUTE_SERVICE_KEY || process.env.OPEN_ROUTE_SERVICE_API_KEY;
+  const baseUrl = process.env.OSRM_BASE_URL || 'http://localhost:5001';
   
-  if (!apiKey) {
-    console.warn("⚠️ ORS: OPEN_ROUTE_SERVICE_KEY not found in environment variables.");
+  if (!startCoords || startCoords.length < 2 || !endCoords || endCoords.length < 2) {
+    console.warn("⚠️ OSRM: Invalid coordinates provided.");
     return null;
   }
 
+  const [startLng, startLat] = startCoords;
+  const [endLng, endLat] = endCoords;
+
   try {
-    const response = await fetch('https://api.openrouteservice.org/v2/directions/driving-car', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json; charset=utf-8',
-        'Authorization': apiKey
-      },
-      body: JSON.stringify({
-        coordinates: [startCoords, endCoords],
-        units: 'km'
-      })
-    });
+    const url = `${baseUrl}/route/v1/driving/${startLng},${startLat};${endLng},${endLat}?overview=false`;
+    
+    const response = await fetch(url);
 
     if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      console.error("❌ ORS API Error:", response.status, errorData);
+      console.error("❌ OSRM API Error:", response.status);
       return null;
     }
 
     const data = await response.json();
     
-    // Structure: routes[0].summary.distance and routes[0].summary.duration (seconds)
-    const summary = data.routes?.[0]?.summary;
-    
-    if (summary && summary.distance !== undefined) {
-      const distanceKm = Number(summary.distance);
-      const durationMins = Math.ceil((summary.duration || 0) / 60);
-      
-      console.log(`🛣️ Road route found: ${distanceKm.toFixed(2)} km, ~${durationMins} mins`);
-      
-      return {
-        distanceKm,
-        durationMins
-      };
+    if (data.code !== 'Ok' || !data.routes || data.routes.length === 0) {
+      console.warn("⚠️ OSRM: No route found.");
+      return null;
     }
+
+    const route = data.routes[0];
     
-    console.warn("⚠️ ORS: No routes found in response.");
-    return null;
+    // OSRM returns distance in METERS and duration in SECONDS
+    const distanceKm = route.distance / 1000;
+    const durationMins = Math.ceil(route.duration / 60);
+    
+    console.log(`🛣️ OSRM Route found: ${distanceKm.toFixed(2)} km, ~${durationMins} mins`);
+    
+    return {
+      distanceKm,
+      durationMins
+    };
   } catch (error) {
-    console.error("❌ ORS Helper Exception:", error.message);
+    console.error("❌ OSRM Helper Exception:", error.message);
     return null;
   }
 }

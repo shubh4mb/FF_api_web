@@ -2,6 +2,7 @@
  * Geo helpers for Try & Buy radius calculations.
  * All coordinate arrays follow MongoDB convention: [longitude, latitude]
  */
+import { getRoadDistance } from './orsHelper.js';
 
 const EARTH_RADIUS_KM = 6371;
 /**
@@ -98,8 +99,60 @@ function getMerchantCoords(merchant) {
   return null;
 }
 
+/**
+ * Filter an array of merchants to only those within a specific radius based on road distance.
+ * @param {Array} merchants
+ * @param {{ latitude: number, longitude: number } | [number, number]} userCoords
+ * @param {number} radiusKm
+ * @returns {Promise<Array>} Merchants with added `_distance` field (km)
+ */
+export async function filterMerchantsByRoadDistance(merchants, userCoords, radiusKm) {
+  if (radiusKm == null) throw new Error("radiusKm is required for filterMerchantsByRoadDistance");
+  const [uLat, uLon] = normalizeCoords(userCoords);
+
+  // 1. Broad filter using fast Haversine check to filter out far merchants (e.g. > 1.5 * radiusKm)
+  // This avoids making unnecessary external API calls for far-away merchants.
+  const potentialMerchants = merchants
+    .map((merchant) => {
+      const coords = getMerchantCoords(merchant);
+      if (!coords) return null;
+
+      const [mLat, mLon] = coords;
+      const distance = haversineDistance(uLat, uLon, mLat, mLon);
+
+      if (distance > radiusKm * 1.5) return null;
+
+      const m = merchant.toObject ? merchant.toObject() : { ...merchant };
+      m._distance = Math.round(distance * 100) / 100; // 2 decimal places
+      return m;
+    })
+    .filter(Boolean);
+
+  // 2. Resolve actual road distance for the remaining potential merchants
+  const nearbyMerchants = [];
+  const roadPromises = potentialMerchants.map(async (m) => {
+    const coords = getMerchantCoords(m);
+    if (!coords) return;
+
+    // getRoadDistance expects startCoords [lng, lat] and endCoords [lng, lat]
+    const roadResult = await getRoadDistance([uLon, uLat], [coords[1], coords[0]]);
+    const roadDistance = roadResult?.distanceKm ?? m._distance; // fallback to Haversine if ORS fails
+
+    if (roadDistance <= radiusKm) {
+      m._distance = Math.round(roadDistance * 100) / 100;
+      nearbyMerchants.push(m);
+    }
+  });
+
+  await Promise.all(roadPromises);
+
+  // 3. Sort by road distance
+  return nearbyMerchants.sort((a, b) => a._distance - b._distance);
+}
+
 export default {
   haversineDistance,
   isWithinTBRadius,
   filterMerchantsByDistance,
+  filterMerchantsByRoadDistance,
 };
