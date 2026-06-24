@@ -120,6 +120,7 @@ const merchantSchema = new mongoose.Schema(
     isZoneLive: { type: Boolean, default: false },
     emailOtp: { type: String },
     emailOtpExpiry: { type: Date },
+    expoPushTokens: { type: [String], default: [] },
   },
   { timestamps: true }
 );

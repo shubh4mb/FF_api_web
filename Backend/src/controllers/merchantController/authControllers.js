@@ -655,3 +655,25 @@ export const logoutMerchant = async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 };
+
+export const addPushToken = async (req, res) => {
+  try {
+    const { token } = req.body;
+    if (!token) return res.status(400).json({ message: "Push token is required" });
+
+    const tokenStr = typeof token === 'string' ? token : token.data;
+
+    const merchant = await Merchant.findById(req.merchantId);
+    if (!merchant) return res.status(404).json({ message: "Merchant not found" });
+
+    if (!merchant.expoPushTokens.includes(tokenStr)) {
+      merchant.expoPushTokens.push(tokenStr);
+      await merchant.save();
+    }
+
+    return res.status(200).json({ message: "Push token saved successfully" });
+  } catch (error) {
+    console.error("Error saving merchant push token:", error);
+    return res.status(500).json({ message: "Internal Server Error" });
+  }
+};

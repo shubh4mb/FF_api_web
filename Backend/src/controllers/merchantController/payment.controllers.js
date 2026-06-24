@@ -3,6 +3,7 @@ import crypto from "crypto";
 import Merchant from "../../models/merchant.model.js";
 import AppConfig from "../../models/appConfig.model.js";
 import mongoose from "mongoose";
+import { logAuditEvent } from "../../utils/auditLogger.js";
 
 // Create Razorpay order for registration fee
 export const createRegistrationFeeOrder = async (req, res) => {
@@ -51,6 +52,15 @@ export const createRegistrationFeeOrder = async (req, res) => {
     merchant.razorpayOrderId = order.id;
     await merchant.save();
     
+    await logAuditEvent({
+      action: "MERCHANT_REGISTRATION_PAYMENT_INITIATED",
+      message: `Registration fee payment of ₹${feeAmount} initiated for merchant: ${merchant.shopName}`,
+      status: "pending",
+      merchantId: merchant._id,
+      details: { razorpayOrderId: order.id, amount: feeAmount },
+      req,
+    });
+    
     return res.json({
       success: true,
       orderId: order.id,
@@ -89,8 +99,25 @@ export const verifyRegistrationFeePayment = async (req, res) => {
       merchant.isActive = true; // Still using isActive for frontend compatibility if needed
       await merchant.save();
 
+      await logAuditEvent({
+        action: "MERCHANT_REGISTRATION_PAYMENT_SUCCESS",
+        message: `Registration fee payment verified successfully for merchant: ${merchant.shopName}. Account activated.`,
+        status: "success",
+        merchantId: merchant._id,
+        details: { razorpay_order_id, razorpay_payment_id },
+        req,
+      });
+
       return res.status(200).json({ success: true, message: "Payment verified successfully", merchant });
     } else {
+      await logAuditEvent({
+        action: "MERCHANT_REGISTRATION_PAYMENT_FAILED",
+        message: `Registration fee signature verification failed for merchant ID: ${merchantId}`,
+        status: "failure",
+        merchantId,
+        details: { razorpay_order_id, razorpay_payment_id, razorpay_signature },
+        req,
+      });
       return res.status(400).json({ success: false, message: "Invalid signature sent!" });
     }
   } catch (error) {

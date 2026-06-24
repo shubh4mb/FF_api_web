@@ -4,7 +4,7 @@ import { addBaseProduct, addVariant, getBaseProducts, getVariants, updateVariant
 import { deleteVariant, addBrand, getBrands, getBaseProductById, getProductsByMerchantId, uploadProductImage, deleteImage, deleteProduct, updatePrice, editProduct, editVariant, updateVariantSizeStock, updateMultipleVariantSizes, getAllBrands } from '../controllers/merchantController/product.controllers.js';
 
 import { addMerchant } from '../controllers/merchantController/merchant.controller.js';
-import { loginMerchant, registerMerchant, updateMerchantShopDetails, updateMerchantBankDetails, updateMerchantKYC, updateMerchantOperatingHours, activateMerchant, registerPhone, sendEmailOtp, verifyEmailOtp, getMerchantByEmail, toggleMerchantOnlineStatus, refreshMerchantToken, logoutMerchant } from '../controllers/merchantController/authControllers.js';
+import { loginMerchant, registerMerchant, updateMerchantShopDetails, updateMerchantBankDetails, updateMerchantKYC, updateMerchantOperatingHours, activateMerchant, registerPhone, sendEmailOtp, verifyEmailOtp, getMerchantByEmail, toggleMerchantOnlineStatus, refreshMerchantToken, logoutMerchant, addPushToken } from '../controllers/merchantController/authControllers.js';
 import { getAllOrder, saveProductDetails, requestOrderCancellation } from '../controllers/merchantController/order.controllers.js';
 import { authMiddlewareMerchant } from '../middleware/jwtAuth.js';
 import { getWalletDetails } from '../helperFns/walletHelper.js';
@@ -13,6 +13,8 @@ import { getMerchantById } from '../controllers/merchantController/merchant.cont
 import { getMerchantAnalytics } from '../controllers/merchantController/analytics.controller.js';
 import { getMerchantCourierOrders, updateCourierOrderStatus, updateCourierOrderReturnStatus } from '../controllers/userControllers/courierOrder.controllers.js';
 import { getAllCollections } from '../controllers/adminControllers/collection.controllers.js';
+import WeeklyPayout from '../models/weeklyPayout.model.js';
+import { getCurrentWeekBounds } from '../helperFns/weeklyPayoutHelper.js';
 
 const router = express.Router();
 
@@ -107,6 +109,7 @@ router.put("/:merchantId/kyc", authMiddlewareMerchant, upload.fields([
 router.put("/:merchantId/operating-hours", authMiddlewareMerchant, updateMerchantOperatingHours);
 router.put("/:merchantId/activate", activateMerchant);
 router.patch("/:merchantId/toggle-online", authMiddlewareMerchant, toggleMerchantOnlineStatus);
+router.put('/push-token', authMiddlewareMerchant, addPushToken);
 
 import { createRegistrationFeeOrder, verifyRegistrationFeePayment } from '../controllers/merchantController/payment.controllers.js';
 router.post('/:merchantId/registration-fee/create-order', authMiddlewareMerchant, createRegistrationFeeOrder);
@@ -237,6 +240,68 @@ router.get('/wallet', authMiddlewareMerchant, async (req, res) => {
     } catch (err) {
         console.error('Get merchant wallet error:', err);
         return res.status(500).json({ message: 'Failed to fetch wallet' });
+    }
+});
+
+// ── Earnings ──
+router.get("/earnings/current-week", authMiddlewareMerchant, async (req, res) => {
+    try {
+        const { weekStart, weekEnd } = getCurrentWeekBounds();
+
+        const payout = await WeeklyPayout.findOne({
+            ownerType: "merchant",
+            ownerId: req.merchantId,
+            weekStart,
+        }).lean();
+
+        return res.status(200).json({
+            success: true,
+            weekStart,
+            weekEnd,
+            payout: payout || {
+                totalEarnings: 0,
+                totalDeductions: 0,
+                netPayout: 0,
+                completedOrders: 0,
+                finalAmount: 0,
+                status: "accumulating",
+                orders: [],
+            },
+        });
+    } catch (err) {
+        console.error("Get merchant current week error:", err);
+        return res.status(500).json({ message: "Failed to fetch current week earnings" });
+    }
+});
+
+router.get("/earnings/history", authMiddlewareMerchant, async (req, res) => {
+    try {
+        const { page = 1, limit = 10 } = req.query;
+
+        const payouts = await WeeklyPayout.find({
+            ownerType: "merchant",
+            ownerId: req.merchantId,
+            status: { $in: ["paid", "failed"] },
+        })
+            .sort({ weekStart: -1 })
+            .skip((page - 1) * limit)
+            .limit(parseInt(limit))
+            .lean();
+
+        const total = await WeeklyPayout.countDocuments({
+            ownerType: "merchant",
+            ownerId: req.merchantId,
+            status: { $in: ["paid", "failed"] },
+        });
+
+        return res.status(200).json({
+            success: true,
+            payouts,
+            pagination: { page: parseInt(page), limit: parseInt(limit), total },
+        });
+    } catch (err) {
+        console.error("Get merchant earnings history error:", err);
+        return res.status(500).json({ message: "Failed to fetch earnings history" });
     }
 });
 

@@ -162,7 +162,13 @@ export async function addToWeeklyPayout({
  * @param {boolean} cancelled - was this a rider-cancelled order?
  * @param {Object} [session]
  */
-export async function incrementOrderCount(riderId, cancelled = false, session = null) {
+export async function incrementOrderCount(riderId, cancelled = false, amount = 0, session = null) {
+    // If the 3rd parameter is a mongoose session object, shift it
+    if (amount && typeof amount === 'object' && (amount.constructor?.name === 'ClientSession' || amount.session)) {
+        session = amount;
+        amount = 0;
+    }
+
     const { weekStart, weekEnd } = getCurrentWeekBounds();
 
     const incFields = cancelled
@@ -182,8 +188,6 @@ export async function incrementOrderCount(riderId, cancelled = false, session = 
                 totalEarnings: 0,
                 totalDeductions: 0,
                 netPayout: 0,
-                completedOrders: cancelled ? 0 : 0,
-                cancelledOrders: 0,
                 incentivesEarned: [],
                 totalIncentive: 0,
                 finalAmount: 0,
@@ -204,7 +208,7 @@ export async function incrementOrderCount(riderId, cancelled = false, session = 
 
     const dailyIncFields = cancelled
         ? { cancelledOrders: 1 }
-        : { completedOrders: 1 };
+        : { completedOrders: 1, totalEarnings: amount };
 
     await DailyPayout.findOneAndUpdate(
         { riderId, date: dayStart },
@@ -214,7 +218,6 @@ export async function incrementOrderCount(riderId, cancelled = false, session = 
                 riderId,
                 date: dayStart,
                 weeklyPayoutId: weeklyPayout._id,
-                totalEarnings: 0,
                 loginHours: 0,
                 loginWindows: [],
                 incentivesEarned: [],

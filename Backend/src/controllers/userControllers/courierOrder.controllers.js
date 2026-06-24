@@ -8,6 +8,7 @@ import crypto from "crypto";
 import razorpay from "../../config/RazorPay.js";
 import { findBestOffers, recordOfferUsage } from '../../services/offerEngine.js';
 import { v2 as cloudinary } from 'cloudinary';
+import { logAuditEvent } from "../../utils/auditLogger.js";
 
 const COURIER_DELIVERY_CHARGE = 40;
 
@@ -227,6 +228,23 @@ export const initiateCourierOrder = async (req, res) => {
     });
 
     await courierOrder.save();
+
+    await logAuditEvent({
+      action: paymentStatus === 'paid' ? "COURIER_ORDER_PLACED" : "COURIER_PAYMENT_INITIATED",
+      message: paymentStatus === 'paid'
+        ? `Free courier order #${courierOrder._id.toString().slice(-5).toUpperCase()} placed directly.`
+        : `Courier order payment of ₹${totalPayable} initiated for order #${courierOrder._id.toString().slice(-5).toUpperCase()} (Razorpay ID: ${razorpayOrderId})`,
+      status: paymentStatus === 'paid' ? "success" : "pending",
+      courierOrderId: courierOrder._id,
+      userId,
+      merchantId,
+      details: {
+        razorpayOrderId,
+        totalPayable,
+        paymentStatus,
+      },
+      req,
+    });
 
     // === RECORD OFFER USAGE ===
     try {
@@ -531,6 +549,26 @@ export const initiateCourierCheckout = async (req, res) => {
       }
     }
 
+    // Log audit events for each created order in checkout
+    for (const order of createdOrders) {
+      await logAuditEvent({
+        action: paymentStatus === 'paid' ? "COURIER_ORDER_PLACED" : "COURIER_PAYMENT_INITIATED",
+        message: paymentStatus === 'paid'
+          ? `Free courier order #${order._id.toString().slice(-5).toUpperCase()} placed directly during checkout.`
+          : `Courier checkout payment of ₹${order.totalPayable} initiated for order #${order._id.toString().slice(-5).toUpperCase()} (Group Razorpay ID: ${finalRazorpayOrderId})`,
+        status: paymentStatus === 'paid' ? "success" : "pending",
+        courierOrderId: order._id,
+        userId,
+        merchantId: order.merchantId,
+        details: {
+          razorpayOrderId: finalRazorpayOrderId,
+          totalPayable: order.totalPayable,
+          paymentStatus,
+        },
+        req,
+      });
+    }
+
     return res.status(200).json({
       success: true,
       message: paymentStatus === 'paid' ? "Free order placed successfully" : "Orders initiated — proceed to payment",
@@ -572,6 +610,13 @@ export const verifyCourierOrderPayment = async (req, res) => {
     .digest("hex");
 
   if (expectedSign !== razorpay_signature) {
+    await logAuditEvent({
+      action: "COURIER_PAYMENT_FAILED",
+      message: `Courier order payment signature verification failed for Razorpay Order ID: ${razorpay_order_id}`,
+      status: "failure",
+      details: { razorpay_order_id, razorpay_payment_id, razorpay_signature },
+      req,
+    });
     return res.status(400).json({ success: false, message: "Invalid payment signature" });
   }
 
@@ -631,6 +676,23 @@ export const verifyCourierOrderPayment = async (req, res) => {
 
     await session.commitTransaction();
     session.endSession();
+
+    // Log payment success for each order
+    for (const order of orders) {
+      await logAuditEvent({
+        action: "COURIER_PAYMENT_SUCCESS",
+        message: `Courier order payment verified successfully for order #${order._id.toString().slice(-5).toUpperCase()}. Razorpay Payment ID: ${razorpay_payment_id}`,
+        status: "success",
+        courierOrderId: order._id,
+        userId: order.userId,
+        merchantId: order.merchantId,
+        details: {
+          razorpay_order_id,
+          razorpay_payment_id,
+        },
+        req,
+      });
+    }
 
     res.status(200).json({
       success: true,
@@ -736,6 +798,17 @@ export const updateCourierOrderStatus = async (req, res) => {
 
     await order.save();
 
+    await logAuditEvent({
+      action: "COURIER_ORDER_STATUS_CHANGED",
+      message: `Courier order #${order._id.toString().slice(-5).toUpperCase()} status updated to ${status} by merchant.`,
+      status: "success",
+      courierOrderId: order._id,
+      userId: order.userId,
+      merchantId: order.merchantId,
+      details: { newStatus: status },
+      req,
+    });
+
     res.status(200).json({ success: true, message: `Order status updated to ${status}`, order });
   } catch (err) {
     console.error("Update courier order status error:", err);
@@ -763,6 +836,16 @@ export const cancelCourierOrder = async (req, res) => {
     order.orderStatus = 'cancelled';
     order.customerDeliveryStatus = 'cancelled';
     await order.save();
+
+    await logAuditEvent({
+      action: "COURIER_ORDER_CANCELLED",
+      message: `Courier order #${order._id.toString().slice(-5).toUpperCase()} was cancelled by user.`,
+      status: "success",
+      courierOrderId: order._id,
+      userId: order.userId,
+      merchantId: order.merchantId,
+      req,
+    });
 
     res.status(200).json({ success: true, message: "Courier order cancelled", order });
   } catch (err) {

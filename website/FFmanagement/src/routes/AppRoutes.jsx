@@ -11,7 +11,6 @@ import MerchantDashboard from '../pages/merchant/MerchantDashboard';
 import AddProduct from '../pages/merchant/AddProduct';
 import NotFound from '../pages/NotFound';
 import AddMerchants from '../pages/admin/AddMerchants';
-import AddBrand from '../pages/admin/AddBrand';
 import Products from '../pages/admin/Products';
 import Variants from '../pages/admin/Variants';
 import EditMerchant from '../pages/admin/EditMerchant';
@@ -34,6 +33,7 @@ import PayoutManagement from '../pages/admin/PayoutManagement';
 import SupportTickets from '../pages/admin/SupportTickets';
 import ZipCoverRequests from '../pages/admin/ZipCoverRequests';
 import OrderCancellations from '../pages/admin/OrderCancellations';
+import AuditLogs from '../pages/admin/AuditLogs';
 
 const AppRoutes = () => {
   return (
@@ -56,7 +56,6 @@ const AppRoutes = () => {
             <Route path="add-products" element={<AddProducts />} />
             <Route path="matching-products/:productId" element={<MatchingProducts />} />
             <Route path="add-merchant" element={<AddMerchants />} />
-            <Route path="add-brand" element={<AddBrand />} />
             <Route path="products" element={<Products />} />
             <Route path="variants/:productId" element={<Variants />} />
             <Route path="add-title-banner" element={<Title_Banner />} />
@@ -73,6 +72,7 @@ const AppRoutes = () => {
             <Route path="support" element={<SupportTickets />} />
             <Route path="zip-covers" element={<ZipCoverRequests />} />
             <Route path="order-cancellations" element={<OrderCancellations />} />
+            <Route path="audit-logs" element={<AuditLogs />} />
           </Route>
         </Route>
 

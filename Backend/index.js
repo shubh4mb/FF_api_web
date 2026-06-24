@@ -32,9 +32,8 @@ const server = createServer(app);
 // Create Socket.IO
 const io = new Server(server, {
   cors: {
-    origin: allowedOrigins,
+    origin: "*",
     methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE'],
-    credentials: true,
   },
 });
 

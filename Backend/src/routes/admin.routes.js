@@ -18,6 +18,7 @@ import { createCollection, getAllCollections, updateCollection, deleteCollection
 import { createIncentive, getAllIncentives, updateIncentive, toggleIncentive, deleteIncentive } from '../controllers/adminControllers/incentive.controllers.js';
 import { getPayouts, triggerPayout, getPayoutById } from '../controllers/adminControllers/payout.controllers.js';
 import { getCancellationRequests, adminCancelOrder } from '../controllers/adminControllers/order.controllers.js';
+import { getAuditLogs } from '../controllers/adminControllers/auditLog.controllers.js';
 
 const router = express.Router();
 
@@ -198,6 +199,9 @@ router.patch('/orders/:orderId/cancel', verifyAdmin, adminCancelOrder);
 // ── Zip Covers ──
 import zipCoverRoutes from './adminRoutes/zipCover.routes.js';
 router.use('/zip-covers', verifyAdmin, zipCoverRoutes);
+
+// ── Audit Logs ──
+router.get('/audit-logs', verifyAdmin, getAuditLogs);
 
 export default router;
 

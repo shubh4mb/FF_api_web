@@ -20,6 +20,8 @@ import { findBestOffers, recordOfferUsage, validateOfferEligibility, getApplicab
 import Offer from '../../models/offer.model.js';
 import Zone from "../../models/zone.model.js";
 import { inferZone } from "../../utils/zoneInfer.js";
+import { logAuditEvent } from "../../utils/auditLogger.js";
+
 
 
 
@@ -314,6 +316,39 @@ export const createRazorpayOrder = async (req, res) => {
     }
   }
 
+  // Log audit event
+  if (paymentStatus === "delivery_fee_paid") {
+    await logAuditEvent({
+      action: "ORDER_PLACED",
+      message: `Free order #${pendingOrder._id.toString().slice(-5).toUpperCase()} placed directly. No upfront fee required.`,
+      status: "success",
+      orderId: pendingOrder._id,
+      userId,
+      merchantId,
+      details: {
+        totalAmount,
+        finalPayable,
+      },
+      req,
+    });
+  } else {
+    await logAuditEvent({
+      action: "PAYMENT_INITIATED",
+      message: `Upfront payment of ₹${upfrontPayable} initiated for order #${pendingOrder._id.toString().slice(-5).toUpperCase()}`,
+      status: "pending",
+      orderId: pendingOrder._id,
+      userId,
+      merchantId,
+      details: {
+        razorpayOrderId,
+        upfrontPayable,
+        totalAmount,
+        finalPayable,
+      },
+      req,
+    });
+  }
+
   // === RESPONSE ===
   return res.status(200).json({
     success: true,
@@ -365,6 +400,13 @@ export const verifyPayment = async (req, res) => {
       .digest("hex");
 
     if (expectedSign !== razorpay_signature) {
+      await logAuditEvent({
+        action: "PAYMENT_FAILED",
+        message: `Upfront payment signature verification failed for Razorpay Order ID: ${razorpay_order_id}`,
+        status: "failure",
+        details: { razorpay_order_id, razorpay_payment_id, razorpay_signature },
+        req,
+      });
       return res.status(400).json({
         success: false,
         message: "Invalid payment signature",
@@ -399,6 +441,22 @@ export const verifyPayment = async (req, res) => {
     order.paymentStatus = "delivery_fee_paid";
     order.orderStatus = "placed";
     await order.save({ session });
+
+    await logAuditEvent({
+      action: "PAYMENT_SUCCESS",
+      message: `Upfront payment verified successfully for order #${order._id.toString().slice(-5).toUpperCase()}. Razorpay Payment ID: ${razorpay_payment_id}`,
+      status: "success",
+      orderId: order._id,
+      userId: order.userId,
+      merchantId: order.merchantId,
+      details: {
+        razorpay_order_id,
+        razorpay_payment_id,
+        orderStatus: order.orderStatus,
+        paymentStatus: order.paymentStatus,
+      },
+      req,
+    });
 
     /* =======================
        STEP 4: REMOVE ONLY THIS ORDER'S MERCHANT ITEMS FROM CART
@@ -439,7 +497,7 @@ export const verifyPayment = async (req, res) => {
     ======================== */
     try {
       const io = getIO();
-      notifyMerchant(io, order.merchantId, order);
+      notifyMerchant(io, order.merchantId, order.toObject());
     } catch (socketErr) {
       console.error("Socket notify error:", socketErr);
     }
@@ -484,6 +542,13 @@ export const razorpayWebhook = async (req, res) => {
 
   if (digest !== signature) {
     console.error("[Webhook] Invalid signature");
+    await logAuditEvent({
+      action: "WEBHOOK_FAILED",
+      message: "Razorpay Webhook signature verification failed",
+      status: "failure",
+      details: { headers: req.headers, body: req.body },
+      req,
+    });
     return res.status(400).json({ message: "Invalid signature" });
   }
 
@@ -507,8 +572,10 @@ export const razorpayWebhook = async (req, res) => {
       order.razorpayPaymentId = payment.id;
       
       // Determine if this is Upfront or Final payment
+      let isFinal = false;
       if (order.finalBilling?.totalPayable > 0) {
         // This is the Final Payment
+        isFinal = true;
         order.paymentStatus = "paid";
         order.orderStatus = "selection_made";
         order.customerDeliveryStatus = "completed";
@@ -524,6 +591,23 @@ export const razorpayWebhook = async (req, res) => {
       }
 
       await order.save();
+      
+      await logAuditEvent({
+        action: "PAYMENT_SUCCESS",
+        message: `Payment captured via Webhook for order #${order._id.toString().slice(-5).toUpperCase()} (${isFinal ? 'Final' : 'Upfront'} Payment). Razorpay Payment ID: ${payment.id}`,
+        status: "success",
+        orderId: order._id,
+        userId: order.userId,
+        merchantId: order.merchantId,
+        details: {
+          webhookEvent: event,
+          paymentId: payment.id,
+          isFinalPayment: isFinal,
+          totalPayable: isFinal ? order.finalBilling?.totalPayable : order.totalPayable,
+        },
+        req,
+      });
+
       console.log(`[Webhook] Order ${order._id} updated successfully.`);
       return res.status(200).json({ status: "ok" });
     }
@@ -540,6 +624,21 @@ export const razorpayWebhook = async (req, res) => {
       courierOrder.orderStatus = 'confirmed';
       await courierOrder.save();
       
+      await logAuditEvent({
+        action: "COURIER_PAYMENT_SUCCESS",
+        message: `Courier order payment captured via Webhook for order #${courierOrder._id.toString().slice(-5).toUpperCase()}. Razorpay Payment ID: ${payment.id}`,
+        status: "success",
+        courierOrderId: courierOrder._id,
+        userId: courierOrder.userId,
+        merchantId: courierOrder.merchantId,
+        details: {
+          webhookEvent: event,
+          paymentId: payment.id,
+          totalPayable: courierOrder.totalPayable,
+        },
+        req,
+      });
+
       console.log(`[Webhook] CourierOrder ${courierOrder._id} updated successfully.`);
       return res.status(200).json({ status: "ok" });
     }
@@ -556,6 +655,18 @@ export const razorpayWebhook = async (req, res) => {
       merchant.isActive = true;
       await merchant.save();
       
+      await logAuditEvent({
+        action: "MERCHANT_REGISTRATION_PAYMENT_SUCCESS",
+        message: `Merchant registration fee payment captured via Webhook for merchant: ${merchant.shopName}. Razorpay Payment ID: ${payment.id}`,
+        status: "success",
+        merchantId: merchant._id,
+        details: {
+          webhookEvent: event,
+          paymentId: payment.id,
+        },
+        req,
+      });
+
       console.log(`[Webhook] Merchant ${merchant._id} activated via webhook.`);
       return res.status(200).json({ status: "ok" });
     }
@@ -589,6 +700,17 @@ export const orderRequestForDeliveryBoy = async (req, res) => {
       await DeliveryRider.findByIdAndUpdate(deliveryBoyId, { status: "busy" });
 
       await order.save();
+
+      await logAuditEvent({
+        action: "ORDER_ASSIGNED",
+        message: `Order #${order._id.toString().slice(-5).toUpperCase()} accepted by rider.`,
+        status: "success",
+        orderId: order._id,
+        deliveryRiderId: deliveryBoyId,
+        merchantId: order.merchantId,
+        req,
+      });
+
       return res.status(200).json({
         message: "Order accepted and assigned to delivery boy",
         order,
@@ -598,6 +720,17 @@ export const orderRequestForDeliveryBoy = async (req, res) => {
     if (action === "reject") {
       order.deliveryRiderStatus = "rejected";
       await order.save();
+
+      await logAuditEvent({
+        action: "ORDER_REJECTED",
+        message: `Order #${order._id.toString().slice(-5).toUpperCase()} rejected by rider.`,
+        status: "info",
+        orderId: order._id,
+        deliveryRiderId: deliveryBoyId,
+        merchantId: order.merchantId,
+        req,
+      });
+
       return res.status(200).json({
         message: "Order rejected by delivery boy",
         order,
@@ -619,6 +752,16 @@ export const orderPacked = async (req, res) => {
 
   order.orderStatus = "packed"
   await order.save();
+
+  await logAuditEvent({
+    action: "ORDER_STATUS_CHANGED",
+    message: `Order #${order._id.toString().slice(-5).toUpperCase()} marked as packed by merchant.`,
+    status: "success",
+    orderId: order._id,
+    merchantId: order.merchantId,
+    req,
+  });
+
   return res.status(200).json({ message: "Order packed" });
 };
 
@@ -630,6 +773,17 @@ export const reachedPickupLocation = async (req, res) => {
 
   order.deliveryBoyStatus = "at_pickup";
   await order.save();
+
+  await logAuditEvent({
+    action: "ORDER_STATUS_CHANGED",
+    message: `Rider reached pickup location for order #${order._id.toString().slice(-5).toUpperCase()}.`,
+    status: "success",
+    orderId: order._id,
+    deliveryRiderId: order.deliveryRiderId,
+    merchantId: order.merchantId,
+    req,
+  });
+
   return res.status(200).json({ message: "Delivery boy reached pickup location" });
 };
 
@@ -642,6 +796,17 @@ export const orderPickedUp = async (req, res) => {
   order.deliveryBoyStatus = "picked_up";
   order.orderStatus = "in_transit";
   await order.save();
+
+  await logAuditEvent({
+    action: "ORDER_STATUS_CHANGED",
+    message: `Order #${order._id.toString().slice(-5).toUpperCase()} picked up by rider. In transit to customer.`,
+    status: "success",
+    orderId: order._id,
+    deliveryRiderId: order.deliveryRiderId,
+    merchantId: order.merchantId,
+    req,
+  });
+
   return res.status(200).json({ message: "Order picked up" });
 };
 
@@ -654,6 +819,17 @@ export const reachedDeliveryLocation = async (req, res) => {
   order.deliveryBoyStatus = "at_delivery";
   order.orderStatus = "in_transit";
   await order.save();
+
+  await logAuditEvent({
+    action: "ORDER_STATUS_CHANGED",
+    message: `Rider reached customer delivery location for order #${order._id.toString().slice(-5).toUpperCase()}.`,
+    status: "success",
+    orderId: order._id,
+    deliveryRiderId: order.deliveryRiderId,
+    merchantId: order.merchantId,
+    req,
+  });
+
   return res.status(200).json({ message: "Delivery boy reached delivery location" });
 };
 
@@ -666,6 +842,17 @@ export const handoverOrder = async (req, res) => {
   order.deliveryBoyStatus = "try_phase";
   order.orderStatus = "try_phase";
   await order.save();
+
+  await logAuditEvent({
+    action: "ORDER_STATUS_CHANGED",
+    message: `Order #${order._id.toString().slice(-5).toUpperCase()} handed over to customer. Trial phase started.`,
+    status: "success",
+    orderId: order._id,
+    deliveryRiderId: order.deliveryRiderId,
+    merchantId: order.merchantId,
+    req,
+  });
+
   return res.status(200).json({ message: "Order handover" });
 };
 
@@ -789,6 +976,21 @@ export const initiateReturn = async (req, res) => {
     order.trialPhaseEnd = new Date();
     await order.save({ session });
     
+    await logAuditEvent({
+      action: "TRY_PHASE_COMPLETED",
+      message: `Try phase completed for order #${order._id.toString().slice(-5).toUpperCase()}. Kept: ${keptItemsCount}, Returned: ${returnedItemsCount}`,
+      status: "success",
+      orderId: order._id,
+      userId: order.userId,
+      merchantId: order.merchantId,
+      details: {
+        keptItemsCount,
+        returnedItemsCount,
+        finalBilling: order.finalBilling,
+      },
+      req,
+    });
+    
     await session.commitTransaction();
     session.endSession();
     
@@ -893,6 +1095,20 @@ export const createFinalPaymentRazorpayOrder = async (req, res) => {
       const io = getIO();
       emitOrderUpdate(io, orderId, order)
 
+      await logAuditEvent({
+        action: "ORDER_COMPLETED",
+        message: `Order #${order._id.toString().slice(-5).toUpperCase()} completed. All items returned, no payment required.`,
+        status: "success",
+        orderId: order._id,
+        userId,
+        merchantId: order.merchantId,
+        details: {
+          itemsCount: order.items.length,
+          returnedItemsCount: order.items.length,
+        },
+        req,
+      });
+
       return res.status(200).json({
         success: true,
         message: "All items returned. No payment required.",
@@ -986,6 +1202,21 @@ export const createFinalPaymentRazorpayOrder = async (req, res) => {
     order.razorpayOrderId = razorpayOrder.id;
     await order.save();
 
+    await logAuditEvent({
+      action: "PAYMENT_INITIATED",
+      message: `Final payment of ₹${billing.totalPayable} initiated for order #${order._id.toString().slice(-5).toUpperCase()}`,
+      status: "pending",
+      orderId: order._id,
+      userId,
+      merchantId: order.merchantId,
+      details: {
+        razorpayOrderId: razorpayOrder.id,
+        totalPayable: billing.totalPayable,
+        breakdown: billing,
+      },
+      req,
+    });
+
     return res.status(200).json({
       success: true,
       razorpayOrder,
@@ -1032,6 +1263,13 @@ export const verifyFinalPayment = async (req, res) => {
       .digest("hex");
 
     if (expectedSign !== razorpay_signature) {
+      await logAuditEvent({
+        action: "PAYMENT_FAILED",
+        message: `Final payment signature verification failed for Razorpay Order ID: ${razorpay_order_id}`,
+        status: "failure",
+        details: { razorpay_order_id, razorpay_payment_id, razorpay_signature },
+        req,
+      });
       return res.status(400).json({ success: false, message: "Invalid signature" });
     }
 
@@ -1107,6 +1345,21 @@ export const verifyFinalPayment = async (req, res) => {
     }
 
     await order.save({ session });
+    
+    await logAuditEvent({
+      action: "PAYMENT_SUCCESS",
+      message: `Final payment of ₹${order.finalBilling.totalPayable} verified successfully for order #${order._id.toString().slice(-5).toUpperCase()}`,
+      status: "success",
+      orderId: order._id,
+      userId,
+      merchantId: order.merchantId,
+      details: {
+        razorpay_order_id,
+        razorpay_payment_id,
+        allItemsAccepted,
+      },
+      req,
+    });
     
     await session.commitTransaction();
     session.endSession();
@@ -1267,6 +1520,16 @@ export const verifyFinalPaymentCod = async (req, res) => {
 
     // Enforce 1000 limit for kept items cash payment
     if (billing.totalPayable > 1000) {
+      await logAuditEvent({
+        action: "PAYMENT_FAILED",
+        message: `COD payment rejected: billing total ₹${billing.totalPayable} exceeds ₹1000 limit for order #${order._id.toString().slice(-5).toUpperCase()}`,
+        status: "failure",
+        orderId: order._id,
+        userId,
+        merchantId: order.merchantId,
+        details: { totalPayable: billing.totalPayable },
+        req,
+      });
       await session.abortTransaction();
       session.endSession();
       return res.status(400).json({
@@ -1331,6 +1594,21 @@ export const verifyFinalPaymentCod = async (req, res) => {
     }
 
     await order.save({ session });
+    
+    await logAuditEvent({
+      action: "PAYMENT_SUCCESS",
+      message: `Final payment of ₹${order.finalBilling.totalPayable} via COD verified successfully for order #${order._id.toString().slice(-5).toUpperCase()}`,
+      status: "success",
+      orderId: order._id,
+      userId,
+      merchantId: order.merchantId,
+      details: {
+        paymentMethod: "COD",
+        totalPayable: order.finalBilling.totalPayable,
+        allItemsAccepted,
+      },
+      req,
+    });
     
     await session.commitTransaction();
     session.endSession();
@@ -1418,6 +1696,17 @@ export const cancelOrder = async (req, res) => {
     order.orderStatus = "cancelled";
     order.customerDeliveryStatus = "cancelled";
     await order.save({ session });
+
+    await logAuditEvent({
+      action: "ORDER_CANCELLED",
+      message: `Order #${order._id.toString().slice(-5).toUpperCase()} was cancelled by user. Upfront amount ₹${refundAmount} refunded to wallet.`,
+      status: "success",
+      orderId: order._id,
+      userId: order.userId,
+      merchantId: order.merchantId,
+      details: { refundAmount },
+      req,
+    });
 
     // Remove from pending orders queue if it exists
     const PendingOrder = (await import("../../models/pendingOrders.model.js")).default;

@@ -90,7 +90,7 @@ export const orderRequestForMerchant = async (req, res) => {
       return res.status(403).json({ message: "Forbidden: You do not own this order" });
     }
 
-    if (status === "accept") {
+    if (status === "accept" || status === "ACCEPTED") {
       order.orderStatus = "accepted";
       order.customerDeliveryStatus = "accepted";
 
@@ -151,7 +151,7 @@ export const orderRequestForMerchant = async (req, res) => {
       });
     }
 
-    if (status === "reject") {
+    if (status === "reject" || status === "REJECTED") {
       order.orderStatus = "rejected";
       order.customerDeliveryStatus = "cancelled";
       order.reason = req.body.reason || "Merchant rejected the order";
@@ -187,12 +187,12 @@ export const orderRequestForMerchant = async (req, res) => {
     emitOrderUpdate(io, orderId, order);
     console.log(order,'order');
     return res.status(200).json({
-      message: status === "reject"
+      message: (status === "reject" || status === "REJECTED")
         ? `Order rejected. ₹${order.deliveryCharge || 0} refunded to customer wallet.`
         : "Order accepted & queued for rider.",
       orderId,
       order,
-      queuedZone: status === "accept" && queueResult?.success ? queueResult.zoneId : undefined,
+      queuedZone: (status === "accept" || status === "ACCEPTED") && queueResult?.success ? queueResult.zoneId : undefined,
     });
 
   } catch (err) {

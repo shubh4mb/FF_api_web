@@ -12,17 +12,22 @@ import { getIO } from "../config/socket.js";
 import { Expo } from "expo-server-sdk";
 import User from "../models/user.model.js";
 import DeliveryRider from "../models/deliveryRider.model.js";
+import Merchant from "../models/merchant.model.js";
 
 const expo = new Expo();
 
-export async function sendPushNotifications(userId, riderId, title, body, data) {
+export async function sendPushNotifications(userId, riderId, title, body, data, merchantId) {
     let doc;
     let isUser = !!userId;
+    let isRider = !!riderId;
+    let isMerchant = !!merchantId;
 
     if (isUser) {
         doc = await User.findById(userId);
-    } else if (riderId) {
+    } else if (isRider) {
         doc = await DeliveryRider.findById(riderId);
+    } else if (isMerchant) {
+        doc = await Merchant.findById(merchantId);
     }
 
     if (!doc || !doc.expoPushTokens || doc.expoPushTokens.length === 0) return;
@@ -67,8 +72,10 @@ export async function sendPushNotifications(userId, riderId, title, body, data) 
         // Remove invalid tokens efficiently
         if (isUser) {
             await User.findByIdAndUpdate(userId, { $pull: { expoPushTokens: { $in: invalidTokens } } });
-        } else {
+        } else if (isRider) {
             await DeliveryRider.findByIdAndUpdate(riderId, { $pull: { expoPushTokens: { $in: invalidTokens } } });
+        } else if (isMerchant) {
+            await Merchant.findByIdAndUpdate(merchantId, { $pull: { expoPushTokens: { $in: invalidTokens } } });
         }
     }
 }

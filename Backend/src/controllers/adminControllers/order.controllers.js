@@ -6,6 +6,7 @@ import { emitOrderUpdate } from "../../sockets/order.socket.js";
 import { creditWallet } from "../../helperFns/walletHelper.js";
 import { notifyOrderEvent } from "../../helperFns/notificationHelper.js";
 import { setRiderMeta, getRiderMeta } from "../../helperFns/deliveryRiderFns.js";
+import { logAuditEvent } from "../../utils/auditLogger.js";
 
 /**
  * Get all orders with a pending cancellation request from a merchant
@@ -42,6 +43,16 @@ export const adminCancelOrder = async (req, res) => {
       order.cancellationRequest = 'rejected';
       await order.save();
       
+      await logAuditEvent({
+        action: "ORDER_CANCELLATION_REJECTED",
+        message: `Admin rejected cancellation request for order #${order._id.toString().slice(-5).toUpperCase()}`,
+        status: "info",
+        orderId: order._id,
+        userId: order.userId,
+        merchantId: order.merchantId,
+        req,
+      });
+
       const io = getIO();
       emitOrderUpdate(io, orderId, order);
 
@@ -93,6 +104,17 @@ export const adminCancelOrder = async (req, res) => {
       await PendingOrder.deleteOne({ orderId: order._id });
 
       await order.save();
+
+      await logAuditEvent({
+        action: "ORDER_CANCELLED",
+        message: `Admin approved cancellation request for order #${order._id.toString().slice(-5).toUpperCase()}. Refunded upfront fee of ₹${refundAmount} to customer wallet.`,
+        status: "success",
+        orderId: order._id,
+        userId: order.userId,
+        merchantId: order.merchantId,
+        details: { refundAmount },
+        req,
+      });
 
       const io = getIO();
       emitOrderUpdate(io, orderId, order);
