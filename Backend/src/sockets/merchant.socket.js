@@ -13,7 +13,7 @@ export const registerMerchantSockets = (io, socket) => {
     socket.data.merchantId = merchantId; // store merchantId on socket itself
 
     // Update Redis State
-    await setMerchantMeta(merchantId, { isOnline: "true", lastSeenAt: Date.now() });
+    await setMerchantMeta(merchantId, { lastSeenAt: Date.now() });
 
     console.log(`✅ Merchant ${merchantId} connected with socket ${socket.id} to room merchant:${merchantId}`);
   });
@@ -27,7 +27,7 @@ export const registerMerchantSockets = (io, socket) => {
 
       if (remainingSockets.length === 0) {
         // no more active sockets for this merchant in the entire cluster
-        await setMerchantMeta(merchantId, { isOnline: "false", lastSeenAt: Date.now() });
+        await setMerchantMeta(merchantId, { lastSeenAt: Date.now() });
         console.log(`❌ Merchant ${merchantId} fully disconnected`);
       } else {
         console.log(

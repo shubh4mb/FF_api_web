@@ -977,3 +977,140 @@ export const getAllBrands = async (req, res) => {
   }
 }
 
+export const bulkUploadProducts = async (req, res) => {
+  try {
+    const { products } = req.body;
+    if (!products || !Array.isArray(products) || products.length === 0) {
+      return res.status(400).json({ success: false, message: "No products provided for upload" });
+    }
+
+    const merchant = await Merchant.findById(req.merchantId);
+    if (!merchant) {
+      return res.status(404).json({ success: false, message: "Merchant not found" });
+    }
+
+    const brandName = merchant.shopName || merchant.ownerName || "Default Brand";
+    const soldBy = merchant.shopName || merchant.ownerName || "Default Store";
+
+    // Auto find or create brand
+    let brand = await Brand.findOne({ name: brandName, createdById: merchant._id });
+    if (!brand) {
+      brand = await Brand.create({
+        name: brandName,
+        createdByType: 'Merchant',
+        createdById: merchant._id,
+      });
+    }
+
+    const createdProducts = [];
+    const errors = [];
+
+    for (let index = 0; index < products.length; index++) {
+      const p = products[index];
+      try {
+        // Find category
+        if (!p.categoryName) {
+          throw new Error(`Category Name is required at product index ${index}`);
+        }
+        const category = await Category.findOne({
+          name: { $regex: new RegExp("^" + p.categoryName.trim() + "$", "i") },
+          level: 0,
+          isActive: true
+        });
+        if (!category) {
+          throw new Error(`Category '${p.categoryName}' not found`);
+        }
+
+        let subCategoryId = undefined;
+        if (p.subCategoryName) {
+          const subCategory = await Category.findOne({
+            name: { $regex: new RegExp("^" + p.subCategoryName.trim() + "$", "i") },
+            level: 1,
+            parentId: category._id,
+            isActive: true
+          });
+          if (!subCategory) {
+            throw new Error(`Subcategory '${p.subCategoryName}' not found in category '${p.categoryName}'`);
+          }
+          subCategoryId = subCategory._id;
+        }
+
+        // Validate gender vs category allowedGenders
+        const leafCategoryId = subCategoryId || category._id;
+        const leafCategory = await Category.findById(leafCategoryId).lean();
+        if (leafCategory && leafCategory.allowedGenders) {
+          const isValidGender = p.gender.every(g => leafCategory.allowedGenders.includes(g));
+          if (!isValidGender) {
+            throw new Error(`Invalid gender for category. Allowed: ${leafCategory.allowedGenders.join(', ')}`);
+          }
+        }
+
+        // Parse variants: we map mrp, price, discount and group sizes
+        const variants = (p.variants || []).map(v => {
+          const mrp = isNaN(Number(v.mrp)) ? 0 : Number(v.mrp);
+          const price = isNaN(Number(v.price)) ? 0 : Number(v.price);
+          const discount = isNaN(Number(v.discount)) ? 0 : Number(v.discount);
+
+          const sizes = (v.sizes || []).map(s => ({
+            size: s.size,
+            stock: isNaN(Number(s.stock)) ? 0 : Number(s.stock)
+          }));
+
+          return {
+            color: v.color || { name: "Default", hex: "#CCCCCC" },
+            mrp,
+            price,
+            discount,
+            sizes,
+            images: []
+          };
+        });
+
+        const product = new Product({
+          name: p.name,
+          merchantId: req.merchantId,
+          brandId: brand._id,
+          categoryId: category._id,
+          subCategoryId,
+          gender: p.gender,
+          soldBy: p.soldBy || soldBy,
+          styleName: p.styleName || "",
+          description: p.description || "",
+          tags: p.tags || [],
+          isTriable: p.isTriable !== undefined ? p.isTriable : true,
+          isActive: p.isActive !== undefined ? p.isActive : true,
+          variants
+        });
+
+        await product.save();
+        createdProducts.push(product);
+      } catch (err) {
+        errors.push({ name: p.name || `Product at index ${index}`, error: err.message });
+      }
+    }
+
+    if (createdProducts.length === 0 && errors.length > 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Failed to upload any products",
+        errors
+      });
+    }
+
+    return res.status(201).json({
+      success: true,
+      message: `Successfully uploaded ${createdProducts.length} product(s).`,
+      count: createdProducts.length,
+      errors: errors.length > 0 ? errors : undefined
+    });
+  } catch (error) {
+    console.error("Bulk upload controller error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Server error during bulk upload",
+      error: error.message
+    });
+  }
+};
+
+

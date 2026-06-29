@@ -1,14 +1,14 @@
 import express from 'express'
 import upload, { handleMulterError } from '../middleware/multer.js'
 import { addBaseProduct, addVariant, getBaseProducts, getVariants, updateVariant, updateSize, deleteVariantSizes, updateSizeCount } from '../controllers/merchantController/product.controllers.js';
-import { deleteVariant, addBrand, getBrands, getBaseProductById, getProductsByMerchantId, uploadProductImage, deleteImage, deleteProduct, updatePrice, editProduct, editVariant, updateVariantSizeStock, updateMultipleVariantSizes, getAllBrands } from '../controllers/merchantController/product.controllers.js';
+import { deleteVariant, addBrand, getBrands, getBaseProductById, getProductsByMerchantId, uploadProductImage, deleteImage, deleteProduct, updatePrice, editProduct, editVariant, updateVariantSizeStock, updateMultipleVariantSizes, getAllBrands, bulkUploadProducts } from '../controllers/merchantController/product.controllers.js';
 
 import { addMerchant } from '../controllers/merchantController/merchant.controller.js';
 import { loginMerchant, registerMerchant, updateMerchantShopDetails, updateMerchantBankDetails, updateMerchantKYC, updateMerchantOperatingHours, activateMerchant, registerPhone, sendEmailOtp, verifyEmailOtp, getMerchantByEmail, toggleMerchantOnlineStatus, refreshMerchantToken, logoutMerchant, addPushToken } from '../controllers/merchantController/authControllers.js';
 import { getAllOrder, saveProductDetails, requestOrderCancellation } from '../controllers/merchantController/order.controllers.js';
 import { authMiddlewareMerchant } from '../middleware/jwtAuth.js';
 import { getWalletDetails } from '../helperFns/walletHelper.js';
-import { getPlacedOrder, orderRequestForMerchant, orderPacked } from '../controllers/merchantController/order.controllers.js';
+import { getPlacedOrder, orderRequestForMerchant, orderPacked, getPackingPhotos, uploadPackingPhoto, deletePackingPhoto, getPackingInfoPublic } from '../controllers/merchantController/order.controllers.js';
 import { getMerchantById } from '../controllers/merchantController/merchant.controller.js';
 import { getMerchantAnalytics } from '../controllers/merchantController/analytics.controller.js';
 import { getMerchantCourierOrders, updateCourierOrderStatus, updateCourierOrderReturnStatus } from '../controllers/userControllers/courierOrder.controllers.js';
@@ -177,6 +177,7 @@ router.post('/brand/add', upload.single('logo'), handleMulterError, addBrand);
 router.get('/brand/get/', getBrands);
 
 router.post('/addBaseProduct', authMiddlewareMerchant, addBaseProduct);
+router.post('/bulk-upload', authMiddlewareMerchant, bulkUploadProducts);
 router.delete('/deleteProduct/:productId', authMiddlewareMerchant, deleteProduct);
 
 router.get('/getBaseProducts', getBaseProducts);
@@ -210,6 +211,10 @@ router.patch('/updateMultipleVariantSizes/:productId/:variantId', authMiddleware
 router.get('/getAllOrders', authMiddlewareMerchant, getAllOrder)
 router.put('/orderRequestForMerchant/:orderId', authMiddlewareMerchant, orderRequestForMerchant)
 router.get('/getPlacedOrder', authMiddlewareMerchant, getPlacedOrder)
+router.get('/order/:orderId/packing-photos', authMiddlewareMerchant, getPackingPhotos)
+router.get('/order/packing-info/:orderId', getPackingInfoPublic)
+router.post('/order/packing-photos/upload', upload.single('image'), handleMulterError, uploadPackingPhoto)
+router.delete('/order/:orderId/packing-photos/:photoId', authMiddlewareMerchant, deletePackingPhoto)
 router.post('/order/packed/:orderId', authMiddlewareMerchant, orderPacked)
 router.put('/order/:orderId/request-cancellation', authMiddlewareMerchant, requestOrderCancellation)
 

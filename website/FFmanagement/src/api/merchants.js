@@ -51,9 +51,9 @@ export const getMerchantById = async (id) => {
     }
 }
 
-export const verifyMerchant = async (id, isVerified, kycVerifications) => {
+export const verifyMerchant = async (id, isVerified, kycVerifications, rejectionReason) => {
     try {
-        const response = await axiosInstance.patch(`/admin/updateMerchant/${id}/verify`, { isVerified, kycVerifications });
+        const response = await axiosInstance.patch(`/admin/updateMerchant/${id}/verify`, { isVerified, kycVerifications, rejectionReason });
         return response.data;
     } catch (error) {
         console.log(error)

@@ -9,6 +9,7 @@ import Merchant from "../../models/merchant.model.js";
 import { creditWallet } from "../../helperFns/walletHelper.js";
 import { notifyOrderEvent } from "../../helperFns/notificationHelper.js";
 import { inferZone } from "../../utils/zoneInfer.js";
+import { storageService } from "../../services/storage.service.js";
 
 const generateOTP = () => Math.floor(1000 + Math.random() * 9000);
 
@@ -261,6 +262,8 @@ export const orderPacked = async (req, res) => {
       return res.status(403).json({ message: "Forbidden: You do not own this order" });
     }
 
+    // Packing proof photos are optional, so we do not block status change if photos are missing
+
     order.orderStatus = "packed";
     order.otp = generateOTP();
     await order.save();
@@ -278,7 +281,132 @@ export const orderPacked = async (req, res) => {
   } catch (error) {
     return res.status(500).json({ message: "Error updating order status" });
   }
-}
+};
+
+export const getPackingPhotos = async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    const order = await Order.findById(orderId).select('packingPhotos items');
+    if (!order) {
+      return res.status(404).json({ message: "Order not found" });
+    }
+    return res.status(200).json({ packingPhotos: order.packingPhotos || [], items: order.items });
+  } catch (error) {
+    console.error("Error fetching packing photos:", error);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+};
+
+export const uploadPackingPhoto = async (req, res) => {
+  try {
+    const { orderId, itemId } = req.body;
+
+    if (!req.file) {
+      return res.status(400).json({ message: "No image file provided" });
+    }
+    if (!orderId || !itemId) {
+      return res.status(400).json({ message: "orderId and itemId are required" });
+    }
+
+    const order = await Order.findById(orderId);
+    if (!order) {
+      return res.status(404).json({ message: "Order not found" });
+    }
+
+    // Verify item exists in order
+    const itemExists = order.items.some(item => item._id.toString() === itemId.toString());
+    if (!itemExists) {
+      return res.status(400).json({ message: "Item does not belong to this order" });
+    }
+
+    // Upload to Cloudinary
+    const result = await storageService.uploadSingle(req.file, "packing_proofs");
+    if (!result) {
+      return res.status(500).json({ message: "Failed to upload image to Cloudinary" });
+    }
+
+    // Add to order packingPhotos
+    const photoObj = {
+      url: result.url,
+      public_id: result.public_id,
+      itemId: itemId,
+      uploadedAt: new Date()
+    };
+
+    order.packingPhotos = order.packingPhotos || [];
+    order.packingPhotos.push(photoObj);
+    await order.save();
+
+    const io = getIO();
+    emitOrderUpdate(io, orderId, order);
+
+    return res.status(200).json({
+      success: true,
+      message: "Packing proof photo uploaded successfully",
+      photo: photoObj
+    });
+  } catch (error) {
+    console.error("Error uploading packing photo:", error);
+    return res.status(500).json({ message: "Error uploading photo", error: error.message });
+  }
+};
+
+export const deletePackingPhoto = async (req, res) => {
+  try {
+    const { orderId, photoId } = req.params;
+    const order = await Order.findById(orderId);
+    if (!order) return res.status(404).json({ message: "Order not found" });
+
+    // Authorization check
+    if (order.merchantId.toString() !== req.merchantId.toString()) {
+      return res.status(403).json({ message: "Forbidden: You do not own this order" });
+    }
+
+    const photo = (order.packingPhotos || []).find(p => p._id.toString() === photoId);
+    if (!photo) return res.status(404).json({ message: "Photo not found" });
+
+    // Delete from Cloudinary
+    if (photo.public_id) {
+      await storageService.deleteFile(photo.public_id);
+    }
+
+    // Pull from array
+    order.packingPhotos.pull({ _id: photoId });
+    await order.save();
+
+    const io = getIO();
+    emitOrderUpdate(io, orderId, order);
+
+    return res.status(200).json({ success: true, message: "Photo deleted successfully" });
+  } catch (error) {
+    console.error("Error deleting packing photo:", error);
+    return res.status(500).json({ message: "Error deleting photo", error: error.message });
+  }
+};
+
+export const getPackingInfoPublic = async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    const order = await Order.findById(orderId).select('packingPhotos items orderStatus');
+    if (!order) {
+      return res.status(404).json({ message: "Order not found" });
+    }
+    return res.status(200).json({ 
+      orderStatus: order.orderStatus,
+      items: order.items.map(item => ({
+        _id: item._id,
+        name: item.name,
+        size: item.size,
+        image: item.image,
+        quantity: item.quantity
+      })),
+      packingPhotos: order.packingPhotos || []
+    });
+  } catch (error) {
+    console.error("Error fetching public packing info:", error);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+};
 
 
 

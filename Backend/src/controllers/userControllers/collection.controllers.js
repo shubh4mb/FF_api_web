@@ -57,6 +57,7 @@ export const getCollectionsForHome = asyncHandler(async (req, res) => {
 
     const products = await Product.find(productFilter)
       .select('name merchantId brandId ratings numReviews variants')
+      .populate('merchantId', 'isOnline isZoneLive')
       .limit(10)
       .lean();
 
@@ -78,10 +79,17 @@ export const getCollectionsForHome = asyncHandler(async (req, res) => {
     // Trim variants for mobile card view
     const trimmedProducts = products.map(p => {
       const v = p.variants?.[0];
+      const merchant = p.merchantId;
+      const merchantIdStr = merchant?._id?.toString() || p.merchantId?.toString();
+
+      const isNearby = req.nearbyMerchantIds?.some(id => id.toString() === merchantIdStr) || false;
+      const isOnline = merchant?.isOnline !== false;
+      const isZoneLive = merchant?.isZoneLive !== false;
+
       return {
         _id: p._id,
         name: p.name,
-        merchantId: p.merchantId,
+        merchantId: merchantIdStr,
         brandId: p.brandId,
         ratings: p.ratings,
         numReviews: p.numReviews,
@@ -91,6 +99,9 @@ export const getCollectionsForHome = asyncHandler(async (req, res) => {
         discount: v?.discount || 0,
         images: v?.images,
         color: v?.color,
+        isNearby,
+        isOnline,
+        isInstantBuyable: isNearby && isOnline && isZoneLive,
       };
     });
 

@@ -46,6 +46,15 @@ const EditMerchant = () => {
   const [croppedLogo, setCroppedLogo] = useState(null);
   const [croppedBg, setCroppedBg] = useState(null);
   const [activeCropField, setActiveCropField] = useState(null);
+  const [showRejectForm, setShowRejectForm] = useState(false);
+  const [rejectionOptions, setRejectionOptions] = useState({
+    panBlurry: false,
+    wrongAccount: false,
+    gstMismatch: false,
+    photoMissing: false,
+    ifscInvalid: false
+  });
+  const [customReason, setCustomReason] = useState("");
 
   useEffect(() => {
     const fetchMerchant = async () => {
@@ -107,6 +116,73 @@ const EditMerchant = () => {
       alert(`Shop ${!form.isVerified ? 'Verified' : 'Unverified'}`);
     } catch (err) {
       alert("Status update failed");
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  const handleReject = async () => {
+    setIsUpdating(true);
+    try {
+      const reasons = [];
+      if (rejectionOptions.panBlurry) reasons.push("❌ PAN blurry");
+      if (rejectionOptions.wrongAccount) reasons.push("❌ Wrong account number");
+      if (rejectionOptions.gstMismatch) reasons.push("❌ GST mismatch");
+      if (rejectionOptions.photoMissing) reasons.push("❌ Shop photo missing");
+      if (rejectionOptions.ifscInvalid) reasons.push("❌ Invalid IFSC code");
+      if (customReason.trim()) reasons.push(`❌ ${customReason.trim()}`);
+
+      const reasonStr = reasons.join("\n");
+      if (!reasonStr) {
+        alert("Please select or type at least one rejection reason");
+        setIsUpdating(false);
+        return;
+      }
+
+      await verifyMerchant(merchantId, false, undefined, reasonStr);
+      setForm(prev => ({ ...prev, isVerified: false, status: 'rejected' }));
+      alert("Merchant rejected successfully");
+      setShowRejectForm(false);
+    } catch (err) {
+      alert("Failed to reject merchant");
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  const handleRejectDoc = async (docKey, docTitle, reason) => {
+    if (!reason || !reason.trim()) return;
+    setIsUpdating(true);
+    try {
+      const fullReason = `❌ ${docTitle}: ${reason.trim()}`;
+      await verifyMerchant(merchantId, false, { [docKey]: false }, fullReason);
+      
+      setForm(prev => {
+        const updatedKyc = { ...prev.kyc };
+        if (docKey === 'bankDetails') {
+          return {
+            ...prev,
+            isVerified: false,
+            status: 'rejected',
+            rejectionReason: fullReason,
+            bankDetails: { ...prev.bankDetails, isBankVerified: false }
+          };
+        } else {
+          if (updatedKyc[docKey]) {
+            updatedKyc[docKey] = { ...updatedKyc[docKey], verified: false };
+          }
+          return {
+            ...prev,
+            isVerified: false,
+            status: 'rejected',
+            rejectionReason: fullReason,
+            kyc: updatedKyc
+          };
+        }
+      });
+      alert(`Rejected ${docTitle} successfully.`);
+    } catch (err) {
+      alert("Failed to reject document");
     } finally {
       setIsUpdating(false);
     }
@@ -201,14 +277,38 @@ const EditMerchant = () => {
         <div className="aspect-video rounded-xl border-2 border-dashed border-gray-100 flex items-center justify-center text-gray-300 text-xs mb-4 uppercase">NO_IMAGE</div>
       )}
 
-      <button
-        type="button"
-        onClick={() => handleVerifyDoc(docKey, !doc?.verified)}
-        disabled={isUpdating}
-        className={`w-full py-2.5 rounded-lg font-black text-[10px] uppercase tracking-widest transition-all ${doc?.verified ? 'bg-white border border-red-100 text-red-500 hover:bg-red-50' : 'bg-black text-white hover:bg-gray-800 shadow-lg shadow-black/10'}`}
-      >
-        {doc?.verified ? 'Revoke Approval' : 'Approve Document'}
-      </button>
+      {doc?.verified ? (
+        <button
+          type="button"
+          onClick={() => handleVerifyDoc(docKey, false)}
+          disabled={isUpdating}
+          className="w-full py-2.5 rounded-lg font-black text-[10px] uppercase tracking-widest transition-all bg-white border border-red-100 text-red-500 hover:bg-red-50"
+        >
+          Revoke Approval
+        </button>
+      ) : (
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={() => handleVerifyDoc(docKey, true)}
+            disabled={isUpdating}
+            className="flex-1 py-2.5 rounded-lg font-black text-[10px] uppercase tracking-widest transition-all bg-black text-white hover:bg-gray-800 shadow-lg shadow-black/10"
+          >
+            Approve
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              const reason = prompt(`Enter rejection reason for ${title}:`);
+              if (reason) handleRejectDoc(docKey, title, reason);
+            }}
+            disabled={isUpdating}
+            className="flex-1 py-2.5 rounded-lg font-black text-[10px] uppercase tracking-widest transition-all bg-red-600 text-white hover:bg-red-750 shadow-lg shadow-red-600/10"
+          >
+            Reject
+          </button>
+        </div>
+      )}
     </div>
   );
 
@@ -226,20 +326,64 @@ const EditMerchant = () => {
           <p className="text-gray-400 font-mono text-[10px] mt-2 uppercase flex items-center gap-2">
             ID: <span className="text-black select-all">{merchantId}</span>
           </p>
-        </div>
-        <div className="flex flex-col sm:flex-row items-center gap-4 bg-gray-50 p-4 rounded-3xl border border-gray-100 w-full lg:w-auto">
-           <div className="text-center sm:text-right sm:mr-6">
-              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Global Verification</p>
-              <p className={`font-black tracking-tight text-lg ${form.isVerified ? 'text-green-600' : 'text-orange-500'}`}>{form.isVerified ? 'VERIFIED_SHOP' : 'PENDING_FINAL_SIGNOFF'}</p>
+           <div className="flex flex-col sm:flex-row items-center gap-4 bg-gray-50 p-4 rounded-3xl border border-gray-100 w-full lg:w-auto">
+              <div className="text-center sm:text-right sm:mr-6">
+                 <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Global Verification</p>
+                 <p className={`font-black tracking-tight text-lg ${form.isVerified ? 'text-green-600' : 'text-orange-500'}`}>{form.isVerified ? 'VERIFIED_SHOP' : 'PENDING_FINAL_SIGNOFF'}</p>
+              </div>
+              <button 
+                 onClick={handleToggleVerify}
+                 disabled={isUpdating || !form.kyc.pan.verified}
+                 className={`w-full sm:w-auto px-10 py-4 rounded-2xl font-black uppercase tracking-widest text-xs transition-all shadow-2xl active:scale-95 ${form.isVerified ? 'bg-white border-2 border-red-500 text-red-500 hover:bg-red-50' : 'bg-black text-white hover:bg-gray-800 disabled:opacity-30'}`}
+              >
+                 {form.isVerified ? 'Block Access' : 'Approve Account'}
+              </button>
+              {!form.isVerified && (
+                <button 
+                   onClick={() => setShowRejectForm(!showRejectForm)}
+                   disabled={isUpdating}
+                   className="w-full sm:w-auto px-8 py-4 rounded-2xl font-black uppercase tracking-widest text-xs transition-all shadow-2xl active:scale-95 bg-red-600 text-white hover:bg-red-700"
+                >
+                   Reject Account
+                </button>
+              )}
            </div>
-           <button 
-              onClick={handleToggleVerify}
-              disabled={isUpdating || !form.kyc.pan.verified}
-              className={`w-full sm:w-auto px-10 py-4 rounded-2xl font-black uppercase tracking-widest text-xs transition-all shadow-2xl active:scale-95 ${form.isVerified ? 'bg-white border-2 border-red-500 text-red-500 hover:bg-red-50' : 'bg-black text-white hover:bg-gray-800 disabled:opacity-30'}`}
-           >
-              {form.isVerified ? 'Block Access' : 'Approve Account'}
-           </button>
         </div>
+        {showRejectForm && (
+          <div className="mt-6 p-6 bg-red-50 border-2 border-red-100 rounded-3xl max-w-xl text-black">
+            <h4 className="text-lg font-black text-red-800 mb-4 uppercase tracking-tighter italic">Select Rejection Reasons</h4>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
+              <label className="flex items-center gap-2 text-sm font-bold text-gray-700 cursor-pointer">
+                <input type="checkbox" checked={rejectionOptions.panBlurry} onChange={e => setRejectionOptions({...rejectionOptions, panBlurry: e.target.checked})} className="w-4 h-4 accent-red-600" />
+                PAN Card Blurry
+              </label>
+              <label className="flex items-center gap-2 text-sm font-bold text-gray-700 cursor-pointer">
+                <input type="checkbox" checked={rejectionOptions.wrongAccount} onChange={e => setRejectionOptions({...rejectionOptions, wrongAccount: e.target.checked})} className="w-4 h-4 accent-red-600" />
+                Wrong Account Number
+              </label>
+              <label className="flex items-center gap-2 text-sm font-bold text-gray-700 cursor-pointer">
+                <input type="checkbox" checked={rejectionOptions.gstMismatch} onChange={e => setRejectionOptions({...rejectionOptions, gstMismatch: e.target.checked})} className="w-4 h-4 accent-red-600" />
+                GST Mismatch
+              </label>
+              <label className="flex items-center gap-2 text-sm font-bold text-gray-700 cursor-pointer">
+                <input type="checkbox" checked={rejectionOptions.photoMissing} onChange={e => setRejectionOptions({...rejectionOptions, photoMissing: e.target.checked})} className="w-4 h-4 accent-red-600" />
+                Shop Photo Missing
+              </label>
+              <label className="flex items-center gap-2 text-sm font-bold text-gray-700 cursor-pointer">
+                <input type="checkbox" checked={rejectionOptions.ifscInvalid} onChange={e => setRejectionOptions({...rejectionOptions, ifscInvalid: e.target.checked})} className="w-4 h-4 accent-red-600" />
+                Invalid IFSC Code
+              </label>
+            </div>
+            <div className="form-group mb-4">
+              <label className="text-xs font-black uppercase text-gray-500 tracking-wider block mb-1">Custom Rejection Notes</label>
+              <textarea value={customReason} onChange={e => setCustomReason(e.target.value)} placeholder="Type custom rejection notes here..." className="w-full p-3 border border-red-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-red-500" />
+            </div>
+            <div className="flex gap-4">
+              <button onClick={handleReject} disabled={isUpdating} className="px-6 py-3 bg-red-600 text-white font-bold rounded-xl text-xs uppercase tracking-wider hover:bg-red-700">Confirm Rejection</button>
+              <button onClick={() => setShowRejectForm(false)} className="px-6 py-3 bg-white border border-red-200 text-red-700 font-bold rounded-xl text-xs uppercase tracking-wider">Cancel</button>
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-4 gap-12">

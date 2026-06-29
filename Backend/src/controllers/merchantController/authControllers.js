@@ -160,6 +160,14 @@ export const toggleMerchantOnlineStatus = async (req, res) => {
     merchant.isOnline = !!isOnline;
     await merchant.save();
 
+    // Sync to Redis
+    try {
+      const { setMerchantMeta } = await import("../../helperFns/merchantFns.js");
+      await setMerchantMeta(merchantId, { isOnline: String(!!isOnline) });
+    } catch (redisErr) {
+      console.error("Failed to sync toggle to Redis:", redisErr);
+    }
+
     if (!merchant) {
       return res.status(404).json({ success: false, message: "Merchant not found" });
     }
@@ -192,7 +200,7 @@ export const getMerchantByEmail = async (req, res) => {
 export const updateMerchantShopDetails = async (req, res) => {
   try {
     const { merchantId } = req.params;
-    let { shopName, shopDescription, businessType, category, genderCategory, ownerName, managerName, managerPhoneNumber, managerEmail, latitude, longitude } = req.body;
+    let { shopName, shopDescription, category, genderCategory, ownerName, managerName, managerPhoneNumber, managerEmail, latitude, longitude, pickupContactNumber, storeMobileNumber } = req.body;
 
     // Sanitize genderCategory: handle array or comma-separated string
     if (genderCategory) {
@@ -335,13 +343,14 @@ export const updateMerchantShopDetails = async (req, res) => {
         $set: {
           shopName,
           shopDescription,
-          businessType,
           category,
           genderCategory,
           ownerName,
           managerName,
           managerPhoneNumber,
           managerEmail,
+          pickupContactNumber,
+          storeMobileNumber,
           address: finalAddress,
           zoneName,
           zoneId,
@@ -412,7 +421,7 @@ export const activateMerchant = async (req, res) => {
     const { merchantId } = req.params;
     const merchant = await Merchant.findByIdAndUpdate(
       merchantId,
-      { $set: { status: 'pending_verification' } },
+      { $set: { status: 'pending_verification', rejectionReason: "" } },
       { new: true }
     );
     res.json({ success: true, merchant });

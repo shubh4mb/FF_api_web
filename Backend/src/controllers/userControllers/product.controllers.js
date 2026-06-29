@@ -315,7 +315,8 @@ export const getFilteredProducts = async (req, res) => {
       if (req.nearbyMerchantIds && req.nearbyMerchantIds.length > 0) {
         const onlineMerchantIds = await Merchant.find({
           _id: { $in: req.nearbyMerchantIds },
-          isOnline: true
+          isOnline: true,
+          isZoneLive: true
         }).select('_id').lean();
         
         if (onlineMerchantIds.length === 0) {
@@ -438,7 +439,7 @@ export const getFilteredProducts = async (req, res) => {
       {
         $lookup: {
           from: 'merchants', localField: 'merchantId', foreignField: '_id', as: 'merchant',
-          pipeline: [{ $project: { shopName: 1 } }],
+          pipeline: [{ $project: { shopName: 1, isOnline: 1, isZoneLive: 1 } }],
         },
       },
       {
@@ -512,6 +513,8 @@ export const getFilteredProducts = async (req, res) => {
           color: '$variants.color',
           images: '$variants.images',
           merchant: { $arrayElemAt: ['$merchant.shopName', 0] },
+          merchantIsOnline: { $arrayElemAt: ['$merchant.isOnline', 0] },
+          merchantIsZoneLive: { $arrayElemAt: ['$merchant.isZoneLive', 0] },
           brand: { $arrayElemAt: ['$brand.name', 0] },
           category: { $arrayElemAt: ['$category.name', 0] },
           subCategory: { $arrayElemAt: ['$subCategory.name', 0] },
@@ -556,10 +559,19 @@ export const getFilteredProducts = async (req, res) => {
     const totalCount = result?.countResult?.[0]?.totalCount || 0;
     const totalPages = Math.ceil(totalCount / limitNum);
 
-    const enrichedProducts = products.map(p => ({
-      ...p,
-      isInstantBuyable: calculateIsInstantBuyable(p._id, p.merchantId, req.nearbyMerchantIds)
-    }));
+    const enrichedProducts = products.map(p => {
+      const isNearby = req.nearbyMerchantIds?.some(id => id.toString() === p.merchantId?.toString()) || false;
+      const isInstantBuyable = calculateIsInstantBuyable(p._id, p.merchantId, req.nearbyMerchantIds, {
+        isOnline: p.merchantIsOnline,
+        isZoneLive: p.merchantIsZoneLive
+      });
+      return {
+        ...p,
+        isNearby,
+        isOnline: p.merchantIsOnline || false,
+        isInstantBuyable
+      };
+    });
 
     res.json({ products: enrichedProducts, totalCount, page: pageNum, totalPages });
   } catch (err) {

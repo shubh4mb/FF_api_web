@@ -146,15 +146,17 @@ export const updateMerchantById = asyncHandler(async (req, res) => {
 
 export const verifyMerchant = asyncHandler(async (req, res) => {
   const { id } = req.params;
-  const { isVerified, kycVerifications } = req.body;
+  const { isVerified, kycVerifications, rejectionReason } = req.body;
 
   let updateQuery = {};
   if (isVerified !== undefined) {
     updateQuery.isVerified = !!isVerified;
     if (!!isVerified) {
       updateQuery.status = 'pending_payment';
+      updateQuery.rejectionReason = "";
     } else {
       updateQuery.status = 'rejected';
+      updateQuery.rejectionReason = rejectionReason || "Your document verification failed.";
     }
   }
 

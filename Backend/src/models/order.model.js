@@ -178,6 +178,14 @@ const OrderSchema = new mongoose.Schema({
       uploadedAt: { type: Date, default: Date.now },
     }
   ],
+  packingPhotos: [
+    {
+      url: { type: String },
+      public_id: { type: String },
+      itemId: { type: mongoose.Schema.Types.ObjectId },
+      uploadedAt: { type: Date, default: Date.now },
+    }
+  ],
   trialPhaseStart: { type: Date, default: null },
   trialPhaseEnd: { type: Date, default: null },
   trialPhaseDuration: { type: Number, default: 0 },
