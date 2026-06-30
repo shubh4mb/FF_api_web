@@ -1,30 +1,37 @@
-import nodemailer from 'nodemailer';
+import { Resend } from 'resend';
 import dotenv from 'dotenv';
 dotenv.config();
 
-const transporter = nodemailer.createTransport({
-  host: "smtp.gmail.com",
-  port: 465,
-  secure: true, // true for port 465, false for other ports
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS,
-  },
-});
+const resendApiKey = process.env.RESEND_API || process.env.RESEND_API_KEY;
+const resend = new Resend(resendApiKey);
+
+// In the Resend free tier sandbox, you can only send from onboarding@resend.dev
+// once you verify your custom domain, you can set EMAIL_FROM=no-reply@yourdomain.com
+const fromEmail = process.env.EMAIL_FROM || 'onboarding@resend.dev';
 
 export const sendMail = async (to, subject, text, html) => {
   try {
-    const info = await transporter.sendMail({
-      from: `"FlashFits" <${process.env.EMAIL_USER}>`,
+    const payload = {
+      from: `FlashFits <${fromEmail}>`,
       to,
       subject,
       text,
-      html,
-    });
-    console.log("Email sent: %s", info.messageId);
-    return info;
+    };
+
+    if (html) {
+      payload.html = html;
+    }
+
+    const { data, error } = await resend.emails.send(payload);
+
+    if (error) {
+      throw error;
+    }
+
+    console.log("Email sent successfully: %s", data?.id);
+    return data;
   } catch (error) {
-    console.error("Error sending email:", error);
+    console.error("Error sending email via Resend:", error);
     throw error;
   }
 };
