@@ -111,9 +111,21 @@ const EditMerchant = () => {
   const handleToggleVerify = async () => {
     setIsUpdating(true);
     try {
-      await verifyMerchant(merchantId, !form.isVerified);
-      setForm(prev => ({ ...prev, isVerified: !prev.isVerified }));
-      alert(`Shop ${!form.isVerified ? 'Verified' : 'Unverified'}`);
+      if (form.status === 'payment_pending_verification') {
+        await verifyMerchant(merchantId, true);
+        setForm(prev => ({ ...prev, isVerified: true, status: 'active', isActive: true }));
+        alert("Merchant payment approved and account activated successfully!");
+      } else {
+        const nextVerifiedState = !form.isVerified;
+        await verifyMerchant(merchantId, nextVerifiedState);
+        setForm(prev => ({ 
+          ...prev, 
+          isVerified: nextVerifiedState, 
+          status: nextVerifiedState ? 'pending_payment' : 'rejected',
+          isActive: false 
+        }));
+        alert(`Shop ${nextVerifiedState ? 'Approved (Pending Payment)' : 'Blocked'}`);
+      }
     } catch (err) {
       alert("Status update failed");
     } finally {
@@ -327,64 +339,103 @@ const EditMerchant = () => {
             ID: <span className="text-black select-all">{merchantId}</span>
           </p>
            <div className="flex flex-col sm:flex-row items-center gap-4 bg-gray-50 p-4 rounded-3xl border border-gray-100 w-full lg:w-auto">
-              <div className="text-center sm:text-right sm:mr-6">
-                 <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Global Verification</p>
-                 <p className={`font-black tracking-tight text-lg ${form.isVerified ? 'text-green-600' : 'text-orange-500'}`}>{form.isVerified ? 'VERIFIED_SHOP' : 'PENDING_FINAL_SIGNOFF'}</p>
+               <div className="text-center sm:text-right sm:mr-6">
+                  <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Global Verification</p>
+                  <p className={`font-black tracking-tight text-lg ${
+                    form.status === 'active' ? 'text-green-600' :
+                    form.status === 'payment_pending_verification' ? 'text-blue-600 animate-pulse' :
+                    form.status === 'pending_payment' ? 'text-yellow-600' : 'text-orange-500'
+                  }`}>
+                    {form.status === 'active' ? 'ACTIVE_STORE' :
+                     form.status === 'payment_pending_verification' ? 'PAYMENT_PENDING_APPROVAL' :
+                     form.status === 'pending_payment' ? 'PENDING_PAYMENT' : 'PENDING_DOCS_APPROVAL'}
+                  </p>
+               </div>
+               <button 
+                  onClick={handleToggleVerify}
+                  disabled={isUpdating || (!form.kyc.pan.verified && form.status !== 'payment_pending_verification')}
+                  className={`w-full sm:w-auto px-10 py-4 rounded-2xl font-black uppercase tracking-widest text-xs transition-all shadow-2xl active:scale-95 ${
+                    form.status === 'active' 
+                      ? 'bg-white border-2 border-red-500 text-red-500 hover:bg-red-50' 
+                      : form.status === 'payment_pending_verification'
+                        ? 'bg-blue-600 text-white hover:bg-blue-700'
+                        : 'bg-black text-white hover:bg-gray-800 disabled:opacity-30'
+                  }`}
+               >
+                  {form.status === 'active' 
+                    ? 'Block Access' 
+                    : form.status === 'payment_pending_verification'
+                      ? 'Approve Payment & Activate'
+                      : 'Approve Account'}
+               </button>
+               {form.status !== 'active' && (
+                 <button 
+                    onClick={() => setShowRejectForm(!showRejectForm)}
+                    disabled={isUpdating}
+                    className="w-full sm:w-auto px-8 py-4 rounded-2xl font-black uppercase tracking-widest text-xs transition-all shadow-2xl active:scale-95 bg-red-600 text-white hover:bg-red-700"
+                 >
+                    Reject Account
+                 </button>
+               )}
+            </div>
+         </div>
+         {showRejectForm && (
+            <div className="mt-6 p-6 bg-red-50 border-2 border-red-100 rounded-3xl max-w-xl text-black">
+              <h4 className="text-lg font-black text-red-800 mb-4 uppercase tracking-tighter italic">Select Rejection Reasons</h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
+                <label className="flex items-center gap-2 text-sm font-bold text-gray-700 cursor-pointer">
+                  <input type="checkbox" checked={rejectionOptions.panBlurry} onChange={e => setRejectionOptions({...rejectionOptions, panBlurry: e.target.checked})} className="w-4 h-4 accent-red-600" />
+                  PAN Card Blurry
+                </label>
+                <label className="flex items-center gap-2 text-sm font-bold text-gray-700 cursor-pointer">
+                  <input type="checkbox" checked={rejectionOptions.wrongAccount} onChange={e => setRejectionOptions({...rejectionOptions, wrongAccount: e.target.checked})} className="w-4 h-4 accent-red-600" />
+                  Wrong Account Number
+                </label>
+                <label className="flex items-center gap-2 text-sm font-bold text-gray-700 cursor-pointer">
+                  <input type="checkbox" checked={rejectionOptions.gstMismatch} onChange={e => setRejectionOptions({...rejectionOptions, gstMismatch: e.target.checked})} className="w-4 h-4 accent-red-600" />
+                  GST Mismatch
+                </label>
+                <label className="flex items-center gap-2 text-sm font-bold text-gray-700 cursor-pointer">
+                  <input type="checkbox" checked={rejectionOptions.photoMissing} onChange={e => setRejectionOptions({...rejectionOptions, photoMissing: e.target.checked})} className="w-4 h-4 accent-red-600" />
+                  Shop Photo Missing
+                </label>
+                <label className="flex items-center gap-2 text-sm font-bold text-gray-700 cursor-pointer">
+                  <input type="checkbox" checked={rejectionOptions.ifscInvalid} onChange={e => setRejectionOptions({...rejectionOptions, ifscInvalid: e.target.checked})} className="w-4 h-4 accent-red-600" />
+                  Invalid IFSC Code
+                </label>
               </div>
-              <button 
-                 onClick={handleToggleVerify}
-                 disabled={isUpdating || !form.kyc.pan.verified}
-                 className={`w-full sm:w-auto px-10 py-4 rounded-2xl font-black uppercase tracking-widest text-xs transition-all shadow-2xl active:scale-95 ${form.isVerified ? 'bg-white border-2 border-red-500 text-red-500 hover:bg-red-50' : 'bg-black text-white hover:bg-gray-800 disabled:opacity-30'}`}
-              >
-                 {form.isVerified ? 'Block Access' : 'Approve Account'}
-              </button>
-              {!form.isVerified && (
-                <button 
-                   onClick={() => setShowRejectForm(!showRejectForm)}
-                   disabled={isUpdating}
-                   className="w-full sm:w-auto px-8 py-4 rounded-2xl font-black uppercase tracking-widest text-xs transition-all shadow-2xl active:scale-95 bg-red-600 text-white hover:bg-red-700"
-                >
-                   Reject Account
-                </button>
-              )}
-           </div>
-        </div>
-        {showRejectForm && (
-          <div className="mt-6 p-6 bg-red-50 border-2 border-red-100 rounded-3xl max-w-xl text-black">
-            <h4 className="text-lg font-black text-red-800 mb-4 uppercase tracking-tighter italic">Select Rejection Reasons</h4>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
-              <label className="flex items-center gap-2 text-sm font-bold text-gray-700 cursor-pointer">
-                <input type="checkbox" checked={rejectionOptions.panBlurry} onChange={e => setRejectionOptions({...rejectionOptions, panBlurry: e.target.checked})} className="w-4 h-4 accent-red-600" />
-                PAN Card Blurry
-              </label>
-              <label className="flex items-center gap-2 text-sm font-bold text-gray-700 cursor-pointer">
-                <input type="checkbox" checked={rejectionOptions.wrongAccount} onChange={e => setRejectionOptions({...rejectionOptions, wrongAccount: e.target.checked})} className="w-4 h-4 accent-red-600" />
-                Wrong Account Number
-              </label>
-              <label className="flex items-center gap-2 text-sm font-bold text-gray-700 cursor-pointer">
-                <input type="checkbox" checked={rejectionOptions.gstMismatch} onChange={e => setRejectionOptions({...rejectionOptions, gstMismatch: e.target.checked})} className="w-4 h-4 accent-red-600" />
-                GST Mismatch
-              </label>
-              <label className="flex items-center gap-2 text-sm font-bold text-gray-700 cursor-pointer">
-                <input type="checkbox" checked={rejectionOptions.photoMissing} onChange={e => setRejectionOptions({...rejectionOptions, photoMissing: e.target.checked})} className="w-4 h-4 accent-red-600" />
-                Shop Photo Missing
-              </label>
-              <label className="flex items-center gap-2 text-sm font-bold text-gray-700 cursor-pointer">
-                <input type="checkbox" checked={rejectionOptions.ifscInvalid} onChange={e => setRejectionOptions({...rejectionOptions, ifscInvalid: e.target.checked})} className="w-4 h-4 accent-red-600" />
-                Invalid IFSC Code
-              </label>
+              <div className="form-group mb-4">
+                <label className="text-xs font-black uppercase text-gray-500 tracking-wider block mb-1">Custom Rejection Notes</label>
+                <textarea value={customReason} onChange={e => setCustomReason(e.target.value)} placeholder="Type custom rejection notes here..." className="w-full p-3 border border-red-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-red-500" />
+              </div>
+              <div className="flex gap-4">
+                <button onClick={handleReject} disabled={isUpdating} className="px-6 py-3 bg-red-600 text-white font-bold rounded-xl text-xs uppercase tracking-wider hover:bg-red-700">Confirm Rejection</button>
+                <button onClick={() => setShowRejectForm(false)} className="px-6 py-3 bg-white border border-red-200 text-red-700 font-bold rounded-xl text-xs uppercase tracking-wider">Cancel</button>
+              </div>
             </div>
-            <div className="form-group mb-4">
-              <label className="text-xs font-black uppercase text-gray-500 tracking-wider block mb-1">Custom Rejection Notes</label>
-              <textarea value={customReason} onChange={e => setCustomReason(e.target.value)} placeholder="Type custom rejection notes here..." className="w-full p-3 border border-red-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-red-500" />
-            </div>
-            <div className="flex gap-4">
-              <button onClick={handleReject} disabled={isUpdating} className="px-6 py-3 bg-red-600 text-white font-bold rounded-xl text-xs uppercase tracking-wider hover:bg-red-700">Confirm Rejection</button>
-              <button onClick={() => setShowRejectForm(false)} className="px-6 py-3 bg-white border border-red-200 text-red-700 font-bold rounded-xl text-xs uppercase tracking-wider">Cancel</button>
-            </div>
-          </div>
-        )}
+          )}
       </div>
+
+      {form.status === 'payment_pending_verification' && (
+        <div className="mb-8 p-6 bg-blue-50 border-2 border-blue-100 rounded-3xl flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+          <div className="flex-1">
+            <div className="flex items-center gap-2 mb-2 text-blue-800 font-bold text-sm">
+              <span>💳</span>
+              <span className="uppercase tracking-wider">Registration Payment Awaiting Verification</span>
+            </div>
+            <p className="text-blue-900 text-sm font-semibold">
+              This merchant has paid their registration fee successfully via Razorpay. Please review their payment and click "Approve Payment & Activate" to grant dashboard access.
+            </p>
+          </div>
+          <button 
+            onClick={handleToggleVerify}
+            disabled={isUpdating}
+            className="px-6 py-3 bg-blue-600 hover:bg-blue-755 text-white font-bold rounded-2xl text-xs uppercase tracking-wider transition-all whitespace-nowrap active:scale-95 shadow-lg shadow-blue-600/20"
+          >
+            {isUpdating ? 'Activating...' : 'Approve Payment & Activate'}
+          </button>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 xl:grid-cols-4 gap-12">
         <div className="xl:col-span-3 space-y-12">
