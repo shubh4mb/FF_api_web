@@ -5,7 +5,7 @@ dotenv.config();
 const resendApiKey = process.env.RESEND_API || process.env.RESEND_API_KEY;
 const resend = new Resend(resendApiKey);
 
-const fromEmail = process.env.EMAIL_FROM || 'noreply@send.mail.theflashfits.com';
+const fromEmail = process.env.EMAIL_FROM || 'noreply@mail.theflashfits.com';
 
 export const sendMail = async (to, subject, text, html) => {
   try {
