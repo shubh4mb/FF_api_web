@@ -90,5 +90,16 @@ appConfigSchema.statics.getConfig = async function () {
     }
 };
 
+// Clear/update the in-memory cache when settings are saved or updated
+appConfigSchema.post('save', function (doc) {
+    cachedConfig = doc;
+    lastConfigFetch = Date.now();
+});
+
+appConfigSchema.post(['updateOne', 'findOneAndUpdate', 'updateMany'], function () {
+    cachedConfig = null;
+    lastConfigFetch = 0;
+});
+
 export default mongoose.models.AppConfig ||
     mongoose.model("AppConfig", appConfigSchema);

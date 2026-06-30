@@ -500,15 +500,19 @@ export const loginMerchant = async (req, res) => {
 
 export const registerMerchant = async (req, res) => {
   try {
-    const { identifier, password, shopName } = req.body;
+    const { identifier, password, shopName, email, phoneNumber } = req.body;
 
-    if (!identifier || !password) {
-      return res.status(400).json({ message: "Identifier (Email/Phone) and password are required" });
+    const emailVal = email || (identifier && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(identifier) ? identifier : undefined);
+    const phoneVal = phoneNumber || (identifier && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(identifier) ? identifier : undefined);
+
+    if (!emailVal && !phoneVal) {
+      return res.status(400).json({ message: "Email or Phone number is required" });
+    }
+    if (!password) {
+      return res.status(400).json({ message: "Password is required" });
     }
 
-    const isEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(identifier);
-    const query = isEmail ? { email: identifier } : { phoneNumber: identifier };
-
+    const query = emailVal ? { email: emailVal } : { phoneNumber: phoneVal };
     let merchant = await Merchant.findOne(query);
 
     const hashedPassword = await bcrypt.hash(password, 10);
@@ -517,9 +521,10 @@ export const registerMerchant = async (req, res) => {
       if (merchant.isActive) {
         return res.status(400).json({ message: "Merchant already active and registered with this identifier" });
       }
-      // Update existing pre-verified user
       merchant.password = hashedPassword;
       merchant.shopName = shopName || merchant.shopName || "New Shop";
+      if (phoneVal) merchant.phoneNumber = phoneVal;
+      if (emailVal) merchant.email = emailVal;
     } else {
       const newMerchantData = {
         password: hashedPassword,
@@ -527,19 +532,37 @@ export const registerMerchant = async (req, res) => {
         isActive: false,
       };
 
-      if (isEmail) {
-        newMerchantData.email = identifier;
-      } else {
-        newMerchantData.phoneNumber = identifier;
-      }
+      if (emailVal) newMerchantData.email = emailVal;
+      if (phoneVal) newMerchantData.phoneNumber = phoneVal;
 
       merchant = new Merchant(newMerchantData);
     }
 
     await merchant.save();
 
+    const token = jwt.sign(
+      { id: merchant._id, email: merchant.email },
+      process.env.JWT_SECRET || "super_secret_random_string",
+      { expiresIn: "15m" }
+    );
+
+    const refreshToken = jwt.sign(
+      { id: merchant._id },
+      process.env.JWT_SECRET || "super_secret_random_string",
+      { expiresIn: "30d" }
+    );
+
+    res.cookie('refreshToken', refreshToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'strict',
+        maxAge: 30 * 24 * 60 * 60 * 1000
+    });
+
     res.status(201).json({
       message: "Merchant registered successfully",
+      token,
+      refreshToken,
       merchant: {
         id: merchant._id,
         shopName: merchant.shopName,
