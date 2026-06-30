@@ -152,10 +152,18 @@ export const verifyMerchant = asyncHandler(async (req, res) => {
   if (isVerified !== undefined) {
     updateQuery.isVerified = !!isVerified;
     if (!!isVerified) {
-      updateQuery.status = 'pending_payment';
+      const merchant = await Merchant.findById(id);
+      if (merchant && (merchant.isRegistrationFeePaid || merchant.status === 'payment_pending_verification')) {
+        updateQuery.status = 'active';
+        updateQuery.isActive = true;
+      } else {
+        updateQuery.status = 'pending_payment';
+        updateQuery.isActive = false;
+      }
       updateQuery.rejectionReason = "";
     } else {
       updateQuery.status = 'rejected';
+      updateQuery.isActive = false;
       updateQuery.rejectionReason = rejectionReason || "Your document verification failed.";
     }
   }

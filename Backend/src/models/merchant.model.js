@@ -102,7 +102,7 @@ const merchantSchema = new mongoose.Schema(
     isActive: { type: Boolean, default: false },
     status: {
       type: String,
-      enum: ['incomplete', 'pending_verification', 'pending_payment', 'active', 'rejected', 'suspended'],
+      enum: ['incomplete', 'pending_verification', 'pending_payment', 'payment_pending_verification', 'active', 'rejected', 'suspended'],
       default: 'incomplete'
     },
     isRegistrationFeePaid: { type: Boolean, default: false },

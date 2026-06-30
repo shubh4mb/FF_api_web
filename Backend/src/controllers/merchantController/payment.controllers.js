@@ -95,8 +95,8 @@ export const verifyRegistrationFeePayment = async (req, res) => {
       }
 
       merchant.isRegistrationFeePaid = true;
-      merchant.status = 'active';
-      merchant.isActive = true; // Still using isActive for frontend compatibility if needed
+      merchant.status = 'payment_pending_verification';
+      merchant.isActive = false;
       await merchant.save();
 
       await logAuditEvent({
