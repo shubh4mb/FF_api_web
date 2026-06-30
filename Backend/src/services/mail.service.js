@@ -5,9 +5,7 @@ dotenv.config();
 const resendApiKey = process.env.RESEND_API || process.env.RESEND_API_KEY;
 const resend = new Resend(resendApiKey);
 
-// In the Resend free tier sandbox, you can only send from onboarding@resend.dev
-// once you verify your custom domain, you can set EMAIL_FROM=no-reply@yourdomain.com
-const fromEmail = process.env.EMAIL_FROM || 'onboarding@resend.dev';
+const fromEmail = process.env.EMAIL_FROM || 'noreply@send.mail.theflashfits.com';
 
 export const sendMail = async (to, subject, text, html) => {
   try {
@@ -15,8 +13,11 @@ export const sendMail = async (to, subject, text, html) => {
       from: `FlashFits <${fromEmail}>`,
       to,
       subject,
-      text,
     };
+
+    if (text) {
+      payload.text = text;
+    }
 
     if (html) {
       payload.html = html;
