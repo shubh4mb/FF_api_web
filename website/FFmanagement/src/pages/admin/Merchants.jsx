@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { getMerchants, verifyMerchant } from '@/api/merchants';
 import { useNavigate } from 'react-router-dom';
 import ReusableAdminTable from '@/components/admin/Table';
+import api from '@/utils/axios.config';
 
 const Merchants = () => {
   const navigate = useNavigate();
@@ -84,9 +85,36 @@ const Merchants = () => {
     fetchMerchants();
   }, []);
 
+  const handleViewDummyReceipt = async () => {
+    try {
+      // Because of the axios interceptor, `res` is already `response.data` (which is the Blob)
+      const res = await api.get('/admin/dummy-receipt', { responseType: 'blob' });
+      
+      // If the response is actually a JSON error (e.g. backend failed)
+      if (res.type === 'application/json') {
+        const text = await res.text();
+        alert("Backend Error: " + text);
+        return;
+      }
+      
+      const url = window.URL.createObjectURL(new Blob([res], { type: 'application/pdf' }));
+      window.open(url, '_blank');
+    } catch (err) {
+      alert("Error fetching receipt: " + err.message);
+    }
+  };
+
   return (
     <div className="space-y-6">
-      <h1 className="text-3xl font-extrabold text-gray-900 tracking-tight">Merchants</h1>
+      <div className="flex justify-between items-center">
+        <h1 className="text-3xl font-extrabold text-gray-900 tracking-tight">Merchants</h1>
+        <button 
+          onClick={handleViewDummyReceipt}
+          className="px-4 py-2 bg-rose-600 text-white rounded-lg hover:bg-rose-700 transition font-medium"
+        >
+          View Dummy Receipt
+        </button>
+      </div>
       {merchants.length === 0 ? (
         <p className="text-gray-500">No merchants found.</p>
       ) : (

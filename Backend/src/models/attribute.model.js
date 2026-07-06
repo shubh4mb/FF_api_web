@@ -18,23 +18,10 @@ const attributeSchema = new mongoose.Schema(
             trim: true,
             lowercase: true
         },
-        categoryId: {
-            type: mongoose.Schema.Types.ObjectId,
-            ref: 'Category',
-            required: true
-        },
         inputType: {
             type: String,
             enum: ['select', 'multiselect', 'text', 'number', 'boolean'],
             required: true
-        },
-        isFilterable: {
-            type: Boolean,
-            default: false
-        },
-        isRequired: {
-            type: Boolean,
-            default: false
         },
         values: {
             type: [attributeValueSchema],

@@ -137,7 +137,6 @@ export const savePersonalDetails = async (req, res) => {
     console.log(req.body);
 
     const riderId = req.riderId;
-    const zoneDoc = await zoneModel.findById(zone);
 
     console.log("📦 Received body:", req.body);
 
@@ -175,6 +174,8 @@ export const savePersonalDetails = async (req, res) => {
       rider.area = area || rider.area;
       rider.pincode = pincode || rider.pincode;
       rider.phone = phone || rider.phone;
+      rider.zoneId = zoneId || rider.zoneId;
+      rider.zoneName = zoneName || rider.zoneName;
     }
 
     await rider.save();
@@ -280,11 +281,14 @@ export const saveBankDetails = async (req, res) => {
       accountNumber,
       ifsc,
     };
+    // Automatically verify and activate rider upon successful registration completion
+    rider.isVerified = true;
+    rider.status = "active";
     await rider.save();
 
     return res.status(200).json({
       success: true,
-      message: "Bank details saved successfully",
+      message: "Bank details saved and account activated successfully",
     });
   } catch (error) {
     console.error("❌ Error saving bank details:", error);

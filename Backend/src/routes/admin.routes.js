@@ -7,7 +7,7 @@ import { getBaseProducts, getVariants, getBaseProductById, addVariant, getProduc
 import { addTitleBanner } from '../controllers/adminControllers/titleBanner.controllers.js';
 import { addCart, getCart } from '../controllers/adminControllers/cart.controllers.js';
 import { addZone, getAllZones, checkZoneOverlap, updateZone, deleteZone } from '../controllers/adminControllers/zone.controllers.js';
-import { getAppConfig, updateAppConfig } from '../controllers/adminControllers/appConfig.controllers.js';
+import { getAppConfig, updateAppConfig, generateDummyReceipt } from '../controllers/adminControllers/appConfig.controllers.js';
 import { getDashboardStats } from '../controllers/adminControllers/dashboard.controllers.js';
 import { verifyAdmin } from '../middleware/adminAuth.middleware.js';
 import adminBannerRoutes from './adminBanner.routes.js';
@@ -16,9 +16,10 @@ import { addHub, getAllHubs, updateHub, deleteHub } from '../controllers/adminCo
 import { createOffer, getAllOffers, getOfferById, updateOffer, toggleOffer, deleteOffer, getAllOffersOverview } from '../controllers/adminControllers/offer.controllers.js';
 import { createCollection, getAllCollections, updateCollection, deleteCollection } from '../controllers/adminControllers/collection.controllers.js';
 import { createIncentive, getAllIncentives, updateIncentive, toggleIncentive, deleteIncentive } from '../controllers/adminControllers/incentive.controllers.js';
-import { getPayouts, triggerPayout, getPayoutById } from '../controllers/adminControllers/payout.controllers.js';
+import { getPayouts, triggerPayout, getPayoutById, getPendingPayouts, markPayoutPaid } from '../controllers/adminControllers/payout.controllers.js';
 import { getCancellationRequests, adminCancelOrder } from '../controllers/adminControllers/order.controllers.js';
 import { getAuditLogs } from '../controllers/adminControllers/auditLog.controllers.js';
+import { sendBroadcastNotification } from '../controllers/adminControllers/notification.controllers.js';
 
 const router = express.Router();
 
@@ -26,6 +27,9 @@ router.use('/banners', adminBannerRoutes);
 
 // ── Dashboard Stats ──
 router.get('/dashboard/stats', verifyAdmin, getDashboardStats);
+
+// ── Dummy Receipt ──
+router.get('/dummy-receipt', verifyAdmin, generateDummyReceipt);
 
 // ── Categories ──
 router.post('/addCategory', verifyAdmin, upload.fields([
@@ -119,7 +123,9 @@ router.delete('/incentives/:id', verifyAdmin, deleteIncentive);
 
 // ── Weekly Payouts ──
 router.get('/payouts', verifyAdmin, getPayouts);
+router.get('/payouts/pending', verifyAdmin, getPendingPayouts);
 router.get('/payouts/:id', verifyAdmin, getPayoutById);
+router.post('/payouts/:id/mark-paid', verifyAdmin, markPayoutPaid);
 router.post('/payouts/trigger', verifyAdmin, triggerPayout);
 
 // ── Support Tickets ──
@@ -202,6 +208,9 @@ router.use('/zip-covers', verifyAdmin, zipCoverRoutes);
 
 // ── Audit Logs ──
 router.get('/audit-logs', verifyAdmin, getAuditLogs);
+
+// ── Notifications ──
+router.post('/notifications/broadcast', verifyAdmin, sendBroadcastNotification);
 
 export default router;
 

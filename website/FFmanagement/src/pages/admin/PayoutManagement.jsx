@@ -12,7 +12,7 @@ import {
   TrendingUp,
   Download
 } from 'lucide-react';
-import { getPayouts, triggerPayout } from '@/api/payouts';
+import { getPayouts, triggerPayout, markPayoutPaid } from '@/api/payouts';
 import toast from 'react-hot-toast';
 
 const PayoutManagement = () => {
@@ -41,7 +41,7 @@ const PayoutManagement = () => {
   };
 
   const handleTriggerPayout = async () => {
-    if (!window.confirm('This will finalize all pending weekly payouts and credit/debit wallets. Proceed?')) return;
+    if (!window.confirm('This will finalize all accumulating weekly payouts (closing the cycle). Proceed?')) return;
     try {
       setProcessing(true);
       const res = await triggerPayout();
@@ -58,6 +58,19 @@ const PayoutManagement = () => {
     }
   };
 
+  const handleMarkPaid = async (id) => {
+    if (!window.confirm('Are you sure you want to mark this payout as paid? Ensure you have already completed the bank transfer. This will credit the user\'s wallet.')) return;
+    try {
+      const res = await markPayoutPaid(id);
+      if (res.success) {
+        toast.success('Payout marked as paid and wallet credited!');
+        fetchPayouts();
+      }
+    } catch (error) {
+      toast.error(error.message || 'Failed to mark as paid');
+    }
+  };
+
   const filteredPayouts = payouts.filter(p => {
     const matchesSearch = p.ownerId.toLowerCase().includes(searchTerm.toLowerCase()) || 
                          p.ownerType.toLowerCase().includes(searchTerm.toLowerCase());
@@ -71,6 +84,8 @@ const PayoutManagement = () => {
     switch (status) {
       case 'paid':
         return <span className="bg-emerald-100 text-emerald-700 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase flex items-center gap-1 w-fit"><CheckCircle className="w-3 h-3" /> Paid</span>;
+      case 'finalized':
+        return <span className="bg-amber-100 text-amber-700 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase flex items-center gap-1 w-fit"><AlertCircle className="w-3 h-3" /> Pending Approval</span>;
       case 'accumulating':
         return <span className="bg-sky-100 text-sky-700 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase flex items-center gap-1 w-fit"><Clock className="w-3 h-3" /> Accumulating</span>;
       case 'failed':
@@ -156,6 +171,7 @@ const PayoutManagement = () => {
               onChange={(e) => setStatusFilter(e.target.value)}
             >
               <option value="all">All Status</option>
+              <option value="finalized">Pending Approval</option>
               <option value="paid">Paid</option>
               <option value="accumulating">Accumulating</option>
               <option value="failed">Failed</option>
@@ -224,7 +240,16 @@ const PayoutManagement = () => {
                     <td className="px-6 py-4">
                       {getStatusBadge(p.status)}
                     </td>
-                    <td className="px-6 py-4 text-right">
+                    <td className="px-6 py-4 text-right flex justify-end gap-2">
+                      {p.status === 'finalized' && (
+                        <button 
+                          className="px-3 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-bold rounded-lg transition-all shadow-sm"
+                          onClick={() => handleMarkPaid(p._id)}
+                          title="Mark as Paid"
+                        >
+                          Mark Paid
+                        </button>
+                      )}
                       <button 
                         className="p-2 text-slate-400 hover:text-sky-500 hover:bg-sky-50 rounded-lg transition-all"
                         title="View Details"

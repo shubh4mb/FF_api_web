@@ -87,7 +87,7 @@ export const verifyEmailOtp = async (req, res) => {
       { expiresIn: "30d" }
     );
 
-    res.cookie('refreshToken', refreshToken, {
+    res.cookie('merchantRefreshToken', refreshToken, {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
         sameSite: 'strict',
@@ -274,8 +274,7 @@ export const updateMerchantShopDetails = async (req, res) => {
     let acceptsReturns = req.body.acceptsReturns === 'true' || req.body.acceptsReturns === true;
 
 
-    // CRITICAL FIRST CHECK: Check if this point falls inside ANY zone's boundary (Try & Buy Zone)
-    const zone = await Zone.findOne({
+    let zone = await Zone.findOne({
       boundary: {
         $geoIntersects: {
           $geometry: {
@@ -285,6 +284,21 @@ export const updateMerchantShopDetails = async (req, res) => {
         },
       },
     });
+
+    // Fallback: If not exactly inside, check if they are within 200 meters of the boundary
+    if (!zone) {
+      zone = await Zone.findOne({
+        boundary: {
+          $near: {
+            $geometry: {
+              type: "Point",
+              coordinates: [lngNum, latNum],
+            },
+            $maxDistance: 200 // 200 meters buffer
+          }
+        }
+      });
+    }
 
     let zoneName = null;
     let zoneId = null;
@@ -470,7 +484,7 @@ export const loginMerchant = async (req, res) => {
       { expiresIn: "30d" }
     );
 
-    res.cookie('refreshToken', refreshToken, {
+    res.cookie('merchantRefreshToken', refreshToken, {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
         sameSite: 'strict',
@@ -552,7 +566,7 @@ export const registerMerchant = async (req, res) => {
       { expiresIn: "30d" }
     );
 
-    res.cookie('refreshToken', refreshToken, {
+    res.cookie('merchantRefreshToken', refreshToken, {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
         sameSite: 'strict',
@@ -624,7 +638,7 @@ export const updateMerchantKYC = async (req, res) => {
 };
 
 export const refreshMerchantToken = async (req, res) => {
-  const refreshToken = req.cookies?.refreshToken || req.body?.refreshToken;
+  const refreshToken = req.cookies?.merchantRefreshToken || req.body?.merchantRefreshToken || req.cookies?.refreshToken || req.body?.refreshToken;
   if (!refreshToken) {
     return res.status(401).json({ message: "Refresh token is required" });
   }
@@ -648,7 +662,7 @@ export const refreshMerchantToken = async (req, res) => {
       { expiresIn: "30d" }
     );
 
-    res.cookie('refreshToken', newRefreshToken, {
+    res.cookie('merchantRefreshToken', newRefreshToken, {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
         sameSite: 'strict',
@@ -676,7 +690,7 @@ export const refreshMerchantToken = async (req, res) => {
 
 export const logoutMerchant = async (req, res) => {
   try {
-    res.clearCookie('refreshToken', {
+    res.clearCookie('merchantRefreshToken', {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'strict',

@@ -34,6 +34,7 @@ import SupportTickets from '../pages/admin/SupportTickets';
 import ZipCoverRequests from '../pages/admin/ZipCoverRequests';
 import OrderCancellations from '../pages/admin/OrderCancellations';
 import AuditLogs from '../pages/admin/AuditLogs';
+import BroadcastNotifications from '../pages/admin/BroadcastNotifications';
 
 const AppRoutes = () => {
   return (
@@ -73,6 +74,7 @@ const AppRoutes = () => {
             <Route path="zip-covers" element={<ZipCoverRequests />} />
             <Route path="order-cancellations" element={<OrderCancellations />} />
             <Route path="audit-logs" element={<AuditLogs />} />
+            <Route path="notifications" element={<BroadcastNotifications />} />
           </Route>
         </Route>
 

@@ -37,6 +37,7 @@ const dailyPayoutSchema = new mongoose.Schema(
         // ── Daily Incentives ──
         incentivesEarned: [dailyIncentiveEntrySchema],
         totalIncentive: { type: Number, default: 0 },
+        dailyIncentiveProcessed: { type: Boolean, default: false }, // Idempotency flag
     },
     { timestamps: true }
 );

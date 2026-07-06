@@ -49,6 +49,13 @@ const appConfigSchema = new mongoose.Schema(
             default: 1000,
             min: 0,
         },
+
+        // ── Session Tracking ──
+        heartbeatTimeoutMs: {
+            type: Number,
+            default: 5 * 60 * 1000, // 5 minutes
+            min: 60000,
+        },
     },
     { timestamps: true }
 );

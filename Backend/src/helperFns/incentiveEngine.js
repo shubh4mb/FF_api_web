@@ -83,10 +83,10 @@ function getOrderCountForWindow(stats, timeWindow) {
  * @param {Object} weeklyPayout - The WeeklyPayout document
  * @returns {Array} Array of earned incentive entries
  */
-export async function evaluateWeeklyIncentives(riderId, weeklyPayout) {
+export async function evaluateWeeklyIncentives(riderId, weeklyPayout, preFetchedIncentives = null) {
     const now = new Date();
 
-    const incentives = await RiderIncentive.find({
+    const incentives = preFetchedIncentives || await RiderIncentive.find({
         type: "weekly",
         isActive: true,
         effectiveFrom: { $lte: now },
@@ -146,10 +146,10 @@ export async function evaluateWeeklyIncentives(riderId, weeklyPayout) {
  * @param {Object} dailyPayout - The DailyPayout document
  * @returns {Array} Array of earned incentive entries
  */
-export async function evaluateDailyIncentives(riderId, dailyPayout) {
+export async function evaluateDailyIncentives(riderId, dailyPayout, preFetchedIncentives = null) {
     const now = new Date();
 
-    const incentives = await RiderIncentive.find({
+    const incentives = preFetchedIncentives || await RiderIncentive.find({
         type: "daily",
         isActive: true,
         effectiveFrom: { $lte: now },

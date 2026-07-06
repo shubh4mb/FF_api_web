@@ -13,6 +13,11 @@ const notificationSchema = new mongoose.Schema(
             ref: "DeliveryRider",
             default: null,
         },
+        merchantId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "Merchant",
+            default: null,
+        },
         orderId: {
             type: mongoose.Schema.Types.ObjectId,
             ref: "Order",
@@ -42,6 +47,9 @@ const notificationSchema = new mongoose.Schema(
 
                 // Generic
                 "info",
+                "admin_notification",
+                "new_order_placed",
+                "return_requested",
             ],
             required: true,
         },
@@ -69,6 +77,7 @@ const notificationSchema = new mongoose.Schema(
 // Indexes for fast queries
 notificationSchema.index({ userId: 1, createdAt: -1 });
 notificationSchema.index({ riderId: 1, createdAt: -1 });
+notificationSchema.index({ merchantId: 1, createdAt: -1 });
 notificationSchema.index({ orderId: 1 });
 
 export default mongoose.models.Notification ||

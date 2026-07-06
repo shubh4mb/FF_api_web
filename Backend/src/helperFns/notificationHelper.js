@@ -156,6 +156,43 @@ export async function notifyRider({ riderId, orderId, type, title, body, data = 
 }
 
 /* ════════════════════════════════════════════════
+   MERCHANT NOTIFICATIONS (orders, returns, admin)
+   ════════════════════════════════════════════════ */
+
+export async function notifyMerchant({ merchantId, orderId, type, title, body, data = {} }) {
+    try {
+        const notification = await Notification.create({
+            merchantId,
+            orderId,
+            type,
+            title,
+            body,
+            data,
+        });
+
+        const io = getIO();
+        io.to(`merchant:${merchantId}`).emit("notification", {
+            _id: notification._id,
+            type,
+            title,
+            body,
+            orderId,
+            data,
+            createdAt: notification.createdAt,
+        });
+
+        // Attempt Expo push notifications (non-blocking)
+        sendPushNotifications(null, null, title, body, data, merchantId).catch((err) =>
+            console.error("Push notification logic error:", err)
+        );
+
+        return notification;
+    } catch (err) {
+        console.error("notifyMerchant error:", err.message);
+    }
+}
+
+/* ════════════════════════════════════════════════
    BATCH: fire-and-forget convenience for order events
    ════════════════════════════════════════════════ */
 

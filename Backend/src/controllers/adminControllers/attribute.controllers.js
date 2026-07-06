@@ -1,4 +1,5 @@
 import Attribute from '../../models/attribute.model.js';
+import Category from '../../models/category.model.js';
 import { ApiResponse } from '../../utils/ApiResponse.js';
 import { ApiError } from '../../utils/ApiError.js';
 import { asyncHandler } from '../../utils/asyncHandler.js';
@@ -8,8 +9,8 @@ export const createAttribute = asyncHandler(async (req, res) => {
     try {
         const { name, categoryId, inputType, isFilterable, isRequired, values } = req.body;
 
-        if (!name || !categoryId || !inputType) {
-            throw new ApiError(400, 'name, categoryId, and inputType are required');
+        if (!name || !inputType) {
+            throw new ApiError(400, 'name and inputType are required');
         }
 
         // Validate values for select/multiselect
@@ -21,16 +22,26 @@ export const createAttribute = asyncHandler(async (req, res) => {
 
         const attribute = new Attribute({
             name,
-            categoryId,
             inputType,
-            isFilterable: isFilterable || false,
-            isRequired: isRequired || false,
             values: ['select', 'multiselect'].includes(inputType) ? values : undefined
         });
 
         await attribute.save();
-        const populated = await Attribute.findById(attribute._id).populate('categoryId', 'name level');
-        res.status(201).json(new ApiResponse(201, { attribute: populated }, 'Attribute created successfully'));
+        
+        if (categoryId) {
+            await Category.findByIdAndUpdate(categoryId, { 
+                $push: { 
+                    attributes: {
+                        attribute: attribute._id,
+                        isRequired: isRequired || false,
+                        isFilterable: isFilterable || false,
+                        order: 0
+                    }
+                } 
+            });
+        }
+        
+        res.status(201).json(new ApiResponse(201, { attribute }, 'Attribute created successfully'));
     } catch (error) {
         if (error.code === 11000) {
             res.status(400).json(new ApiResponse(400, null, 'An attribute with this slug already exists'));
@@ -45,10 +56,18 @@ export const createAttribute = asyncHandler(async (req, res) => {
 export const getAttributes = asyncHandler(async (req, res) => {
     try {
         const { categoryId } = req.query;
-        const filter = categoryId ? { categoryId } : {};
+        let filter = {};
+        
+        if (categoryId) {
+            const category = await Category.findById(categoryId);
+            if (!category) {
+                throw new ApiError(404, 'Category not found');
+            }
+            const attributeIds = category.attributes.map(attr => attr.attribute);
+            filter = { _id: { $in: attributeIds } };
+        }
 
         const attributes = await Attribute.find(filter)
-            .populate('categoryId', 'name level')
             .sort({ createdAt: -1 });
 
         res.status(200).json(new ApiResponse(200, { attributes, count: attributes.length }, 'Attributes retrieved successfully'));
@@ -62,7 +81,7 @@ export const getAttributes = asyncHandler(async (req, res) => {
 export const updateAttribute = asyncHandler(async (req, res) => {
     try {
         const { id } = req.params;
-        const { name, categoryId, inputType, isFilterable, isRequired, values } = req.body;
+        const { name, inputType, values } = req.body;
 
         const attribute = await Attribute.findById(id);
         if (!attribute) {
@@ -78,10 +97,7 @@ export const updateAttribute = asyncHandler(async (req, res) => {
         }
 
         if (name) attribute.name = name;
-        if (categoryId) attribute.categoryId = categoryId;
         if (inputType) attribute.inputType = inputType;
-        if (typeof isFilterable === 'boolean') attribute.isFilterable = isFilterable;
-        if (typeof isRequired === 'boolean') attribute.isRequired = isRequired;
 
         // Handle values
         if (['select', 'multiselect'].includes(effectiveInputType)) {
@@ -96,8 +112,7 @@ export const updateAttribute = asyncHandler(async (req, res) => {
         }
 
         await attribute.save();
-        const populated = await Attribute.findById(attribute._id).populate('categoryId', 'name level');
-        res.status(200).json(new ApiResponse(200, { attribute: populated }, 'Attribute updated successfully'));
+        res.status(200).json(new ApiResponse(200, { attribute }, 'Attribute updated successfully'));
     } catch (error) {
         if (error.code === 11000) {
             res.status(400).json(new ApiResponse(400, null, 'An attribute with this slug already exists'));

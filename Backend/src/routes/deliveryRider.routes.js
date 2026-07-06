@@ -16,16 +16,22 @@ import {
   endTrialPhase,
   verifyOtpOnReturn,
   reachedReturnMerchant,
-  verifyMerchantReturnOtp
+  verifyMerchantReturnOtp,
+  updateRiderLocation,
+  getActiveOrder
 } from '../controllers/deliveryRiderController/orderController.js';
+import { getAllZones } from '../controllers/adminControllers/zone.controllers.js';
+import { startOnlineSession, endOnlineSession, getSessionHistory } from '../controllers/deliveryRiderController/sessionController.js';
 const router = express.Router();
 
 router.post('/register', register);
+router.get('/zones', getAllZones);
 router.get('/getRiderById', authMiddlewareRider, getRider);
 router.post("/auth/verify-otp", verifyOTP);
 router.post("/auth/refresh", refreshRiderToken);
 router.put("/push-token", authMiddlewareRider, addPushToken);
 router.post("/registration/personal-details", authMiddlewareRider, savePersonalDetails);
+router.post("/order/updateLocation", authMiddlewareRider, updateRiderLocation);
 router.post(
   "/registration/upload-documents",
   authMiddlewareRider,
@@ -52,6 +58,12 @@ router.post("/order/endTrialPhase", authMiddlewareRider, endTrialPhase);        
 router.post("/order/verifyOtpOnReturn", authMiddlewareRider, verifyOtpOnReturn);          // return OTP verify
 router.post("/order/reachedReturnMerchant", authMiddlewareRider, reachedReturnMerchant);   // ✅ was missing!
 router.post("/order/verifyMerchantReturnOtp", authMiddlewareRider, verifyMerchantReturnOtp);
+router.get("/order/active", authMiddlewareRider, getActiveOrder);
+
+// === Online Session ===
+router.post("/session/start", authMiddlewareRider, startOnlineSession);
+router.post("/session/end", authMiddlewareRider, endOnlineSession);
+router.get("/session/history", authMiddlewareRider, getSessionHistory);
 
 // ── Reviews ──
 import { createRiderReview, deleteReview } from '../controllers/userControllers/review.controllers.js';
@@ -169,7 +181,88 @@ import WeeklyPayout from "../models/weeklyPayout.model.js";
 import DailyPayout from "../models/dailyPayout.model.js";
 import RiderIncentive from "../models/riderIncentive.model.js";
 import { getCurrentWeekBounds, getDayStartIST } from "../helperFns/weeklyPayoutHelper.js";
-import { findHighestSlab } from "../helperFns/incentiveEngine.js";
+import { findHighestSlab, evaluateDailyIncentives } from "../helperFns/incentiveEngine.js";
+
+// GET /api/rider/earnings/today
+router.get("/earnings/today", authMiddlewareRider, async (req, res) => {
+  try {
+    const dayStart = getDayStartIST();
+    
+    let payout = await DailyPayout.findOne({
+      riderId: req.riderId,
+      date: dayStart,
+    }).lean();
+
+    if (!payout) {
+      payout = {
+        totalEarnings: 0,
+        completedOrders: 0,
+        cancelledOrders: 0,
+        totalIncentive: 0,
+        incentivesEarned: [],
+      };
+    } else {
+      // Calculate real-time estimated incentive on-the-fly for display
+      const estimatedIncentives = await evaluateDailyIncentives(req.riderId, payout);
+      if (estimatedIncentives && estimatedIncentives.length > 0) {
+        payout.incentivesEarned = estimatedIncentives;
+        payout.totalIncentive = estimatedIncentives.reduce((sum, i) => sum + i.amount, 0);
+      } else {
+         payout.totalIncentive = 0;
+         payout.incentivesEarned = [];
+      }
+    }
+
+    return res.status(200).json({
+      success: true,
+      date: dayStart,
+      payout,
+    });
+  } catch (err) {
+    console.error("Get today earnings error:", err);
+    return res.status(500).json({ message: "Failed to fetch today's earnings" });
+  }
+});
+
+// GET /api/rider/earnings/yesterday
+router.get("/earnings/yesterday", authMiddlewareRider, async (req, res) => {
+  try {
+    const today = getDayStartIST();
+    const yesterday = new Date(today);
+    yesterday.setUTCDate(yesterday.getUTCDate() - 1);
+    
+    let payout = await DailyPayout.findOne({
+      riderId: req.riderId,
+      date: yesterday,
+    }).lean();
+
+    if (!payout) {
+      payout = {
+        totalEarnings: 0,
+        completedOrders: 0,
+        cancelledOrders: 0,
+        totalIncentive: 0,
+        incentivesEarned: [],
+      };
+    } else if (!payout.totalIncentive || payout.totalIncentive === 0) {
+       // Just in case cron hasn't run yet, estimate it
+       const estimatedIncentives = await evaluateDailyIncentives(req.riderId, payout);
+       if (estimatedIncentives && estimatedIncentives.length > 0) {
+         payout.incentivesEarned = estimatedIncentives;
+         payout.totalIncentive = estimatedIncentives.reduce((sum, i) => sum + i.amount, 0);
+       }
+    }
+
+    return res.status(200).json({
+      success: true,
+      date: yesterday,
+      payout,
+    });
+  } catch (err) {
+    console.error("Get yesterday earnings error:", err);
+    return res.status(500).json({ message: "Failed to fetch yesterday's earnings" });
+  }
+});
 
 // GET /api/rider/earnings/current-week
 router.get("/earnings/current-week", authMiddlewareRider, async (req, res) => {

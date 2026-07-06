@@ -14,7 +14,9 @@ export async function setMerchantMeta(merchantId, obj) {
 }
 
 export async function getMerchantMeta(merchantId) {
+    console.log(`[Redis] Reading meta for merchant:${merchantId}:meta`);
     const rawMeta = await redis.hGetAll(`merchant:${merchantId}:meta`);
+    console.log(`[Redis] Raw meta for merchant:${merchantId}:meta result:`, rawMeta);
     const meta = { ...rawMeta };
     if (meta.isOnline !== undefined) meta.isOnline = meta.isOnline === 'true';
     if (meta.lastSeenAt !== undefined) meta.lastSeenAt = parseInt(meta.lastSeenAt, 10) || Date.now();

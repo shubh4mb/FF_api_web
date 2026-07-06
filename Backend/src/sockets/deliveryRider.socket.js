@@ -3,6 +3,7 @@ import { geoAdd, geoRadius, setHeartbeat, setRiderMeta, getRiderMeta } from "../
 import { redis, inMemoryIndex } from "../config/redisConfig.js";
 // import { setRiderMeta } from "../helperFns/deliveryRiderFns.js";
 import { inferZone } from "../utils/zoneInfer.js";
+import { heartbeatSession } from "../helperFns/onlineSessionHelper.js";
 import PendingOrder from "../models/pendingOrders.model.js";
 import Order from "../models/order.model.js";
 export const registerDeliveryRiderSockets = (io, socket) => {
@@ -30,6 +31,7 @@ export const registerDeliveryRiderSockets = (io, socket) => {
       assignedOrderId: keepOrder
     });
     await setHeartbeat(riderId, zoneId, 120);
+    await heartbeatSession(riderId);
     console.log(`Rider ${riderId} registered on socket ${socket.id}. Busy: ${isBusy}`);
 
     // If rider has an active order, emit it again so their frontend can resume
@@ -101,6 +103,7 @@ export const registerDeliveryRiderSockets = (io, socket) => {
 
     // Heartbeat with zone
     await setHeartbeat(riderId, zoneId, 120);
+    await heartbeatSession(riderId);
 
     // THIS TRIGGERS THE QUEUE MATCHER
     io.emit(`riderAvailable:${zoneId}`, { zoneId, riderId });

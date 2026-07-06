@@ -16,7 +16,6 @@ export const inferZone = async (lat, lng) => {
   }
 
   try {
-    // 2. First: Try exact polygon intersection (most accurate)
     const zoneWithPolygon = await Zone.findOne({
       boundary: {
         $geoIntersects: {

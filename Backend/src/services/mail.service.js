@@ -7,7 +7,7 @@ const resend = new Resend(resendApiKey);
 
 const fromEmail = process.env.EMAIL_FROM || 'noreply@mail.theflashfits.com';
 
-export const sendMail = async (to, subject, text, html) => {
+export const sendMail = async (to, subject, text, html, attachments = []) => {
   try {
     const payload = {
       from: `FlashFits <${fromEmail}>`,
@@ -21,6 +21,10 @@ export const sendMail = async (to, subject, text, html) => {
 
     if (html) {
       payload.html = html;
+    }
+
+    if (attachments && attachments.length > 0) {
+      payload.attachments = attachments;
     }
 
     const { data, error } = await resend.emails.send(payload);
@@ -57,4 +61,26 @@ export const sendVerificationEmail = async (merchantEmail, shopName) => {
     </div>
   `;
   return sendMail(merchantEmail, subject, text, html);
+};
+
+export const sendMerchantPaymentReceiptEmail = async (merchantEmail, shopName, pdfBuffer) => {
+  const subject = "Payment Receipt - Flashfits";
+  const text = `Hi ${shopName},\n\nThank you for your payment. Please find your receipt attached as a PDF.\n\nBest regards,\nThe Flashfits Team`;
+  const html = `
+    <div style="font-family: sans-serif; padding: 20px; color: #333; line-height: 1.6;">
+      <h2 style="color: #000;">Payment Receipt</h2>
+      <p>Hi ${shopName},</p>
+      <p>Thank you for your payment. Please find your receipt attached as a PDF document.</p>
+      <p style="margin-top: 30px;">Best regards,<br/><strong>The Flashfits Team</strong></p>
+    </div>
+  `;
+
+  const attachments = [
+    {
+      filename: 'Flashfits_Receipt.pdf',
+      content: pdfBuffer,
+    }
+  ];
+
+  return sendMail(merchantEmail, subject, text, html, attachments);
 };

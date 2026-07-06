@@ -21,9 +21,9 @@ import Offer from '../../models/offer.model.js';
 import Zone from "../../models/zone.model.js";
 import { inferZone } from "../../utils/zoneInfer.js";
 import { logAuditEvent } from "../../utils/auditLogger.js";
-
-
-
+import AppConfig from "../../models/appConfig.model.js";
+import { generateReceiptPDF } from "../../utils/pdfGenerator.js";
+import { sendMerchantPaymentReceiptEmail } from "../../services/mail.service.js";
 
 export const createRazorpayOrder = async (req, res) => {
   try {
@@ -668,6 +668,24 @@ export const razorpayWebhook = async (req, res) => {
       });
 
       console.log(`[Webhook] Merchant ${merchant._id} activated via webhook.`);
+      
+      // Send Receipt
+      try {
+        const config = await AppConfig.getConfig();
+        const feeAmount = config.merchantRegistrationFee;
+        const pdfBuffer = await generateReceiptPDF({
+          shopName: merchant.shopName,
+          merchantEmail: merchant.email,
+          amount: feeAmount,
+          paymentId: payment.id,
+          date: new Date()
+        });
+        await sendMerchantPaymentReceiptEmail(merchant.email, merchant.shopName, pdfBuffer);
+        console.log(`[Webhook] Receipt sent successfully to merchant ${merchant.email}`);
+      } catch (receiptError) {
+        console.error(`[Webhook] Failed to send receipt to merchant ${merchant.email}:`, receiptError);
+      }
+
       return res.status(200).json({ status: "ok" });
     }
 

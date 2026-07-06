@@ -13,6 +13,7 @@ import merchantRoutes from './routes/merchant.routes.js';
 import deliveryRiderRoutes from './routes/deliveryRider.routes.js';
 import courierOrderRoutes from './routes/courierOrder.routes.js';
 import cronRoutes from './routes/cron.routes.js';
+import { razorpayWebhook } from './controllers/userControllers/order.controllers.js';
 import { allowedOrigins } from './config/cors.js';
 import { getIO } from './config/socket.js';
 import swaggerUi from 'swagger-ui-express';
@@ -91,6 +92,9 @@ app.use('/api-docs/', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
 
 // ---- Routes ----
+app.post('/api/v1/webhook/razorpay', razorpayWebhook);
+app.post('/api/webhook/razorpay', razorpayWebhook); // Fallback / alias route
+
 app.use('/api/auth', authRoutes);
 app.use('/api/user', userRoutes);
 app.use('/api/admin', adminRoutes);
@@ -98,6 +102,7 @@ app.use('/api/merchant', merchantRoutes);
 app.use('/api/deliveryRider', deliveryRiderRoutes);
 app.use('/api/courier', courierOrderRoutes);
 app.use('/api/cron', cronRoutes);
+
 
 app.get('/', (req, res) => {
   res.send('Backend is working!');

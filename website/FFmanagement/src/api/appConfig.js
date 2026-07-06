@@ -6,7 +6,13 @@ import axios from "@/utils/axios.config"; // Assumes you have an axios intercept
 export const getAppConfig = async () => {
     try {
         const response = await axios.get("/admin/config");
-        return response.data;
+        if (response && response.config) {
+            return response;
+        }
+        if (response && response.data) {
+            return response.data;
+        }
+        return response;
     } catch (error) {
         throw error.response?.data || error;
     }
@@ -18,7 +24,13 @@ export const getAppConfig = async () => {
 export const updateAppConfig = async (configData) => {
     try {
         const response = await axios.put("/admin/config", configData);
-        return response.data;
+        if (response && response.config) {
+            return response;
+        }
+        if (response && response.data) {
+            return response.data;
+        }
+        return response;
     } catch (error) {
         throw error.response?.data || error;
     }

@@ -158,16 +158,13 @@ export async function addToWeeklyPayout({
 
 /**
  * Increment the order count for a rider's weekly payout.
- * @param {string} riderId
- * @param {boolean} cancelled - was this a rider-cancelled order?
- * @param {Object} [session]
+ * @param {Object} params
+ * @param {string} params.riderId
+ * @param {boolean} [params.cancelled=false] - was this a rider-cancelled order?
+ * @param {number} [params.amount=0] - order payout amount
+ * @param {Object} [params.session=null] - mongoose session
  */
-export async function incrementOrderCount(riderId, cancelled = false, amount = 0, session = null) {
-    // If the 3rd parameter is a mongoose session object, shift it
-    if (amount && typeof amount === 'object' && (amount.constructor?.name === 'ClientSession' || amount.session)) {
-        session = amount;
-        amount = 0;
-    }
+export async function incrementOrderCount({ riderId, cancelled = false, amount = 0, session = null }) {
 
     const { weekStart, weekEnd } = getCurrentWeekBounds();
 
@@ -257,33 +254,16 @@ export async function processWeeklyPayouts() {
             if (payout.ownerType === "rider") {
                 const incentives = await evaluateWeeklyIncentives(payout.ownerId, payout);
                 if (incentives.length > 0) {
-                    payout.incentivesEarned = incentives;
-                    payout.totalIncentive = incentives.reduce((sum, i) => sum + i.amount, 0);
+                    payout.incentivesEarned.push(...incentives);
+                    const weeklyIncentiveTotal = incentives.reduce((sum, i) => sum + i.amount, 0);
+                    payout.totalIncentive += weeklyIncentiveTotal;
                 }
             }
 
             payout.finalAmount = payout.netPayout + payout.totalIncentive;
 
-            // Credit or debit the wallet
-            if (payout.finalAmount > 0) {
-                await creditWallet({
-                    ownerType: payout.ownerType === "rider" ? "rider" : "merchant",
-                    ownerId: payout.ownerId,
-                    amount: payout.finalAmount,
-                    description: `Weekly payout (${payout.weekStart.toISOString().split("T")[0]} → ${payout.weekEnd.toISOString().split("T")[0]})`,
-                });
-            } else if (payout.finalAmount < 0) {
-                await debitWallet({
-                    ownerType: payout.ownerType === "rider" ? "rider" : "merchant",
-                    ownerId: payout.ownerId,
-                    amount: Math.abs(payout.finalAmount),
-                    description: `Weekly deduction (${payout.weekStart.toISOString().split("T")[0]} → ${payout.weekEnd.toISOString().split("T")[0]})`,
-                    allowNegative: true,
-                });
-            }
-
-            payout.status = "paid";
-            payout.paidAt = new Date();
+            payout.finalAmount = payout.netPayout + payout.totalIncentive;
+            payout.status = "finalized";
             await payout.save();
             successCount++;
         } catch (error) {
@@ -309,29 +289,50 @@ export async function processDailyIncentives() {
     yesterday.setUTCHours(0, 0, 0, 0);
     const yesterdayUTC = new Date(yesterday.getTime() - IST_OFFSET_MS);
 
-    const dailyPayouts = await DailyPayout.find({ date: yesterdayUTC });
+    // Fetch daily incentives once for the whole batch
+    const RiderIncentive = (await import("../models/riderIncentive.model.js")).default;
+    const activeIncentives = await RiderIncentive.find({
+        type: "daily",
+        isActive: true,
+        effectiveFrom: { $lte: yesterdayUTC },
+        $or: [
+            { effectiveTo: null },
+            { effectiveTo: { $gt: yesterdayUTC } },
+        ],
+    }).lean();
 
-    console.log(`[Daily Incentive] Processing ${dailyPayouts.length} daily records for ${yesterdayUTC.toISOString()}.`);
+    // Find payouts that haven't had their daily incentives processed yet
+    const dailyPayouts = await DailyPayout.find({ 
+        date: yesterdayUTC,
+        dailyIncentiveProcessed: false
+    });
+
+    console.log(`[Daily Incentive] Processing ${dailyPayouts.length} unprocessed daily records for ${yesterdayUTC.toISOString()}.`);
 
     for (const dp of dailyPayouts) {
         try {
-            const incentives = await evaluateDailyIncentives(dp.riderId, dp);
+            const incentives = await evaluateDailyIncentives(dp.riderId, dp, activeIncentives);
+            
+            // Even if no incentives, we mark it processed to avoid re-evaluating
+            dp.dailyIncentiveProcessed = true;
+
             if (incentives.length > 0) {
                 dp.incentivesEarned = incentives;
                 dp.totalIncentive = incentives.reduce((sum, i) => sum + i.amount, 0);
-                await dp.save();
+            }
+            
+            await dp.save();
 
-                // Add daily incentive bonus to the parent weekly payout
-                if (dp.weeklyPayoutId) {
-                    await WeeklyPayout.findByIdAndUpdate(dp.weeklyPayoutId, {
-                        $inc: { totalIncentive: dp.totalIncentive },
-                        $push: {
-                            incentivesEarned: {
-                                $each: incentives,
-                            },
+            // Add daily incentive bonus to the parent weekly payout
+            if (incentives.length > 0 && dp.weeklyPayoutId) {
+                await WeeklyPayout.findByIdAndUpdate(dp.weeklyPayoutId, {
+                    $inc: { totalIncentive: dp.totalIncentive },
+                    $push: {
+                        incentivesEarned: {
+                            $each: incentives,
                         },
-                    });
-                }
+                    },
+                });
             }
         } catch (err) {
             console.error(`[Daily Incentive] Error for rider ${dp.riderId}:`, err.message);

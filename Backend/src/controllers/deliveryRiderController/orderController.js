@@ -1,10 +1,12 @@
 import Order from "../../models/order.model.js";
 import deliveryRiderModel from "../../models/deliveryRider.model.js";
 import PendingOrder from "../../models/pendingOrders.model.js";
-import { getRiderMeta, setRiderMeta } from "../../helperFns/deliveryRiderFns.js";
+import { getRiderMeta, setRiderMeta, geoAdd, setHeartbeat } from "../../helperFns/deliveryRiderFns.js";
 import { emitOrderUpdate } from "../../sockets/order.socket.js";
 import { notifyOrderEvent } from "../../helperFns/notificationHelper.js";
 import { clearRiderTimeout } from "../../helperFns/riderTimeoutHelper.js";
+import { inferZone } from "../../utils/zoneInfer.js";
+import { heartbeatSession, addOrderToSession } from "../../helperFns/onlineSessionHelper.js";
 
 // Haversine formula to calculate distance between two points in meters
 const getDistance = (lat1, lon1, lat2, lon2) => {
@@ -162,7 +164,7 @@ export const verifyOtp = async (req, res) => {
     if (!order) {
       return res.status(404).json({ message: "Order not found" });
     }
-    if (order.otp !== otp) {
+    if (String(order.otp) !== String(otp)) {
       return res.status(400).json({ message: "Invalid OTP" });
     }
     console.log(order, "order");
@@ -321,7 +323,7 @@ export const verifyOtpOnReturn = async (req, res) => {
 
     const order = await Order.findById(orderId);
     if (!order) return res.status(404).json({ message: "Order not found" });
-    if (order.otp !== otp) return res.status(400).json({ message: "Invalid OTP" });
+    if (String(order.otp) !== String(otp)) return res.status(400).json({ message: "Invalid OTP" });
 
     order.deliveryRiderStatus = "returning";
     order.orderStatus = "return_in_progress";
@@ -409,7 +411,7 @@ export const verifyMerchantReturnOtp= async (req, res) => {
 
     const order = await Order.findById(orderId);
     if (!order) return res.status(404).json({ message: "Order not found" });
-    if (order.otp !== otp) return res.status(400).json({ message: "Invalid OTP" });
+    if (String(order.otp) !== String(otp)) return res.status(400).json({ message: "Invalid OTP" });
 
     order.deliveryRiderStatus = "completed";
     order.orderStatus = "completed";
@@ -438,6 +440,13 @@ export const verifyMerchantReturnOtp= async (req, res) => {
       } catch (redisErr) {
         console.error("Redis meta cleanup error (non-fatal):", redisErr);
       }
+
+      // Associate this order with the rider's active online session
+      try {
+        await addOrderToSession(order.deliveryRiderId.toString(), order._id.toString());
+      } catch (sessionErr) {
+        console.error("Session order association error (non-fatal):", sessionErr);
+      }
     }    // 📱 Rider notification: "Return verified, you're done!"
     notifyOrderEvent("rider", "return_complete", {
       riderId: req.riderId,
@@ -455,5 +464,112 @@ export const verifyMerchantReturnOtp= async (req, res) => {
     console.error("Error in verifyOtpOnReturn:", error);
     res.status(500).json({ message: "❌ " + error.message });
   }
-}
+};
+
+export const updateRiderLocation = async (req, res) => {
+  try {
+    const { lat, lng } = req.body;
+    const riderId = req.riderId;
+
+    if (!riderId || lat == null || lng == null) {
+      return res.status(400).json({ message: "riderId, lat, and lng are required" });
+    }
+
+    const currentMeta = await getRiderMeta(riderId.toString());
+    const zoneId = await inferZone(lat, lng);
+
+    const newMeta = {
+      isOnline: true,
+      isBusy: currentMeta?.isBusy === "true" || currentMeta?.isBusy === true || false,
+      socketId: currentMeta?.socketId || "",
+      lastSeenAt: Date.now(),
+      zoneId,
+    };
+
+    // If rider has an active order, find it
+    const rider = await deliveryRiderModel.findById(riderId);
+    if (rider?.currentOrderId) {
+      newMeta.assignedOrderId = rider.currentOrderId.toString();
+    }
+
+    await setRiderMeta(riderId.toString(), zoneId, newMeta);
+
+    // Put rider in Redis geo set if they are online and not busy
+    if (!newMeta.isBusy && !newMeta.assignedOrderId) {
+      await geoAdd(zoneId, lng, lat, riderId.toString());
+    }
+
+    await setHeartbeat(riderId.toString(), zoneId, 120);
+
+    // Update online session heartbeat
+    await heartbeatSession(riderId.toString());
+
+    // Emit live updates to any socket rooms
+    if (req.io) {
+      req.io.emit(`riderAvailable:${zoneId}`, { zoneId, riderId: riderId.toString() });
+
+      const assignedOrderId = newMeta.assignedOrderId;
+      if (assignedOrderId) {
+        req.io.to(assignedOrderId).emit("riderLocationUpdate", {
+          riderId: riderId.toString(),
+          lat,
+          lng,
+          ts: Date.now(),
+        });
+      }
+    }
+
+    // Update location in MongoDB model for backup
+    await deliveryRiderModel.findByIdAndUpdate(riderId, {
+      location: {
+        type: "Point",
+        coordinates: [lng, lat],
+        updatedAt: new Date()
+      }
+    });
+
+    return res.status(200).json({ success: true, message: "Location updated successfully", zoneId });
+  } catch (error) {
+    console.error("Error in updateRiderLocation REST controller:", error);
+    return res.status(500).json({ message: "Internal server error", error: error.message });
+  }
+};
+
+export const getActiveOrder = async (req, res) => {
+  try {
+    const riderId = req.riderId;
+    const rider = await deliveryRiderModel.findById(riderId);
+    if (!rider) {
+      return res.status(404).json({ message: "Rider not found" });
+    }
+
+    // Try finding by currentOrderId
+    let order = null;
+    if (rider.currentOrderId) {
+      order = await Order.findById(rider.currentOrderId)
+        .populate("items.productId")
+        .populate("merchantId");
+    }
+
+    // Fallback: search for any active order assigned to this rider
+    if (!order) {
+      order = await Order.findOne({
+        deliveryRiderId: riderId,
+        orderStatus: { $nin: ["completed", "cancelled", "returned"] },
+      })
+        .populate("items.productId")
+        .populate("merchantId");
+    }
+
+    // Filter out completed/cancelled ones that might be stuck in currentOrderId
+    if (order && ["completed", "cancelled", "returned"].includes(order.orderStatus)) {
+      order = null;
+    }
+
+    return res.status(200).json({ success: true, order });
+  } catch (error) {
+    console.error("Error in getActiveOrder:", error);
+    return res.status(500).json({ message: "Error fetching active order" });
+  }
+};
 

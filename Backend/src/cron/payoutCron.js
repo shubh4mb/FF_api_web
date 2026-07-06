@@ -8,6 +8,7 @@
 import cron from "node-cron";
 import AppConfig from "../models/appConfig.model.js";
 import { processWeeklyPayouts, processDailyIncentives } from "../helperFns/weeklyPayoutHelper.js";
+import { sweepStaleSessions } from "../helperFns/onlineSessionHelper.js";
 
 const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
@@ -50,5 +51,14 @@ export function initPayoutCron() {
         }
     });
 
-    console.log("[Cron] ✅ Payout and incentive crons initialized.");
+    // ── Sweep stale online sessions every 2 minutes ──
+    cron.schedule("*/2 * * * *", async () => {
+        try {
+            await sweepStaleSessions();
+        } catch (error) {
+            console.error("[Session Sweep Cron] ❌ Error:", error.message);
+        }
+    });
+
+    console.log("[Cron] ✅ Payout, incentive, and session sweep crons initialized.");
 }

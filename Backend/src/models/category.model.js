@@ -52,6 +52,25 @@ const categorySchema = new mongoose.Schema({
     type: Boolean,
     default: false,
   },
+  attributes: [{
+    attribute: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Attribute",
+      required: true
+    },
+    isRequired: {
+      type: Boolean,
+      default: false
+    },
+    isFilterable: {
+      type: Boolean,
+      default: false
+    },
+    order: {
+      type: Number,
+      default: 0
+    }
+  }],
   image: {
     public_id: {
       type: String,

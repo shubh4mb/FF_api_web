@@ -46,7 +46,7 @@ export const adminLogin = asyncHandler(async (req, res) => {
 
     const loggedInAdmin = await Admin.findById(adminUser._id).select('-password');
 
-    res.cookie('refreshToken', refreshToken, {
+    res.cookie('adminRefreshToken', refreshToken, {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
         sameSite: 'strict',
@@ -56,14 +56,14 @@ export const adminLogin = asyncHandler(async (req, res) => {
     return res.status(200).json(
         new ApiResponse(
             200,
-            { admin: loggedInAdmin, token, refreshToken },
+            { admin: loggedInAdmin, token, adminRefreshToken: refreshToken },
             "Admin logged in successfully"
         )
     );
 });
 
 export const refreshAdminToken = asyncHandler(async (req, res) => {
-    const refreshToken = req.cookies?.refreshToken || req.body?.refreshToken;
+    const refreshToken = req.cookies?.adminRefreshToken || req.body?.adminRefreshToken || req.cookies?.refreshToken || req.body?.refreshToken;
     if (!refreshToken) {
         throw new ApiError(401, "Refresh token is required");
     }
@@ -87,7 +87,7 @@ export const refreshAdminToken = asyncHandler(async (req, res) => {
             { expiresIn: '30d' }
         );
 
-        res.cookie('refreshToken', newRefreshToken, {
+        res.cookie('adminRefreshToken', newRefreshToken, {
             httpOnly: true,
             secure: process.env.NODE_ENV === 'production',
             sameSite: 'strict',
@@ -95,7 +95,7 @@ export const refreshAdminToken = asyncHandler(async (req, res) => {
         });
 
         return res.status(200).json(
-            new ApiResponse(200, { token, refreshToken: newRefreshToken }, "Admin token refreshed successfully")
+            new ApiResponse(200, { token, adminRefreshToken: newRefreshToken }, "Admin token refreshed successfully")
         );
     } catch (error) {
         throw new ApiError(401, "Invalid or expired admin refresh token");

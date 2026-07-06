@@ -27,3 +27,22 @@ export const triggerPayout = async () => {
     throw error.response ? error.response.data : new Error('Network Error');
   }
 };
+
+export const getPendingPayouts = async (ownerType = '') => {
+  try {
+    const url = ownerType ? `admin/payouts/pending?ownerType=${ownerType}` : `admin/payouts/pending`;
+    const response = await axiosInstance.get(url);
+    return response;
+  } catch (error) {
+    throw error.response ? error.response.data : new Error('Network Error');
+  }
+};
+
+export const markPayoutPaid = async (id) => {
+  try {
+    const response = await axiosInstance.post(`admin/payouts/${id}/mark-paid`);
+    return response;
+  } catch (error) {
+    throw error.response ? error.response.data : new Error('Network Error');
+  }
+};

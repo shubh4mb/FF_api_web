@@ -31,13 +31,17 @@ export const addZone = asyncHandler(async (req, res) => {
     status,
   });
 
-  // 4️⃣ Auto-sync merchants within this zone
+  // 4️⃣ Auto-sync merchants within this zone (including 200m buffer)
   if (boundary && boundary.coordinates) {
+    const merchantBufferPolygon = turf.buffer(turfPolygon, 0.2, {
+      units: "kilometers",
+    });
+
     const merchantsUpdateRes = await Merchant.updateMany(
       {
         "address.location": {
           $geoWithin: {
-            $geometry: boundary
+            $geometry: merchantBufferPolygon.geometry
           }
         }
       },
@@ -49,7 +53,7 @@ export const addZone = asyncHandler(async (req, res) => {
         }
       }
     );
-    console.log(`Auto-linked ${merchantsUpdateRes.modifiedCount} merchants to new zone: ${zoneName}`);
+    console.log(`Auto-linked ${merchantsUpdateRes.modifiedCount} merchants to new zone (with 200m buffer): ${zoneName}`);
   }
 
   return res.status(201).json(
@@ -128,13 +132,18 @@ export const updateZone = asyncHandler(async (req, res) => {
     throw new ApiError(404, "Zone not found");
   }
 
-  // If boundary was updated, re-sync merchants
+  // If boundary was updated, re-sync merchants (including 200m buffer)
   if (updateData.boundary && updateData.boundary.coordinates) {
+    const turfPolygon = turf.polygon(updateData.boundary.coordinates);
+    const merchantBufferPolygon = turf.buffer(turfPolygon, 0.2, {
+      units: "kilometers",
+    });
+
     await Merchant.updateMany(
       {
         "address.location": {
           $geoWithin: {
-            $geometry: updatedZone.boundary
+            $geometry: merchantBufferPolygon.geometry
           }
         }
       },
@@ -146,7 +155,7 @@ export const updateZone = asyncHandler(async (req, res) => {
         }
       }
     );
-    console.log(`Re-linked merchants to updated zone: ${updatedZone.zoneName}`);
+    console.log(`Re-linked merchants to updated zone (with 200m buffer): ${updatedZone.zoneName}`);
   }
 
   if (req.body.status !== undefined) {

@@ -262,6 +262,19 @@ function Sidebar() {
               Audit Logs
             </NavLink>
           </li>
+          <li>
+            <NavLink
+              to="/admin/notifications"
+              className={({ isActive }) =>
+                `block px-4 py-2 rounded-lg transition-colors ${isActive
+                  ? 'bg-sky-400 text-slate-800 font-semibold'
+                  : 'hover:bg-sky-700 hover:text-sky-400'
+                }`
+              }
+            >
+              Push Notifications
+            </NavLink>
+          </li>
         </ul>
       </nav>
 

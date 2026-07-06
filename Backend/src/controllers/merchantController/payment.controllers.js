@@ -4,6 +4,8 @@ import Merchant from "../../models/merchant.model.js";
 import AppConfig from "../../models/appConfig.model.js";
 import mongoose from "mongoose";
 import { logAuditEvent } from "../../utils/auditLogger.js";
+import { generateReceiptPDF } from "../../utils/pdfGenerator.js";
+import { sendMerchantPaymentReceiptEmail } from "../../services/mail.service.js";
 
 // Create Razorpay order for registration fee
 export const createRegistrationFeeOrder = async (req, res) => {
@@ -107,6 +109,23 @@ export const verifyRegistrationFeePayment = async (req, res) => {
         details: { razorpay_order_id, razorpay_payment_id },
         req,
       });
+
+      // Send Receipt
+      try {
+        const config = await AppConfig.getConfig();
+        const feeAmount = config.merchantRegistrationFee;
+        const pdfBuffer = await generateReceiptPDF({
+          shopName: merchant.shopName,
+          merchantEmail: merchant.email,
+          amount: feeAmount,
+          paymentId: razorpay_payment_id,
+          date: new Date()
+        });
+        await sendMerchantPaymentReceiptEmail(merchant.email, merchant.shopName, pdfBuffer);
+        console.log(`[Manual Verification] Receipt sent successfully to merchant ${merchant.email}`);
+      } catch (receiptError) {
+        console.error(`[Manual Verification] Failed to send receipt to merchant ${merchant.email}:`, receiptError);
+      }
 
       return res.status(200).json({ success: true, message: "Payment verified successfully", merchant });
     } else {

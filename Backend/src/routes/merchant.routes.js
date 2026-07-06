@@ -15,6 +15,7 @@ import { getMerchantCourierOrders, updateCourierOrderStatus, updateCourierOrderR
 import { getAllCollections } from '../controllers/adminControllers/collection.controllers.js';
 import WeeklyPayout from '../models/weeklyPayout.model.js';
 import { getCurrentWeekBounds } from '../helperFns/weeklyPayoutHelper.js';
+import Notification from '../models/notification.model.js';
 
 const router = express.Router();
 
@@ -321,6 +322,36 @@ router.delete('/offers/:id', authMiddlewareMerchant, deleteMerchantOffer);
 // ── Zip Covers ──
 import zipCoverRoutes from './merchantRoutes/zipCover.routes.js';
 router.use('/zip-covers', zipCoverRoutes);
+
+// ── Notifications ──
+
+router.get("/notifications", authMiddlewareMerchant, async (req, res) => {
+    try {
+        const merchantId = req.merchantId;
+        const notifications = await Notification.find({ merchantId })
+            .sort({ createdAt: -1 })
+            .limit(50)
+            .lean();
+        return res.status(200).json({ success: true, notifications });
+    } catch (err) {
+        console.error("Merchant get notifications error:", err);
+        return res.status(500).json({ message: "Failed to fetch notifications" });
+    }
+});
+
+router.patch("/notifications/:id", authMiddlewareMerchant, async (req, res) => {
+    try {
+        const notification = await Notification.findOneAndUpdate(
+            { _id: req.params.id, merchantId: req.merchantId },
+            { read: true },
+            { new: true }
+        );
+        if (!notification) return res.status(404).json({ message: "Not found" });
+        return res.status(200).json({ success: true, notification });
+    } catch (err) {
+        return res.status(500).json({ message: "Failed to update notification" });
+    }
+});
 
 
 export default router;

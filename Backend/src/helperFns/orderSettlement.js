@@ -149,7 +149,12 @@ export const settleOrder = async (order, providedSession = null) => {
             });
 
             // Track completed order count for incentive evaluation
-            await incrementOrderCount(order.deliveryRiderId, false, riderPayout, session);
+            await incrementOrderCount({
+                riderId: order.deliveryRiderId,
+                cancelled: false,
+                amount: riderPayout,
+                session
+            });
         }
 
         // Mark as settled
