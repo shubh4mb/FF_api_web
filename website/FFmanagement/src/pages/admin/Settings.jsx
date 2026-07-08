@@ -1,8 +1,14 @@
 import { useState, useEffect } from "react";
 import { getAppConfig, updateAppConfig } from "../../api/appConfig"; // We'll create this API file next
 import { Save, Loader2, AlertCircle } from "lucide-react";
+import { Navigate } from "react-router-dom";
 
 const Settings = () => {
+    const adminUser = JSON.parse(localStorage.getItem('adminUser') || '{}');
+    if (adminUser.role === 'sales') {
+        return <Navigate to="/admin/leads" replace />;
+    }
+
     const [config, setConfig] = useState({
         deliveryPerKmRate: 12,
         returnPerKmRate: 7,

@@ -2,9 +2,11 @@
 import {addMerchant} from "../../api/merchants";
 import CropperModal from "../../components/CropperModal";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 
 const AddMerchants = () => {
+  const [searchParams] = useSearchParams();
   const [form, setForm] = useState({
     shopName: "",
     ownerName: "",
@@ -13,8 +15,22 @@ const AddMerchants = () => {
     password: "",
     logo: null,
     backgroundImage: null,
-    category:"All"
+    category: "All"
   });
+
+  useEffect(() => {
+    const shopName = searchParams.get("shopName") || "";
+    const ownerName = searchParams.get("ownerName") || "";
+    const phoneNumber = searchParams.get("phoneNumber") || "";
+    if (shopName || ownerName || phoneNumber) {
+      setForm(prev => ({
+        ...prev,
+        shopName: shopName || prev.shopName,
+        ownerName: ownerName || prev.ownerName,
+        phoneNumber: phoneNumber || prev.phoneNumber
+      }));
+    }
+  }, [searchParams]);
 
   const [previewUrl, setPreviewUrl] = useState(null); // base64 preview
   const [croppedImage, setCroppedImage] = useState(null); // blob

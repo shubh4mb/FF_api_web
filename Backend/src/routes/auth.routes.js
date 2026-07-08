@@ -2,6 +2,7 @@ import express from 'express';
 import { sendOTP, verifyOTP, refreshUserToken } from '../controllers/auth.controllers.js';
 import { adminLogin, registerAdmin, refreshAdminToken } from '../controllers/adminAuth.controllers.js';
 import { googleLogin } from '../controllers/googleAuth.controllers.js';
+import { verifyAdmin } from '../middleware/adminAuth.middleware.js';
 
 const router = express.Router();
 
@@ -153,7 +154,7 @@ router.post('/admin/login', adminLogin);
  *       400:
  *         description: Bad request
  */
-router.post('/admin/register', registerAdmin);
+router.post('/admin/register', verifyAdmin, registerAdmin);
 
 /**
  * @swagger

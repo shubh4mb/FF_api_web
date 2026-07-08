@@ -43,17 +43,17 @@ const OrderCancellations = () => {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
-            <ShieldAlert className="w-7 h-7 text-rose-500" />
+          <h1 className="text-xl sm:text-2xl font-bold text-slate-800 flex items-center gap-2">
+            <ShieldAlert className="w-6 h-6 sm:w-7 sm:h-7 text-rose-500" />
             Merchant Cancellation Requests
           </h1>
-          <p className="text-slate-500 mt-1">Review and process merchant-initiated cancellation requests for stuck orders</p>
+          <p className="text-sm sm:text-base text-slate-500 mt-1">Review and process merchant-initiated cancellation requests for stuck orders</p>
         </div>
         <button
           onClick={fetchRequests}
-          className="flex items-center gap-2 px-4 py-2 border border-slate-200 rounded-xl text-sm font-semibold text-slate-600 hover:bg-slate-50 hover:text-slate-800 transition-all shadow-sm"
+          className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2 border border-slate-200 rounded-xl text-sm font-semibold text-slate-600 hover:bg-slate-50 hover:text-slate-800 transition-all shadow-sm"
         >
           <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
           Refresh

@@ -23,7 +23,14 @@ import {
 import toast from 'react-hot-toast';
 import { getDashboardStats } from '../../api/dashboard';
 
+import { Navigate } from 'react-router-dom';
+
 const Dashboard = () => {
+  const adminUser = JSON.parse(localStorage.getItem('adminUser') || '{}');
+  if (adminUser.role === 'sales') {
+    return <Navigate to="/admin/leads" replace />;
+  }
+
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState({
     totalOrderValue: 0,
@@ -99,8 +106,8 @@ const Dashboard = () => {
     <div className="space-y-8">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold text-slate-800">Platform Overview</h1>
-        <p className="text-slate-500 mt-1">Real-time metrics and analytics for FlashFits operations</p>
+        <h1 className="text-xl lg:text-2xl font-bold text-slate-800">Platform Overview</h1>
+        <p className="text-sm lg:text-base text-slate-500 mt-1">Real-time metrics and analytics for FlashFits operations</p>
       </div>
 
       {/* KPI Cards Grid */}

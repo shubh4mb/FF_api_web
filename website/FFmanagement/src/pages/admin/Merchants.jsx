@@ -106,11 +106,11 @@ const Merchants = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h1 className="text-3xl font-extrabold text-gray-900 tracking-tight">Merchants</h1>
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+        <h1 className="text-2xl lg:text-3xl font-extrabold text-gray-900 tracking-tight">Merchants</h1>
         <button 
           onClick={handleViewDummyReceipt}
-          className="px-4 py-2 bg-rose-600 text-white rounded-lg hover:bg-rose-700 transition font-medium"
+          className="px-4 py-2 bg-rose-600 text-white rounded-lg hover:bg-rose-700 transition font-medium text-sm w-full sm:w-auto"
         >
           View Dummy Receipt
         </button>

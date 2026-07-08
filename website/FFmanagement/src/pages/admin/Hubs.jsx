@@ -127,14 +127,14 @@ const Hubs = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-slate-900">Hubs Management</h1>
           <p className="text-slate-500 text-sm mt-1">Create and manage delivery hubs and their serviceable pincodes.</p>
         </div>
         <button
           onClick={openAddModal}
-          className="bg-sky-500 hover:bg-sky-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 font-medium transition-colors"
+          className="w-full sm:w-auto bg-sky-500 hover:bg-sky-600 text-white px-4 py-2 rounded-lg flex items-center justify-center gap-2 font-medium transition-colors"
         >
           <Plus size={18} />
           Add New Hub

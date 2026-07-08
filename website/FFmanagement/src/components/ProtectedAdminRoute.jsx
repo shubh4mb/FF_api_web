@@ -14,8 +14,8 @@ const ProtectedAdminRoute = () => {
         localStorage.removeItem('adminUser');
     }
 
-    // Check if token exists and user is an admin
-    if (!token || user.role !== 'superadmin') {
+    // Check if token exists and user has authorized role
+    if (!token || (user.role !== 'superadmin' && user.role !== 'sales')) {
         return <Navigate to="/admin/login" replace />;
     }
 

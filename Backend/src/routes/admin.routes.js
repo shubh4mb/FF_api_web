@@ -206,6 +206,10 @@ router.patch('/orders/:orderId/cancel', verifyAdmin, adminCancelOrder);
 import zipCoverRoutes from './adminRoutes/zipCover.routes.js';
 router.use('/zip-covers', verifyAdmin, zipCoverRoutes);
 
+// ── Sales Leads ──
+import leadRoutes from './adminRoutes/lead.routes.js';
+router.use('/leads', verifyAdmin, leadRoutes);
+
 // ── Audit Logs ──
 router.get('/audit-logs', verifyAdmin, getAuditLogs);
 

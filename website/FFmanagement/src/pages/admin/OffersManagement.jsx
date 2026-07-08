@@ -113,14 +113,14 @@ export default function OffersManagement() {
   return (
     <div>
       {/* Header */}
-      <div className="flex justify-between items-center mb-6">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
         <div>
           <h1 className="text-2xl font-extrabold text-slate-800">Offers Management</h1>
           <p className="text-sm text-slate-500 mt-1">Create and manage platform-wide offers</p>
         </div>
         <button
           onClick={() => { setEditingOffer(null); setShowForm(true); }}
-          className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold text-white transition-all hover:shadow-lg"
+          className="w-full sm:w-auto flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold text-white transition-all hover:shadow-lg"
           style={{ background: 'linear-gradient(135deg, #3B82F6, #2563EB)' }}
         >
           <Plus size={16} /> Create Offer

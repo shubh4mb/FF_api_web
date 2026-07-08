@@ -35,6 +35,11 @@ import ZipCoverRequests from '../pages/admin/ZipCoverRequests';
 import OrderCancellations from '../pages/admin/OrderCancellations';
 import AuditLogs from '../pages/admin/AuditLogs';
 import BroadcastNotifications from '../pages/admin/BroadcastNotifications';
+import SalesLeads from '../pages/admin/SalesLeads';
+import AddLead from '../pages/admin/leads/AddLead';
+import LeadDetails from '../pages/admin/leads/LeadDetails';
+import ManageSalesTeam from '../pages/admin/leads/ManageSalesTeam';
+
 
 const AppRoutes = () => {
   return (
@@ -49,6 +54,10 @@ const AppRoutes = () => {
         <Route path="/admin" element={<ProtectedAdminRoute />}>
           <Route element={<AdminLayout />}>
             <Route index element={<AdminDashboard />} />
+            <Route path="leads" element={<SalesLeads />} />
+            <Route path="leads/add" element={<AddLead />} />
+            <Route path="leads/team" element={<ManageSalesTeam />} />
+            <Route path="leads/:id" element={<LeadDetails />} />
             <Route path="category" element={<Category />} />
             <Route path="merchants" element={<Merchants />} />
             <Route path="settings" element={<Settings />} />

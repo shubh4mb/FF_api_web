@@ -99,14 +99,14 @@ export default function CollectionManagement() {
   return (
     <div className="animate-in fade-in duration-500">
       {/* Header */}
-      <div className="flex justify-between items-center mb-8">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
         <div>
           <h1 className="text-2xl font-extrabold text-slate-800 tracking-tight">Collections</h1>
           <p className="text-sm text-slate-500 mt-1 font-medium">Manage admin-defined curated collections for discovery</p>
         </div>
         <button
           onClick={() => { setEditingCollection(null); setShowForm(true); }}
-          className="flex items-center gap-2 px-6 py-3 rounded-xl text-sm font-bold text-white transition-all hover:shadow-lg active:scale-95 shadow-blue-500/20"
+          className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3 rounded-xl text-sm font-bold text-white transition-all hover:shadow-lg active:scale-95 shadow-blue-500/20"
           style={{ background: 'linear-gradient(135deg, #0EA5E9, #2563EB)' }}
         >
           <Plus size={18} /> Create Collection

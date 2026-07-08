@@ -109,6 +109,10 @@ export const registerAdmin = asyncHandler(async (req, res) => {
     console.log(req.body);
     const { email, password, name, phoneNumber } = req.body;
 
+    if (!req.admin || req.admin.role !== 'superadmin') {
+        throw new ApiError(403, "Only Super Admins can register new staff accounts");
+    }
+
     if (!email || !password) {
         throw new ApiError(400, "Email and password are required for registration");
     }
@@ -123,7 +127,7 @@ export const registerAdmin = asyncHandler(async (req, res) => {
         email,
         phoneNumber,
         password,
-        role: 'superadmin',
+        role: req.body.role || 'superadmin',
     });
 
     const createdAdmin = await Admin.findById(admin._id).select('-password');
