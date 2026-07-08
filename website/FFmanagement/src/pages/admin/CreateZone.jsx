@@ -281,7 +281,7 @@ export default function ZoneCreator() {
         {/* Right Side: Map Area */}
         <div className="lg:col-span-2">
           <div className="bg-white p-2 rounded-xl shadow-sm border border-slate-200 overflow-hidden h-[550px] relative z-10">
-            <MapContainer center={[9.9312, 76.2673]} zoom={13} style={{ height: '100%', width: '100%', borderRadius: '0.5rem' }}>
+            <MapContainer center={[9.9961, 76.2942]} zoom={13} style={{ height: '100%', width: '100%', borderRadius: '0.5rem' }}>
               <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
 
               <LocationHandler />

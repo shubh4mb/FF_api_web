@@ -24,7 +24,7 @@ export default function AddLead() {
   const [staff, setStaff] = useState([]);
   const [isMapModalOpen, setIsMapModalOpen] = useState(false);
   const [tempMapLocation, setTempMapLocation] = useState(null);
-  const [mapCenter] = useState([9.9312, 76.2673]); // default Cochin coordinates
+  const [mapCenter] = useState([9.9961, 76.2942]); // default Kaloor, Kochi coordinates
 
   const [leadForm, setLeadForm] = useState({
     shopName: '',
