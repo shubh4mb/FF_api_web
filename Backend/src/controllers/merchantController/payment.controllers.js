@@ -7,6 +7,16 @@ import { logAuditEvent } from "../../utils/auditLogger.js";
 import { generateReceiptPDF } from "../../utils/pdfGenerator.js";
 import { sendMerchantPaymentReceiptEmail } from "../../services/mail.service.js";
 
+export const getRegistrationFee = async (req, res) => {
+  try {
+    const config = await AppConfig.getConfig();
+    return res.json({ success: true, feeAmount: config.merchantRegistrationFee });
+  } catch (error) {
+    console.error("Error getting registration fee:", error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 // Create Razorpay order for registration fee
 export const createRegistrationFeeOrder = async (req, res) => {
   try {

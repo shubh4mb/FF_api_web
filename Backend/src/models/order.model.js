@@ -166,6 +166,7 @@ const OrderSchema = new mongoose.Schema({
   returnCharge: { type: Number, default: 0 },
   originalDeliveryCharge: { type: Number, default: 0 },
   originalReturnCharge: { type: Number, default: 0 },
+  waitingTimeCharge: { type: Number, default: 0 }, // Added for rider waiting time compensation
   otp: {
     type: String,
     default: null

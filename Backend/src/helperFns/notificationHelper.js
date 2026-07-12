@@ -41,9 +41,10 @@ export async function sendPushNotifications(userId, riderId, title, body, data, 
             invalidTokens.push(pushToken);
             continue;
         }
+        let soundOpt = data?.silent ? null : 'default';
         messages.push({
             to: pushToken,
-            sound: 'default',
+            sound: soundOpt,
             title,
             body,
             data,
@@ -262,10 +263,12 @@ export async function notifyOrderEvent(target, event, ctx) {
         trial_ended: {
             title: "Trial Phase Ended ⏰",
             body: `Customer has finished trying items for order #${shortId}.`,
+            silent: true,
         },
         return_started: {
             title: "Return Trip 🔄",
             body: `Head back to merchant with returned items for order #${shortId}.`,
+            silent: true,
         },
         return_complete: {
             title: "Return Verified ✅",
@@ -295,13 +298,14 @@ export async function notifyOrderEvent(target, event, ctx) {
     }
 
     if (target === "rider" && ctx.riderId) {
+        const payloadData = { ...(ctx.data || {}), silent: tmpl.silent };
         return notifyRider({
             riderId: ctx.riderId,
             orderId: ctx.orderId,
             type: event,
             title: tmpl.title,
             body: tmpl.body,
-            data: ctx.data || {},
+            data: payloadData,
         });
     }
 }

@@ -1,5 +1,5 @@
 import mongoose from 'mongoose';
-
+import crypto from 'crypto';
 
 const variantSchema = new mongoose.Schema({
   color: {
@@ -41,6 +41,7 @@ const variantSchema = new mongoose.Schema({
 
 const productSchema = new mongoose.Schema({
   name: { type: String, required: true },
+  productCode: { type: String, unique: true },
   merchantId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Merchant',
@@ -135,5 +136,13 @@ const productSchema = new mongoose.Schema({
 // Indexes for fast gender + category queries
 productSchema.index({ gender: 1, subCategoryId: 1 });
 productSchema.index({ merchantId: 1, gender: 1 });
+
+productSchema.pre('save', function (next) {
+  if (this.isNew && !this.productCode) {
+    const randomString = crypto.randomBytes(4).toString('hex').toUpperCase();
+    this.productCode = `PRD-${randomString}`;
+  }
+  next();
+});
 
 export default mongoose.model('Product', productSchema);

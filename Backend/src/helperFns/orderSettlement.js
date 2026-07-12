@@ -2,6 +2,7 @@ import Product from "../models/product.model.js";
 import Category from "../models/category.model.js";
 import mongoose from "mongoose";
 import { addToWeeklyPayout, incrementOrderCount } from "./weeklyPayoutHelper.js";
+import AppConfig from "../models/appConfig.model.js";
 
 /**
  * Calculates and distributes funds to merchant, rider, and admin wallets
@@ -66,16 +67,28 @@ export const settleOrder = async (order, providedSession = null) => {
         }
 
         // 3. Handle Rider Payout & Free Delivery Costing
-        // Rider always gets paid the original charges (even if customer got free delivery)
-        // Tip is always passed through to rider regardless of offers
         const hasReturns = order.items.some(i => i.tryStatus === "returned");
         const tipAmount = order.finalBilling?.deliveryTip || 0;
+
+        const config = await AppConfig.getConfig();
+        const waitingChargePerMinute = config.waitingChargePerMinute || 0;
+        let waitingTimeCharge = 0;
+        
+        if (order.trialPhaseStart && order.trialPhaseEnd) {
+            const waitingMinutes = Math.max(0, Math.floor((new Date(order.trialPhaseEnd) - new Date(order.trialPhaseStart)) / 60000));
+            waitingTimeCharge = waitingMinutes * waitingChargePerMinute;
+            order.waitingTimeCharge = waitingTimeCharge;
+            // Optionally update trialPhaseDuration just in case it wasn't saved precisely
+            order.trialPhaseDuration = waitingMinutes;
+        }
+
         const riderPayout = (order.originalDeliveryCharge || 0) 
             + (hasReturns ? (order.originalReturnCharge || 0) : 0)
-            + tipAmount;
+            + tipAmount
+            + waitingTimeCharge;
 
         if (riderPayout > 0) {
-            // Who pays for this? (Check if any applied offer gave free delivery)
+            // Check if any applied offer gave free delivery
             const freeDeliveryOffer = (order.appliedOffers || []).find(o => o.freeDelivery === true);
             if (freeDeliveryOffer) {
                 if (freeDeliveryOffer.scope === "admin") {
@@ -84,6 +97,13 @@ export const settleOrder = async (order, providedSession = null) => {
                     merchantDiscount += riderPayout;
                 }
             }
+        }
+        
+        // Admin subsidizes the waiting time compensation to the rider
+        if (waitingTimeCharge > 0) {
+            adminDiscount += waitingTimeCharge;
+            // Persist the waiting time charge to the order document
+            await order.save({ session });
         }
 
         // 4. Final Payout Calculations

@@ -3,7 +3,7 @@ import { addCategory, getCategories, updateCategory, getCategoryById } from '../
 import { addMerchant, getMerchants, getMerchantById, updateMerchantById, verifyMerchant } from '../controllers/adminControllers/merchant.controllers.js';
 import { addBrand, getBrands } from '../controllers/adminControllers/brand.controllers.js';
 import upload, { handleMulterError } from '../middleware/multer.js';
-import { getBaseProducts, getVariants, getBaseProductById, addVariant, getProductsByMerchantId, updateMatchingProducts } from '../controllers/adminControllers/product.controllers.js';
+import { getBaseProducts, getVariants, getBaseProductById, addVariant, getProductsByMerchantId, updateMatchingProducts, toggleProductStatus } from '../controllers/adminControllers/product.controllers.js';
 import { addTitleBanner } from '../controllers/adminControllers/titleBanner.controllers.js';
 import { addCart, getCart } from '../controllers/adminControllers/cart.controllers.js';
 import { addZone, getAllZones, checkZoneOverlap, updateZone, deleteZone } from '../controllers/adminControllers/zone.controllers.js';
@@ -75,6 +75,7 @@ router.get('/getBaseProductById/:productId', getBaseProductById);
 router.post('/addVariant/:productId', upload.array('images'), handleMulterError, addVariant);
 router.get('/products/merchant/:merchantId', getProductsByMerchantId);
 router.put('/updateMatchingProducts/:productId', updateMatchingProducts);
+router.patch('/updateProductStatus/:productId', verifyAdmin, toggleProductStatus);
 
 router.post('/titleBanner/add', verifyAdmin, upload.single('image'), handleMulterError, addTitleBanner);
 
@@ -212,6 +213,11 @@ router.use('/leads', verifyAdmin, leadRoutes);
 
 // ── Audit Logs ──
 router.get('/audit-logs', verifyAdmin, getAuditLogs);
+
+// ── Return Issues ──
+import { getAllReturnIssues, updateReturnIssueStatus } from '../controllers/adminControllers/returnIssue.controllers.js';
+router.get('/return-issues', verifyAdmin, getAllReturnIssues);
+router.patch('/return-issues/:id', verifyAdmin, updateReturnIssueStatus);
 
 // ── Notifications ──
 router.post('/notifications/broadcast', verifyAdmin, sendBroadcastNotification);

@@ -905,7 +905,7 @@ export const getAllOrders = async (req, res) => {
   try {
     const userId = req.user.userId;
     const orders = await Order.find({ userId })
-      .select('orderStatus items totalAmount customerDeliveryStatus createdAt merchantDetails deliveryCharge finalBilling')
+      .select('orderStatus items totalAmount customerDeliveryStatus createdAt merchantDetails deliveryCharge finalBilling deliveryRiderStatus deliveryMode isCourier')
       .sort({ createdAt: -1 })
       .lean();
     return res.status(200).json({ orders });
@@ -1481,6 +1481,10 @@ export const verifyFinalPaymentCod = async (req, res) => {
     const acceptedItems = order.items.filter(
       item => item.tryStatus === "accepted" || item.tryStatus === "not-triable"
     );
+
+    if (!order.trialPhaseEnd) {
+      order.trialPhaseEnd = new Date();
+    }
 
     // === Recalculate Offers ===
     let recalculatedDiscount = 0;

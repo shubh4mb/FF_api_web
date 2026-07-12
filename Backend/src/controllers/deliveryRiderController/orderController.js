@@ -226,6 +226,7 @@ export const reachedCustomerLocation = async (req, res) => {
 
     order.deliveryRiderStatus = "at_delivery";
     order.orderStatus = "in_transit";
+    order.otp = Math.floor(1000 + Math.random() * 9000); // OTP for handover
     await order.save();
     emitOrderUpdate(req.io, orderId, order);
 
@@ -243,10 +244,14 @@ export const reachedCustomerLocation = async (req, res) => {
 }
 
 export const handOutProducts = async (req, res) => {
-  const { orderId } = req.body;
+  const { orderId, otp } = req.body;
   try {
     const order = await Order.findById(orderId);
     if (!order) return res.status(404).json({ message: "Order not found" });
+
+    if (String(order.otp) !== String(otp)) {
+      return res.status(400).json({ message: "Invalid OTP" });
+    }
 
     // Update order status and set trial phase details
     order.orderStatus = "try_phase";
@@ -256,8 +261,8 @@ export const handOutProducts = async (req, res) => {
     order.trialPhaseEnd = null; // Reset end time
     order.trialPhaseDuration = 30; // Set trial phase duration (e.g., 30 minutes)
     //generate 4 digit otp
-    const otp = Math.floor(1000 + Math.random() * 9000);
-    order.otp = otp;
+    const newOtp = Math.floor(1000 + Math.random() * 9000);
+    order.otp = newOtp;
     await order.save();
 
     // Emit orderUpdate event

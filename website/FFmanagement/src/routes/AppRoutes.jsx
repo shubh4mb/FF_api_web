@@ -41,6 +41,7 @@ import LeadDetails from '../pages/admin/leads/LeadDetails';
 import ManageSalesTeam from '../pages/admin/leads/ManageSalesTeam';
 import LeadsMap from '../pages/admin/leads/LeadsMap';
 import LeadsDashboard from '../pages/admin/leads/LeadsDashboard';
+import ReturnIssues from '../pages/admin/ReturnIssues';
 
 
 const AppRoutes = () => {
@@ -88,6 +89,7 @@ const AppRoutes = () => {
             <Route path="order-cancellations" element={<OrderCancellations />} />
             <Route path="audit-logs" element={<AuditLogs />} />
             <Route path="notifications" element={<BroadcastNotifications />} />
+            <Route path="return-issues" element={<ReturnIssues />} />
           </Route>
         </Route>
 

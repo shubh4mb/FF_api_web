@@ -300,14 +300,16 @@ const EditMerchant = () => {
         </button>
       ) : (
         <div className="flex gap-2">
-          <button
-            type="button"
-            onClick={() => handleVerifyDoc(docKey, true)}
-            disabled={isUpdating}
-            className="flex-1 py-2.5 rounded-lg font-black text-[10px] uppercase tracking-widest transition-all bg-black text-white hover:bg-gray-800 shadow-lg shadow-black/10"
-          >
-            Approve
-          </button>
+          {doc?.image?.url && (
+            <button
+              type="button"
+              onClick={() => handleVerifyDoc(docKey, true)}
+              disabled={isUpdating}
+              className="flex-1 py-2.5 rounded-lg font-black text-[10px] uppercase tracking-widest transition-all bg-black text-white hover:bg-gray-800 shadow-lg shadow-black/10"
+            >
+              Approve
+            </button>
+          )}
           <button
             type="button"
             onClick={() => {
@@ -353,7 +355,7 @@ const EditMerchant = () => {
                </div>
                <button 
                   onClick={handleToggleVerify}
-                  disabled={isUpdating || (!form.kyc.pan.verified && form.status !== 'payment_pending_verification')}
+                  disabled={isUpdating}
                   className={`w-full sm:w-auto px-10 py-4 rounded-2xl font-black uppercase tracking-widest text-xs transition-all shadow-2xl active:scale-95 ${
                     form.status === 'active' 
                       ? 'bg-white border-2 border-red-500 text-red-500 hover:bg-red-50' 

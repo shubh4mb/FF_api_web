@@ -101,4 +101,14 @@ export const getBaseProductById = async (productId) => {
     }
 }
 
+export const toggleProductStatus = async (productId) => {
+    try {
+        const response = await axiosInstance.patch(`admin/updateProductStatus/${productId}`);
+        return response.data;
+    } catch (error) {
+        console.log(error);
+        throw error.response ? error.response.data : new Error('Network Error');
+    }
+}
+
 

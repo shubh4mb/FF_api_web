@@ -112,7 +112,8 @@ router.put("/:merchantId/activate", activateMerchant);
 router.patch("/:merchantId/toggle-online", authMiddlewareMerchant, toggleMerchantOnlineStatus);
 router.put('/push-token', authMiddlewareMerchant, addPushToken);
 
-import { createRegistrationFeeOrder, verifyRegistrationFeePayment } from '../controllers/merchantController/payment.controllers.js';
+import { createRegistrationFeeOrder, verifyRegistrationFeePayment, getRegistrationFee } from '../controllers/merchantController/payment.controllers.js';
+router.get('/registration-fee/amount', getRegistrationFee);
 router.post('/:merchantId/registration-fee/create-order', authMiddlewareMerchant, createRegistrationFeeOrder);
 router.post('/:merchantId/registration-fee/verify', authMiddlewareMerchant, verifyRegistrationFeePayment);
 
@@ -225,6 +226,11 @@ router.put('/products/:id/details', authMiddlewareMerchant, saveProductDetails);
 router.get('/courier/getAllOrders', authMiddlewareMerchant, getMerchantCourierOrders);
 router.patch('/courier/order/:orderId/status', authMiddlewareMerchant, updateCourierOrderStatus);
 router.patch('/courier/order/:orderId/return/status', authMiddlewareMerchant, updateCourierOrderReturnStatus);
+
+// ── Return Issues ──
+import { createReturnIssue, getMerchantReturnIssues } from '../controllers/merchantController/returnIssue.controllers.js';
+router.post('/return-issues', authMiddlewareMerchant, upload.array('images', 5), handleMulterError, createReturnIssue);
+router.get('/return-issues', authMiddlewareMerchant, getMerchantReturnIssues);
 
 // router.post('/updateOrderStatus',updateOrderStatus);
 // router.post('orderPacked',authMiddlewareMerchant,orderPacked)  

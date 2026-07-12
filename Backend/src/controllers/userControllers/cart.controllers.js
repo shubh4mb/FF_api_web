@@ -19,7 +19,7 @@ export const addToCart = async (req, res) => {
   }
 
   try {
-    const product = await Product.findById(productId);
+    const product = await Product.findById(productId).populate('categoryId');
     if (!product) return res.status(404).json({ message: "Product not found" });
 
     const variant = product.variants.id(variantId);
@@ -34,16 +34,28 @@ export const addToCart = async (req, res) => {
 
     let cart = await Cart.findOne({ userId });
 
+    const targetCatName = product.categoryId?.name?.toLowerCase();
+    const targetMult = (targetCatName === 'footwear') ? 2 : 1;
+
     if (cart) {
+      const productIds = cart.items.map(i => i.productId);
+      const products = await Product.find({ _id: { $in: productIds } }).populate('categoryId').lean();
+      const productMap = products.reduce((acc, p) => { acc[p._id.toString()] = p; return acc; }, {});
+
       const currentMerchantQty = cart.items
         .filter(item => item.merchantId.toString() === merchantId.toString())
-        .reduce((sum, item) => sum + item.quantity, 0);
+        .reduce((sum, item) => {
+          const p = productMap[item.productId.toString()];
+          const catName = p?.categoryId?.name?.toLowerCase();
+          const mult = (catName === 'footwear') ? 2 : 1;
+          return sum + (item.quantity * mult);
+        }, 0);
 
-      if (currentMerchantQty + quantity > 6) {
+      if (currentMerchantQty + (quantity * targetMult) > 6) {
         return res.status(400).json({ message: "You can only have up to 6 Try & Buy items per merchant." });
       }
     } else {
-      if (quantity > 6) {
+      if ((quantity * targetMult) > 6) {
         return res.status(400).json({ message: "You can only have up to 6 Try & Buy items per merchant." });
       }
     }
@@ -365,11 +377,26 @@ export const updateCartQuantity = async (req, res) => {
     if (!item) return res.status(404).json({ success: false, message: 'Item not found in cart' });
 
     const merchantId = item.merchantId.toString();
+    
+    // Fetch products to check categories for the multiplier
+    const productIds = cart.items.map(i => i.productId);
+    const products = await Product.find({ _id: { $in: productIds } }).populate('categoryId').lean();
+    const productMap = products.reduce((acc, p) => { acc[p._id.toString()] = p; return acc; }, {});
+
     const currentMerchantQtyExcludingThisItem = cart.items
       .filter(i => i.merchantId.toString() === merchantId && i._id.toString() !== cartId)
-      .reduce((sum, i) => sum + i.quantity, 0);
+      .reduce((sum, i) => {
+        const p = productMap[i.productId.toString()];
+        const catName = p?.categoryId?.name?.toLowerCase();
+        const mult = (catName === 'footwear') ? 2 : 1;
+        return sum + (i.quantity * mult);
+      }, 0);
 
-    if (currentMerchantQtyExcludingThisItem + quantity > 6) {
+    const targetProduct = productMap[item.productId.toString()];
+    const targetCatName = targetProduct?.categoryId?.name?.toLowerCase();
+    const targetMult = (targetCatName === 'footwear') ? 2 : 1;
+
+    if (currentMerchantQtyExcludingThisItem + (quantity * targetMult) > 6) {
       return res.status(400).json({ success: false, message: "You can only have up to 6 Try & Buy items per merchant." });
     }
 

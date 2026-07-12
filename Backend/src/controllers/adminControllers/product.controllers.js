@@ -167,5 +167,16 @@ export const updateMatchingProducts = asyncHandler(async (req, res) => {
   return res.status(200).json(new ApiResponse(200, {}, "Matching products updated successfully"));
 });
 
+export const toggleProductStatus = asyncHandler(async (req, res) => {
+  const { productId } = req.params;
+  const product = await Product.findById(productId);
+  
+  if (!product) {
+    throw new ApiError(404, "Product not found");
+  }
 
+  product.isActive = !product.isActive;
+  await product.save();
 
+  return res.status(200).json(new ApiResponse(200, { isActive: product.isActive }, "Product status updated successfully"));
+});

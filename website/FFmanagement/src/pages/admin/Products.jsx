@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { getBaseProducts } from '@/api/products'
+import { getBaseProducts, toggleProductStatus } from '@/api/products'
 import ReusableAdminTable from '@/components/admin/Table'
 import { useNavigate } from 'react-router-dom'
 
@@ -56,10 +56,24 @@ const productActions = [
     className: "text-red-600 hover:underline text-sm",
   },
   {
-    label:"Matching Products",
+    label: "Matching Products",
     onClick: (row) => navigate(`/admin/matching-products/${row._id}`),
     className: "text-blue-600 hover:underline text-sm",
   },
+  {
+    label: "Toggle Status",
+    onClick: async (row) => {
+      try {
+        await toggleProductStatus(row._id);
+        setProducts(prev => prev.map(p => p._id === row._id ? { ...p, isActive: !p.isActive } : p));
+        alert(`Product ${!row.isActive ? 'activated' : 'deactivated'} successfully!`);
+      } catch (err) {
+        console.error(err);
+        alert("Failed to toggle product status.");
+      }
+    },
+    className: "text-green-600 hover:underline text-sm font-bold",
+  }
 ];
   
   const [products, setProducts] = useState([]);
