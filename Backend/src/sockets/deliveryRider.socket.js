@@ -6,6 +6,8 @@ import { inferZone } from "../utils/zoneInfer.js";
 import { heartbeatSession } from "../helperFns/onlineSessionHelper.js";
 import PendingOrder from "../models/pendingOrders.model.js";
 import Order from "../models/order.model.js";
+import { clearRiderTimeout } from "../helperFns/riderTimeoutHelper.js";
+import { matchQueuedOrders } from "../helperFns/orderFns.js";
 export const registerDeliveryRiderSockets = (io, socket) => {
 
   socket.on("registerRider", async ({ riderId }) => {
@@ -170,24 +172,85 @@ export const registerDeliveryRiderSockets = (io, socket) => {
     console.log("Rider disconnected:", socket.id);
 
     const riderId = socket.data.riderId;
-    
-    if (riderId) {
-      const meta = await getRiderMeta(riderId);
-      if (meta) {
-        const zoneId = meta.zoneId || 'global'; // ← get from stored meta
-        const keepOrder = meta.assignedOrderId ? meta.assignedOrderId : "";
+    if (!riderId) return;
 
-        await setRiderMeta(riderId, zoneId, {
-          isOnline: false,
-          isBusy: !!keepOrder,
-          assignedOrderId: keepOrder,
-        });
+    const meta = await getRiderMeta(riderId);
+    if (!meta) return;
 
-        console.log(`Rider ${riderId} marked OFFLINE in zone ${zoneId}`);
-        if (!keepOrder) {
-          io.emit(`riderFreed:${zoneId}`, { zoneId, riderId }); // ← trigger matcher!
+    const zoneId = meta.zoneId || 'global';
+    const keepOrder = meta.assignedOrderId || "";
+
+    // ── Phone-death fast re-queue ──
+    // If rider disconnects with an order that was ONLY assigned (not accepted),
+    // immediately free the rider and re-queue the order to the next rider.
+    if (keepOrder) {
+      try {
+        const order = await Order.findById(keepOrder);
+
+        if (
+          order &&
+          order.deliveryRiderId?.toString() === riderId &&
+          order.deliveryRiderStatus === "assigned"
+        ) {
+          // Rider disconnected BEFORE accepting — immediate re-queue
+          console.log(`📱💀 Rider ${riderId} disconnected with unaccepted order ${keepOrder}`);
+
+          // 1. Free the rider completely
+          await setRiderMeta(riderId, zoneId, {
+            isOnline: false,
+            isBusy: false,
+            assignedOrderId: "",
+          });
+          await DeliveryRider.findByIdAndUpdate(riderId, {
+            currentOrderId: null,
+            isBusy: false,
+            isAvailable: false, // phone is dead — don't mark available
+          });
+
+          // 2. Reset the order for re-queue
+          order.deliveryRiderId = null;
+          order.deliveryRiderDetails = { name: null, phone: null };
+          order.deliveryRiderStatus = "queued";
+          await order.save();
+
+          // 3. Re-queue pending order
+          await PendingOrder.findOneAndUpdate(
+            { orderId: keepOrder.toString() },
+            { status: "queued", assignedRider: null, assignedAt: null }
+          );
+
+          // 4. Clear the 2-min timeout (no longer needed)
+          clearRiderTimeout(keepOrder);
+
+          // 5. Emit update to order room (customer gets notified)
+          io.to(keepOrder.toString()).emit("orderUpdate", {
+            orderId: keepOrder,
+            orderStatus: order.orderStatus,
+            deliveryRiderStatus: "queued",
+            message: "Rider unavailable, finding new rider...",
+          });
+
+          // 6. Trigger matcher to find next rider immediately
+          await matchQueuedOrders(zoneId);
+
+          console.log(`✅ Order ${keepOrder} immediately re-queued in zone ${zoneId}`);
+          return;
         }
+      } catch (err) {
+        console.error("Error in disconnect fast re-queue:", err);
       }
+    }
+
+    // ── Normal disconnect (no order, or order was already accepted/in-progress) ──
+    await setRiderMeta(riderId, zoneId, {
+      isOnline: false,
+      isBusy: !!keepOrder,
+      assignedOrderId: keepOrder,
+    });
+
+    console.log(`Rider ${riderId} marked OFFLINE in zone ${zoneId}`);
+    if (!keepOrder) {
+      io.emit(`riderFreed:${zoneId}`, { zoneId, riderId });
     }
   });
 

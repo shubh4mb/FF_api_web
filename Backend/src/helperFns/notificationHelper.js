@@ -298,7 +298,7 @@ export async function notifyOrderEvent(target, event, ctx) {
     }
 
     if (target === "rider" && ctx.riderId) {
-        const payloadData = { ...(ctx.data || {}), silent: tmpl.silent };
+        const payloadData = { ...(ctx.data || {}), silent: tmpl.silent, orderId: ctx.orderId, type: event };
         return notifyRider({
             riderId: ctx.riderId,
             orderId: ctx.orderId,

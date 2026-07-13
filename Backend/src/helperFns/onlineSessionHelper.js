@@ -164,8 +164,20 @@ export async function sweepStaleSessions() {
  */
 async function syncSessionToDailyPayout(session) {
   try {
-    const dayStart = getDayStartIST();
-    const durationHours = (session.totalDurationMs || 0) / (1000 * 60 * 60);
+    const dayStart = getDayStartIST(session.startedAt);
+    
+    // Window is 08:00 to 23:00 IST
+    // dayStart is 00:00 IST (in UTC), so we add hours in milliseconds
+    const windowStartMs = dayStart.getTime() + (8 * 60 * 60 * 1000);
+    const windowEndMs = dayStart.getTime() + (23 * 60 * 60 * 1000);
+
+    const startMs = Math.max(session.startedAt.getTime(), windowStartMs);
+    const endMs = Math.min(session.endedAt.getTime(), windowEndMs);
+
+    let durationHours = 0;
+    if (endMs > startMs) {
+      durationHours = (endMs - startMs) / (1000 * 60 * 60);
+    }
 
     await DailyPayout.findOneAndUpdate(
       { riderId: session.riderId, date: dayStart },

@@ -4,6 +4,7 @@ import Product from "../../models/product.model.js";
 import Merchant from "../../models/merchant.model.js";
 import DeliveryRider from "../../models/deliveryRider.model.js";
 import User from "../../models/user.model.js";
+import { uploadToCloudinary } from "../../config/cloudinary.config.js";
 
 // ─── AGGREGATE HELPER ────────────────────────────────────────────
 const MODEL_MAP = {
@@ -38,7 +39,7 @@ const COMPLETED_STATUSES = ["completed", "selection_made", "return_in_progress"]
 export const createReview = async (req, res) => {
     try {
         const userId = req.user.userId;
-        const { targetId, targetType, orderId, rating, title, comment, images } = req.body;
+        const { targetId, targetType, orderId, rating, title, comment } = req.body;
 
         if (!targetId || !targetType || !orderId || !rating) {
             return res.status(400).json({ message: "targetId, targetType, orderId, and rating are required" });
@@ -81,6 +82,23 @@ export const createReview = async (req, res) => {
             }
         }
 
+        // Handle Image Uploads
+        let imageUrls = [];
+        // if old images are passed as string array (optional depending on frontend, but good to handle)
+        if (req.body.images) {
+            const existingImages = Array.isArray(req.body.images) ? req.body.images : [req.body.images];
+            imageUrls.push(...existingImages);
+        }
+
+        if (req.files && req.files.length > 0) {
+            const uploadPromises = req.files.map(file => 
+                uploadToCloudinary(file.buffer, { folder: "reviews" })
+            );
+            const results = await Promise.all(uploadPromises);
+            const newUrls = results.map(result => result.secure_url);
+            imageUrls.push(...newUrls);
+        }
+
         // Upsert — update if exists, create if not
         const review = await Review.findOneAndUpdate(
             { userId, targetId, targetType, orderId },
@@ -90,10 +108,10 @@ export const createReview = async (req, res) => {
                 targetId,
                 targetType,
                 orderId,
-                rating,
+                rating: Number(rating),
                 title: title || null,
                 comment: comment || null,
-                images: images || [],
+                images: imageUrls,
             },
             { upsert: true, new: true, runValidators: true }
         );
@@ -208,8 +226,14 @@ export const getReviews = async (req, res) => {
 export const getMyReviews = async (req, res) => {
     try {
         const userId = req.user.userId;
+        const { orderId } = req.query;
 
-        const reviews = await Review.find({ userId, reviewerType: "customer" })
+        const query = { userId, reviewerType: "customer" };
+        if (orderId) {
+            query.orderId = orderId;
+        }
+
+        const reviews = await Review.find(query)
             .sort({ createdAt: -1 })
             .lean();
 
@@ -279,19 +303,7 @@ export const getReviewableItems = async (req, res) => {
         for (const order of orders) {
             const orderId = order._id.toString();
 
-            // Products
-            for (const item of order.items) {
-                const key = `${orderId}_product_${item.productId}`;
-                if (!reviewedSet.has(key)) {
-                    reviewable.push({
-                        orderId,
-                        targetId: item.productId,
-                        targetType: "product",
-                        name: item.name,
-                        image: item.image,
-                    });
-                }
-            }
+
 
             // Merchant
             if (order.merchantId) {

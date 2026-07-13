@@ -81,17 +81,27 @@ export const adminCancelOrder = async (req, res) => {
         order.paymentStatus = 'refunded';
       }
 
-      // 3. Free the rider in DB & Redis if assigned
-      if (order.deliveryRiderId) {
-        await DeliveryRider.findByIdAndUpdate(order.deliveryRiderId, {
+      // 3. Free the rider in DB & Redis if assigned (either accepted or offered/assigned in queue)
+      let riderIdToFree = order.deliveryRiderId;
+      
+      const pendingOrderDoc = await PendingOrder.findOne({ orderId: order._id });
+      if (pendingOrderDoc) {
+        if (!riderIdToFree && pendingOrderDoc.assignedRider) {
+          riderIdToFree = pendingOrderDoc.assignedRider;
+        }
+        await PendingOrder.deleteOne({ _id: pendingOrderDoc._id });
+      }
+
+      if (riderIdToFree) {
+        await DeliveryRider.findByIdAndUpdate(riderIdToFree, {
           currentOrderId: null,
           isBusy: false,
           isAvailable: true,
         });
 
         try {
-          const meta = await getRiderMeta(order.deliveryRiderId.toString());
-          await setRiderMeta(order.deliveryRiderId.toString(), meta?.zoneId || 'global', {
+          const meta = await getRiderMeta(riderIdToFree.toString());
+          await setRiderMeta(riderIdToFree.toString(), meta?.zoneId || 'global', {
             isBusy: "false",
             assignedOrderId: "",
           });
@@ -100,8 +110,13 @@ export const adminCancelOrder = async (req, res) => {
         }
       }
 
-      // 4. Remove from PendingOrder queue if queued
-      await PendingOrder.deleteOne({ orderId: order._id });
+      // 4. Clear any active assignment timeout
+      try {
+        const { clearRiderTimeout } = await import("../../helperFns/riderTimeoutHelper.js");
+        clearRiderTimeout(order._id);
+      } catch (err) {
+        console.error("Error clearing rider timeout (non-fatal):", err);
+      }
 
       await order.save();
 

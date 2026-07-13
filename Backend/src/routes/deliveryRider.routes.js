@@ -314,7 +314,7 @@ router.get("/earnings/history", authMiddlewareRider, async (req, res) => {
     const payouts = await WeeklyPayout.find({
       ownerType: "rider",
       ownerId: req.riderId,
-      status: { $in: ["paid", "failed"] },
+      status: { $in: ["finalized", "paid", "failed"] },
     })
       .sort({ weekStart: -1 })
       .skip((page - 1) * limit)
@@ -324,7 +324,7 @@ router.get("/earnings/history", authMiddlewareRider, async (req, res) => {
     const total = await WeeklyPayout.countDocuments({
       ownerType: "rider",
       ownerId: req.riderId,
-      status: { $in: ["paid", "failed"] },
+      status: { $in: ["finalized", "paid", "failed"] },
     });
 
     return res.status(200).json({

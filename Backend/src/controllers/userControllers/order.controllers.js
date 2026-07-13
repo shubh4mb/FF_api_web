@@ -1730,9 +1730,40 @@ export const cancelOrder = async (req, res) => {
       req,
     });
 
-    // Remove from pending orders queue if it exists
+    // Remove from pending orders queue if it exists and free the assigned rider
     const PendingOrder = (await import("../../models/pendingOrders.model.js")).default;
-    await PendingOrder.deleteOne({ orderId: order._id }).session(session);
+    const pendingOrderDoc = await PendingOrder.findOne({ orderId: order._id }).session(session);
+    if (pendingOrderDoc) {
+      const riderIdToFree = pendingOrderDoc.assignedRider;
+      if (riderIdToFree) {
+        const deliveryRiderModel = (await import("../../models/deliveryRider.model.js")).default;
+        await deliveryRiderModel.findByIdAndUpdate(riderIdToFree, {
+          currentOrderId: null,
+          isBusy: false,
+          isAvailable: true,
+        }).session(session);
+
+        try {
+          const { getRiderMeta, setRiderMeta } = await import("../../helperFns/deliveryRiderFns.js");
+          const meta = await getRiderMeta(riderIdToFree);
+          await setRiderMeta(riderIdToFree, meta?.zoneId || 'global', {
+            isBusy: "false",
+            assignedOrderId: "",
+          });
+        } catch (redisErr) {
+          console.error("Redis meta cleanup error during cancellation (non-fatal):", redisErr);
+        }
+      }
+      await PendingOrder.deleteOne({ _id: pendingOrderDoc._id }).session(session);
+    }
+
+    // Clear any active assignment timeout
+    try {
+      const { clearRiderTimeout } = await import("../../helperFns/riderTimeoutHelper.js");
+      clearRiderTimeout(order._id);
+    } catch (timeoutErr) {
+      console.error("Timeout cleanup error during cancellation (non-fatal):", timeoutErr);
+    }
 
     await session.commitTransaction();
     session.endSession();

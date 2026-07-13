@@ -474,8 +474,9 @@ import {
   deleteReview,
   getReviewableItems,
 } from '../controllers/userControllers/review.controllers.js';
+import upload, { handleMulterError } from '../middleware/multer.js';
 
-router.post('/review', authMiddleware, createReview);
+router.post('/review', authMiddleware, upload.array('images', 5), handleMulterError, createReview);
 router.get('/reviews/my', authMiddleware, getMyReviews);
 router.get('/reviews/reviewable', authMiddleware, getReviewableItems);
 router.delete('/review/:reviewId', authMiddleware, deleteReview);
