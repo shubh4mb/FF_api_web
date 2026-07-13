@@ -23,7 +23,7 @@ const INPUT_TYPE_COLORS = {
 const AttributeFormModal = ({ isOpen, onClose, onSubmit, editingAttribute, categories, saving, error }) => {
     const initialFormData = {
         name: '',
-        categoryId: '',
+        categoryIds: [],
         inputType: 'select',
         isFilterable: false,
         isRequired: false,
@@ -35,12 +35,28 @@ const AttributeFormModal = ({ isOpen, onClose, onSubmit, editingAttribute, categ
     useEffect(() => {
         if (isOpen) {
             if (editingAttribute) {
+                const attrCategoryIds = categories
+                    .filter(cat => cat.attributes?.some(a => a.attribute === editingAttribute._id || a.attribute?._id === editingAttribute._id))
+                    .map(cat => cat._id);
+
+                // Try to grab existing flags from the first category it's attached to
+                let existingIsFilterable = false;
+                let existingIsRequired = false;
+                if (attrCategoryIds.length > 0) {
+                    const firstCat = categories.find(c => c._id === attrCategoryIds[0]);
+                    const attrLink = firstCat?.attributes?.find(a => a.attribute === editingAttribute._id || a.attribute?._id === editingAttribute._id);
+                    if (attrLink) {
+                        existingIsFilterable = attrLink.isFilterable;
+                        existingIsRequired = attrLink.isRequired;
+                    }
+                }
+
                 setFormData({
                     name: editingAttribute.name || '',
-                    categoryId: editingAttribute.categoryId?._id || editingAttribute.categoryId || '',
+                    categoryIds: attrCategoryIds,
                     inputType: editingAttribute.inputType || 'select',
-                    isFilterable: editingAttribute.isFilterable || false,
-                    isRequired: editingAttribute.isRequired || false,
+                    isFilterable: existingIsFilterable,
+                    isRequired: existingIsRequired,
                     values: editingAttribute.values && editingAttribute.values.length > 0
                         ? editingAttribute.values.map(v => ({ label: v.label, value: v.value }))
                         : [{ label: '', value: '' }]
@@ -49,7 +65,7 @@ const AttributeFormModal = ({ isOpen, onClose, onSubmit, editingAttribute, categ
                 setFormData(initialFormData);
             }
         }
-    }, [editingAttribute, isOpen]);
+    }, [editingAttribute, isOpen, categories]);
 
     if (!isOpen) return null;
 
@@ -62,6 +78,17 @@ const AttributeFormModal = ({ isOpen, onClose, onSubmit, editingAttribute, categ
         } else {
             setFormData(prev => ({ ...prev, [name]: type === 'checkbox' ? checked : value }));
         }
+    };
+
+    const handleCategoryToggle = (catId) => {
+        setFormData(prev => {
+            const currentIds = prev.categoryIds || [];
+            if (currentIds.includes(catId)) {
+                return { ...prev, categoryIds: currentIds.filter(id => id !== catId) };
+            } else {
+                return { ...prev, categoryIds: [...currentIds, catId] };
+            }
+        });
     };
 
     const addValueRow = () => {
@@ -135,35 +162,39 @@ const AttributeFormModal = ({ isOpen, onClose, onSubmit, editingAttribute, categ
                                 />
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1.5">Category <span className="text-red-500">*</span></label>
+                                <label className="block text-sm font-medium text-gray-700 mb-1.5">Input Type <span className="text-red-500">*</span></label>
                                 <select
-                                    name="categoryId"
-                                    value={formData.categoryId}
+                                    name="inputType"
+                                    value={formData.inputType}
                                     onChange={handleChange}
                                     className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
                                     required
                                 >
-                                    <option value="">Select a category</option>
-                                    {level2Categories.map(cat => (
-                                        <option key={cat._id} value={cat._id}>{cat.name}</option>
+                                    {Object.entries(INPUT_TYPE_LABELS).map(([key, label]) => (
+                                        <option key={key} value={key}>{label}</option>
                                     ))}
                                 </select>
                             </div>
                         </div>
 
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1.5">Input Type <span className="text-red-500">*</span></label>
-                            <select
-                                name="inputType"
-                                value={formData.inputType}
-                                onChange={handleChange}
-                                className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
-                                required
-                            >
-                                {Object.entries(INPUT_TYPE_LABELS).map(([key, label]) => (
-                                    <option key={key} value={key}>{label}</option>
+                            <label className="block text-sm font-medium text-gray-700 mb-1.5">Categories <span className="text-red-500">*</span></label>
+                            <div className="w-full border border-gray-300 rounded-lg p-3 bg-gray-50 max-h-48 overflow-y-auto grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                {level2Categories.map(cat => (
+                                    <label key={cat._id} className="flex items-center gap-2 cursor-pointer hover:bg-gray-100 p-1.5 rounded transition">
+                                        <input 
+                                            type="checkbox" 
+                                            checked={(formData.categoryIds || []).includes(cat._id)}
+                                            onChange={() => handleCategoryToggle(cat._id)}
+                                            className="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
+                                        />
+                                        <span className="text-sm text-gray-700 truncate">{cat.name}</span>
+                                    </label>
                                 ))}
-                            </select>
+                            </div>
+                            {(formData.categoryIds || []).length === 0 && (
+                                <p className="text-xs text-red-500 mt-1">Please select at least one category.</p>
+                            )}
                         </div>
 
                         <div className="flex items-center gap-6">
@@ -303,7 +334,10 @@ const AttributeManagement = () => {
     };
 
     const filteredAttributes = filterCategory
-        ? attributes.filter(a => (a.categoryId?._id || a.categoryId) === filterCategory)
+        ? attributes.filter(a => {
+            const selectedCat = categories.find(c => c._id === filterCategory);
+            return selectedCat?.attributes?.some(attrObj => attrObj.attribute === a._id || attrObj.attribute?._id === a._id);
+          })
         : attributes;
 
     const level2Categories = categories.filter(c => c.level === 1);
@@ -385,7 +419,12 @@ const AttributeManagement = () => {
                                         <span className="font-medium text-gray-900">{attr.name}</span>
                                         <span className="block text-xs text-gray-400 mt-0.5">{attr.slug}</span>
                                     </td>
-                                    <td className="px-5 py-4 text-sm text-gray-600">{attr.categoryId?.name || '—'}</td>
+                                    <td className="px-5 py-4 text-sm text-gray-600">
+                                        {categories
+                                            .filter(cat => cat.attributes?.some(a => a.attribute === attr._id || a.attribute?._id === attr._id))
+                                            .map(cat => cat.name)
+                                            .join(', ') || '—'}
+                                    </td>
                                     <td className="px-5 py-4">
                                         <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${INPUT_TYPE_COLORS[attr.inputType] || 'bg-gray-100 text-gray-600'}`}>
                                             {INPUT_TYPE_LABELS[attr.inputType] || attr.inputType}
@@ -406,11 +445,19 @@ const AttributeManagement = () => {
                                         )}
                                     </td>
                                     <td className="px-5 py-4">
-                                        <div className="flex gap-1.5">
-                                            {attr.isFilterable && <span className="px-2 py-0.5 bg-green-50 text-green-700 border border-green-200 rounded text-xs font-medium">Filter</span>}
-                                            {attr.isRequired && <span className="px-2 py-0.5 bg-orange-50 text-orange-700 border border-orange-200 rounded text-xs font-medium">Required</span>}
-                                            {!attr.isFilterable && !attr.isRequired && <span className="text-gray-400 text-xs">—</span>}
-                                        </div>
+                                        {(() => {
+                                            const catWithAttr = categories.find(c => c.attributes?.some(a => a.attribute === attr._id || a.attribute?._id === attr._id));
+                                            const attrLink = catWithAttr?.attributes?.find(a => a.attribute === attr._id || a.attribute?._id === attr._id);
+                                            const isFilterable = attrLink?.isFilterable;
+                                            const isRequired = attrLink?.isRequired;
+                                            return (
+                                                <div className="flex gap-1.5">
+                                                    {isFilterable && <span className="px-2 py-0.5 bg-green-50 text-green-700 border border-green-200 rounded text-xs font-medium">Filter</span>}
+                                                    {isRequired && <span className="px-2 py-0.5 bg-orange-50 text-orange-700 border border-orange-200 rounded text-xs font-medium">Required</span>}
+                                                    {!isFilterable && !isRequired && <span className="text-gray-400 text-xs">—</span>}
+                                                </div>
+                                            );
+                                        })()}
                                     </td>
                                     <td className="px-5 py-4 text-right">
                                         <div className="flex items-center justify-end gap-1">

@@ -7,7 +7,7 @@ import { asyncHandler } from '../../utils/asyncHandler.js';
 // Create a new attribute
 export const createAttribute = asyncHandler(async (req, res) => {
     try {
-        const { name, categoryId, inputType, isFilterable, isRequired, values } = req.body;
+        const { name, categoryId, categoryIds, inputType, isFilterable, isRequired, values } = req.body;
 
         if (!name || !inputType) {
             throw new ApiError(400, 'name and inputType are required');
@@ -28,17 +28,27 @@ export const createAttribute = asyncHandler(async (req, res) => {
 
         await attribute.save();
         
-        if (categoryId) {
-            await Category.findByIdAndUpdate(categoryId, { 
-                $push: { 
-                    attributes: {
-                        attribute: attribute._id,
-                        isRequired: isRequired || false,
-                        isFilterable: isFilterable || false,
-                        order: 0
-                    }
-                } 
-            });
+        let targetCategories = [];
+        if (categoryIds && Array.isArray(categoryIds)) {
+            targetCategories = categoryIds;
+        } else if (categoryId) {
+            targetCategories = [categoryId]; // Fallback for backward compatibility
+        }
+
+        if (targetCategories.length > 0) {
+            await Category.updateMany(
+                { _id: { $in: targetCategories } },
+                { 
+                    $push: { 
+                        attributes: {
+                            attribute: attribute._id,
+                            isRequired: isRequired || false,
+                            isFilterable: isFilterable || false,
+                            order: 0
+                        }
+                    } 
+                }
+            );
         }
         
         res.status(201).json(new ApiResponse(201, { attribute }, 'Attribute created successfully'));
@@ -81,7 +91,7 @@ export const getAttributes = asyncHandler(async (req, res) => {
 export const updateAttribute = asyncHandler(async (req, res) => {
     try {
         const { id } = req.params;
-        const { name, inputType, values } = req.body;
+        const { name, inputType, values, categoryIds, isRequired, isFilterable } = req.body;
 
         const attribute = await Attribute.findById(id);
         if (!attribute) {
@@ -112,6 +122,55 @@ export const updateAttribute = asyncHandler(async (req, res) => {
         }
 
         await attribute.save();
+
+        // Handle category syncing if categoryIds is provided
+        if (categoryIds && Array.isArray(categoryIds)) {
+            const currentLinkedCategories = await Category.find({ 'attributes.attribute': id }, '_id');
+            const currentCategoryIds = currentLinkedCategories.map(c => c._id.toString());
+            const newCategoryIds = categoryIds.map(catId => catId.toString());
+
+            const addedCategoryIds = newCategoryIds.filter(catId => !currentCategoryIds.includes(catId));
+            const removedCategoryIds = currentCategoryIds.filter(catId => !newCategoryIds.includes(catId));
+            const keptCategoryIds = currentCategoryIds.filter(catId => newCategoryIds.includes(catId));
+
+            // Pull from removed
+            if (removedCategoryIds.length > 0) {
+                await Category.updateMany(
+                    { _id: { $in: removedCategoryIds } },
+                    { $pull: { attributes: { attribute: id } } }
+                );
+            }
+
+            // Push to added
+            if (addedCategoryIds.length > 0) {
+                await Category.updateMany(
+                    { _id: { $in: addedCategoryIds } },
+                    { 
+                        $push: { 
+                            attributes: {
+                                attribute: id,
+                                isRequired: isRequired || false,
+                                isFilterable: isFilterable || false,
+                                order: 0
+                            }
+                        } 
+                    }
+                );
+            }
+
+            // Update flags for kept categories
+            if (keptCategoryIds.length > 0 && (isRequired !== undefined || isFilterable !== undefined)) {
+                await Category.updateMany(
+                    { _id: { $in: keptCategoryIds }, 'attributes.attribute': id },
+                    { 
+                        $set: { 
+                            'attributes.$.isRequired': isRequired || false,
+                            'attributes.$.isFilterable': isFilterable || false
+                        } 
+                    }
+                );
+            }
+        }
         res.status(200).json(new ApiResponse(200, { attribute }, 'Attribute updated successfully'));
     } catch (error) {
         if (error.code === 11000) {
