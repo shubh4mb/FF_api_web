@@ -1,7 +1,7 @@
 import mongoose from 'mongoose';
 import Merchant from './src/models/merchant.model.js';
 
-const uri = "mongodb+srv://shubhambiswas9899:Shubham%402000@ff.tixzrs2.mongodb.net/preproduction?retryWrites=true&w=majority&appName=FF";
+const uri = process.env.MONGODB_URI;
 
 async function run() {
   try {

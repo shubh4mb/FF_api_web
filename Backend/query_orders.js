@@ -1,6 +1,6 @@
 import mongoose from 'mongoose';
 
-const MONGODB_URI = 'mongodb+srv://shubhambiswas9899:Shubham%402000@ff.tixzrs2.mongodb.net/preproduction?retryWrites=true&w=majority&appName=FF';
+const MONGODB_URI = process.env.MONGODB_URI;
 
 async function run() {
     await mongoose.connect(MONGODB_URI);

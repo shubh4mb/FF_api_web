@@ -4,7 +4,7 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 async function testLogin() {
-    await mongoose.connect(process.env.MONGODB_URI || 'mongodb+srv://admin:admin@cluster0.p7j1p.mongodb.net/olaCars?retryWrites=true&w=majority&appName=Cluster0');
+    await mongoose.connect(process.env.MONGODB_URI);
 
     const adminUser = await Admin.findOne({ email: 'admin@flashfits.com' });
     if (!adminUser) {

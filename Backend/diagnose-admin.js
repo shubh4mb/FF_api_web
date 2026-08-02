@@ -4,7 +4,7 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 async function diagnostic() {
-    const uri = process.env.MONGODB_URI || 'mongodb+srv://shubhambiswas9899:Shubham%402000@ff.tixzrs2.mongodb.net/?retryWrites=true&w=majority&appName=FF';
+    const uri = process.env.MONGODB_URI;
     console.log("Connecting to:", uri.split('@')[1] || "Localhost");
 
     try {
