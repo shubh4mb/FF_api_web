@@ -143,6 +143,7 @@ export const getOffersByMerchant = async (req, res) => {
       merchantId,
       scope: 'merchant',
       isActive: true,
+      isPublic: { $ne: false },
       startDate: { $lte: now },
       endDate: { $gt: now },
     })

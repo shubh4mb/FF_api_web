@@ -43,6 +43,12 @@ const weeklyPayoutSchema = new mongoose.Schema(
         totalDeductions: { type: Number, default: 0 },
         netPayout: { type: Number, default: 0 },
 
+        // ── Admin Adjustments ──
+        adminDeduction: {
+            amount: { type: Number, default: 0 },
+            reason: { type: String, default: "" },
+        },
+
         // ── Rider-specific Stats ──
         completedOrders: { type: Number, default: 0 },
         cancelledOrders: { type: Number, default: 0 },

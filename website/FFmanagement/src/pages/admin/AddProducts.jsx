@@ -141,7 +141,7 @@ export default function AddProductPage() {
         <div className="border p-3 rounded">
           <label className="block text-sm font-semibold text-gray-800 mb-2">Gender Target</label>
           <div className="flex gap-4">
-            {['MEN', 'WOMEN', 'KIDS'].map(g => (
+            {['MEN', 'WOMEN', 'KIDS', 'BOYS', 'GIRLS'].map(g => (
               <label key={g} className="flex items-center gap-2 cursor-pointer">
                 <input
                   type="checkbox"

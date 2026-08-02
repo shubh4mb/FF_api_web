@@ -10,8 +10,8 @@ export const getMerchantAnalytics = async (req, res) => {
 
         if (startDate && endDate) {
             matchStage.createdAt = {
-                $gte: new Date(startDate),
-                $lte: new Date(new Date(endDate).setHours(23, 59, 59, 999))
+                $gte: new Date(startDate + "T00:00:00.000Z"),
+                $lte: new Date(endDate + "T23:59:59.999Z")
             };
         }
 
@@ -23,7 +23,11 @@ export const getMerchantAnalytics = async (req, res) => {
                     _id: null,
                     totalRevenue: { 
                         $sum: { 
-                            $cond: [{ $in: ["$orderStatus", ["delivered", "completed"]] }, "$finalBilling.baseAmount", 0] 
+                            $cond: [
+                                { $in: ["$orderStatus", ["delivered", "completed"]] },
+                                { $cond: [{ $gt: ["$finalBilling.baseAmount", 0] }, "$finalBilling.baseAmount", "$totalAmount"] },
+                                0
+                            ] 
                         } 
                     },
                     totalOrders: { $sum: 1 },
@@ -69,7 +73,11 @@ export const getMerchantAnalytics = async (req, res) => {
                     _id: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } },
                     revenue: { 
                         $sum: { 
-                            $cond: [{ $in: ["$orderStatus", ["delivered", "completed"]] }, "$finalBilling.baseAmount", 0] 
+                            $cond: [
+                                { $in: ["$orderStatus", ["delivered", "completed"]] },
+                                { $cond: [{ $gt: ["$finalBilling.baseAmount", 0] }, "$finalBilling.baseAmount", "$totalAmount"] },
+                                0
+                            ] 
                         } 
                     },
                     orders: { $sum: 1 },
@@ -128,10 +136,30 @@ export const getMerchantAnalytics = async (req, res) => {
         const returnRate = formattedStats.deliveredOrders > 0 ? (formattedStats.returnedOrders / formattedStats.deliveredOrders) * 100 : 0;
         const deliveryRate = formattedStats.totalOrders > 0 ? (formattedStats.deliveredOrders / formattedStats.totalOrders) * 100 : 0;
 
+        // Fill missing dates in dailyTrend
+        const filledTrend = [];
+        if (startDate && endDate) {
+            const dateMap = new Map(dailyTrend.map(d => [d._id, d]));
+            let currDate = new Date(startDate + "T00:00:00.000Z");
+            let endD = new Date(endDate + "T00:00:00.000Z");
+            
+            while (currDate <= endD) {
+                const dateStr = currDate.toISOString().split('T')[0];
+                filledTrend.push(dateMap.get(dateStr) || {
+                    _id: dateStr,
+                    revenue: 0,
+                    orders: 0,
+                    delivered: 0,
+                    returns: 0
+                });
+                currDate.setDate(currDate.getDate() + 1);
+            }
+        }
+
         res.status(200).json({
             success: true,
             stats: { ...formattedStats, avgOrderValue, returnRate, deliveryRate },
-            dailyTrend: dailyTrend.map(d => ({ date: d._id, ...d })),
+            dailyTrend: (filledTrend.length > 0 ? filledTrend : dailyTrend).map(d => ({ date: d._id, ...d })),
             topProducts
         });
 

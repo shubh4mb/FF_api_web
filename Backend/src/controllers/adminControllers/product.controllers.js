@@ -3,6 +3,8 @@ import { storageService } from '../../services/storage.service.js';
 import { asyncHandler } from '../../utils/asyncHandler.js';
 import { ApiError } from '../../utils/ApiError.js';
 import { ApiResponse } from '../../utils/ApiResponse.js';
+import ProductFlat from '../../models/productFlat.model.js';
+import { convertToLegacyFormat } from '../../utils/variantAdapter.js';
 
 
 export const getBaseProducts = asyncHandler(async (req, res) => {
@@ -41,7 +43,6 @@ export const addVariant = asyncHandler(async (req, res) => {
   const productId = req.params.productId;
   const { color, sizes, mrp, price, discount } = req.body;
 
-  // Parse JSON strings safely
   let parsedColor, parsedSizes;
   try {
     parsedColor = JSON.parse(color);
@@ -50,7 +51,6 @@ export const addVariant = asyncHandler(async (req, res) => {
     throw new ApiError(400, "Invalid JSON in color or sizes");
   }
 
-  // Ensure numeric values are safe
   const safeNumber = (val) => {
     const num = Number(val);
     return isNaN(num) ? 0 : num;
@@ -60,7 +60,6 @@ export const addVariant = asyncHandler(async (req, res) => {
   const safePrice = safeNumber(price);
   const safeDiscount = safeNumber(discount);
 
-  // Upload images to Cloudinary (max 5)
   const MAX_IMAGES = 5;
   const uploadedImages = [];
 
@@ -70,7 +69,51 @@ export const addVariant = asyncHandler(async (req, res) => {
     uploadedImages.push(...results);
   }
 
-  // Construct the new variant object
+  if (process.env.USE_FLAT_PRODUCT_SCHEMA === 'true') {
+    const existingFlatProduct = await ProductFlat.findOne({ styleGroupId: productId });
+    if (!existingFlatProduct) {
+      throw new ApiError(404, "Product group not found");
+    }
+
+    const base = existingFlatProduct.toObject();
+    delete base._id;
+    delete base.__v;
+    delete base.createdAt;
+    delete base.updatedAt;
+
+    const parentProductCode = existingFlatProduct.productCode.split('-')[0] || existingFlatProduct.productCode;
+    const cleanColor = (parsedColor?.name || 'Default').replace(/\s+/g, '').toUpperCase();
+
+    for (const sizeObj of parsedSizes) {
+      const cleanSize = sizeObj.size.replace(/\s+/g, '').toUpperCase();
+      const flatDoc = new ProductFlat({
+        ...base,
+        productCode: `${parentProductCode}-${cleanColor}-${cleanSize}`,
+        color: parsedColor,
+        size: sizeObj.size,
+        stock: isNaN(Number(sizeObj.stock)) ? 0 : Number(sizeObj.stock),
+        mrp: safeMrp,
+        price: safePrice,
+        discount: safeDiscount,
+        images: uploadedImages
+      });
+      await flatDoc.save();
+    }
+
+    await ProductFlat.deleteOne({
+      styleGroupId: productId,
+      size: 'Free',
+      'color.name': 'Default',
+      stock: 0,
+      price: 0
+    });
+
+    const siblings = await ProductFlat.find({ styleGroupId: productId, isActive: true });
+    const legacyProduct = convertToLegacyFormat(siblings[0], siblings.slice(1));
+
+    return res.status(200).json(new ApiResponse(200, { product: legacyProduct }, "Variant added successfully"));
+  }
+
   const newVariant = {
     color: parsedColor,
     sizes: parsedSizes,
@@ -80,7 +123,6 @@ export const addVariant = asyncHandler(async (req, res) => {
     images: uploadedImages,
   };
 
-  // Update the product by pushing the variant
   const updatedProduct = await Product.findByIdAndUpdate(
     productId,
     { $push: { variants: newVariant } },
@@ -179,4 +221,18 @@ export const toggleProductStatus = asyncHandler(async (req, res) => {
   await product.save();
 
   return res.status(200).json(new ApiResponse(200, { isActive: product.isActive }, "Product status updated successfully"));
+});
+
+export const toggleProductVerification = asyncHandler(async (req, res) => {
+  const { productId } = req.params;
+  const product = await Product.findById(productId);
+  
+  if (!product) {
+    throw new ApiError(404, "Product not found");
+  }
+
+  product.isVerified = !product.isVerified;
+  await product.save();
+
+  return res.status(200).json(new ApiResponse(200, { isVerified: product.isVerified }, "Product verification updated successfully"));
 });

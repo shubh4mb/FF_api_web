@@ -33,6 +33,7 @@ import PayoutManagement from '../pages/admin/PayoutManagement';
 import SupportTickets from '../pages/admin/SupportTickets';
 import ZipCoverRequests from '../pages/admin/ZipCoverRequests';
 import OrderCancellations from '../pages/admin/OrderCancellations';
+import UnresponsiveRiderReports from '../pages/admin/UnresponsiveRiderReports';
 import AuditLogs from '../pages/admin/AuditLogs';
 import BroadcastNotifications from '../pages/admin/BroadcastNotifications';
 import SalesLeads from '../pages/admin/SalesLeads';
@@ -42,6 +43,10 @@ import ManageSalesTeam from '../pages/admin/leads/ManageSalesTeam';
 import LeadsMap from '../pages/admin/leads/LeadsMap';
 import LeadsDashboard from '../pages/admin/leads/LeadsDashboard';
 import ReturnIssues from '../pages/admin/ReturnIssues';
+import WarehouseManagement from '../pages/admin/WarehouseManagement';
+import WarehouseProducts from '../pages/admin/WarehouseProducts';
+import WarehouseOrders from '../pages/admin/WarehouseOrders';
+
 
 
 const AppRoutes = () => {
@@ -87,9 +92,13 @@ const AppRoutes = () => {
             <Route path="support" element={<SupportTickets />} />
             <Route path="zip-covers" element={<ZipCoverRequests />} />
             <Route path="order-cancellations" element={<OrderCancellations />} />
+            <Route path="unresponsive-riders" element={<UnresponsiveRiderReports />} />
             <Route path="audit-logs" element={<AuditLogs />} />
             <Route path="notifications" element={<BroadcastNotifications />} />
             <Route path="return-issues" element={<ReturnIssues />} />
+            <Route path="warehouses" element={<WarehouseManagement />} />
+            <Route path="warehouse-products" element={<WarehouseProducts />} />
+            <Route path="warehouse-orders" element={<WarehouseOrders />} />
           </Route>
         </Route>
 

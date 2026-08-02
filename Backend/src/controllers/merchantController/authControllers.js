@@ -100,7 +100,9 @@ export const verifyEmailOtp = async (req, res) => {
       merchant: {
         _id: merchant._id,
         email: merchant.email,
-        zoneId: merchant.zoneId
+        zoneId: merchant.zoneId,
+        accountType: merchant.accountType || 'merchant',
+        warehouseId: merchant.warehouseId || null,
       },
       token, // ✅ send token to frontend
     });
@@ -502,7 +504,9 @@ export const loginMerchant = async (req, res) => {
         phoneNumber: merchant.phoneNumber,
         isActive: merchant.isActive,
         status: merchant.status,
-        zoneId: merchant.zoneId
+        zoneId: merchant.zoneId,
+        accountType: merchant.accountType || 'merchant',
+        warehouseId: merchant.warehouseId || null,
       },
     });
 
@@ -585,6 +589,8 @@ export const registerMerchant = async (req, res) => {
         isActive: merchant.isActive,
         status: merchant.status,
         zoneId: merchant.zoneId,
+        accountType: merchant.accountType || 'merchant',
+        warehouseId: merchant.warehouseId || null,
       }
     });
   } catch (error) {
@@ -679,7 +685,9 @@ export const refreshMerchantToken = async (req, res) => {
         phoneNumber: merchant.phoneNumber,
         isActive: merchant.isActive,
         status: merchant.status,
-        zoneId: merchant.zoneId
+        zoneId: merchant.zoneId,
+        accountType: merchant.accountType || 'merchant',
+        warehouseId: merchant.warehouseId || null,
       },
       message: "Merchant token refreshed successfully" 
     });

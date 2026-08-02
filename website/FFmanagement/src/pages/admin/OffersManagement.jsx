@@ -296,6 +296,7 @@ function OfferFormModal({ offer, submitting, categories, collections, onSubmit, 
     isFlashSale: offer?.isFlashSale || offer?.type === 'FLASH_SALE',
     couponCode: offer?.couponCode || '',
     requiresCoupon: offer?.requiresCoupon || false,
+    isPublic: offer?.isPublic !== undefined ? offer.isPublic : true,
     maxUsageTotal: offer?.maxUsageTotal || '',
     maxUsagePerUser: offer?.maxUsagePerUser || 1,
     freeDelivery: offer?.freeDelivery || false,
@@ -309,7 +310,6 @@ function OfferFormModal({ offer, submitting, categories, collections, onSubmit, 
   const update = (key, value) => {
     setForm((p) => {
         const newState = { ...p, [key]: value };
-        // Auto-set benefit type if choosing collection or category
         if (key === 'type' && (value === 'COLLECTION' || value === 'CATEGORY')) {
             newState.benefitType = 'PRODUCT';
         } else if (key === 'type') {
@@ -353,234 +353,285 @@ function OfferFormModal({ offer, submitting, categories, collections, onSubmit, 
 
   return (
     <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl w-full max-w-lg max-h-[90vh] overflow-auto p-7 shadow-2xl">
-        <div className="flex justify-between items-center mb-6">
-          <h2 className="text-xl font-extrabold text-slate-800">
-            {offer ? 'Edit Offer' : 'Create Admin Offer'}
-          </h2>
-          <button onClick={onClose} className="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 transition-colors">
-            <X size={16} className="text-slate-500" />
+      <div className="bg-slate-50 rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-auto shadow-2xl flex flex-col">
+        <div className="sticky top-0 bg-white border-b border-slate-200 p-6 z-10 flex justify-between items-center rounded-t-2xl">
+          <div>
+            <h2 className="text-xl font-extrabold text-slate-800">
+              {offer ? 'Edit Platform Offer' : 'Create Platform Offer'}
+            </h2>
+            <p className="text-sm text-slate-500 mt-1">Design global promotions across the platform.</p>
+          </div>
+          <button onClick={onClose} className="p-2 rounded-lg bg-slate-100 hover:bg-slate-200 transition-colors">
+            <X size={18} className="text-slate-500" />
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-5">
-          {/* Type */}
-          <div>
-            <label className="text-xs font-bold text-slate-500 mb-2 block tracking-tight uppercase">Offer Type</label>
-            <div className="grid grid-cols-2 gap-2">
+        <form onSubmit={handleSubmit} className="p-6 space-y-6">
+          
+          {/* Section 1: Offer Type */}
+          <div className="bg-white p-5 rounded-2xl border border-slate-200">
+            <h3 className="text-sm font-extrabold text-slate-700 mb-4">1. What kind of offer is this?</h3>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
               {ADMIN_OFFER_TYPES.map((t) => (
                 <button
                   key={t.value} type="button"
                   onClick={() => handleTypeChange(t.value)}
-                  className={`flex items-center gap-3 p-3 rounded-xl border-2 transition-all text-left ${form.type === t.value ? 'shadow-sm' : 'border-slate-50'}`}
+                  className={`flex flex-col items-center justify-center gap-2 p-4 rounded-xl border-2 transition-all text-center ${form.type === t.value ? 'shadow-sm' : 'border-slate-100 hover:border-slate-200'}`}
                   style={{
                     borderColor: form.type === t.value ? t.color : undefined,
-                    background: form.type === t.value ? t.bg : '#F8FAFC',
+                    background: form.type === t.value ? t.bg : '#fff',
                   }}
                 >
-                  <t.icon size={18} color={t.color} />
+                  <t.icon size={24} color={form.type === t.value ? t.color : '#94A3B8'} />
                   <div>
-                    <div className="text-xs font-bold text-slate-700">{t.label}</div>
-                    <div className="text-[10px] text-slate-400 font-medium">{t.description}</div>
+                    <div className={`text-xs font-bold ${form.type === t.value ? '' : 'text-slate-600'}`} style={{ color: form.type === t.value ? t.color : undefined }}>{t.label}</div>
+                    <div className="text-[10px] text-slate-400 font-medium mt-1 leading-tight">{t.description}</div>
                   </div>
                 </button>
               ))}
             </div>
-          </div>
 
-          {/* Applicable To */}
-          <div>
-            <label className="text-xs font-bold text-slate-500 mb-2 block tracking-tight uppercase">Applicable To</label>
-            <div className="grid grid-cols-3 gap-2">
-              {[
-                { value: 'both', label: 'Both', color: '#475569', bg: '#F1F5F9', description: 'Try & Buy + Courier' },
-                { value: 'try_and_buy', label: 'Try & Buy', color: '#16A34A', bg: '#F0FDF4', description: 'Platform delivery' },
-                { value: 'courier', label: 'Standard Cart', color: '#7C3AED', bg: '#F5F3FF', description: 'Courier delivery' },
-              ].map((opt) => (
-                <button
-                  key={opt.value} type="button"
-                  onClick={() => update('applicableTo', opt.value)}
-                  className={`p-3 rounded-xl border-2 transition-all text-left ${form.applicableTo === opt.value ? 'shadow-sm' : 'border-slate-50'}`}
-                  style={{
-                    borderColor: form.applicableTo === opt.value ? opt.color : undefined,
-                    background: form.applicableTo === opt.value ? opt.bg : '#F8FAFC',
-                  }}
-                >
-                  <div className="text-xs font-bold text-slate-700">{opt.label}</div>
-                  <div className="text-[10px] text-slate-400 font-medium">{opt.description}</div>
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Title */}
-          <div>
-            <label className="text-xs font-bold text-slate-500 mb-1 block">Title *</label>
-            <input value={form.title} onChange={(e) => update('title', e.target.value)} placeholder="e.g. ₹150 OFF on first order" className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm font-medium bg-slate-50 outline-none focus:ring-2 focus:ring-blue-100" required />
-          </div>
-
-          {/* Discount */}
-          <div className="grid grid-cols-3 gap-3">
-            <div>
-              <label className="text-xs font-bold text-slate-500 mb-1 block">Discount Type</label>
-              <select value={form.discountType} onChange={(e) => update('discountType', e.target.value)} className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm font-medium bg-slate-50">
-                <option value="percentage">% Off</option>
-                <option value="flat">₹ Flat</option>
-              </select>
-            </div>
-            <div>
-              <label className="text-xs font-bold text-slate-500 mb-1 block">Value *</label>
-              <input type="number" value={form.discountValue} onChange={(e) => update('discountValue', Number(e.target.value))} min={0} className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm font-medium bg-slate-50" required />
-            </div>
-            {form.discountType === 'percentage' && (
-              <div>
-                <label className="text-xs font-bold text-slate-500 mb-1 block">Max ₹</label>
-                <input type="number" value={form.maxDiscount} onChange={(e) => update('maxDiscount', e.target.value)} min={0} placeholder="No cap" className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm font-medium bg-slate-50" />
+            <div className="mt-6">
+              <label className="text-xs font-bold text-slate-500 mb-2 block">Where is this applicable?</label>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                {[
+                  { value: 'both', label: 'All Orders', bg: '#F1F5F9', color: '#475569', desc: 'Try & Buy + Courier' },
+                  { value: 'try_and_buy', label: 'Try & Buy Only', bg: '#F0FDF4', color: '#16A34A', desc: 'Local Platform Delivery' },
+                  { value: 'courier', label: 'Standard Delivery', bg: '#F5F3FF', color: '#7C3AED', desc: 'Courier only' },
+                ].map((opt) => (
+                  <button
+                    key={opt.value} type="button"
+                    onClick={() => update('applicableTo', opt.value)}
+                    className={`p-3 rounded-xl border-2 transition-all text-left ${form.applicableTo === opt.value ? 'shadow-sm' : 'border-slate-100 bg-white hover:border-slate-200'}`}
+                    style={{
+                      borderColor: form.applicableTo === opt.value ? opt.color : undefined,
+                      background: form.applicableTo === opt.value ? opt.bg : undefined,
+                    }}
+                  >
+                    <div className="text-sm font-bold" style={{ color: form.applicableTo === opt.value ? opt.color : '#334155' }}>{opt.label}</div>
+                    <div className="text-xs text-slate-400 mt-1">{opt.desc}</div>
+                  </button>
+                ))}
               </div>
-            )}
+            </div>
           </div>
 
-          {/* Logic Box */}
-          <div className="bg-slate-50 p-5 rounded-2xl border border-slate-100 space-y-4">
-            <h3 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Eligibility Logic</h3>
+          {/* Section 2: The Deal */}
+          <div className="bg-white p-5 rounded-2xl border border-slate-200">
+            <h3 className="text-sm font-extrabold text-slate-700 mb-4">2. The Deal Details</h3>
             
-            {(form.type === 'CART_VALUE' || form.type === 'CATEGORY' || form.type === 'COLLECTION') && (
+            <div className="space-y-4">
               <div>
-                <label className="text-xs font-bold text-slate-500 mb-1 block">Min Cart Value (₹)</label>
-                <input type="number" value={form.conditions.minCartValue} onChange={(e) => updateCond('minCartValue', Number(e.target.value))} min={0} className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm font-medium bg-white" />
+                <label className="text-xs font-bold text-slate-500 mb-1 block">Offer Title (Shown to customers) *</label>
+                <input value={form.title} onChange={(e) => update('title', e.target.value)} placeholder="e.g. ₹150 OFF on first order" className="w-full px-4 py-3 rounded-xl border border-slate-200 text-sm font-medium bg-slate-50 outline-none focus:ring-2 focus:ring-blue-100 focus:bg-white transition-all" required />
               </div>
-            )}
 
-            {form.type === 'COLLECTION' && (
-              <div>
-                <label className="text-xs font-bold text-slate-500 mb-1 block">Target Collection</label>
-                <select 
-                  value={form.conditions.collectionId || ''} 
-                  onChange={(e) => updateCond('collectionId', e.target.value || null)}
-                  className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm font-bold bg-white"
-                >
-                  <option value="">Select Collection</option>
-                  {collections.map(c => (
-                    <option key={c._id} value={c._id}>{c.name}</option>
-                  ))}
-                </select>
-              </div>
-            )}
-
-            {form.type === 'CATEGORY' && (
-              <div className="space-y-4">
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                 <div>
-                  <label className="text-xs font-bold text-slate-500 mb-2 block">Whitelist Genders</label>
-                  <div className="flex gap-2">
-                    {['MEN', 'WOMEN', 'KIDS'].map((g) => (
-                      <button
-                        key={g} type="button"
-                        onClick={() => {
-                          const genders = form.conditions.genders || [];
-                          updateCond('genders', genders.includes(g) ? genders.filter((x) => x !== g) : [...genders, g]);
-                        }}
-                        className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all uppercase ${(form.conditions.genders || []).includes(g) ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-400 border-slate-200 hover:border-slate-300'}`}
-                      >
-                        {g}
-                      </button>
+                  <label className="text-xs font-bold text-slate-500 mb-1 block">Discount Type</label>
+                  <select value={form.discountType} onChange={(e) => update('discountType', e.target.value)} className="w-full px-3 py-3 rounded-xl border border-slate-200 text-sm font-medium bg-slate-50">
+                    <option value="percentage">Percentage (%)</option>
+                    <option value="flat">Flat Amount (₹)</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-slate-500 mb-1 block">Discount Value *</label>
+                  <input type="number" value={form.discountValue} onChange={(e) => update('discountValue', Number(e.target.value))} min={0} className="w-full px-3 py-3 rounded-xl border border-slate-200 text-sm font-medium bg-slate-50" required />
+                </div>
+                {form.discountType === 'percentage' && (
+                  <div>
+                    <label className="text-xs font-bold text-slate-500 mb-1 block">Max Discount (₹)</label>
+                    <input type="number" value={form.maxDiscount} onChange={(e) => update('maxDiscount', e.target.value)} min={0} placeholder="No cap" className="w-full px-3 py-3 rounded-xl border border-slate-200 text-sm font-medium bg-slate-50" />
+                  </div>
+                )}
+              </div>
+              
+              <label className="flex items-start gap-3 p-4 bg-green-50 rounded-xl border border-green-200 cursor-pointer">
+                <input type="checkbox" checked={form.freeDelivery} onChange={(e) => update('freeDelivery', e.target.checked)} className="mt-1" />
+                <div>
+                  <div className="text-sm font-bold text-green-700">Include Free Delivery?</div>
+                  <div className="text-xs text-green-600 mt-1">Waive delivery charges when this offer applies.</div>
+                </div>
+              </label>
+            </div>
+          </div>
+
+          {/* Section 3: Targeting & Logic (Conditional) */}
+          <div className="bg-white p-5 rounded-2xl border border-slate-200">
+            <h3 className="text-sm font-extrabold text-slate-700 mb-4">3. Targeting Rules</h3>
+            
+            <div className="space-y-6">
+              {(form.type === 'CART_VALUE' || form.type === 'CATEGORY' || form.type === 'COLLECTION' || form.type === 'FIRST_TIME_USER') && (
+                <div>
+                  <label className="text-xs font-bold text-slate-500 mb-1 block">Minimum Cart Value (₹) <span className="font-normal">(Optional)</span></label>
+                  <input type="number" value={form.conditions.minCartValue} onChange={(e) => updateCond('minCartValue', Number(e.target.value))} min={0} placeholder="0" className="w-full px-4 py-3 rounded-xl border border-slate-200 text-sm font-medium bg-slate-50" />
+                </div>
+              )}
+
+              {form.type === 'COLLECTION' && (
+                <div className="p-4 bg-purple-50 rounded-xl border border-purple-100">
+                  <label className="text-sm font-bold text-purple-700 mb-2 block">Target Collection</label>
+                  <select 
+                    value={form.conditions.collectionId || ''} 
+                    onChange={(e) => updateCond('collectionId', e.target.value || null)}
+                    className="w-full px-4 py-3 rounded-xl border border-purple-200 text-sm font-bold bg-white text-purple-900 shadow-sm"
+                  >
+                    <option value="">Select a Curated Collection...</option>
+                    {collections.map(c => (
+                      <option key={c._id} value={c._id}>{c.name}</option>
                     ))}
+                  </select>
+                </div>
+              )}
+
+              {form.type === 'CATEGORY' && (
+                <div className="p-4 bg-blue-50 rounded-xl border border-blue-100 space-y-5">
+                  <div>
+                    <label className="text-sm font-bold text-blue-700 mb-2 block">Target Genders</label>
+                    <div className="flex flex-wrap gap-2">
+                      {['MEN', 'WOMEN', 'KIDS', 'BOYS', 'GIRLS'].map((g) => (
+                        <button
+                          key={g} type="button"
+                          onClick={() => {
+                            const genders = form.conditions.genders || [];
+                            updateCond('genders', genders.includes(g) ? genders.filter((x) => x !== g) : [...genders, g]);
+                          }}
+                          className={`px-4 py-2 rounded-lg text-xs font-bold border transition-all uppercase ${(form.conditions.genders || []).includes(g) ? 'bg-blue-600 text-white border-blue-600 shadow-sm' : 'bg-white text-blue-400 border-blue-200 hover:border-blue-300'}`}
+                        >
+                          {g}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                          <label className="text-xs font-bold text-blue-700 mb-2 block">Main Categories</label>
+                          <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto p-2 bg-white/50 rounded-xl border border-blue-100/50">
+                              {mainCategories.map(cat => (
+                              <button
+                                  key={cat._id} type="button"
+                                  onClick={() => handleToggleCategory(cat._id, 'categoryIds')}
+                                  className={`px-3 py-1.5 rounded-md text-xs font-bold border transition-all ${(form.conditions.categoryIds || []).includes(cat._id) ? 'bg-blue-600 text-white border-blue-600 shadow-sm' : 'bg-white text-slate-500 border-slate-200 hover:border-slate-300'}`}
+                              >
+                                  {cat.name}
+                              </button>
+                              ))}
+                          </div>
+                      </div>
+                      <div>
+                          <label className="text-xs font-bold text-blue-700 mb-2 block">Sub-Categories</label>
+                          <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto p-2 bg-white/50 rounded-xl border border-blue-100/50">
+                              {subCategories.map(sub => (
+                              <button
+                                  key={sub._id} type="button"
+                                  onClick={() => handleToggleCategory(sub._id, 'subCategoryIds')}
+                                  className={`px-3 py-1.5 rounded-md text-xs font-bold border transition-all ${(form.conditions.subCategoryIds || []).includes(sub._id) ? 'bg-orange-500 text-white border-orange-500 shadow-sm' : 'bg-white text-slate-500 border-slate-200 hover:border-slate-300'}`}
+                              >
+                                  {sub.name}
+                              </button>
+                              ))}
+                          </div>
+                      </div>
                   </div>
                 </div>
-                
-                <div className="grid grid-cols-2 gap-4">
-                    <div>
-                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-tight block mb-1.5">Categories</label>
-                        <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto">
-                            {mainCategories.map(cat => (
-                            <button
-                                key={cat._id} type="button"
-                                onClick={() => handleToggleCategory(cat._id, 'categoryIds')}
-                                className={`px-2 py-1 rounded-md text-[10px] font-bold border transition-all uppercase ${(form.conditions.categoryIds || []).includes(cat._id) ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-400 border-slate-200 hover:border-slate-300'}`}
-                            >
-                                {cat.name}
-                            </button>
-                            ))}
-                        </div>
-                    </div>
-                    <div>
-                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-tight block mb-1.5">Sub-Categories</label>
-                        <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto">
-                            {subCategories.map(sub => (
-                            <button
-                                key={sub._id} type="button"
-                                onClick={() => handleToggleCategory(sub._id, 'subCategoryIds')}
-                                className={`px-2 py-1 rounded-md text-[10px] font-bold border transition-all uppercase ${(form.conditions.subCategoryIds || []).includes(sub._id) ? 'bg-orange-500 text-white border-orange-500' : 'bg-white text-slate-400 border-slate-200 hover:border-slate-300'}`}
-                            >
-                                {sub.name}
-                            </button>
-                            ))}
-                        </div>
-                    </div>
+              )}
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+                <div>
+                  <label className="text-xs font-bold text-slate-500 mb-1 block">Start Date & Time *</label>
+                  <input type="datetime-local" value={form.startDate} onChange={(e) => update('startDate', e.target.value)} className="w-full px-4 py-3 rounded-xl border border-slate-200 text-sm font-medium bg-slate-50" required />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-slate-500 mb-1 block">End Date & Time *</label>
+                  <input type="datetime-local" value={form.endDate} onChange={(e) => update('endDate', e.target.value)} className="w-full px-4 py-3 rounded-xl border border-slate-200 text-sm font-medium bg-slate-50" required />
                 </div>
               </div>
-            )}
-          </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs font-bold text-slate-500 mb-1 block">Start *</label>
-              <input type="datetime-local" value={form.startDate} onChange={(e) => update('startDate', e.target.value)} className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm font-medium bg-slate-50" required />
-            </div>
-            <div>
-              <label className="text-xs font-bold text-slate-500 mb-1 block">End *</label>
-              <input type="datetime-local" value={form.endDate} onChange={(e) => update('endDate', e.target.value)} className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm font-medium bg-slate-50" required />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-                <label className="text-xs font-bold text-slate-500 mb-1 block">Coupon Code</label>
-                <input value={form.couponCode} onChange={(e) => update('couponCode', e.target.value.toUpperCase())} placeholder="Optional" className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm font-bold bg-slate-50 tracking-wider" />
-            </div>
-            <div className="space-y-2 py-1">
-                <label className="flex items-center gap-2 cursor-pointer">
-                    <input type="checkbox" checked={form.requiresCoupon} onChange={(e) => update('requiresCoupon', e.target.checked)} className="rounded" />
-                    <span className="text-xs font-semibold text-slate-500">Requires coupon</span>
+              <div className="p-4 bg-slate-50 rounded-xl border border-slate-200">
+                <label className="flex items-center gap-3 cursor-pointer mb-3">
+                    <input type="checkbox" checked={form.requiresCoupon} onChange={(e) => update('requiresCoupon', e.target.checked)} className="w-4 h-4 rounded text-blue-600" />
+                    <span className="text-sm font-bold text-slate-700">Requires a Secret Promo Code?</span>
                 </label>
-                <label className="flex items-center gap-2 cursor-pointer">
-                    <input type="checkbox" checked={form.freeDelivery} onChange={(e) => update('freeDelivery', e.target.checked)} className="rounded" />
-                    <span className="text-xs font-semibold text-slate-500">Free Delivery</span>
-                </label>
+                {form.requiresCoupon && (
+                  <div className="mb-4">
+                    <input value={form.couponCode} onChange={(e) => update('couponCode', e.target.value.toUpperCase())} placeholder="e.g. FLASH50" className="w-full px-4 py-3 rounded-xl border border-slate-300 text-sm font-extrabold bg-white tracking-widest uppercase shadow-sm" required={form.requiresCoupon} />
+                    <p className="text-xs text-slate-500 mt-2">Users must type this exact code to get the discount.</p>
+                  </div>
+                )}
+
+                <div className="pt-3 border-t border-slate-200">
+                  <label className="flex items-center gap-3 cursor-pointer">
+                      <input type="checkbox" checked={form.isPublic} onChange={(e) => update('isPublic', e.target.checked)} className="w-4 h-4 rounded text-blue-600" />
+                      <span className="text-sm font-bold text-slate-700">Show in Public Coupon List?</span>
+                  </label>
+                  <p className="text-xs text-slate-500 mt-1">If unchecked, this coupon will be HIDDEN from the available coupons list in the app. Users can only apply it by manually typing the promo code.</p>
+                </div>
+              </div>
             </div>
           </div>
 
-          <div className="border border-slate-100 rounded-xl p-4 bg-slate-50/50">
-                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-3">Stacking & Type</label>
-                <div className="flex gap-2 mb-3">
-                    {['PRODUCT', 'CART', 'DELIVERY'].map(bt => (
+          {/* Section 4: Advanced Restrictions */}
+          <div className="bg-white p-5 rounded-2xl border border-slate-200 space-y-5">
+            <h3 className="text-sm font-extrabold text-slate-700">4. Advanced Restrictions</h3>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="text-xs font-bold text-slate-500 mb-1 block">Total Usage Limit <span className="font-normal">(Optional)</span></label>
+                <input type="number" value={form.maxUsageTotal} onChange={(e) => update('maxUsageTotal', e.target.value)} placeholder="e.g. First 100 users" className="w-full px-4 py-3 rounded-xl border border-slate-200 text-sm font-medium bg-slate-50" />
+              </div>
+              <div>
+                <label className="text-xs font-bold text-slate-500 mb-1 block">Max Uses Per Customer</label>
+                <input type="number" value={form.maxUsagePerUser} onChange={(e) => update('maxUsagePerUser', e.target.value)} min={1} className="w-full px-4 py-3 rounded-xl border border-slate-200 text-sm font-medium bg-slate-50" />
+              </div>
+            </div>
+
+            <div className="pt-2">
+                <label className="text-xs font-bold text-slate-500 mb-2 block">How is the discount applied?</label>
+                <div className="flex flex-col md:flex-row gap-3">
+                    {[
+                      { value: 'CART', label: 'On entire cart total' },
+                      { value: 'PRODUCT', label: 'On specific matching items' },
+                      { value: 'DELIVERY', label: 'On delivery fees' },
+                    ].map(bt => (
                         <button
-                            key={bt} type="button"
-                            onClick={() => update('benefitType', bt)}
-                            className={`flex-1 py-1.5 rounded-lg text-xs font-extrabold border transition-all ${form.benefitType === bt ? 'bg-blue-600 text-white border-blue-600 shadow-sm' : 'bg-white text-slate-400 border-slate-100 hover:border-slate-300'}`}
+                            key={bt.value} type="button"
+                            onClick={() => update('benefitType', bt.value)}
+                            className={`flex-1 p-3 rounded-xl text-xs font-bold border transition-all ${form.benefitType === bt.value ? 'bg-blue-50 text-blue-700 border-blue-500 shadow-sm' : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50'}`}
                         >
-                            {bt}
+                            {bt.label}
                         </button>
                     ))}
                 </div>
-                <div className="flex gap-4">
-                    <label className="flex items-center gap-2 cursor-pointer">
-                        <input type="checkbox" checked={form.stackable} onChange={(e) => update('stackable', e.target.checked)} className="rounded" />
-                        <span className="text-xs font-semibold text-slate-500">Stackable</span>
-                    </label>
-                    <label className="flex items-center gap-2 cursor-pointer">
-                        <input type="checkbox" checked={form.isExclusive} onChange={(e) => { update('isExclusive', e.target.checked); if(e.target.checked) update('stackable', false); }} className="rounded" />
-                        <span className="text-xs font-semibold text-orange-600">Exclusive</span>
-                    </label>
-                </div>
+            </div>
+
+            <div className="flex flex-col gap-3 pt-2">
+                <label className="flex items-start gap-3 cursor-pointer">
+                    <input type="checkbox" checked={form.stackable} onChange={(e) => update('stackable', e.target.checked)} className="mt-1 w-4 h-4 rounded text-blue-600" />
+                    <div>
+                      <span className="text-sm font-bold text-slate-700">Stackable Offer</span>
+                      <p className="text-xs text-slate-500">Allow customers to combine this with other merchant discounts.</p>
+                    </div>
+                </label>
+                <label className="flex items-start gap-3 cursor-pointer">
+                    <input type="checkbox" checked={form.isExclusive} onChange={(e) => { update('isExclusive', e.target.checked); if(e.target.checked) update('stackable', false); }} className="mt-1 w-4 h-4 rounded text-red-600" />
+                    <div>
+                      <span className="text-sm font-bold text-red-600">Exclusive Offer</span>
+                      <p className="text-xs text-slate-500">If applied, NO other coupons can be used on this order.</p>
+                    </div>
+                </label>
+            </div>
           </div>
 
-          <button
-            type="submit" disabled={submitting}
-            className="w-full py-3.5 rounded-xl text-sm font-extrabold text-white transition-all disabled:opacity-50"
-            style={{ background: 'linear-gradient(135deg, #3B82F6, #2563EB)' }}
-          >
-            {submitting ? 'Processing...' : offer ? 'Update Live Scheme' : 'Launch New Offer'}
-          </button>
+          <div className="sticky bottom-0 bg-slate-50 pt-2 pb-2 mt-4 z-10 border-t border-slate-200">
+            <button
+              type="submit" disabled={submitting}
+              className="w-full py-4 rounded-xl text-base font-extrabold text-white transition-all disabled:opacity-50 shadow-lg hover:shadow-xl hover:-translate-y-0.5"
+              style={{ background: 'linear-gradient(135deg, #3B82F6, #2563EB)' }}
+            >
+              {submitting ? 'Processing...' : offer ? 'Update Live Offer' : 'Launch Offer Now'}
+            </button>
+          </div>
         </form>
       </div>
     </div>

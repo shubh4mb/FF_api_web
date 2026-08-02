@@ -3,6 +3,8 @@ import Product from "../../models/product.model.js";
 import Cart from '../../models/cart.model.js';
 import CourierOrder from "../../models/courierOrder.model.js";
 import DeliveryRider from '../../models/deliveryRider.model.js';
+import ProductFlat from "../../models/productFlat.model.js";
+import { generateColorVariantId } from "../../utils/variantAdapter.js";
 import Merchant from '../../models/merchant.model.js';
 import { emitOrderUpdate } from "../../sockets/order.socket.js";
 import { notifyMerchant } from "../../sockets/merchant.socket.js";
@@ -24,6 +26,7 @@ import { logAuditEvent } from "../../utils/auditLogger.js";
 import AppConfig from "../../models/appConfig.model.js";
 import { generateReceiptPDF } from "../../utils/pdfGenerator.js";
 import { sendMerchantPaymentReceiptEmail } from "../../services/mail.service.js";
+import { createWarehouseTBOrder } from "./warehouseOrder.controllers.js";
 
 export const createRazorpayOrder = async (req, res) => {
   try {
@@ -34,10 +37,41 @@ export const createRazorpayOrder = async (req, res) => {
       return res.status(400).json({ message: "merchantId is required for multi-cart checkout" });
     }
 
+    if (requestedMerchantId === 'flashmart') {
+      const cartDoc = await Cart.findOne({ userId });
+      const whItem = cartDoc?.items?.find(i => i.source === 'warehouse');
+      if (whItem && whItem.warehouseId) {
+        req.body.warehouseId = whItem.warehouseId.toString();
+        return createWarehouseTBOrder(req, res);
+      }
+    }
+
     // === VALIDATE CART ===
-    const cart = await Cart.findOne({ userId })
-      .populate("items.productId")
-      .populate("items.merchantId");
+    let cart;
+    if (process.env.USE_FLAT_PRODUCT_SCHEMA === 'true') {
+      const cartDoc = await Cart.findOne({ userId }).populate("items.merchantId");
+      if (cartDoc) {
+        cart = cartDoc.toObject();
+        for (const item of cart.items) {
+          if (!item.productId) continue;
+          const styleGroupId = item.productId.toString();
+          const siblings = await ProductFlat.find({ styleGroupId, size: item.size, isDeleted: { $ne: true } }).lean();
+          if (siblings.length > 0) {
+            const matched = siblings.find(
+              (v) => generateColorVariantId(styleGroupId, v.color.name) === item.variantId.toString()
+            ) || siblings[0];
+
+            item.productId = matched;
+          } else {
+            item.productId = null;
+          }
+        }
+      }
+    } else {
+      cart = await Cart.findOne({ userId })
+        .populate("items.productId")
+        .populate("items.merchantId");
+    }
 
     if (!cart || cart.items.length === 0) {
       return res.status(400).json({ message: "Your cart is empty" });
@@ -133,32 +167,49 @@ export const createRazorpayOrder = async (req, res) => {
       const product = item.productId;
       if (!product) continue;
 
-      const variant = product.variants.id(item.variantId);
-      if (!variant) continue;
+      let price = 0;
+      let stock = 0;
+      let name = '';
+      let isTriable = false;
+      let pId = null;
 
-      const sizeObj = variant.sizes.find(s => s.size === item.size);
-      if (!sizeObj) {
-        return res.status(400).json({ message: `Size ${item.size} not found for product ${product.name}` });
+      if (process.env.USE_FLAT_PRODUCT_SCHEMA === 'true') {
+        price = product.price || 0;
+        stock = product.stock || 0;
+        name = product.name;
+        isTriable = product.isTriable;
+        pId = product.styleGroupId || product._id;
+      } else {
+        const variant = product.variants.id(item.variantId);
+        if (!variant) continue;
+
+        const sizeObj = variant.sizes.find(s => s.size === item.size);
+        if (!sizeObj) {
+          return res.status(400).json({ message: `Size ${item.size} not found for product ${product.name}` });
+        }
+        price = variant.price;
+        stock = sizeObj.stock;
+        name = product.name;
+        isTriable = product.isTriable;
+        pId = product._id;
       }
 
-      if (sizeObj.stock < item.quantity) {
-        return res.status(400).json({ message: `Insufficient stock for ${product.name} (Size: ${item.size}). Available: ${sizeObj.stock}, Requested: ${item.quantity}` });
+      if (stock < item.quantity) {
+        return res.status(400).json({ message: `Insufficient stock for ${name} (Size: ${item.size}). Available: ${stock}, Requested: ${item.quantity}` });
       }
-
-      const price = variant.price;
 
       for (let i = 0; i < item.quantity; i++) {
         totalAmount += price;
 
         orderItems.push({
-          productId: item.productId,
+          productId: pId,
           variantId: item.variantId,
-          name: product.name,
+          name,
           quantity: 1, // 🔥 ALWAYS 1
           price,
           size: item.size,
           image: item.image?.url || "",
-          tryStatus: product.isTriable ? "pending" : "not-triable",
+          tryStatus: isTriable ? "pending" : "not-triable",
         });
       }
     }
@@ -537,7 +588,9 @@ export const razorpayWebhook = async (req, res) => {
   }
 
   const shasum = crypto.createHmac("sha256", secret);
-  shasum.update(JSON.stringify(req.body));
+  // Use the raw body string to prevent formatting mismatch
+  const bodyToVerify = req.rawBody || JSON.stringify(req.body);
+  shasum.update(bodyToVerify);
   const digest = shasum.digest("hex");
 
   if (digest !== signature) {
@@ -1330,18 +1383,34 @@ export const verifyFinalPayment = async (req, res) => {
     // === Deduct stock ONLY for accepted/kept items ===
     const stockUpdateErrors = [];
     for (const item of acceptedItems) {
-      const result = await Product.updateOne(
-        { _id: item.productId, "variants._id": item.variantId },
-        { $inc: { "variants.$[variant].sizes.$[size].stock": -item.quantity } },
-        { arrayFilters: [{ "variant._id": item.variantId }, { "size.size": item.size }], session }
-      );
-      if (result.modifiedCount === 0) {
-        stockUpdateErrors.push(item.productId);
-        console.warn(`Stock not updated for product ${item.productId} — may already be 0`);
+      if (process.env.USE_FLAT_PRODUCT_SCHEMA === 'true') {
+        const docs = await ProductFlat.find({ styleGroupId: item.productId, size: item.size });
+        const targetDoc = docs.find(d => generateColorVariantId(item.productId.toString(), d.color.name) === item.variantId.toString());
+        if (targetDoc) {
+          const result = await ProductFlat.updateOne(
+            { _id: targetDoc._id },
+            { $inc: { stock: -item.quantity } },
+            { session }
+          );
+          if (result.modifiedCount === 0) {
+            stockUpdateErrors.push(item.productId);
+          }
+        } else {
+          stockUpdateErrors.push(item.productId);
+        }
+      } else {
+        const result = await Product.updateOne(
+          { _id: item.productId, "variants._id": item.variantId },
+          { $inc: { "variants.$[variant].sizes.$[size].stock": -item.quantity } },
+          { arrayFilters: [{ "variant._id": item.variantId }, { "size.size": item.size }], session }
+        );
+        if (result.modifiedCount === 0) {
+          stockUpdateErrors.push(item.productId);
+          console.warn(`Stock not updated for product ${item.productId} — may already be 0`);
+        }
       }
     }
 
-    // ... existing code ...
     // === Free up the rider if all items accepted (no return trip needed) ===
     if (allItemsAccepted && order.deliveryRiderId) {
       await DeliveryRider.findByIdAndUpdate(order.deliveryRiderId, {
@@ -1585,13 +1654,30 @@ export const verifyFinalPaymentCod = async (req, res) => {
     // === Deduct stock for accepted items ===
     const stockUpdateErrors = [];
     for (const item of acceptedItems) {
-      const result = await Product.updateOne(
-        { _id: item.productId, "variants._id": item.variantId },
-        { $inc: { "variants.$[variant].sizes.$[size].stock": -item.quantity } },
-        { arrayFilters: [{ "variant._id": item.variantId }, { "size.size": item.size }], session }
-      );
-      if (result.modifiedCount === 0) {
-        stockUpdateErrors.push(item.productId);
+      if (process.env.USE_FLAT_PRODUCT_SCHEMA === 'true') {
+        const docs = await ProductFlat.find({ styleGroupId: item.productId, size: item.size });
+        const targetDoc = docs.find(d => generateColorVariantId(item.productId.toString(), d.color.name) === item.variantId.toString());
+        if (targetDoc) {
+          const result = await ProductFlat.updateOne(
+            { _id: targetDoc._id },
+            { $inc: { stock: -item.quantity } },
+            { session }
+          );
+          if (result.modifiedCount === 0) {
+            stockUpdateErrors.push(item.productId);
+          }
+        } else {
+          stockUpdateErrors.push(item.productId);
+        }
+      } else {
+        const result = await Product.updateOne(
+          { _id: item.productId, "variants._id": item.variantId },
+          { $inc: { "variants.$[variant].sizes.$[size].stock": -item.quantity } },
+          { arrayFilters: [{ "variant._id": item.variantId }, { "size.size": item.size }], session }
+        );
+        if (result.modifiedCount === 0) {
+          stockUpdateErrors.push(item.productId);
+        }
       }
     }
 
@@ -1795,13 +1881,34 @@ export const cancelOrder = async (req, res) => {
   }
 };
 
+export const reportUnresponsiveRider = async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    const userId = req.userId;
 
+    const order = await Order.findOne({ _id: orderId, userId });
+    if (!order) {
+      return res.status(404).json({ success: false, message: "Order not found" });
+    }
 
+    if (!order.deliveryRiderId) {
+      return res.status(400).json({ success: false, message: "No rider assigned to this order" });
+    }
 
+    if (order.riderUnresponsiveReport?.status === 'pending') {
+      return res.status(400).json({ success: false, message: "You have already reported the rider. An admin is reviewing it." });
+    }
 
+    order.riderUnresponsiveReport = {
+      reportedBy: 'user',
+      status: 'pending',
+      reportedAt: new Date()
+    };
 
-
-
-
-
-
+    await order.save();
+    return res.status(200).json({ success: true, message: "Report submitted successfully. Admin will review." });
+  } catch (error) {
+    console.error("Report Unresponsive Rider Error:", error);
+    return res.status(500).json({ success: false, message: "Server error" });
+  }
+};

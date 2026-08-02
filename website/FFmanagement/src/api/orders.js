@@ -9,3 +9,13 @@ export const handleCancellationRequest = async (orderId, action) => {
   const response = await api.patch(`/admin/orders/${orderId}/cancel`, { action });
   return response.order || response.data?.order || response;
 };
+
+export const getUnresponsiveRiderReports = async () => {
+  const response = await api.get('/admin/orders/unresponsive-rider-reports');
+  return response.orders || response.data?.orders || [];
+};
+
+export const resolveUnresponsiveRider = async (orderId, action) => {
+  const response = await api.patch(`/admin/orders/${orderId}/resolve-unresponsive-rider`, { action });
+  return response.order || response.data?.order || response;
+};

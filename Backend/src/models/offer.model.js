@@ -120,7 +120,7 @@ const offerSchema = new mongoose.Schema({
     subCategoryIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Category' }],
     productIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Product' }],    // Product-specific
     collectionId: { type: mongoose.Schema.Types.ObjectId, ref: 'Collection' }, // Collection-specific
-    genders: [{ type: String, enum: ['MEN', 'WOMEN', 'KIDS'] }],              // Gender targeting
+    genders: [{ type: String, enum: ['MEN', 'WOMEN', 'KIDS', 'BOYS', 'GIRLS'] }],              // Gender targeting
     firstTimeUserOnly: { type: Boolean, default: false },  // First-Time User
     minOrderValue: { type: Number, default: 0 },           // Vendor Min Order
   },
@@ -151,6 +151,11 @@ const offerSchema = new mongoose.Schema({
   requiresCoupon: {
     type: Boolean,
     default: false,   // false = auto-apply, true = needs code
+  },
+  isPublic: {
+    type: Boolean,
+    default: true,    // true = shown in available coupons list, false = hidden (manual code entry only)
+    index: true,
   },
 
   // ── Usage Limits ──
@@ -188,7 +193,7 @@ const offerSchema = new mongoose.Schema({
 }, { timestamps: true });
 
 // ── Compound Indexes ──
-offerSchema.index({ scope: 1, isActive: 1, endDate: 1 });
+offerSchema.index({ scope: 1, isActive: 1, isPublic: 1, endDate: 1 });
 offerSchema.index({ type: 1, isActive: 1 });
 offerSchema.index({ merchantId: 1, isActive: 1 });
 offerSchema.index({ couponCode: 1 }, { sparse: true });

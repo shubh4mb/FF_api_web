@@ -16,6 +16,7 @@ import { registerMerchantSockets } from './src/sockets/merchant.socket.js';
 import { registerOrderSockets } from './src/sockets/order.socket.js';
 import { registerUserSockets } from './src/sockets/user.socket.js';
 import { registerDeliveryRiderSockets } from './src/sockets/deliveryRider.socket.js';
+import { registerWarehouseOrderSockets } from './src/sockets/warehouseOrder.socket.js';
 
 const PORT = process.env.PORT || 5000;
 
@@ -64,6 +65,8 @@ io.on('connection', (socket) => {
 
   if (role === "merchant") {
     registerMerchantSockets(io, socket);
+  } else if (role === "warehouse") {
+    registerWarehouseOrderSockets(io, socket);
   } else if (role === "user") {
     registerUserSockets(io, socket);
   } else if (role === "deliveryRider") {

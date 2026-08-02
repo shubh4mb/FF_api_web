@@ -31,7 +31,27 @@ const cartItemSchema = new mongoose.Schema({
   merchantId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Merchant', // For multi-shop cart support
-    required: true,
+    required: false, // not required for warehouse items
+  },
+  // ── Source: where this item will be fulfilled from ──
+  // 'shop' = merchant's physical store (existing default)
+  // 'warehouse' = FlashFits warehouse
+  source: {
+    type: String,
+    enum: ['shop', 'warehouse'],
+    default: 'shop',
+  },
+  // Set when source = 'warehouse'
+  warehouseId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Warehouse',
+    default: null,
+  },
+  // Set when source = 'warehouse' (the WarehouseProduct _id)
+  warehouseProductId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Product',
+    default: null,
   },
 });
 

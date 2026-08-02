@@ -38,9 +38,9 @@ export const getPendingPayouts = async (ownerType = '') => {
   }
 };
 
-export const markPayoutPaid = async (id) => {
+export const markPayoutPaid = async (id, payload = {}) => {
   try {
-    const response = await axiosInstance.post(`admin/payouts/${id}/mark-paid`);
+    const response = await axiosInstance.post(`admin/payouts/${id}/mark-paid`, payload);
     return response;
   } catch (error) {
     throw error.response ? error.response.data : new Error('Network Error');

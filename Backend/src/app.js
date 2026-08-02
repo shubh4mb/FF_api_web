@@ -61,7 +61,12 @@ app.use(cors({
   allowedHeaders: "Content-Type,Authorization,ngrok-skip-browser-warning"
 }));
 
-app.use(express.json({ limit: "16kb" }));
+app.use(express.json({ 
+  limit: "16kb",
+  verify: (req, res, buf) => {
+    req.rawBody = buf.toString(); // Save raw string for webhook signature verification
+  }
+}));
 app.use(express.urlencoded({ extended: true, limit: "16kb" }));
 app.use(cookieParser());
 

@@ -59,9 +59,41 @@ export const getMerchants = asyncHandler(async (req, res) => {
 });
 
 export const getMerchantById = asyncHandler(async (req, res) => {
-  const merchant = await Merchant.findById(req.params.id)
-    .lean();
+  let merchant = await Merchant.findById(req.params.id).lean();
   if (!merchant) {
+    try {
+      const Warehouse = (await import("../../models/warehouse.model.js")).default;
+      let warehouse = null;
+      if (mongoose.Types.ObjectId.isValid(req.params.id)) {
+        warehouse = await Warehouse.findById(req.params.id).lean();
+      }
+      if (warehouse || req.params.id === 'ff-warehouse-hub' || req.params.id === 'warehouse') {
+        const Product = (await import("../../models/product.model.js")).default;
+        const count = await Product.countDocuments({ source: 'warehouse', isActive: true });
+        const virtualMerchant = {
+          _id: warehouse ? warehouse._id.toString() : 'ff-warehouse-hub',
+          shopName: warehouse?.name || 'FlashFits Warehouse Hub',
+          logo: { url: '' },
+          backgroundImage: { url: '' },
+          genderCategory: ['MEN', 'WOMEN', 'KIDS', 'BOYS', 'GIRLS'],
+          shipsWithinHours: 1,
+          isOnline: true,
+          isZoneLive: true,
+          isVerified: true,
+          isActive: true,
+          isNearby: true,
+          isWarehouse: true,
+          rating: 4.9,
+          address: warehouse?.address || { city: 'FlashFits Hub', area: 'FlashFits Hub' },
+          distanceKm: 2.5,
+          durationMins: 20,
+          stats: { totalProducts: count },
+        };
+        return res.status(200).json(new ApiResponse(200, { merchant: virtualMerchant }, "Warehouse retrieved as merchant"));
+      }
+    } catch (whErr) {
+      console.error('Error fetching warehouse as merchant:', whErr);
+    }
     throw new ApiError(404, "Merchant not found");
   }
 
@@ -127,7 +159,16 @@ export const updateMerchantById = asyncHandler(async (req, res) => {
     }
   }
 
-  const merchant = await Merchant.findByIdAndUpdate(req.params.id, req.body, { new: true });
+  // Handle warehouse assignment
+  let updateData = { ...req.body };
+  let updateOperation = { $set: updateData };
+
+  if (req.body.warehouseId) {
+    updateOperation.$addToSet = { assignedWarehouseIds: req.body.warehouseId };
+    delete updateData.warehouseId; // Remove from $set since it's an operator field, not on merchant directly in this context
+  }
+
+  const merchant = await Merchant.findByIdAndUpdate(req.params.id, updateOperation, { new: true });
   if (!merchant) {
     throw new ApiError(404, "Merchant not found");
   }

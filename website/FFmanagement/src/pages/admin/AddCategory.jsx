@@ -26,6 +26,8 @@ const AddCategory = () => {
     logo_MEN: { preview: '', file: null },
     logo_WOMEN: { preview: '', file: null },
     logo_KIDS: { preview: '', file: null },
+    logo_BOYS: { preview: '', file: null },
+    logo_GIRLS: { preview: '', file: null },
   });
 
   const [titleBanners, setTitleBanners] = useState([]);
@@ -36,6 +38,8 @@ const AddCategory = () => {
     logo_MEN: false, 
     logo_WOMEN: false, 
     logo_KIDS: false, 
+    logo_BOYS: false, 
+    logo_GIRLS: false, 
     title_banners: false 
   });
   const [tempImageSrc, setTempImageSrc] = useState({ 
@@ -44,6 +48,8 @@ const AddCategory = () => {
     logo_MEN: '', 
     logo_WOMEN: '', 
     logo_KIDS: '', 
+    logo_BOYS: '', 
+    logo_GIRLS: '', 
     title_banners: '' 
   });
 
@@ -274,7 +280,7 @@ const AddCategory = () => {
         <div className="flex flex-col">
           <label className="font-semibold text-gray-700 mb-2">Allowed Genders</label>
           <div className="flex gap-4">
-            {['MEN', 'WOMEN', 'KIDS'].map(g => (
+            {['MEN', 'WOMEN', 'KIDS', 'BOYS', 'GIRLS'].map(g => (
               <label key={g} className="flex items-center gap-2 cursor-pointer">
                 <input
                   type="checkbox"
@@ -391,7 +397,7 @@ const AddCategory = () => {
         </div>
 
         {/* Shared Cropper Modal */}
-        {['image', 'logo', 'logo_MEN', 'logo_WOMEN', 'logo_KIDS', 'title_banners'].map((type) => (
+        {['image', 'logo', 'logo_MEN', 'logo_WOMEN', 'logo_KIDS', 'logo_BOYS', 'logo_GIRLS', 'title_banners'].map((type) => (
           showCropper[type] && tempImageSrc[type] && (
             <div key={type} className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
               <div className="bg-white p-4 rounded-lg w-full max-w-2xl">

@@ -60,3 +60,15 @@ export const verifyMerchant = async (id, isVerified, kycVerifications, rejection
         throw error.response ? error.response.data : new Error('Network Error');
     }
 }
+
+export const updateWarehouseStatus = async (id, warehouseStatus, warehouseId = null) => {
+    try {
+        const payload = { warehouseStatus };
+        if (warehouseId) payload.warehouseId = warehouseId;
+        const response = await axiosInstance.patch(`/admin/updateMerchant/${id}`, payload);
+        return response.data;
+    } catch (error) {
+        console.log(error);
+        throw error.response ? error.response.data : new Error('Network Error');
+    }
+}

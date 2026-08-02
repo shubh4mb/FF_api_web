@@ -32,6 +32,8 @@ export default function EditCategoryPage() {
     logo_MEN: { preview: '', file: null, existing: null },
     logo_WOMEN: { preview: '', file: null, existing: null },
     logo_KIDS: { preview: '', file: null, existing: null },
+    logo_BOYS: { preview: '', file: null, existing: null },
+    logo_GIRLS: { preview: '', file: null, existing: null },
   });
 
   // titleBanners state holds array of: { id, preview, file, existing }
@@ -43,6 +45,8 @@ export default function EditCategoryPage() {
     logo_MEN: false, 
     logo_WOMEN: false, 
     logo_KIDS: false, 
+    logo_BOYS: false, 
+    logo_GIRLS: false, 
     title_banners: false 
   });
   const [tempImageSrc, setTempImageSrc] = useState({ 
@@ -51,6 +55,8 @@ export default function EditCategoryPage() {
     logo_MEN: '', 
     logo_WOMEN: '', 
     logo_KIDS: '', 
+    logo_BOYS: '', 
+    logo_GIRLS: '', 
     title_banners: '' 
   });
 
@@ -102,6 +108,16 @@ export default function EditCategoryPage() {
           preview: data.logos?.KIDS?.url || '',
           file: null,
           existing: data.logos?.KIDS
+        },
+        logo_BOYS: {
+          preview: data.logos?.BOYS?.url || '',
+          file: null,
+          existing: data.logos?.BOYS
+        },
+        logo_GIRLS: {
+          preview: data.logos?.GIRLS?.url || '',
+          file: null,
+          existing: data.logos?.GIRLS
         }
       });
 
@@ -255,9 +271,9 @@ export default function EditCategoryPage() {
       submitData.append('existing_logos', JSON.stringify(existingLogosToKeep));
 
       // New Gender-Specific Logo Files
-      ['MEN', 'WOMEN', 'KIDS'].forEach(gender => {
+      ['MEN', 'WOMEN', 'KIDS', 'BOYS', 'GIRLS'].forEach(gender => {
         const logoState = images[`logo_${gender}`];
-        if (logoState.file) {
+        if (logoState && logoState.file) {
           submitData.append(`logo_${gender}`, logoState.file);
         }
       });
@@ -395,7 +411,7 @@ export default function EditCategoryPage() {
                 Allowed Genders
               </label>
               <div className="flex gap-4">
-                {['MEN', 'WOMEN', 'KIDS'].map(g => (
+                {['MEN', 'WOMEN', 'KIDS', 'BOYS', 'GIRLS'].map(g => (
                   <label key={g} className="flex items-center gap-2 cursor-pointer">
                     <input
                       type="checkbox"
@@ -573,7 +589,7 @@ export default function EditCategoryPage() {
             </div>
 
             {/* Shared Cropper Modal */}
-            {['image', 'logo', 'logo_MEN', 'logo_WOMEN', 'logo_KIDS', 'title_banners'].map((type) => (
+            {['image', 'logo', 'logo_MEN', 'logo_WOMEN', 'logo_KIDS', 'logo_BOYS', 'logo_GIRLS', 'title_banners'].map((type) => (
               showCropper[type] && tempImageSrc[type] && (
                 <div key={type} className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
                   <div className="bg-white p-4 rounded-lg w-full max-w-2xl">

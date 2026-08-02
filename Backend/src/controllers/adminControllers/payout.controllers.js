@@ -103,6 +103,7 @@ export const getPayoutById = async (req, res) => {
  */
 export const markPayoutPaid = async (req, res) => {
     try {
+        const { adminDeductionAmount, adminDeductionReason } = req.body;
         const payout = await WeeklyPayout.findById(req.params.id);
 
         if (!payout) {
@@ -115,22 +116,24 @@ export const markPayoutPaid = async (req, res) => {
             });
         }
 
-        // Credit or debit the wallet
-        if (payout.finalAmount > 0) {
-            await creditWallet({
-                ownerType: payout.ownerType === "rider" ? "rider" : "merchant",
-                ownerId: payout.ownerId,
-                amount: payout.finalAmount,
-                description: `Weekly payout (${payout.weekStart.toISOString().split("T")[0]} → ${payout.weekEnd.toISOString().split("T")[0]})`,
-            });
-        } else if (payout.finalAmount < 0) {
-            await debitWallet({
-                ownerType: payout.ownerType === "rider" ? "rider" : "merchant",
-                ownerId: payout.ownerId,
-                amount: Math.abs(payout.finalAmount),
-                description: `Weekly deduction (${payout.weekStart.toISOString().split("T")[0]} → ${payout.weekEnd.toISOString().split("T")[0]})`,
-                allowNegative: true,
-            });
+        const deductionAmount = parseFloat(adminDeductionAmount) || 0;
+
+        if (deductionAmount > 0) {
+            if (!adminDeductionReason) {
+                return res.status(400).json({ message: "Reason is required for admin deduction." });
+            }
+            if (deductionAmount > payout.finalAmount) {
+                return res.status(400).json({ message: "Deduction cannot exceed final amount." });
+            }
+
+            payout.adminDeduction = {
+                amount: deductionAmount,
+                reason: adminDeductionReason
+            };
+
+            payout.totalDeductions += deductionAmount;
+            payout.netPayout -= deductionAmount;
+            payout.finalAmount -= deductionAmount;
         }
 
         payout.status = "paid";
@@ -139,7 +142,7 @@ export const markPayoutPaid = async (req, res) => {
 
         return res.status(200).json({
             success: true,
-            message: "Payout successfully marked as paid and wallet credited.",
+            message: "Payout successfully marked as paid.",
             payout,
         });
     } catch (error) {

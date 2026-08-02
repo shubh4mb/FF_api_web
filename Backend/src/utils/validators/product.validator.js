@@ -4,7 +4,7 @@ export const productSchema = Joi.object({
   name: Joi.string().required(),
   brandId: Joi.string().hex().length(24).optional(),
   description: Joi.string().optional(),
-  gender: Joi.array().items(Joi.string().valid('MEN', 'WOMEN', 'KIDS')).min(1).required(),
+  gender: Joi.array().items(Joi.string().valid('MEN', 'WOMEN', 'KIDS', 'BOYS', 'GIRLS')).min(1).required(),
   categoryId: Joi.string().hex().length(24).required(),
   subCategoryId: Joi.string().hex().length(24).optional(),
   tags: Joi.array().items(Joi.string()).optional(),

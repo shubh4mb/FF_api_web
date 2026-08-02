@@ -212,6 +212,11 @@ const OrderSchema = new mongoose.Schema({
     type: String,
     default: null
   },
+  riderUnresponsiveReport: {
+    reportedBy: { type: String, enum: ['user', 'merchant', 'none'], default: 'none' },
+    status: { type: String, enum: ['none', 'pending', 'resolved'], default: 'none' },
+    reportedAt: { type: Date }
+  }
 
 }, { timestamps: true });
 

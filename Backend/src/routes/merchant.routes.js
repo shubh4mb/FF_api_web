@@ -1,14 +1,14 @@
 import express from 'express'
 import upload, { handleMulterError } from '../middleware/multer.js'
-import { addBaseProduct, addVariant, getBaseProducts, getVariants, updateVariant, updateSize, deleteVariantSizes, updateSizeCount } from '../controllers/merchantController/product.controllers.js';
+import { addBaseProduct, addVariant, getBaseProducts, getVariants, updateVariant, updateSize, deleteVariantSizes, updateSizeCount, createProductFull, searchBaseProducts } from '../controllers/merchantController/product.controllers.js';
 import { deleteVariant, addBrand, getBrands, getBaseProductById, getProductsByMerchantId, uploadProductImage, deleteImage, deleteProduct, updatePrice, editProduct, editVariant, updateVariantSizeStock, updateMultipleVariantSizes, getAllBrands, bulkUploadProducts } from '../controllers/merchantController/product.controllers.js';
 
 import { addMerchant } from '../controllers/merchantController/merchant.controller.js';
 import { loginMerchant, registerMerchant, updateMerchantShopDetails, updateMerchantBankDetails, updateMerchantKYC, updateMerchantOperatingHours, activateMerchant, registerPhone, sendEmailOtp, verifyEmailOtp, getMerchantByEmail, toggleMerchantOnlineStatus, refreshMerchantToken, logoutMerchant, addPushToken } from '../controllers/merchantController/authControllers.js';
-import { getAllOrder, saveProductDetails, requestOrderCancellation } from '../controllers/merchantController/order.controllers.js';
+import { getAllOrder, saveProductDetails, requestOrderCancellation, getMyWarehouseSales } from '../controllers/merchantController/order.controllers.js';
 import { authMiddlewareMerchant } from '../middleware/jwtAuth.js';
 import { getWalletDetails } from '../helperFns/walletHelper.js';
-import { getPlacedOrder, orderRequestForMerchant, orderPacked, getPackingPhotos, uploadPackingPhoto, deletePackingPhoto, getPackingInfoPublic } from '../controllers/merchantController/order.controllers.js';
+import { getPlacedOrder, orderRequestForMerchant, orderPacked, getPackingPhotos, uploadPackingPhoto, deletePackingPhoto, getPackingInfoPublic, reportUnresponsiveRider } from '../controllers/merchantController/order.controllers.js';
 import { getMerchantById } from '../controllers/merchantController/merchant.controller.js';
 import { getMerchantAnalytics } from '../controllers/merchantController/analytics.controller.js';
 import { getMerchantCourierOrders, updateCourierOrderStatus, updateCourierOrderReturnStatus } from '../controllers/userControllers/courierOrder.controllers.js';
@@ -208,6 +208,8 @@ router.patch('/editProduct/:id', authMiddlewareMerchant, editProduct)
 // router.patch('/editVariant/:productId/:variantId',editVariant)
 router.patch('/updateVariantSizeStock/:productId/:variantId/:sizeName', authMiddlewareMerchant, updateVariantSizeStock)
 router.patch('/updateMultipleVariantSizes/:productId/:variantId', authMiddlewareMerchant, updateMultipleVariantSizes)
+router.post('/createProductFull', authMiddlewareMerchant, upload.any(), handleMulterError, createProductFull);
+router.get('/searchBaseProducts', authMiddlewareMerchant, searchBaseProducts);
 
 
 router.get('/getAllOrders', authMiddlewareMerchant, getAllOrder)
@@ -218,7 +220,8 @@ router.get('/order/packing-info/:orderId', getPackingInfoPublic)
 router.post('/order/packing-photos/upload', upload.single('image'), handleMulterError, uploadPackingPhoto)
 router.delete('/order/:orderId/packing-photos/:photoId', authMiddlewareMerchant, deletePackingPhoto)
 router.post('/order/packed/:orderId', authMiddlewareMerchant, orderPacked)
-router.put('/order/:orderId/request-cancellation', authMiddlewareMerchant, requestOrderCancellation)
+router.put('/order/:orderId/request-cancellation', authMiddlewareMerchant, requestOrderCancellation);
+router.post('/order/report-rider/:orderId', authMiddlewareMerchant, reportUnresponsiveRider);
 
 router.put('/products/:id/details', authMiddlewareMerchant, saveProductDetails);
 
@@ -266,10 +269,36 @@ router.get("/earnings/current-week", authMiddlewareMerchant, async (req, res) =>
             weekStart,
         }).lean();
 
+        const dailyBreakdown = [
+            { day: 'Mon', amount: 0 },
+            { day: 'Tue', amount: 0 },
+            { day: 'Wed', amount: 0 },
+            { day: 'Thu', amount: 0 },
+            { day: 'Fri', amount: 0 },
+            { day: 'Sat', amount: 0 },
+            { day: 'Sun', amount: 0 }
+        ];
+
+        if (payout && payout.orders && payout.orders.length > 0) {
+            payout.orders.forEach(order => {
+                if (order.settledAt) {
+                    // Convert UTC to IST by adding 5.5 hours, assuming week bounds are based on IST.
+                    // Or simply use the UTC date since the week bounds and logic in weeklyPayoutHelper
+                    // ensures the orders belong to this week.
+                    const date = new Date(order.settledAt);
+                    const dayIndex = date.getDay(); // 0 is Sun, 1 is Mon...
+                    const mappedIndex = dayIndex === 0 ? 6 : dayIndex - 1;
+                    const val = order.type === 'credit' ? order.amount : -order.amount;
+                    dailyBreakdown[mappedIndex].amount += val;
+                }
+            });
+        }
+
         return res.status(200).json({
             success: true,
             weekStart,
             weekEnd,
+            dailyBreakdown,
             payout: payout || {
                 totalEarnings: 0,
                 totalDeductions: 0,
@@ -359,5 +388,68 @@ router.patch("/notifications/:id", authMiddlewareMerchant, async (req, res) => {
     }
 });
 
+// ── Warehouse Sales (Merchant view of their consignment sales) ──
+router.get('/warehouse-sales', authMiddlewareMerchant, getMyWarehouseSales);
+
+// ── Warehouse Operator Routes (accountType = 'warehouse') ──
+import {
+  getWarehousePlacedOrders,
+  getAllWarehouseOrdersForOperator,
+  getWarehouseOrderDetailForOperator,
+  acceptWarehouseOrder,
+  rejectWarehouseOrder,
+  markWarehouseOrderPacked,
+  uploadWarehousePackingPhoto,
+  getWarehouseOperatorStats,
+} from '../controllers/merchantController/warehouseOrder.controllers.js';
+
+import {
+  getMyWarehouseProducts,
+  addMyWarehouseProduct,
+  addMyWarehouseProductVariant,
+  updateMyWarehouseProductStock,
+  deleteMyWarehouseProduct,
+  updateMyWarehouseProduct,
+  createWarehouseProductFull,
+  getMyConsignedWarehouseStock,
+  applyForWarehouseService,
+} from '../controllers/merchantController/warehouseProduct.controllers.js';
+
+import { getAssignedMerchants } from '../controllers/merchantController/operator.controllers.js';
+
+router.get('/warehouse-orders/stats', authMiddlewareMerchant, getWarehouseOperatorStats);
+router.get('/warehouse-orders/placed', authMiddlewareMerchant, getWarehousePlacedOrders);
+router.get('/warehouse-orders/all', authMiddlewareMerchant, getAllWarehouseOrdersForOperator);
+router.get('/warehouse-orders/:orderId', authMiddlewareMerchant, getWarehouseOrderDetailForOperator);
+router.patch('/warehouse-orders/:orderId/accept', authMiddlewareMerchant, acceptWarehouseOrder);
+router.patch('/warehouse-orders/:orderId/reject', authMiddlewareMerchant, rejectWarehouseOrder);
+router.patch('/warehouse-orders/:orderId/packed', authMiddlewareMerchant, markWarehouseOrderPacked);
+router.post(
+  '/warehouse-orders/:orderId/packing-photo',
+  authMiddlewareMerchant,
+  upload.single('photo'),
+  handleMulterError,
+  uploadWarehousePackingPhoto
+);
+
+// Warehouse operator assigned merchants
+router.get('/assigned-merchants', authMiddlewareMerchant, getAssignedMerchants);
+
+// Warehouse operator product listings & stock management
+router.post('/apply-warehouse', authMiddlewareMerchant, applyForWarehouseService);
+router.get('/my-consigned-stock', authMiddlewareMerchant, getMyConsignedWarehouseStock);
+router.get('/warehouse-products', authMiddlewareMerchant, getMyWarehouseProducts);
+router.post('/warehouse-products/add', authMiddlewareMerchant, addMyWarehouseProduct);
+router.post('/warehouse-products/full', authMiddlewareMerchant, upload.any(), createWarehouseProductFull);
+router.post(
+  '/warehouse-products/:warehouseProductId/variants',
+  authMiddlewareMerchant,
+  upload.array('images', 5),
+  handleMulterError,
+  addMyWarehouseProductVariant
+);
+router.patch('/warehouse-products/:warehouseProductId', authMiddlewareMerchant, updateMyWarehouseProduct);
+router.patch('/warehouse-products/:warehouseProductId/stock', authMiddlewareMerchant, updateMyWarehouseProductStock);
+router.delete('/warehouse-products/:warehouseProductId', authMiddlewareMerchant, deleteMyWarehouseProduct);
 
 export default router;

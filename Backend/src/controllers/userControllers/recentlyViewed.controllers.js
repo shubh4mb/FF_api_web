@@ -3,6 +3,8 @@ import RecentlyViewed from '../../models/recentlyViewed.model.js';
 import Product from '../../models/product.model.js';
 import { ApiResponse } from '../../utils/ApiResponse.js';
 import { ApiError } from '../../utils/ApiError.js';
+import ProductFlat from '../../models/productFlat.model.js';
+import { generateColorVariantId } from '../../utils/variantAdapter.js';
 
 // @desc    Add product to recently viewed
 // @route   POST /api/user/recently-viewed/add
@@ -16,9 +18,20 @@ export const addToRecentlyViewed = asyncHandler(async (req, res) => {
   }
 
   // Check if product exists
-  const product = await Product.findById(productId);
-  if (!product) {
-    throw new ApiError(404, 'Product not found');
+  if (process.env.USE_FLAT_PRODUCT_SCHEMA === 'true') {
+    let product = await ProductFlat.findOne({ styleGroupId: productId });
+    if (!product) {
+      // Fallback to legacy
+      product = await Product.findById(productId);
+      if (!product) {
+        throw new ApiError(404, 'Product not found');
+      }
+    }
+  } else {
+    const product = await Product.findById(productId);
+    if (!product) {
+      throw new ApiError(404, 'Product not found');
+    }
   }
 
   // Upsert the recently viewed record
@@ -48,6 +61,52 @@ export const addToRecentlyViewed = asyncHandler(async (req, res) => {
 // @access  Private
 export const getMyRecentlyViewed = asyncHandler(async (req, res) => {
   const userId = req.user.userId;
+
+  if (process.env.USE_FLAT_PRODUCT_SCHEMA === 'true') {
+    const recentlyViewedItems = await RecentlyViewed.find({ userId })
+      .sort({ updatedAt: -1 })
+      .limit(20)
+      .lean();
+
+    const products = [];
+    for (const item of recentlyViewedItems) {
+      if (!item.productId) continue;
+      const styleGroupId = item.productId.toString();
+      const siblings = await ProductFlat.find({ styleGroupId, isDeleted: { $ne: true } })
+        .populate('brandId', 'name')
+        .populate('merchantId', 'isOnline isZoneLive')
+        .lean();
+
+      if (siblings.length > 0) {
+        const matched = siblings.find(
+          (v) => generateColorVariantId(styleGroupId, v.color?.name) === item.variantId.toString()
+        ) || siblings[0];
+
+        const nearbySet = new Set(req.nearbyMerchantIds?.map(id => id.toString()) || []);
+        const isNearby = matched.merchantId ? nearbySet.has(matched.merchantId._id?.toString() || matched.merchantId.toString()) : false;
+        const isOnline = matched.merchantId?.isOnline !== undefined ? matched.merchantId.isOnline : true;
+        const isZoneLive = matched.merchantId?.isZoneLive !== undefined ? matched.merchantId.isZoneLive : true;
+        const isInstantBuyable = isNearby && isOnline && isZoneLive;
+
+        products.push({
+          _id: styleGroupId, // Re-map _id to styleGroupId so routing/details lookups work
+          id: styleGroupId,
+          name: matched.name,
+          brand: matched.brandId?.name,
+          price: matched.price,
+          mrp: matched.mrp,
+          images: matched.images,
+          ratings: matched.ratings,
+          isTriable: matched.isTriable,
+          variantId: item.variantId,
+          isNearby,
+          isInstantBuyable,
+        });
+      }
+    }
+
+    return res.status(200).json(new ApiResponse(200, products, 'Recently viewed retrieved'));
+  }
 
   const recentlyViewedItems = await RecentlyViewed.find({ userId })
     .populate({

@@ -26,7 +26,7 @@ const categorySchema = new mongoose.Schema({
   // ── Gender constraint (who this category is for) ──
   allowedGenders: {
     type: [String],
-    enum: ["MEN", "WOMEN", "KIDS"],
+    enum: ["MEN", "WOMEN", "KIDS", "BOYS", "GIRLS"],
     default: ["MEN", "WOMEN"],
   },
 
@@ -101,6 +101,14 @@ const categorySchema = new mongoose.Schema({
       url: { type: String, required: false }
     },
     KIDS: {
+      public_id: { type: String, required: false },
+      url: { type: String, required: false }
+    },
+    BOYS: {
+      public_id: { type: String, required: false },
+      url: { type: String, required: false }
+    },
+    GIRLS: {
       public_id: { type: String, required: false },
       url: { type: String, required: false }
     }

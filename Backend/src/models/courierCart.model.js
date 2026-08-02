@@ -31,7 +31,23 @@ const courierCartItemSchema = new mongoose.Schema({
   merchantId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Merchant',
-    required: true,
+    required: false, // not required for warehouse items
+  },
+  // ── Source fulfillment ──
+  source: {
+    type: String,
+    enum: ['shop', 'warehouse'],
+    default: 'shop',
+  },
+  warehouseId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Warehouse',
+    default: null,
+  },
+  warehouseProductId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Product',
+    default: null,
   },
 });
 

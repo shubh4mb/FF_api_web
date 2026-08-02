@@ -28,7 +28,7 @@ const merchantSchema = new mongoose.Schema(
       enum: ['Individual', 'Sole Proprietor', 'Partnership', 'Company'] 
     },
     category: [{ type: String }],
-    genderCategory: [{ type: String, enum: ['Men', 'Women', 'Kids'] }],
+    genderCategory: [{ type: String, enum: ['Men', 'Women', 'Kids', 'Boys', 'Girls'] }],
     zoneId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Zone",
@@ -121,6 +121,33 @@ const merchantSchema = new mongoose.Schema(
     },
     createdAt: { type: Date, default: Date.now },
     isZoneLive: { type: Boolean, default: false },
+    // ── Warehouse Operator Support ──
+    // 'merchant' = standard shop owner (default)
+    // 'warehouse' = FlashFits warehouse operator (created by admin)
+    accountType: {
+      type: String,
+      enum: ['merchant', 'warehouse'],
+      default: 'merchant',
+    },
+    // Only set when accountType = 'warehouse' — links to Warehouse doc
+    warehouseId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Warehouse',
+      default: null,
+    },
+    // Warehouse Fulfillment Opt-In Status for standard merchants
+    warehouseStatus: {
+      type: String,
+      enum: ['none', 'pending', 'approved', 'rejected'],
+      default: 'none',
+    },
+    // Warehouses this merchant is assigned to
+    assignedWarehouseIds: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Warehouse',
+      }
+    ],
     emailOtp: { type: String },
     emailOtpExpiry: { type: Date },
     expoPushTokens: { type: [String], default: [] },

@@ -18,6 +18,9 @@ function Sidebar({ isOpen, onClose }) {
     { to: '/admin/attributes', label: 'Attributes', roles: ['superadmin'] },
     { to: '/admin/hubs', label: 'Hubs', roles: ['superadmin'] },
     { to: '/admin/zones', label: 'Zones', roles: ['superadmin'] },
+    { to: '/admin/warehouses', label: 'Warehouses', roles: ['superadmin'] },
+    { to: '/admin/warehouse-products', label: 'Warehouse Products', roles: ['superadmin'] },
+    { to: '/admin/warehouse-orders', label: 'Warehouse Orders', roles: ['superadmin'] },
     { to: '/admin/offers', label: 'Offers', roles: ['superadmin'] },
     { to: '/admin/collections', label: 'Collections', roles: ['superadmin'] },
     { to: '/admin/incentives', label: 'Incentives', roles: ['superadmin'] },
@@ -27,6 +30,7 @@ function Sidebar({ isOpen, onClose }) {
     { to: '/admin/settings', label: 'Settings', roles: ['superadmin'] },
     { to: '/admin/zip-covers', label: 'Zip Cover Requests', roles: ['superadmin'] },
     { to: '/admin/order-cancellations', label: 'Order Cancellations', roles: ['superadmin'] },
+    { to: '/admin/unresponsive-riders', label: 'Unresponsive Riders', roles: ['superadmin'] },
     { to: '/admin/audit-logs', label: 'Audit Logs', roles: ['superadmin'] },
     { to: '/admin/notifications', label: 'Push Notifications', roles: ['superadmin'] },
   ];

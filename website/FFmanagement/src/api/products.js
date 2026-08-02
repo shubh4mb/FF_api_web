@@ -111,4 +111,12 @@ export const toggleProductStatus = async (productId) => {
     }
 }
 
-
+export const toggleProductVerification = async (productId) => {
+    try {
+        const response = await axiosInstance.patch(`admin/updateProductVerification/${productId}`);
+        return response.data;
+    } catch (error) {
+        console.log(error);
+        throw error.response ? error.response.data : new Error('Network Error');
+    }
+}

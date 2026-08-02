@@ -16,7 +16,7 @@ export const getCollectionsForHome = asyncHandler(async (req, res) => {
   console.log(`[Debug] getCollectionsForHome - Gender: ${gender}, NearbyIDs Count: ${nearbyIds?.length || 0}`);
 
   // 1. Fetch active collections
-  const collections = await Collection.find({ isActive: true })
+  const collections = await Collection.find({ isActive: true, isVerified: true })
     .sort({ priority: -1 })
     .lean();
 
@@ -33,6 +33,7 @@ export const getCollectionsForHome = asyncHandler(async (req, res) => {
       _id: { $in: nearbyIds },
       isOnline: true,
       isActive: true,
+      isVerified: true,
       isVerified: true
     }).select('_id').lean();
     onlineNearbyIds = onlineMerchants.map(m => m._id);
@@ -47,6 +48,7 @@ export const getCollectionsForHome = asyncHandler(async (req, res) => {
     const productFilter = {
       collectionIds: coll._id,
       isActive: true,
+      isVerified: true,
       merchantId: { $in: onlineNearbyIds },
       variants: { $exists: true, $not: { $size: 0 } }
     };

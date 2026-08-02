@@ -46,6 +46,16 @@ export const createMerchantOffer = async (req, res) => {
       }
     }
 
+    // Rule: Merchants can only create PRODUCT-level discounts on standard courier orders (no cart-wide discount or free delivery)
+    const applicableTo = req.body.applicableTo || 'both';
+    let benefitType = req.body.benefitType || 'PRODUCT';
+    let isFreeDelivery = freeDelivery || false;
+
+    if (applicableTo === 'courier' || applicableTo === 'both') {
+      benefitType = 'PRODUCT';
+      isFreeDelivery = false;
+    }
+
     const offer = await Offer.create({
       title,
       description: description || '',
@@ -72,14 +82,15 @@ export const createMerchantOffer = async (req, res) => {
       isFlashSale: false,
       couponCode: couponCode || null,
       requiresCoupon: requiresCoupon || false,
+      isPublic: req.body.isPublic !== undefined ? req.body.isPublic : true,
       maxUsageTotal: maxUsageTotal || null,
       maxUsagePerUser: maxUsagePerUser || 1,
-      freeDelivery: freeDelivery || false,
+      freeDelivery: isFreeDelivery,
       priority: priority || 0,
-      benefitType: req.body.benefitType || 'CART',
+      benefitType,
       stackable: req.body.stackable !== undefined ? req.body.stackable : true,
       isExclusive: req.body.isExclusive || false,
-      applicableTo: req.body.applicableTo || 'both',
+      applicableTo,
       isActive: true,
     });
 
@@ -150,6 +161,13 @@ export const updateMerchantOffer = async (req, res) => {
     }
 
     Object.assign(offer, updates);
+
+    // Rule: Merchants can only create PRODUCT-level discounts on standard courier orders (no cart-wide discount or free delivery)
+    if (offer.applicableTo === 'courier' || offer.applicableTo === 'both') {
+      offer.benefitType = 'PRODUCT';
+      offer.freeDelivery = false;
+    }
+
     await offer.save();
 
     return res.status(200).json({

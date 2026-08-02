@@ -10,7 +10,8 @@ import {
   AlertCircle,
   PlayCircle,
   TrendingUp,
-  Download
+  Download,
+  X
 } from 'lucide-react';
 import { getPayouts, triggerPayout, markPayoutPaid } from '@/api/payouts';
 import toast from 'react-hot-toast';
@@ -21,6 +22,13 @@ const PayoutManagement = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [processing, setProcessing] = useState(false);
+
+  // Mark as Paid Modal State
+  const [isMarkPaidModalOpen, setIsMarkPaidModalOpen] = useState(false);
+  const [selectedPayout, setSelectedPayout] = useState(null);
+  const [adminDeductionAmount, setAdminDeductionAmount] = useState('');
+  const [adminDeductionReason, setAdminDeductionReason] = useState('');
+  const [submittingPayment, setSubmittingPayment] = useState(false);
 
   useEffect(() => {
     fetchPayouts();
@@ -58,16 +66,38 @@ const PayoutManagement = () => {
     }
   };
 
-  const handleMarkPaid = async (id) => {
-    if (!window.confirm('Are you sure you want to mark this payout as paid? Ensure you have already completed the bank transfer. This will credit the user\'s wallet.')) return;
+  const openMarkPaidModal = (payout) => {
+    setSelectedPayout(payout);
+    setAdminDeductionAmount('');
+    setAdminDeductionReason('');
+    setIsMarkPaidModalOpen(true);
+  };
+
+  const submitMarkPaid = async () => {
+    if (!selectedPayout) return;
     try {
-      const res = await markPayoutPaid(id);
+      setSubmittingPayment(true);
+      const payload = {};
+      if (adminDeductionAmount && parseFloat(adminDeductionAmount) > 0) {
+        payload.adminDeductionAmount = parseFloat(adminDeductionAmount);
+        payload.adminDeductionReason = adminDeductionReason;
+        if (!payload.adminDeductionReason) {
+          toast.error("Reason is required for deduction.");
+          setSubmittingPayment(false);
+          return;
+        }
+      }
+
+      const res = await markPayoutPaid(selectedPayout._id, payload);
       if (res.success) {
-        toast.success('Payout marked as paid and wallet credited!');
+        toast.success('Payout marked as paid!');
+        setIsMarkPaidModalOpen(false);
         fetchPayouts();
       }
     } catch (error) {
       toast.error(error.message || 'Failed to mark as paid');
+    } finally {
+      setSubmittingPayment(false);
     }
   };
 
@@ -87,7 +117,7 @@ const PayoutManagement = () => {
       case 'finalized':
         return <span className="bg-amber-100 text-amber-700 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase flex items-center gap-1 w-fit"><AlertCircle className="w-3 h-3" /> Pending Approval</span>;
       case 'accumulating':
-        return <span className="bg-sky-100 text-sky-700 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase flex items-center gap-1 w-fit"><Clock className="w-3 h-3" /> Accumulating</span>;
+        return <span className="bg-sky-100 text-sky-700 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase flex items-center gap-1 w-fit"><Clock className="w-3 h-3" /> Pending</span>;
       case 'failed':
         return <span className="bg-rose-100 text-rose-700 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase flex items-center gap-1 w-fit"><AlertCircle className="w-3 h-3" /> Failed</span>;
       default:
@@ -244,7 +274,7 @@ const PayoutManagement = () => {
                       {p.status === 'finalized' && (
                         <button 
                           className="px-3 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-bold rounded-lg transition-all shadow-sm"
-                          onClick={() => handleMarkPaid(p._id)}
+                          onClick={() => openMarkPaidModal(p)}
                           title="Mark as Paid"
                         >
                           Mark Paid
@@ -264,6 +294,83 @@ const PayoutManagement = () => {
           </table>
         </div>
       </div>
+
+      {/* Mark Paid Modal */}
+      {isMarkPaidModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+              <h3 className="text-sm font-bold text-slate-800">Process Payment</h3>
+              <button 
+                onClick={() => setIsMarkPaidModalOpen(false)}
+                className="text-slate-400 hover:text-slate-600 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <div className="p-6 space-y-4">
+              <div className="p-4 bg-sky-50 rounded-xl border border-sky-100 mb-6">
+                <p className="text-xs text-sky-800 font-medium leading-relaxed">
+                  You are about to mark this payout as paid. Please ensure the bank transfer has been successfully completed.
+                </p>
+                <p className="text-sm font-black text-sky-900 mt-2">
+                  Amount: ₹{selectedPayout?.finalAmount?.toLocaleString()}
+                </p>
+              </div>
+
+              <div className="space-y-3">
+                <label className="block">
+                  <span className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Admin Deduction (Optional)</span>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 font-medium">₹</span>
+                    <input 
+                      type="number"
+                      value={adminDeductionAmount}
+                      onChange={(e) => setAdminDeductionAmount(e.target.value)}
+                      placeholder="0"
+                      className="w-full pl-8 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 transition-all font-medium"
+                    />
+                  </div>
+                  <p className="text-[10px] text-slate-500 mt-1">Leave empty if no deduction is needed.</p>
+                </label>
+
+                <label className="block">
+                  <span className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Reason for Deduction</span>
+                  <textarea 
+                    value={adminDeductionReason}
+                    onChange={(e) => setAdminDeductionReason(e.target.value)}
+                    placeholder="e.g. Late penalty, missing items..."
+                    className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 transition-all min-h-[80px] resize-none"
+                    required={parseFloat(adminDeductionAmount) > 0}
+                  ></textarea>
+                </label>
+              </div>
+            </div>
+
+            <div className="p-4 border-t border-slate-100 flex gap-3 bg-slate-50/50">
+              <button 
+                className="flex-1 px-4 py-2.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 text-sm font-bold rounded-xl transition-all"
+                onClick={() => setIsMarkPaidModalOpen(false)}
+              >
+                Cancel
+              </button>
+              <button 
+                className="flex-1 px-4 py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white text-sm font-bold rounded-xl transition-all flex items-center justify-center gap-2 shadow-sm shadow-emerald-500/20 disabled:opacity-50"
+                onClick={submitMarkPaid}
+                disabled={submittingPayment}
+              >
+                {submittingPayment ? (
+                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                ) : (
+                  <CheckCircle className="w-4 h-4" />
+                )}
+                Confirm Paid
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

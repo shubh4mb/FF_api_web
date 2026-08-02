@@ -1,5 +1,6 @@
 import Order from "../../models/order.model.js";
 import Product from "../../models/product.model.js";
+import WarehouseOrder from "../../models/warehouseOrder.model.js";
 import { emitOrderUpdate } from "../../sockets/order.socket.js";
 import { getIO } from "../../config/socket.js";
 import DeliveryRider from "../../models/deliveryRider.model.js";
@@ -204,7 +205,7 @@ export const orderRequestForMerchant = async (req, res) => {
 export const getAllOrder = async (req, res) => {
   try {
     const orders = await Order.find({ merchantId: req.merchantId, orderStatus: { $ne: 'pending' } })
-      .select('orderStatus items totalAmount deliveryRiderStatus createdAt updatedAt deliveryRiderId deliveryRiderDetails deliveryLocation userId otp cancellationRequest cancellationRequestReason')
+      .select('orderStatus items totalAmount deliveryRiderStatus createdAt updatedAt deliveryRiderId deliveryRiderDetails deliveryLocation userId otp cancellationRequest cancellationRequestReason riderUnresponsiveReport')
       .sort({ createdAt: -1 })
       .lean();
     return res.status(200).json({ orders });
@@ -408,11 +409,92 @@ export const getPackingInfoPublic = async (req, res) => {
   }
 };
 
+export const reportUnresponsiveRider = async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    const merchantId = req.merchantId;
 
+    const order = await Order.findOne({ _id: orderId, merchantId });
+    if (!order) {
+      return res.status(404).json({ success: false, message: "Order not found" });
+    }
 
+    if (!order.deliveryRiderId) {
+      return res.status(400).json({ success: false, message: "No rider assigned to this order" });
+    }
 
+    if (order.riderUnresponsiveReport?.status === 'pending') {
+      return res.status(400).json({ success: false, message: "You have already reported the rider. An admin is reviewing it." });
+    }
 
+    order.riderUnresponsiveReport = {
+      reportedBy: 'merchant',
+      status: 'pending',
+      reportedAt: new Date()
+    };
 
+    await order.save();
+    return res.status(200).json({ success: true, message: "Report submitted successfully. Admin will review." });
+  } catch (error) {
+    console.error("Report Unresponsive Rider Error:", error);
+    return res.status(500).json({ success: false, message: "Server error" });
+  }
+};
 
+/**
+ * GET /merchant/warehouse-sales
+ * Returns all warehouse orders where this merchant is the consignment source.
+ * Shown as a SEPARATE section in the merchant dashboard (not mixed with shop orders).
+ */
+export const getMyWarehouseSales = async (req, res) => {
+  try {
+    const merchantId = req.merchantId;
+    const { orderStatus, page = 1, limit = 20 } = req.query;
 
+    const filter = { sourceMerchantId: merchantId };
+    if (orderStatus) filter.orderStatus = orderStatus;
+
+    const skip = (Number(page) - 1) * Number(limit);
+
+    const [orders, total] = await Promise.all([
+      WarehouseOrder.find(filter)
+        .populate('warehouseId', 'name code')
+        .select(
+          'orderStatus fulfillmentType items totalAmount commissionRate commissionAmount merchantPayout settlementStatus createdAt warehouseId warehouseDetails'
+        )
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(Number(limit))
+        .lean(),
+      WarehouseOrder.countDocuments(filter),
+    ]);
+
+    // Summary stats for merchant dashboard
+    const stats = await WarehouseOrder.aggregate([
+      { $match: { sourceMerchantId: merchantId } },
+      {
+        $group: {
+          _id: null,
+          totalSales: { $sum: '$totalAmount' },
+          totalPayout: { $sum: '$merchantPayout' },
+          totalOrders: { $sum: 1 },
+          pendingSettlements: {
+            $sum: { $cond: [{ $eq: ['$settlementStatus', 'unsettled'] }, 1, 0] },
+          },
+        },
+      },
+    ]);
+
+    return res.status(200).json({
+      orders,
+      total,
+      page: Number(page),
+      limit: Number(limit),
+      stats: stats[0] || { totalSales: 0, totalPayout: 0, totalOrders: 0, pendingSettlements: 0 },
+    });
+  } catch (error) {
+    console.error('getMyWarehouseSales error:', error);
+    return res.status(500).json({ message: '❌ ' + error.message });
+  }
+};
 

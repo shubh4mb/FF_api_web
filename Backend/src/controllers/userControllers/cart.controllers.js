@@ -7,43 +7,121 @@ import { calculateDeliveryCharge } from '../../helperFns/deliveryChargeFns.js'
 import AppConfig from "../../models/appConfig.model.js";
 import CourierCart from "../../models/courierCart.model.js";
 import { findBestOffers } from '../../services/offerEngine.js';
-
 import Offer from "../../models/offer.model.js";
+import ProductFlat from '../../models/productFlat.model.js';
+import { generateColorVariantId } from '../../utils/variantAdapter.js';
 
 export const addToCart = async (req, res) => {
   const userId = req.user.userId;
-  const { productId, variantId, size, quantity, merchantId, image } = req.body;
+  const { productId, variantId, size, quantity, merchantId, image, source } = req.body;
+  const effectiveMerchantId = merchantId || (source === 'warehouse' ? 'flashmart' : null);
 
-  if (!productId || !variantId || !size || !quantity || !merchantId || !image) {
+  if (!productId || !variantId || !size || !quantity || (!effectiveMerchantId && source !== 'warehouse') || !image) {
     return res.status(400).json({ message: "Missing required fields" });
   }
 
   try {
-    const product = await Product.findById(productId).populate('categoryId');
-    if (!product) return res.status(404).json({ message: "Product not found" });
+    let sizeObjStock = 0;
+    let targetCatName = '';
+    let isWarehouseItem = source === 'warehouse';
+    let warehouseIdObj = null;
 
-    const variant = product.variants.id(variantId);
-    if (!variant) return res.status(404).json({ message: "Variant not found" });
+    if (isWarehouseItem || process.env.USE_FLAT_PRODUCT_SCHEMA !== 'true') {
+      const product = await Product.findById(productId).populate('categoryId');
+      if (product && product.source === 'warehouse') {
+        isWarehouseItem = true;
+        warehouseIdObj = product.warehouseId;
+        const variant = product.variants.id(variantId);
+        if (!variant) return res.status(404).json({ message: "Variant not found" });
 
-    const sizeObj = variant.sizes.find(s => s.size === size);
-    if (!sizeObj) return res.status(400).json({ message: "Invalid size selected" });
+        const sizeObj = variant.sizes.find(s => s.size === size);
+        if (!sizeObj) return res.status(400).json({ message: "Invalid size selected" });
 
-    if (sizeObj.stock < quantity) {
-      return res.status(400).json({ message: `Only ${sizeObj.stock} items left in stock` });
+        if (sizeObj.stock < quantity) {
+          return res.status(400).json({ message: `Only ${sizeObj.stock} items left in stock` });
+        }
+        sizeObjStock = sizeObj.stock;
+        targetCatName = product.categoryId?.name?.toLowerCase() || '';
+      } else if (product) {
+        const variant = product.variants.id(variantId);
+        if (!variant) return res.status(404).json({ message: "Variant not found" });
+
+        const sizeObj = variant.sizes.find(s => s.size === size);
+        if (!sizeObj) return res.status(400).json({ message: "Invalid size selected" });
+
+        if (sizeObj.stock < quantity) {
+          return res.status(400).json({ message: `Only ${sizeObj.stock} items left in stock` });
+        }
+        sizeObjStock = sizeObj.stock;
+        targetCatName = product.categoryId?.name?.toLowerCase() || '';
+      } else {
+        return res.status(404).json({ message: "Product not found" });
+      }
+    } else {
+      const matchingFlatVariants = await ProductFlat.find({ styleGroupId: productId, size: size, isDeleted: { $ne: true } }).populate('categoryId');
+      const matchedDoc = matchingFlatVariants.find(v => generateColorVariantId(productId, v.color.name) === variantId);
+
+      if (matchedDoc) {
+        if (matchedDoc.stock < quantity) {
+          return res.status(400).json({ message: `Only ${matchedDoc.stock} items left in stock` });
+        }
+        sizeObjStock = matchedDoc.stock;
+        targetCatName = matchedDoc.categoryId?.name?.toLowerCase() || '';
+      } else {
+        // Fallback to legacy Product model
+        const product = await Product.findById(productId).populate('categoryId');
+        if (!product) return res.status(404).json({ message: "Product not found" });
+        const variant = product.variants.id(variantId);
+        if (!variant) return res.status(404).json({ message: "Product variant size not found" });
+        const sizeObj = variant.sizes.find(s => s.size === size);
+        if (!sizeObj) return res.status(400).json({ message: "Invalid size selected" });
+        if (sizeObj.stock < quantity) {
+          return res.status(400).json({ message: `Only ${sizeObj.stock} items left in stock` });
+        }
+        sizeObjStock = sizeObj.stock;
+        targetCatName = product.categoryId?.name?.toLowerCase() || '';
+      }
     }
 
     let cart = await Cart.findOne({ userId });
 
-    const targetCatName = product.categoryId?.name?.toLowerCase();
     const targetMult = (targetCatName === 'footwear') ? 2 : 1;
 
     if (cart) {
       const productIds = cart.items.map(i => i.productId);
-      const products = await Product.find({ _id: { $in: productIds } }).populate('categoryId').lean();
-      const productMap = products.reduce((acc, p) => { acc[p._id.toString()] = p; return acc; }, {});
+      
+      let products;
+      if (process.env.USE_FLAT_PRODUCT_SCHEMA === 'true') {
+        products = await ProductFlat.find({ styleGroupId: { $in: productIds } }).populate('categoryId').lean();
+        const foundProductIds = new Set(products.map(p => p.styleGroupId.toString()));
+        const missingProductIds = productIds.filter(id => !foundProductIds.has(id.toString()));
+        if (missingProductIds.length > 0) {
+          const legacyProducts = await Product.find({ _id: { $in: missingProductIds } }).populate('categoryId').lean();
+          products = [...products, ...legacyProducts];
+        }
+      } else {
+        products = await Product.find({ _id: { $in: productIds } }).populate('categoryId').lean();
+      }
+      
+      const productMap = products.reduce((acc, p) => { 
+        const key = p.styleGroupId ? p.styleGroupId.toString() : p._id.toString();
+        acc[key] = p; 
+        return acc; 
+      }, {});
 
+      // Only count items with the SAME source type (warehouse vs shop) for the limit
+      // Warehouse items have their own limit separate from merchant store items
+      const itemSource = isWarehouseItem ? 'warehouse' : 'shop';
       const currentMerchantQty = cart.items
-        .filter(item => item.merchantId.toString() === merchantId.toString())
+        .filter(item => {
+          const sameSource = (item.source || 'shop') === itemSource;
+          if (isWarehouseItem) {
+            // For warehouse items, count all warehouse items (regardless of merchantId)
+            return sameSource;
+          }
+          // For store items, count only store items from the same merchant
+          return sameSource && item.merchantId && effectiveMerchantId && item.merchantId.toString() === effectiveMerchantId.toString();
+        })
         .reduce((sum, item) => {
           const p = productMap[item.productId.toString()];
           const catName = p?.categoryId?.name?.toLowerCase();
@@ -52,11 +130,12 @@ export const addToCart = async (req, res) => {
         }, 0);
 
       if (currentMerchantQty + (quantity * targetMult) > 6) {
-        return res.status(400).json({ message: "You can only have up to 6 Try & Buy items per merchant." });
+        const sourceLabel = isWarehouseItem ? 'FlashMart' : 'Try & Buy';
+        return res.status(400).json({ message: `You can only have up to 6 ${sourceLabel} item slots per merchant (Footwear items count as 2 slots).` });
       }
     } else {
       if ((quantity * targetMult) > 6) {
-        return res.status(400).json({ message: "You can only have up to 6 Try & Buy items per merchant." });
+        return res.status(400).json({ message: "You can only have up to 6 item slots per merchant (Footwear items count as 2 slots)." });
       }
     }
 
@@ -68,40 +147,47 @@ export const addToCart = async (req, res) => {
           variantId,
           size,
           quantity,
-          stockQuantity: sizeObj.stock,
+          stockQuantity: sizeObjStock,
           merchantId,
           image: typeof image === 'string' ? { url: image } : image,
+          source: isWarehouseItem ? 'warehouse' : 'shop',
+          warehouseId: warehouseIdObj,
+          warehouseProductId: isWarehouseItem ? productId : null,
         }],
       });
     } else {
       const existingItem = cart.items.find(item =>
-        item.productId.toString() === productId &&
-        item.variantId.toString() === variantId &&
-        item.size === size
+        item.productId?.toString() === productId &&
+        item.variantId?.toString() === variantId &&
+        item.size === size &&
+        (isWarehouseItem ? item.source === 'warehouse' : item.source !== 'warehouse')
       );
 
       if (existingItem) {
-        if ((existingItem.quantity + quantity) > sizeObj.stock) {
-          return res.status(400).json({ message: `Only ${sizeObj.stock} items left in stock` });
+        if ((existingItem.quantity + quantity) > sizeObjStock) {
+          return res.status(400).json({ message: `Only ${sizeObjStock} items left in stock` });
         }
         existingItem.quantity += quantity;
-        existingItem.stockQuantity = sizeObj.stock;
+        existingItem.stockQuantity = sizeObjStock;
       } else {
         cart.items.push({
           productId,
           variantId,
           size,
           quantity,
-          stockQuantity: sizeObj.stock,
+          stockQuantity: sizeObjStock,
           merchantId,
           image: typeof image === 'string' ? { url: image } : image,
+          source: isWarehouseItem ? 'warehouse' : 'shop',
+          warehouseId: warehouseIdObj,
+          warehouseProductId: isWarehouseItem ? productId : null,
         });
       }
       cart.updatedAt = new Date();
     }
 
     await cart.save();
-    res.status(200).json({ message: "Item added to cart", cart });
+    res.status(200).json({ success: true, message: "Product added to cart", cart });
   } catch (err) {
     console.error("Add to cart error:", err);
     res.status(500).json({ message: "Server error" });
@@ -111,9 +197,11 @@ export const addToCart = async (req, res) => {
 export const getCartCount = async (req, res) => {
   const userId = req.user.userId;
   try {
-    const cart = await Cart.findOne({ userId })
-      .populate("items.productId", "name variants images")
-      .lean();
+    let cartQuery = Cart.findOne({ userId });
+    if (process.env.USE_FLAT_PRODUCT_SCHEMA !== 'true') {
+      cartQuery = cartQuery.populate("items.productId", "name variants images");
+    }
+    const cart = await cartQuery.lean();
     if (!cart) {
       return res.status(200).json({
         success: true,
@@ -122,6 +210,33 @@ export const getCartCount = async (req, res) => {
         items: [],
       });
     }
+
+    if (process.env.USE_FLAT_PRODUCT_SCHEMA === 'true') {
+      const itemsWithVariant = [];
+      for (const item of cart.items) {
+        if (!item.productId) continue;
+        const styleGroupId = item.productId.toString();
+        const siblings = await ProductFlat.find({ styleGroupId, size: item.size, isDeleted: { $ne: true } }).lean();
+        const matched = siblings.find(
+          (v) => generateColorVariantId(styleGroupId, v.color.name) === item.variantId.toString()
+        ) || siblings[0];
+
+        itemsWithVariant.push({
+          ...item,
+          productId: styleGroupId,
+          price: matched?.price || null,
+          mrp: matched?.mrp || null,
+        });
+      }
+      const merchantSet = new Set(cart.items.map(i => i.merchantId?.toString()));
+      return res.status(200).json({
+        success: true,
+        totalCarts: merchantSet.size,
+        totalItems: itemsWithVariant.length,
+        items: itemsWithVariant,
+      });
+    }
+
     const itemsWithVariant = cart.items.map((item) => {
       const product = item.productId;
       const variant = product?.variants?.find(
@@ -151,14 +266,18 @@ export const getCart = async (req, res) => {
   const { addressId, latitude, longitude, serviceable, deliveryTip = 0 } = req.body;
 
   try {
-    const cart = await Cart.findOne({ userId })
-      .populate({
+    let cartQuery = Cart.findOne({ userId })
+      .populate("items.merchantId", "shopName address isOnline logo");
+    if (process.env.USE_FLAT_PRODUCT_SCHEMA !== 'true') {
+      cartQuery = cartQuery.populate({
         path: "items.productId",
         select: "name variants images categoryId subCategoryId brandId gender tags collectionIds",
-      })
-      .populate("items.merchantId", "shopName address isOnline logo");
+      });
+    }
 
-    if (!cart || cart.items.length === 0) {
+    const cartDoc = await cartQuery.exec();
+
+    if (!cartDoc || cartDoc.items.length === 0) {
       return res.status(200).json({
         success: true,
         totalItems: 0,
@@ -166,6 +285,51 @@ export const getCart = async (req, res) => {
         items: [],
         deliveryDetails: null,
       });
+    }
+
+    const cart = cartDoc.toObject();
+
+    if (process.env.USE_FLAT_PRODUCT_SCHEMA === 'true') {
+      for (const item of cart.items) {
+        if (!item.productId && !item.warehouseProductId) continue;
+
+        if (item.source === 'warehouse') {
+          const whProduct = await Product.findById(item.warehouseProductId || item.productId).lean();
+          if (whProduct) {
+            const variant = whProduct.variants?.find(v => v._id.toString() === item.variantId.toString()) || whProduct.variants?.[0];
+            item.productId = whProduct;
+            item.price = variant?.price || 0;
+            item.mrp = variant?.mrp || 0;
+          } else {
+            item.price = 0;
+            item.mrp = 0;
+          }
+          continue;
+        }
+
+        const styleGroupId = item.productId.toString();
+        const siblings = await ProductFlat.find({ styleGroupId, size: item.size, isDeleted: { $ne: true } })
+          .populate('categoryId')
+          .populate('subCategoryId')
+          .populate('brandId')
+          .lean();
+        if (siblings.length > 0) {
+          const matched = siblings.find(
+            (v) => generateColorVariantId(styleGroupId, v.color.name) === item.variantId.toString()
+          ) || siblings[0];
+
+          item.productId = {
+            ...matched,
+            _id: styleGroupId, // Re-map _id to styleGroupId so routing/details lookups work
+          };
+          item.price = matched.price || 0;
+          item.mrp = matched.mrp || 0;
+        } else {
+          item.productId = null;
+          item.price = 0;
+          item.mrp = 0;
+        }
+      }
     }
 
     const config = await AppConfig.getConfig();
@@ -189,17 +353,39 @@ export const getCart = async (req, res) => {
     const merchantGroupMap = {};
     for (const item of cart.items) {
       const product = item.productId;
-      const merchant = item.merchantId;
-      const merchantKey = merchant?._id?.toString() || item.merchantId?.toString() || 'unknown';
-      const variant = product?.variants?.find(
-        (v) => v._id.toString() === item.variantId.toString()
-      );
-      const price = variant?.price || 0;
-      const mrp = variant?.mrp || 0;
+      let merchant = item.merchantId;
+      let merchantKey = merchant?._id?.toString() || item.merchantId?.toString() || 'unknown';
+
+      if (item.source === 'warehouse') {
+        merchantKey = 'flashmart';
+        merchant = {
+          _id: 'flashmart',
+          shopName: 'FF FlashMart',
+          isOnline: true,
+          logo: null,
+        };
+      }
+      
+      let price = 0;
+      let mrp = 0;
+      if (item.source === 'warehouse') {
+        price = item.price || 0;
+        mrp = item.mrp || 0;
+      } else if (process.env.USE_FLAT_PRODUCT_SCHEMA === 'true') {
+        price = item.price || 0;
+        mrp = item.mrp || 0;
+      } else {
+        const variant = product?.variants?.find(
+          (v) => v._id.toString() === item.variantId.toString()
+        );
+        price = variant?.price || 0;
+        mrp = variant?.mrp || 0;
+      }
+
       if (!merchantGroupMap[merchantKey]) {
         merchantGroupMap[merchantKey] = { merchant, items: [] };
       }
-      merchantGroupMap[merchantKey].items.push({ ...item.toObject(), price, mrp });
+      merchantGroupMap[merchantKey].items.push({ ...item, price, mrp });
     }
 
     const merchantCarts = [];
@@ -378,13 +564,39 @@ export const updateCartQuantity = async (req, res) => {
 
     const merchantId = item.merchantId.toString();
     
-    // Fetch products to check categories for the multiplier
     const productIds = cart.items.map(i => i.productId);
-    const products = await Product.find({ _id: { $in: productIds } }).populate('categoryId').lean();
-    const productMap = products.reduce((acc, p) => { acc[p._id.toString()] = p; return acc; }, {});
+    
+    let products;
+    if (process.env.USE_FLAT_PRODUCT_SCHEMA === 'true') {
+      products = await ProductFlat.find({ styleGroupId: { $in: productIds } }).populate('categoryId').lean();
+      const foundProductIds = new Set(products.map(p => p.styleGroupId.toString()));
+      const missingProductIds = productIds.filter(id => !foundProductIds.has(id.toString()));
+      if (missingProductIds.length > 0) {
+        const legacyProducts = await Product.find({ _id: { $in: missingProductIds } }).populate('categoryId').lean();
+        products = [...products, ...legacyProducts];
+      }
+    } else {
+      products = await Product.find({ _id: { $in: productIds } }).populate('categoryId').lean();
+    }
+    
+    const productMap = products.reduce((acc, p) => { 
+      const key = p.styleGroupId ? p.styleGroupId.toString() : p._id.toString();
+      acc[key] = p; 
+      return acc; 
+    }, {});
+
+    const itemSource = item.source || 'shop';
+    const isWarehouseItem = itemSource === 'warehouse';
 
     const currentMerchantQtyExcludingThisItem = cart.items
-      .filter(i => i.merchantId.toString() === merchantId && i._id.toString() !== cartId)
+      .filter(i => {
+        if (i._id.toString() === cartId) return false;
+        const sameSource = (i.source || 'shop') === itemSource;
+        if (isWarehouseItem) {
+          return sameSource;
+        }
+        return sameSource && i.merchantId && i.merchantId.toString() === merchantId;
+      })
       .reduce((sum, i) => {
         const p = productMap[i.productId.toString()];
         const catName = p?.categoryId?.name?.toLowerCase();
@@ -397,7 +609,8 @@ export const updateCartQuantity = async (req, res) => {
     const targetMult = (targetCatName === 'footwear') ? 2 : 1;
 
     if (currentMerchantQtyExcludingThisItem + (quantity * targetMult) > 6) {
-      return res.status(400).json({ success: false, message: "You can only have up to 6 Try & Buy items per merchant." });
+      const sourceLabel = isWarehouseItem ? 'FlashMart' : 'Try & Buy';
+      return res.status(400).json({ success: false, message: `You can only have up to 6 ${sourceLabel} item slots per merchant (Footwear items count as 2 slots).` });
     }
 
     item.quantity = quantity;

@@ -277,12 +277,16 @@ export const findBestOffers = async (userId, cartContext, couponCode = null, sel
     }
 
     let totalValue = discount;
-    if (offer.freeDelivery) {
+    const isMerchantCourier = offer.scope === 'merchant' && (orderType === 'courier' || offer.applicableTo === 'courier');
+    const allowFreeDelivery = offer.freeDelivery && !isMerchantCourier;
+
+    if (allowFreeDelivery) {
       totalValue += (cartContext.totalDeliveryCharge || 0) + (cartContext.totalReturnCharge || 0);
     }
 
     const processedOffer = {
       ...offer,
+      freeDelivery: allowFreeDelivery,
       discountAmount: discount,
       totalValue,
     };
@@ -338,6 +342,7 @@ export const getAvailableOffersForUser = async (userId, cartContext = null, orde
 
   const offers = await Offer.find({
     isActive: true,
+    isPublic: { $ne: false },
     startDate: { $lte: now },
     endDate: { $gt: now },
   })

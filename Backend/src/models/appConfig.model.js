@@ -55,6 +55,15 @@ const appConfigSchema = new mongoose.Schema(
             min: 0,
         },
 
+        // ── Warehouse Commission ──
+        // Default % FF takes from each warehouse sale (can be overridden per warehouse/product)
+        defaultWarehouseCommissionRate: {
+            type: Number,
+            default: 10, // 10%
+            min: 0,
+            max: 100,
+        },
+
         // ── Session Tracking ──
         heartbeatTimeoutMs: {
             type: Number,

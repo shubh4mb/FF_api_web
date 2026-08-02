@@ -3,6 +3,8 @@ import Cart from '../../models/cart.model.js';
 import Wishlist from '../../models/wishlist.model.js';
 import Merchant from '../../models/merchant.model.js';
 import mongoose from 'mongoose';
+import ProductFlat from '../../models/productFlat.model.js';
+import { generateColorVariantId } from '../../utils/variantAdapter.js';
 import { body, validationResult } from 'express-validator'
 
 /**
@@ -39,8 +41,15 @@ export const newArrivals = async (req, res) => {
         isOnline: true,
         isZoneLive: true
       }).select('_id').lean();
-      
-      filter.merchantId = { $in: onlineMerchantIds.map(m => m._id) };
+
+      const orConditions = [
+        { merchantId: { $in: onlineMerchantIds.map(m => m._id) }, source: { $ne: 'warehouse' } }
+      ];
+      // Include warehouse products if any warehouses are nearby
+      if (req.nearbyWarehouseIds && req.nearbyWarehouseIds.length > 0) {
+        orConditions.push({ source: 'warehouse', warehouseId: { $in: req.nearbyWarehouseIds } });
+      }
+      filter.$or = orConditions;
     }
 
     if (gender && gender !== 'All') {
@@ -70,7 +79,9 @@ export const newArrivals = async (req, res) => {
         images: v?.images,
         color: v?.color,
         isTriable: p.isTriable,
-        isInstantBuyable: calculateIsInstantBuyable(p._id, p.merchantId, req.nearbyMerchantIds)
+        isInstantBuyable: p.source === 'warehouse' ? true : calculateIsInstantBuyable(p._id, p.merchantId, req.nearbyMerchantIds),
+        isWarehouseListing: p.source === 'warehouse' || false,
+        source: p.source || 'shop',
       };
     });
 
@@ -83,6 +94,84 @@ export const newArrivals = async (req, res) => {
 
 export const productsDetails = async (req, res) => {
   try {
+    if (process.env.USE_FLAT_PRODUCT_SCHEMA === 'true') {
+      // 1. Fetch flat product from the flat collection (matching styleGroupId or variant _id)
+      const flatProductDoc = await ProductFlat.findOne({
+        $or: [{ _id: req.params.id }, { styleGroupId: req.params.id }],
+        isActive: true
+      })
+        .populate('brandId', 'name')
+        .populate('categoryId', 'name')
+        .populate('subCategoryId', 'name')
+        .populate('subSubCategoryId', 'name')
+        .populate({ 
+          path: 'merchantId', 
+          select: 'shopName logo isVerified isActive address isOnline isZoneLive', 
+          match: { isVerified: true, isActive: true } 
+        })
+        .populate('attributes.attributeId', 'name');
+
+      if (flatProductDoc && flatProductDoc.merchantId) {
+        // 2. Fetch sibling flat variants sharing the same styleGroupId
+        const siblings = await ProductFlat.find({
+          styleGroupId: flatProductDoc.styleGroupId,
+          _id: { $ne: flatProductDoc._id },
+          isActive: true
+        });
+
+        const nearbySet = new Set(req.nearbyMerchantIds?.map(id => id.toString()) || []);
+        const isNearby = nearbySet.has(flatProductDoc.merchantId._id.toString());
+
+        const isInstantBuyable = calculateIsInstantBuyable(flatProductDoc.styleGroupId, flatProductDoc.merchantId._id, req.nearbyMerchantIds, {
+          isOnline: flatProductDoc.merchantId.isOnline,
+          isZoneLive: flatProductDoc.merchantId.isZoneLive
+        });
+
+        const siblingsMapped = siblings.map(s => {
+          const doc = s.toObject ? s.toObject() : s;
+          return {
+            ...doc,
+            colorVariantId: generateColorVariantId(flatProductDoc.styleGroupId, doc.color?.name || 'Default')
+          };
+        });
+        const activeDocMapped = {
+          ...flatProductDoc.toObject ? flatProductDoc.toObject() : flatProductDoc,
+          colorVariantId: generateColorVariantId(flatProductDoc.styleGroupId, flatProductDoc.color?.name || 'Default')
+        };
+
+        const fulfillmentOptions = {
+          flashmart: {
+            available: false,
+            estimatedTime: "45 Mins",
+            label: "FlashMart Express",
+            warehouseId: null,
+          },
+          directStore: {
+            available: isInstantBuyable && isNearby,
+            estimatedTime: "45-60 Mins",
+            label: "Direct Store",
+            shopName: flatProductDoc.merchantId.shopName,
+            merchantId: flatProductDoc.merchantId._id,
+          },
+          courier: {
+            available: true,
+            estimatedTime: "2-4 Days",
+            label: "Standard Courier",
+          },
+        };
+
+        return res.status(200).json({
+          isFlatPayload: true,
+          activeProduct: activeDocMapped,
+          siblings: siblingsMapped,
+          isInstantBuyable,
+          isNearby,
+          fulfillmentOptions,
+        });
+      }
+    }
+
+    // Fallback: Run legacy nested schema query (used for warehouse products & legacy products)
     const product = await Product.findOne(
       { _id: req.params.id, isActive: true }
     )
@@ -90,14 +179,86 @@ export const productsDetails = async (req, res) => {
       .populate('categoryId', 'name')
       .populate('subCategoryId', 'name')
       .populate('subSubCategoryId', 'name')
-      .populate({ 
-        path: 'merchantId', 
-        select: 'shopName logo isVerified isActive address isOnline isZoneLive', 
-        match: { isVerified: true, isActive: true } 
-      })
+      .populate('warehouseId', 'name code supportsTryAndBuy supportsCourier')
+      .populate('merchantId', 'shopName logo isVerified isActive address isOnline isZoneLive')
+      .populate('attributes.attributeId', 'name')
       .lean();
 
-    if (!product || !product.merchantId) {
+    if (!product) {
+      return res.status(404).json({ message: 'Product not found' });
+    }
+
+    if (product.source === 'warehouse') {
+      // Check if same product also exists in a nearby live shop
+      let availableInShop = false;
+      let shopMerchantId = null;
+      let shopMerchantName = null;
+
+      if (product.merchantId && req.nearbyMerchantIds) {
+        const merchantIdStr = (product.merchantId._id || product.merchantId).toString();
+        const nearbySet = new Set(req.nearbyMerchantIds.map(id => id.toString()));
+
+        if (nearbySet.has(merchantIdStr)) {
+          const isMerchantLive = product.merchantId.isOnline !== false && product.merchantId.isZoneLive !== false;
+          if (isMerchantLive) {
+            const shopProduct = await Product.findOne({
+              merchantId: product.merchantId._id || product.merchantId,
+              $or: [
+                ...(product.sourceProductId ? [{ _id: product.sourceProductId }] : []),
+                { sourceProductId: product._id },
+                { name: product.name }
+              ],
+              source: { $ne: 'warehouse' },
+              isActive: true,
+            }).select('_id').lean();
+
+            if (shopProduct) {
+              availableInShop = true;
+              shopMerchantId = product.merchantId._id || product.merchantId;
+              shopMerchantName = product.merchantId.shopName || null;
+            }
+          }
+        }
+      }
+
+      const fulfillmentOptions = {
+        flashmart: {
+          available: true,
+          estimatedTime: "45 Mins",
+          label: "FlashMart Express",
+          warehouseId: product.warehouseId?._id || null,
+          warehouseName: product.warehouseId?.name || "FlashFits Hub",
+        },
+        directStore: {
+          available: availableInShop,
+          estimatedTime: "45-60 Mins",
+          label: "Direct Store",
+          shopName: shopMerchantName || product.merchantId?.shopName || "Partner Shop",
+          merchantId: shopMerchantId || product.merchantId?._id,
+        },
+        courier: {
+          available: product.warehouseId?.supportsCourier ?? true,
+          estimatedTime: "2-4 Days",
+          label: "Standard Courier",
+        },
+      };
+
+      return res.status(200).json({
+        ...product,
+        isInstantBuyable: true,
+        isNearby: true,
+        isWarehouseListing: true,
+        sellerLabel: 'FF FlashMart',
+        sourceMerchantName: product.merchantId?.shopName || null,
+        sourceMerchantLogo: product.merchantId?.logo || null,
+        availableInShop,
+        shopMerchantId,
+        shopMerchantName,
+        fulfillmentOptions,
+      });
+    }
+
+    if (!product.merchantId) {
       return res.status(404).json({ message: 'Product from unverified or inactive shop' });
     }
 
@@ -109,7 +270,28 @@ export const productsDetails = async (req, res) => {
       isZoneLive: product.merchantId.isZoneLive
     });
 
-    res.status(200).json({ ...product, isInstantBuyable, isNearby });
+    const fulfillmentOptions = {
+      flashmart: {
+        available: false,
+        estimatedTime: "45 Mins",
+        label: "FlashMart Express",
+        warehouseId: null,
+      },
+      directStore: {
+        available: isInstantBuyable && isNearby,
+        estimatedTime: "45-60 Mins",
+        label: "Direct Store",
+        shopName: product.merchantId.shopName,
+        merchantId: product.merchantId._id,
+      },
+      courier: {
+        available: true,
+        estimatedTime: "2-4 Days",
+        label: "Standard Courier",
+      },
+    };
+
+    res.status(200).json({ ...product, isInstantBuyable, isNearby, fulfillmentOptions });
   } catch (error) {
     console.error('Error in productsDetails:', error.message);
     res.status(500).json({ message: '❌ ' + error.message });
@@ -132,8 +314,14 @@ export const trendingProducts = async (req, res) => {
         isOnline: true,
         isZoneLive: true
       }).select('_id').lean();
-      
-      filter.merchantId = { $in: onlineMerchantIds.map(m => m._id) };
+
+      const orConditions = [
+        { merchantId: { $in: onlineMerchantIds.map(m => m._id) }, source: { $ne: 'warehouse' } }
+      ];
+      if (req.nearbyWarehouseIds && req.nearbyWarehouseIds.length > 0) {
+        orConditions.push({ source: 'warehouse', warehouseId: { $in: req.nearbyWarehouseIds } });
+      }
+      filter.$or = orConditions;
     }
 
     if (gender && gender !== 'All') {
@@ -162,7 +350,9 @@ export const trendingProducts = async (req, res) => {
         images: v?.images,
         color: v?.color,
         isTriable: p.isTriable,
-        isInstantBuyable: calculateIsInstantBuyable(p._id, p.merchantId, req.nearbyMerchantIds)
+        isInstantBuyable: p.source === 'warehouse' ? true : calculateIsInstantBuyable(p._id, p.merchantId, req.nearbyMerchantIds),
+        isWarehouseListing: p.source === 'warehouse' || false,
+        source: p.source || 'shop',
       };
     });
 
@@ -311,21 +501,21 @@ export const getFilteredProducts = async (req, res) => {
     };
 
     if (deliveryMode === 'tryAndBuy') {
-      // Only nearby merchants (within 7km) that are ONLINE
-      if (req.nearbyMerchantIds && req.nearbyMerchantIds.length > 0) {
-        const onlineMerchantIds = await Merchant.find({
-          _id: { $in: req.nearbyMerchantIds },
-          isOnline: true,
-          isZoneLive: true
-        }).select('_id').lean();
-        
-        if (onlineMerchantIds.length === 0) {
-          return res.json({ products: [], totalCount: 0, page: pageNum, totalPages: 0 });
-        }
-        match.merchantId = { $in: onlineMerchantIds.map(m => m._id) };
-      } else {
-        return res.json({ products: [], totalCount: 0, page: pageNum, totalPages: 0 });
+      // Nearby online merchants + nearby warehouse products
+      const onlineMerchantIds = await Merchant.find({
+        _id: { $in: req.nearbyMerchantIds || [] },
+        isOnline: true,
+        isZoneLive: true
+      }).select('_id').lean();
+      
+      const onlineIds = onlineMerchantIds.map(m => m._id);
+      const orConditions = [
+        { merchantId: { $in: onlineIds }, source: { $ne: 'warehouse' } }
+      ];
+      if (req.nearbyWarehouseIds && req.nearbyWarehouseIds.length > 0) {
+        orConditions.push({ source: 'warehouse', warehouseId: { $in: req.nearbyWarehouseIds } });
       }
+      match.$or = orConditions;
     } else if (deliveryMode === 'courier') {
       // Courier-enabled merchants OUTSIDE the 7km radius
       const Merchant = (await import('../../models/merchant.model.js')).default;
@@ -659,14 +849,35 @@ export const getProductsByMerchantId = async (req, res) => {
     const { merchantId } = req.params;
 
     const Merchant = (await import('../../models/merchant.model.js')).default;
-    const merchant = await Merchant.findOne({ _id: merchantId, isVerified: true, isActive: true });
-
-    if (!merchant) {
-      return res.status(404).json({ message: 'Non-verified or inactive shop' });
+    let merchant = null;
+    if (mongoose.Types.ObjectId.isValid(merchantId)) {
+      merchant = await Merchant.findOne({ _id: merchantId, isVerified: true, isActive: true });
     }
 
-    const products = await Product.find({ merchantId: merchantId, isActive: true })
-      .select('name brandId categoryId subCategoryId gender variants ratings numReviews')
+    let isWarehouse = false;
+    let filter = null;
+
+    if (!merchant) {
+      const Warehouse = (await import('../../models/warehouse.model.js')).default;
+      let warehouse = null;
+      if (mongoose.Types.ObjectId.isValid(merchantId)) {
+        warehouse = await Warehouse.findById(merchantId).lean();
+      }
+      if (warehouse || merchantId === 'ff-warehouse-hub' || merchantId === 'warehouse') {
+        isWarehouse = true;
+        filter = { source: 'warehouse', isActive: true };
+        if (warehouse) {
+          filter.$or = [{ warehouseId: warehouse._id }, { source: 'warehouse' }];
+        }
+      } else {
+        return res.status(404).json({ message: 'Non-verified or inactive shop' });
+      }
+    } else {
+      filter = { merchantId: merchantId, isActive: true, source: { $ne: 'warehouse' } };
+    }
+
+    const products = await Product.find(filter)
+      .select('name brandId categoryId subCategoryId gender variants ratings numReviews isTriable source warehouseId')
       .populate([
         { path: 'brandId', select: 'name' },
         { path: 'categoryId', select: 'name' },
@@ -682,7 +893,7 @@ export const getProductsByMerchantId = async (req, res) => {
         _id: product._id,
         name: product.name,
         brand: product.brandId,
-        merchant: product.merchantId,
+        merchant: product.merchantId || merchantId,
         gender: product.gender,
         categoryId: product.categoryId,
         subCategoryId: product.subCategoryId,
@@ -698,9 +909,13 @@ export const getProductsByMerchantId = async (req, res) => {
         discount: mainVariant.discount || 0,
         isTriable: product.isTriable,
         isMainVariant: true,
-        isInstantBuyable: req.nearbyMerchantIds?.some(id => id.toString() === merchantId.toString()) && 
-                          merchant.isOnline && 
-                          merchant.isZoneLive
+        isWarehouseListing: isWarehouse || product.source === 'warehouse',
+        source: product.source || (isWarehouse ? 'warehouse' : 'shop'),
+        isInstantBuyable: isWarehouse ? true : (
+          req.nearbyMerchantIds?.some(id => id.toString() === merchantId.toString()) && 
+          merchant?.isOnline && 
+          merchant?.isZoneLive
+        )
       };
     }).filter(Boolean);
 
@@ -958,7 +1173,6 @@ export const getCourierProducts = async (req, res) => {
     const { gender, page = 1, limit = 20 } = req.query;
     const Merchant = (await import('../../models/merchant.model.js')).default;
 
-    // 1. Find all eligible merchants (Nearby T&B OR Distant Courier)
     const combinedMerchants = await Merchant.find({
       $or: [
         { _id: { $in: req.nearbyMerchantIds || [] } },
@@ -966,9 +1180,20 @@ export const getCourierProducts = async (req, res) => {
       ],
       isActive: true,
       isVerified: true,
-    }).select('_id shopName logo').lean();
+    }).select('_id shopName logo backgroundImage rating stats isOnline genderCategory address').lean();
 
-    let filteredCourierMerchants = combinedMerchants;
+    const resolvedMerchants = await Promise.all(combinedMerchants.map(async (m) => {
+      const count = await Product.countDocuments({ merchantId: m._id, isActive: true });
+      return {
+        ...m,
+        stats: {
+          ...m.stats,
+          totalProducts: count
+        }
+      };
+    }));
+
+    let filteredCourierMerchants = resolvedMerchants;
     const lat = parseFloat(req.query.lat);
     const lng = parseFloat(req.query.lng);
 

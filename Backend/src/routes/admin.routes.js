@@ -3,7 +3,7 @@ import { addCategory, getCategories, updateCategory, getCategoryById } from '../
 import { addMerchant, getMerchants, getMerchantById, updateMerchantById, verifyMerchant } from '../controllers/adminControllers/merchant.controllers.js';
 import { addBrand, getBrands } from '../controllers/adminControllers/brand.controllers.js';
 import upload, { handleMulterError } from '../middleware/multer.js';
-import { getBaseProducts, getVariants, getBaseProductById, addVariant, getProductsByMerchantId, updateMatchingProducts, toggleProductStatus } from '../controllers/adminControllers/product.controllers.js';
+import { getBaseProducts, getVariants, getBaseProductById, addVariant, getProductsByMerchantId, updateMatchingProducts, toggleProductStatus, toggleProductVerification } from '../controllers/adminControllers/product.controllers.js';
 import { addTitleBanner } from '../controllers/adminControllers/titleBanner.controllers.js';
 import { addCart, getCart } from '../controllers/adminControllers/cart.controllers.js';
 import { addZone, getAllZones, checkZoneOverlap, updateZone, deleteZone } from '../controllers/adminControllers/zone.controllers.js';
@@ -17,7 +17,7 @@ import { createOffer, getAllOffers, getOfferById, updateOffer, toggleOffer, dele
 import { createCollection, getAllCollections, updateCollection, deleteCollection } from '../controllers/adminControllers/collection.controllers.js';
 import { createIncentive, getAllIncentives, updateIncentive, toggleIncentive, deleteIncentive } from '../controllers/adminControllers/incentive.controllers.js';
 import { getPayouts, triggerPayout, getPayoutById, getPendingPayouts, markPayoutPaid } from '../controllers/adminControllers/payout.controllers.js';
-import { getCancellationRequests, adminCancelOrder } from '../controllers/adminControllers/order.controllers.js';
+import { getCancellationRequests, adminCancelOrder, getUnresponsiveRiderReports, resolveUnresponsiveRider } from '../controllers/adminControllers/order.controllers.js';
 import { getAuditLogs } from '../controllers/adminControllers/auditLog.controllers.js';
 import { sendBroadcastNotification } from '../controllers/adminControllers/notification.controllers.js';
 
@@ -38,6 +38,8 @@ router.post('/addCategory', verifyAdmin, upload.fields([
     { name: 'logo_MEN', maxCount: 1 },
     { name: 'logo_WOMEN', maxCount: 1 },
     { name: 'logo_KIDS', maxCount: 1 },
+    { name: 'logo_BOYS', maxCount: 1 },
+    { name: 'logo_GIRLS', maxCount: 1 },
     { name: 'title_banners', maxCount: 5 }
 ]), handleMulterError, addCategory);
 router.get('/getCategories', getCategories);
@@ -48,6 +50,8 @@ router.patch('/updateCategory/:id', verifyAdmin, upload.fields([
     { name: 'logo_MEN', maxCount: 1 },
     { name: 'logo_WOMEN', maxCount: 1 },
     { name: 'logo_KIDS', maxCount: 1 },
+    { name: 'logo_BOYS', maxCount: 1 },
+    { name: 'logo_GIRLS', maxCount: 1 },
     { name: 'title_banners', maxCount: 5 }
 ]), handleMulterError, updateCategory);
 
@@ -76,6 +80,7 @@ router.post('/addVariant/:productId', upload.array('images'), handleMulterError,
 router.get('/products/merchant/:merchantId', getProductsByMerchantId);
 router.put('/updateMatchingProducts/:productId', updateMatchingProducts);
 router.patch('/updateProductStatus/:productId', verifyAdmin, toggleProductStatus);
+router.patch('/updateProductVerification/:productId', verifyAdmin, toggleProductVerification);
 
 router.post('/titleBanner/add', verifyAdmin, upload.single('image'), handleMulterError, addTitleBanner);
 
@@ -203,6 +208,10 @@ router.get('/support/stats', verifyAdmin, async (req, res) => {
 router.get('/orders/cancellation-requests', verifyAdmin, getCancellationRequests);
 router.patch('/orders/:orderId/cancel', verifyAdmin, adminCancelOrder);
 
+// ── Unresponsive Rider Reports ──
+router.get('/orders/unresponsive-rider-reports', verifyAdmin, getUnresponsiveRiderReports);
+router.patch('/orders/:orderId/resolve-unresponsive-rider', verifyAdmin, resolveUnresponsiveRider);
+
 // ── Zip Covers ──
 import zipCoverRoutes from './adminRoutes/zipCover.routes.js';
 router.use('/zip-covers', verifyAdmin, zipCoverRoutes);
@@ -222,5 +231,66 @@ router.patch('/return-issues/:id', verifyAdmin, updateReturnIssueStatus);
 // ── Notifications ──
 router.post('/notifications/broadcast', verifyAdmin, sendBroadcastNotification);
 
+// ── Warehouse ──
+import {
+  createWarehouse,
+  getAllWarehouses,
+  getWarehouseById,
+  updateWarehouse,
+  deleteWarehouse,
+  createWarehouseOperator,
+} from '../controllers/adminControllers/warehouse.controllers.js';
+import {
+  addWarehouseProduct,
+  addWarehouseProductVariant,
+  getWarehouseProducts,
+  getWarehouseProductById,
+  updateWarehouseProduct,
+  updateWarehouseProductStock,
+  toggleWarehouseProductVerification,
+  deleteWarehouseProduct,
+} from '../controllers/adminControllers/warehouseProduct.controllers.js';
+import {
+  getAllWarehouseOrders,
+  getWarehouseOrderById,
+  updateWarehouseOrderStatus,
+  settleWarehouseOrder,
+  getWarehouseOrderStats,
+} from '../controllers/adminControllers/warehouseOrder.controllers.js';
+
+// Warehouse CRUD
+router.post('/warehouse/create', verifyAdmin, createWarehouse);
+router.get('/warehouse/all', verifyAdmin, getAllWarehouses);
+router.get('/warehouse/:id', verifyAdmin, getWarehouseById);
+router.patch('/warehouse/:id', verifyAdmin, updateWarehouse);
+router.delete('/warehouse/:id', verifyAdmin, deleteWarehouse);
+
+// Warehouse Operator
+router.post('/warehouse/:warehouseId/operator', verifyAdmin, createWarehouseOperator);
+
+// Warehouse Products
+router.post('/warehouse/:warehouseId/products/add', verifyAdmin, addWarehouseProduct);
+router.post(
+  '/warehouse/products/:warehouseProductId/variants',
+  verifyAdmin,
+  upload.array('images', 5),
+  handleMulterError,
+  addWarehouseProductVariant
+);
+router.get('/warehouse/:warehouseId/products', verifyAdmin, getWarehouseProducts);
+router.get('/warehouse/products/:warehouseProductId', verifyAdmin, getWarehouseProductById);
+router.patch('/warehouse/products/:warehouseProductId', verifyAdmin, updateWarehouseProduct);
+router.patch('/warehouse/products/:warehouseProductId/stock', verifyAdmin, updateWarehouseProductStock);
+router.patch('/warehouse/products/:warehouseProductId/verify', verifyAdmin, toggleWarehouseProductVerification);
+router.delete('/warehouse/products/:warehouseProductId', verifyAdmin, deleteWarehouseProduct);
+
+// Warehouse Orders
+router.get('/warehouse/orders/stats', verifyAdmin, getWarehouseOrderStats);
+router.get('/warehouse/orders', verifyAdmin, getAllWarehouseOrders);
+router.get('/warehouse/orders/:orderId', verifyAdmin, getWarehouseOrderById);
+router.patch('/warehouse/orders/:orderId/status', verifyAdmin, updateWarehouseOrderStatus);
+router.post('/warehouse/orders/:orderId/settle', verifyAdmin, settleWarehouseOrder);
+
 export default router;
+
 

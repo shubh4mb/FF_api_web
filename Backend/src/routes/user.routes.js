@@ -5,7 +5,7 @@ import { phoneLogin, addPushToken } from '../controllers/userControllers/authCon
 import { addToCart, getCart, clearCart, updateCartQuantity, deleteCartItem, getCartCount, moveToCourier, selectOffer, deselectOffer } from '../controllers/userControllers/cart.controllers.js';
 import { addToCourierCart, getCourierCart, clearCourierCart, updateCourierCartQuantity, deleteCourierCartItem, getCourierCartCount, selectOfferCourier, deselectOfferCourier } from '../controllers/userControllers/courierCart.controllers.js';
 import { authMiddleware } from '../middleware/jwtAuth.js';
-import { getAllOrders, initiateReturn, getOrderById, createRazorpayOrder, verifyPayment, createFinalPaymentRazorpayOrder, verifyFinalPayment, verifyFinalPaymentCod, cancelOrder } from '../controllers/userControllers/order.controllers.js';
+import { getAllOrders, initiateReturn, getOrderById, createRazorpayOrder, verifyPayment, createFinalPaymentRazorpayOrder, verifyFinalPayment, verifyFinalPaymentCod, cancelOrder, reportUnresponsiveRider } from '../controllers/userControllers/order.controllers.js';
 import { body } from 'express-validator'
 import { createAddress, getAllAddresses, getSingleAddress, updateAddress, deleteAddress } from '../controllers/userControllers/address.controllers.js';
 import {
@@ -415,7 +415,7 @@ router.delete('/wishlist/delete/:wishlistItemId', authMiddleware, removeFromWish
  *       200:
  *         description: Wishlist items
  */
-router.get('/wishlist/my', authMiddleware, getMyWishlist);
+router.get('/wishlist/my', authMiddleware, resolveNearbyMerchants, getMyWishlist);
 
 router.get('/wishlist/ids', authMiddleware, getMyWishlistIds);
 
@@ -443,6 +443,7 @@ router.post('/order/createFinalPaymentOrder/:orderId', authMiddleware, createFin
 router.post('/order/verifyFinalPayment', authMiddleware, verifyFinalPayment);
 router.post('/order/verifyFinalPaymentCod', authMiddleware, verifyFinalPaymentCod);
 router.post('/order/cancel/:orderId', authMiddleware, cancelOrder);
+router.post('/order/report-rider/:orderId', authMiddleware, reportUnresponsiveRider);
 
 /**
  * @swagger
@@ -542,5 +543,41 @@ router.get('/support/tickets', authMiddleware, async (req, res) => {
     return res.status(500).json({ message: "Failed to fetch tickets" });
   }
 });
+
+// ── Warehouse Products (Customer Browse) ──
+import {
+  getWarehouseProducts,
+  getWarehouseProductDetail,
+  addWarehouseProductToCart,
+  addWarehouseProductToCourierCart,
+  getWarehouseMerchants,
+} from '../controllers/userControllers/warehouseProduct.controllers.js';
+import {
+  createWarehouseTBOrder,
+  createWarehouseCourierOrder,
+  verifyWarehousePayment,
+  getMyWarehouseOrders,
+  getWarehouseOrderDetail,
+} from '../controllers/userControllers/warehouseOrder.controllers.js';
+
+// Browse warehouse products (no auth needed for listing)
+router.get('/warehouse/merchants', resolveNearbyMerchants, getWarehouseMerchants);
+router.get('/warehouse/products', resolveNearbyMerchants, getWarehouseProducts);
+router.get('/warehouse/products/:id', resolveNearbyMerchants, getWarehouseProductDetail);
+
+// Add to carts (auth required)
+router.post('/warehouse/cart/add', authMiddleware, addWarehouseProductToCart);
+router.post('/warehouse/courier-cart/add', authMiddleware, addWarehouseProductToCourierCart);
+
+// Warehouse Orders — T&B
+router.post('/warehouse/orders/create', authMiddleware, createWarehouseTBOrder);
+router.post('/warehouse/orders/verify-payment', authMiddleware, verifyWarehousePayment);
+
+// Warehouse Orders — Courier
+router.post('/warehouse/orders/courier/create', authMiddleware, createWarehouseCourierOrder);
+
+// My warehouse orders
+router.get('/warehouse/orders/my-orders', authMiddleware, getMyWarehouseOrders);
+router.get('/warehouse/orders/:orderId', authMiddleware, getWarehouseOrderDetail);
 
 export default router;

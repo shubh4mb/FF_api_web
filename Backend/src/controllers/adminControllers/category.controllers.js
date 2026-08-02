@@ -48,7 +48,7 @@ export const addCategory = asyncHandler(async (req, res) => {
 
     // Handle gender-specific logos
     const logos = {};
-    for (const gender of ['MEN', 'WOMEN', 'KIDS']) {
+    for (const gender of ['MEN', 'WOMEN', 'KIDS', 'BOYS', 'GIRLS']) {
       const fieldName = `logo_${gender}`;
       if (req.files[fieldName]) {
         const detail = await storageService.uploadSingle(req.files[fieldName], `category/logo_${gender.toLowerCase()}`, CATEGORY_OPTIONS);
@@ -120,7 +120,7 @@ export const updateCategory = asyncHandler(async (req, res) => {
 
     // Handle gender-specific logos
     const logos = {};
-    for (const gender of ['MEN', 'WOMEN', 'KIDS']) {
+    for (const gender of ['MEN', 'WOMEN', 'KIDS', 'BOYS', 'GIRLS']) {
       const fieldName = `logo_${gender}`;
       if (req.files[fieldName]) {
         const detail = await storageService.uploadSingle(req.files[fieldName], `category/logo_${gender.toLowerCase()}`, CATEGORY_OPTIONS);

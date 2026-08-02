@@ -15,6 +15,10 @@ const variantSchema = new mongoose.Schema({
         type: Number,
         default: 0,
       },
+      reservedStock: {
+        type: Number,
+        default: 0,
+      },
     }
   ],
   mrp: Number, // Original price before discount
@@ -47,10 +51,28 @@ const productSchema = new mongoose.Schema({
     ref: 'Merchant',
     required: true,
   },
+  source: {
+    type: String,
+    enum: ['merchant', 'warehouse'],
+    default: 'merchant',
+  },
+  warehouseId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Warehouse',
+  },
+  sourceProductId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Product',
+  },
+  commissionRate: {
+    type: Number,
+    default: null,
+    min: 0,
+    max: 100,
+  },
   brandId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Brand',
-    required: true,
   },
 
   // Category Structure (2 levels: L0 = e.g. Topwear, L1 = e.g. T-Shirt)
@@ -71,7 +93,7 @@ const productSchema = new mongoose.Schema({
   // Gender: who this product is for (array for unisex support)
   gender: {
     type: [String],
-    enum: ['MEN', 'WOMEN', 'KIDS'],
+    enum: ['MEN', 'WOMEN', 'KIDS', 'BOYS', 'GIRLS'],
     required: true,
     index: true,
   },
@@ -129,6 +151,7 @@ const productSchema = new mongoose.Schema({
   numReviews: { type: Number, default: 0 },
 
   isActive: { type: Boolean, default: true },
+  isVerified: { type: Boolean, default: false },
   isDeleted: { type: Boolean, default: false },
   createdAt: { type: Date, default: Date.now },
 }, { timestamps: true });
