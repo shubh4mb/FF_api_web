@@ -1,6 +1,5 @@
 import asyncHandler from 'express-async-handler';
 import RecentlyViewed from '../../models/recentlyViewed.model.js';
-import Product from '../../models/product.model.js';
 import { ApiResponse } from '../../utils/ApiResponse.js';
 import { ApiError } from '../../utils/ApiError.js';
 import ProductFlat from '../../models/productFlat.model.js';
@@ -17,25 +16,15 @@ export const addToRecentlyViewed = asyncHandler(async (req, res) => {
     throw new ApiError(400, 'productId and variantId are required');
   }
 
-  // Check if product exists
-  if (process.env.USE_FLAT_PRODUCT_SCHEMA === 'true') {
-    let product = await ProductFlat.findOne({ styleGroupId: productId });
-    if (!product) {
-      // Fallback to legacy
-      product = await Product.findById(productId);
-      if (!product) {
-        throw new ApiError(404, 'Product not found');
-      }
-    }
-  } else {
-    const product = await Product.findById(productId);
-    if (!product) {
-      throw new ApiError(404, 'Product not found');
-    }
+  const product = await ProductFlat.findOne({
+    $or: [{ styleGroupId: productId }, { _id: productId }],
+    isDeleted: { $ne: true }
+  });
+  if (!product) {
+    throw new ApiError(404, 'Product not found');
   }
 
   // Upsert the recently viewed record
-  // If it exists for (userId, productId), it will update the variantId and timestamps (updatedAt)
   await RecentlyViewed.findOneAndUpdate(
     { userId, productId },
     { variantId, updatedAt: new Date() },
@@ -62,100 +51,47 @@ export const addToRecentlyViewed = asyncHandler(async (req, res) => {
 export const getMyRecentlyViewed = asyncHandler(async (req, res) => {
   const userId = req.user.userId;
 
-  if (process.env.USE_FLAT_PRODUCT_SCHEMA === 'true') {
-    const recentlyViewedItems = await RecentlyViewed.find({ userId })
-      .sort({ updatedAt: -1 })
-      .limit(20)
+  const recentlyViewedItems = await RecentlyViewed.find({ userId })
+    .sort({ updatedAt: -1 })
+    .limit(20)
+    .lean();
+
+  const products = [];
+  for (const item of recentlyViewedItems) {
+    if (!item.productId) continue;
+    const styleGroupId = item.productId.toString();
+    const siblings = await ProductFlat.find({ styleGroupId, isDeleted: { $ne: true } })
+      .populate('brandId', 'name')
+      .populate('merchantId', 'isOnline isZoneLive')
       .lean();
 
-    const products = [];
-    for (const item of recentlyViewedItems) {
-      if (!item.productId) continue;
-      const styleGroupId = item.productId.toString();
-      const siblings = await ProductFlat.find({ styleGroupId, isDeleted: { $ne: true } })
-        .populate('brandId', 'name')
-        .populate('merchantId', 'isOnline isZoneLive')
-        .lean();
-
-      if (siblings.length > 0) {
-        const matched = siblings.find(
-          (v) => generateColorVariantId(styleGroupId, v.color?.name) === item.variantId.toString()
-        ) || siblings[0];
-
-        const nearbySet = new Set(req.nearbyMerchantIds?.map(id => id.toString()) || []);
-        const isNearby = matched.merchantId ? nearbySet.has(matched.merchantId._id?.toString() || matched.merchantId.toString()) : false;
-        const isOnline = matched.merchantId?.isOnline !== undefined ? matched.merchantId.isOnline : true;
-        const isZoneLive = matched.merchantId?.isZoneLive !== undefined ? matched.merchantId.isZoneLive : true;
-        const isInstantBuyable = isNearby && isOnline && isZoneLive;
-
-        products.push({
-          _id: styleGroupId, // Re-map _id to styleGroupId so routing/details lookups work
-          id: styleGroupId,
-          name: matched.name,
-          brand: matched.brandId?.name,
-          price: matched.price,
-          mrp: matched.mrp,
-          images: matched.images,
-          ratings: matched.ratings,
-          isTriable: matched.isTriable,
-          variantId: item.variantId,
-          isNearby,
-          isInstantBuyable,
-        });
-      }
-    }
-
-    return res.status(200).json(new ApiResponse(200, products, 'Recently viewed retrieved'));
-  }
-
-  const recentlyViewedItems = await RecentlyViewed.find({ userId })
-    .populate({
-      path: 'productId',
-      select: 'name brandId merchantId ratings isTriable variants',
-      populate: [
-        {
-          path: 'brandId',
-          select: 'name',
-        },
-        {
-          path: 'merchantId',
-          select: 'isOnline isZoneLive',
-        }
-      ],
-    })
-    .sort({ updatedAt: -1 })
-    .limit(20);
-
-  // Map to a cleaner format for frontend
-  const products = recentlyViewedItems
-    .filter(item => item.productId) // Filter out if product was deleted
-    .map(item => {
-      const product = item.productId;
-      const variant = product.variants.id(item.variantId) || product.variants[0];
+    if (siblings.length > 0) {
+      const matched = siblings.find(
+        (v) => generateColorVariantId(styleGroupId, v.color?.name) === item.variantId.toString()
+      ) || siblings[0];
 
       const nearbySet = new Set(req.nearbyMerchantIds?.map(id => id.toString()) || []);
-      const isNearby = product.merchantId ? nearbySet.has(product.merchantId._id.toString()) : false;
-      
-      const isOnline = product.merchantId?.isOnline !== undefined ? product.merchantId.isOnline : true;
-      const isZoneLive = product.merchantId?.isZoneLive !== undefined ? product.merchantId.isZoneLive : true;
-      
+      const isNearby = matched.merchantId ? nearbySet.has(matched.merchantId._id?.toString() || matched.merchantId.toString()) : false;
+      const isOnline = matched.merchantId?.isOnline !== undefined ? matched.merchantId.isOnline : true;
+      const isZoneLive = matched.merchantId?.isZoneLive !== undefined ? matched.merchantId.isZoneLive : true;
       const isInstantBuyable = isNearby && isOnline && isZoneLive;
 
-      return {
-        _id: product._id,
-        id: product._id,
-        name: product.name,
-        brand: product.brandId?.name,
-        price: variant?.price,
-        mrp: variant?.mrp,
-        images: variant?.images,
-        ratings: product.ratings,
-        isTriable: product.isTriable,
+      products.push({
+        _id: styleGroupId, // Re-map _id to styleGroupId so routing/details lookups work
+        id: styleGroupId,
+        name: matched.name,
+        brand: matched.brandId?.name,
+        price: matched.price,
+        mrp: matched.mrp,
+        images: matched.images,
+        ratings: matched.ratings,
+        isTriable: matched.isTriable,
         variantId: item.variantId,
         isNearby,
         isInstantBuyable,
-      };
-    });
+      });
+    }
+  }
 
-  res.status(200).json(new ApiResponse(200, products, 'Recently viewed retrieved'));
+  return res.status(200).json(new ApiResponse(200, products, 'Recently viewed retrieved'));
 });

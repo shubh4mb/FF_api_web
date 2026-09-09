@@ -189,7 +189,7 @@ const Products = () => {
     },
     {
       label: "Matching Products",
-      onClick: (row) => navigate(`/admin/matching-products/${row._id}`),
+      onClick: (row) => navigate(`/admin/matching-products/${row._id}`, { state: { merchantId: row.merchantId?._id || row.merchantId } }),
     },
     {
       label: "Toggle Status",

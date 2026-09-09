@@ -70,6 +70,87 @@ const appConfigSchema = new mongoose.Schema(
             default: 5 * 60 * 1000, // 5 minutes
             min: 60000,
         },
+
+        // ── App Versions & Force Update Policies ──
+        customerAppVersion: {
+            minVersion: {
+                type: String,
+                default: "1.0.0",
+            },
+            latestVersion: {
+                type: String,
+                default: "1.1.0",
+            },
+            storeUrl: {
+                type: String,
+                default: "market://details?id=com.flashfits.app",
+            },
+            webUrl: {
+                type: String,
+                default: "https://play.google.com/store/apps/details?id=com.flashfits.app",
+            },
+            mandatoryTitle: {
+                type: String,
+                default: "Mandatory Update Required",
+            },
+            mandatoryMessage: {
+                type: String,
+                default: "A critical new version of FlashFits is required to continue shopping and tracking orders. Please update now.",
+            },
+            optionalTitle: {
+                type: String,
+                default: "New Version Available",
+            },
+            optionalMessage: {
+                type: String,
+                default: "Discover fresh features, smoother checkout, and new styles. Update now for the best experience!",
+            },
+            releaseNotes: {
+                type: [String],
+                default: [
+                    "Performance improvements & smoother experience",
+                    "Bug fixes and stability enhancements",
+                ],
+            },
+        },
+
+        deliveryAppVersion: {
+            minVersion: {
+                type: String,
+                default: "1.0.0",
+            },
+            latestVersion: {
+                type: String,
+                default: "1.0.0",
+            },
+            storeUrl: {
+                type: String,
+                default: "market://details?id=com.flashfits.delivery",
+            },
+            webUrl: {
+                type: String,
+                default: "https://play.google.com/store/apps/details?id=com.flashfits.delivery",
+            },
+        },
+
+        merchantAppVersion: {
+            minVersion: {
+                type: String,
+                default: "1.0.0",
+            },
+            latestVersion: {
+                type: String,
+                default: "1.0.0",
+            },
+            storeUrl: {
+                type: String,
+                default: "market://details?id=com.flashfits.merchant",
+            },
+            webUrl: {
+                type: String,
+                default: "https://play.google.com/store/apps/details?id=com.flashfits.merchant",
+            },
+        },
     },
     { timestamps: true }
 );

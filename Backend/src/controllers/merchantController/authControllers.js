@@ -407,11 +407,23 @@ export const updateMerchantShopDetails = async (req, res) => {
 export const updateMerchantBankDetails = async (req, res) => {
   try {
     const { merchantId } = req.params;
-    const merchant = await Merchant.findByIdAndUpdate(
-      merchantId,
-      { $set: { bankDetails: req.body } },
-      { new: true }
-    );
+    const merchant = await Merchant.findById(merchantId);
+    if (!merchant) {
+      return res.status(404).json({ message: "Merchant not found" });
+    }
+
+    merchant.bankDetails = {
+      ...merchant.bankDetails,
+      ...req.body,
+      isBankVerified: false,
+    };
+
+    if (merchant.status === 'rejected') {
+      merchant.status = 'pending_verification';
+      merchant.rejectionReason = "";
+    }
+
+    await merchant.save();
     res.json({ success: true, merchant });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -623,16 +635,26 @@ export const updateMerchantKYC = async (req, res) => {
     if (req.files) {
       if (req.files.panImage) {
         merchant.kyc.pan.image = await storageService.uploadSingle(req.files.panImage[0], `merchant/${merchantId}/kyc/pan`);
+        merchant.kyc.pan.verified = false;
       }
       if (req.files.gstImage) {
         merchant.kyc.gst.image = await storageService.uploadSingle(req.files.gstImage[0], `merchant/${merchantId}/kyc/gst`);
+        merchant.kyc.gst.verified = false;
       }
       if (req.files.businessProofImage) {
         merchant.kyc.businessProof.image = await storageService.uploadSingle(req.files.businessProofImage[0], `merchant/${merchantId}/kyc/business`);
+        merchant.kyc.businessProof.verified = false;
       }
       if (req.files.bankProofImage) {
         merchant.kyc.bankProof.image = await storageService.uploadSingle(req.files.bankProofImage[0], `merchant/${merchantId}/kyc/bank`);
+        merchant.kyc.bankProof.verified = false;
       }
+    }
+
+    // Reset status to pending_verification if merchant was previously rejected
+    if (merchant.status === 'rejected') {
+      merchant.status = 'pending_verification';
+      merchant.rejectionReason = "";
     }
 
     await merchant.save();

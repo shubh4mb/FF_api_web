@@ -68,8 +68,8 @@ export const getMerchantById = asyncHandler(async (req, res) => {
         warehouse = await Warehouse.findById(req.params.id).lean();
       }
       if (warehouse || req.params.id === 'ff-warehouse-hub' || req.params.id === 'warehouse') {
-        const Product = (await import("../../models/product.model.js")).default;
-        const count = await Product.countDocuments({ source: 'warehouse', isActive: true });
+        const ProductFlat = (await import("../../models/productFlat.model.js")).default;
+        const count = await ProductFlat.countDocuments({ source: 'warehouse', isActive: true, isDeleted: { $ne: true } });
         const virtualMerchant = {
           _id: warehouse ? warehouse._id.toString() : 'ff-warehouse-hub',
           shopName: warehouse?.name || 'FlashFits Warehouse Hub',
@@ -187,10 +187,24 @@ export const updateMerchantById = asyncHandler(async (req, res) => {
 
 export const verifyMerchant = asyncHandler(async (req, res) => {
   const { id } = req.params;
-  const { isVerified, kycVerifications, rejectionReason } = req.body;
+  const { isVerified, kycVerifications, rejectionReason, status } = req.body;
 
   let updateQuery = {};
-  if (isVerified !== undefined) {
+  if (status !== undefined) {
+    updateQuery.status = status;
+    if (status === 'active') {
+      updateQuery.isActive = true;
+      updateQuery.isVerified = true;
+      updateQuery.rejectionReason = "";
+    } else if (status === 'rejected' || status === 'suspended') {
+      updateQuery.isActive = false;
+      if (rejectionReason) updateQuery.rejectionReason = rejectionReason;
+    } else if (status === 'pending_payment') {
+      updateQuery.isVerified = true;
+      updateQuery.isActive = false;
+      updateQuery.rejectionReason = "";
+    }
+  } else if (isVerified !== undefined) {
     updateQuery.isVerified = !!isVerified;
     if (!!isVerified) {
       const merchant = await Merchant.findById(id);
@@ -227,8 +241,19 @@ export const verifyMerchant = asyncHandler(async (req, res) => {
     throw new ApiError(404, "Merchant not found");
   }
 
+  // Check if all KYC items are verified to update isKycVerified flag
+  const isKycComplete = !!(
+    merchant.kyc?.pan?.verified &&
+    merchant.kyc?.businessProof?.verified &&
+    merchant.kyc?.bankProof?.verified
+  );
+  if (merchant.kyc?.isKycVerified !== isKycComplete) {
+    merchant.kyc.isKycVerified = isKycComplete;
+    await merchant.save();
+  }
+
   // Trigger email notification if verified
-  if (isVerified) {
+  if (isVerified || status === 'active') {
     try {
       await sendVerificationEmail(merchant.email, merchant.shopName);
     } catch (emailError) {
@@ -238,6 +263,6 @@ export const verifyMerchant = asyncHandler(async (req, res) => {
   }
 
   return res.status(200).json(
-    new ApiResponse(200, { merchant }, `Merchant ${isVerified ? "verified" : "unverified"} successfully`)
+    new ApiResponse(200, { merchant }, `Merchant updated successfully`)
   );
 });

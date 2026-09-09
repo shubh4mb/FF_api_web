@@ -91,6 +91,13 @@ const DeliveryRiderSchema = new mongoose.Schema({
     ifscCode: { type: String },
   },
 
+  // UPI ID for direct QR payment collection from customers
+  upiId: {
+    type: String,
+    default: null,
+    trim: true,
+  },
+
   isAvailable: {
     type: Boolean,
     default: true,

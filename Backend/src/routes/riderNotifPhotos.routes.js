@@ -5,6 +5,7 @@
 import express from "express";
 import Notification from "../models/notification.model.js";
 import Order from "../models/order.model.js";
+import WarehouseOrder from "../models/warehouseOrder.model.js";
 import { getWalletDetails } from "../helperFns/walletHelper.js";
 import { authMiddlewareRider, authMiddleware } from "../middleware/jwtAuth.js"; // authMiddleware added here
 import upload from "../middleware/multer.js";
@@ -53,7 +54,10 @@ router.post(
             const { orderId } = req.body;
             if (!orderId) return res.status(400).json({ message: "orderId is required" });
 
-            const order = await Order.findById(orderId);
+            let order = await Order.findById(orderId);
+            if (!order) {
+                order = await WarehouseOrder.findById(orderId);
+            }
             if (!order) return res.status(404).json({ message: "Order not found" });
             if (order.deliveryRiderId?.toString() !== req.riderId.toString()) {
                 return res.status(403).json({ message: "Not authorized" });

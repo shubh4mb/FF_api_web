@@ -4,7 +4,7 @@ import { newArrivals, productsDetails, getFilteredProducts, getRelatedProducts, 
 import { phoneLogin, addPushToken } from '../controllers/userControllers/authControllers.js';
 import { addToCart, getCart, clearCart, updateCartQuantity, deleteCartItem, getCartCount, moveToCourier, selectOffer, deselectOffer } from '../controllers/userControllers/cart.controllers.js';
 import { addToCourierCart, getCourierCart, clearCourierCart, updateCourierCartQuantity, deleteCourierCartItem, getCourierCartCount, selectOfferCourier, deselectOfferCourier } from '../controllers/userControllers/courierCart.controllers.js';
-import { authMiddleware } from '../middleware/jwtAuth.js';
+import { authMiddleware, authMiddlewareOptional } from '../middleware/jwtAuth.js';
 import { getAllOrders, initiateReturn, getOrderById, createRazorpayOrder, verifyPayment, createFinalPaymentRazorpayOrder, verifyFinalPayment, verifyFinalPaymentCod, cancelOrder, reportUnresponsiveRider } from '../controllers/userControllers/order.controllers.js';
 import { body } from 'express-validator'
 import { createAddress, getAllAddresses, getSingleAddress, updateAddress, deleteAddress } from '../controllers/userControllers/address.controllers.js';
@@ -24,7 +24,10 @@ import User from "../models/user.model.js";
 import { getWalletDetails } from "../helperFns/walletHelper.js";
 
 import userBannerRoutes from './userBanner.routes.js';
-import { getCollectionsForHome } from '../controllers/userControllers/collection.controllers.js';
+import { getCollectionsForHome, getCollectionDetails } from '../controllers/userControllers/collection.controllers.js';
+import { getHomeFeed } from '../controllers/userControllers/home.controllers.js';
+import { getReferralStats } from '../controllers/userControllers/referral.controllers.js';
+import { getAppVersionPolicy } from '../controllers/adminControllers/appConfig.controllers.js';
 
 const router = express.Router();
 
@@ -35,7 +38,13 @@ const router = express.Router();
  *   description: User-facing APIs for products, cart, wishlist, and orders
  */
 
+// ── App Version Policy (Public) ──
+router.get('/app-version', getAppVersionPolicy);
+
 router.use('/banners', userBannerRoutes);
+
+// ── Aggregated Home Feed ──
+router.get('/home-feed', authMiddlewareOptional, resolveNearbyMerchants, getHomeFeed);
 
 // ── Notifications ──
 
@@ -198,6 +207,9 @@ router.get("/profile", authMiddleware, async (req, res) => {
   }
 });
 
+// ── Referral Stats ──
+router.get("/referral-stats", authMiddleware, getReferralStats);
+
 router.put("/profile/phone", authMiddleware, async (req, res) => {
   try {
     const { phoneNumber } = req.body;
@@ -311,6 +323,7 @@ router.get('/products/:id/related', resolveNearbyMerchants, getRelatedProducts)
 router.get('/products/merchant/:merchantId', resolveNearbyMerchants, getProductsByMerchantId)
 router.get('/products/collection', resolveNearbyMerchants, getCollectionProductsByMerchant);
 router.get('/collections/home', resolveNearbyMerchants, getCollectionsForHome);
+router.get('/collections/:slugOrId', resolveNearbyMerchants, getCollectionDetails);
 router.post(
   '/products/batch',
   [

@@ -1,5 +1,5 @@
 import WarehouseOrder from '../../models/warehouseOrder.model.js';
-import Product from '../../models/product.model.js';
+import ProductFlat from '../../models/productFlat.model.js';
 import Warehouse from '../../models/warehouse.model.js';
 import Merchant from '../../models/merchant.model.js';
 import { getIO } from '../../config/socket.js';
@@ -7,6 +7,7 @@ import { emitWarehouseOrderUpdate } from '../../sockets/warehouseOrder.socket.js
 import { enqueueOrder } from '../../helperFns/orderFns.js';
 import { inferZone } from '../../utils/zoneInfer.js';
 import { storageService } from '../../services/storage.service.js';
+import { cancelAndCleanupOrder } from '../../helperFns/orderCancellationHelper.js';
 
 const generateOTP = () => Math.floor(1000 + Math.random() * 9000);
 
@@ -165,7 +166,6 @@ export const acceptWarehouseOrder = async (req, res) => {
  */
 export const rejectWarehouseOrder = async (req, res) => {
   try {
-    const io = getIO();
     const merchant = await Merchant.findById(req.merchantId);
     if (!merchant || merchant.accountType !== 'warehouse') {
       return res.status(403).json({ message: 'Not a warehouse operator' });
@@ -177,29 +177,24 @@ export const rejectWarehouseOrder = async (req, res) => {
     });
     if (!order) return res.status(404).json({ message: 'Order not found' });
 
-    order.orderStatus = 'rejected';
-    order.customerDeliveryStatus = 'cancelled';
-    order.reason = req.body.reason || 'Rejected by warehouse';
-    await order.save();
+    const result = await cancelAndCleanupOrder({
+      orderId: order._id,
+      cancelledBy: 'merchant',
+      reason: req.body.reason || 'Rejected by warehouse operator',
+      action: 'rejected',
+      req,
+    });
 
-    // Release reserved stock
-    for (const item of order.items) {
-      if (item.warehouseProductId && item.variantId && item.size) {
-        await Product.updateOne(
-          {
-            _id: item.warehouseProductId,
-            'variants._id': item.variantId,
-            'variants.sizes.size': item.size,
-          },
-          { $inc: { 'variants.$[v].sizes.$[s].reservedStock': -(item.quantity || 1) } },
-          { arrayFilters: [{ 'v._id': item.variantId }, { 's.size': item.size }] }
-        );
-      }
+    if (!result.success) {
+      return res.status(result.statusCode || 400).json({ message: result.error || 'Failed to reject order' });
     }
 
-    await emitWarehouseOrderUpdate(io, merchant.warehouseId, order._id.toString(), order);
-
-    return res.status(200).json({ success: true, message: 'Order rejected' });
+    return res.status(200).json({
+      success: true,
+      message: 'Order rejected, stock released, and resources cleaned up',
+      order: result.order,
+      refundAmount: result.refundAmount,
+    });
   } catch (error) {
     console.error('rejectWarehouseOrder error:', error);
     return res.status(500).json({ message: error.message });

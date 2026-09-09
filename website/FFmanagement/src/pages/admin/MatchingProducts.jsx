@@ -1,26 +1,41 @@
 import React, { useEffect, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { getProductsByMerchantId, updateMatchingProducts } from '@/api/products';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
+import { getProductsByMerchantId, updateMatchingProducts, getBaseProductById } from '@/api/products';
 
 const MatchingProducts = () => {
   const [products, setProducts] = useState([]);
   const [selectedProducts, setSelectedProducts] = useState([]);
   const navigate = useNavigate();
   const { productId } = useParams();
+  const location = useLocation();
+  const merchantId = location.state?.merchantId;
 
   useEffect(() => {
-    const fetchProducts = async () => {
+    const fetchData = async () => {
       try {
-        const res = await getProductsByMerchantId(productId);
-        console.log(res);
-        const filtered = res.products.filter(p => p._id !== productId);
-        setProducts(filtered);
+        // Fetch current product to prepopulate selected matching products
+        const currentProductRes = await getBaseProductById(productId);
+        if (currentProductRes?.data?.matchingProducts) {
+          setSelectedProducts(currentProductRes.data.matchingProducts);
+        }
+
+        let mId = merchantId;
+        if (!mId && currentProductRes?.data?.merchantId) {
+           mId = currentProductRes.data.merchantId._id || currentProductRes.data.merchantId;
+        }
+
+        if (mId) {
+          const res = await getProductsByMerchantId(mId);
+          console.log(res);
+          const filtered = res.products.filter(p => p._id !== productId);
+          setProducts(filtered);
+        }
       } catch (error) {
         console.log(error);
       }
     };
-    fetchProducts();
-  }, [productId]);
+    fetchData();
+  }, [productId, merchantId]);
 
   const handleSelect = (id) => {
     if (selectedProducts.includes(id)) {

@@ -1,6 +1,6 @@
 import Review from "../../models/review.model.js";
 import Order from "../../models/order.model.js";
-import Product from "../../models/product.model.js";
+import ProductFlat from "../../models/productFlat.model.js";
 import Merchant from "../../models/merchant.model.js";
 import DeliveryRider from "../../models/deliveryRider.model.js";
 import User from "../../models/user.model.js";
@@ -8,7 +8,7 @@ import { uploadToCloudinary } from "../../config/cloudinary.config.js";
 
 // ─── AGGREGATE HELPER ────────────────────────────────────────────
 const MODEL_MAP = {
-    product: { model: Product, ratingField: "ratings", countField: "numReviews" },
+    product: { model: ProductFlat, ratingField: "ratings", countField: "numReviews" },
     merchant: { model: Merchant, ratingField: "rating", countField: "reviewCount" },
     rider: { model: DeliveryRider, ratingField: "rating", countField: "reviewCount" },
     customer: { model: User, ratingField: "rating", countField: "reviewCount" },
@@ -30,6 +30,16 @@ async function syncRating(targetId, targetType) {
         [config.ratingField]: avg,
         [config.countField]: count,
     });
+
+    if (targetType === "product") {
+        const flatDoc = await ProductFlat.findById(targetId).select('styleGroupId').lean();
+        const styleGroupId = flatDoc ? flatDoc.styleGroupId : targetId;
+        
+        await ProductFlat.updateMany(
+            { $or: [{ _id: targetId }, { styleGroupId: styleGroupId }] },
+            { ratings: avg, numReviews: count }
+        );
+    }
 }
 
 // ─── VALID COMPLETED STATUSES ────────────────────────────────────

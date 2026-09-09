@@ -14,13 +14,17 @@ export const registerWarehouseOrderSockets = (io, socket) => {
   socket.on("registerWarehouse", async (warehouseId) => {
     if (!warehouseId) return;
 
+    if (socket.data.warehouseId && socket.data.warehouseId !== warehouseId) {
+      socket.leave(`warehouse:${socket.data.warehouseId}`);
+    }
+
     const warehouse = await Warehouse.findById(warehouseId);
     if (!warehouse) return;
 
     socket.join(`warehouse:${warehouseId}`);
     socket.data.warehouseId = warehouseId;
 
-    console.log(`✅ Warehouse ${warehouseId} operator connected with socket ${socket.id} to room warehouse:${warehouseId}`);
+    console.log(`✅ Warehouse ${warehouseId} operator/admin connected with socket ${socket.id} to room warehouse:${warehouseId}`);
   });
 
   socket.on("disconnect", async () => {
@@ -40,15 +44,18 @@ export const registerWarehouseOrderSockets = (io, socket) => {
 };
 
 /**
- * Emit a new warehouse order event to the warehouse operator room.
- * Called when a user places a warehouse T&B order.
+ * Emit a new warehouse order event to the warehouse room.
+ * Called when a user places a warehouse order.
  */
 export const notifyWarehouse = async (io, warehouseId, orderData) => {
+  if (!io || !warehouseId) return;
   const whId = String(warehouseId);
   const room = `warehouse:${whId}`;
 
+  // Emit both event names for maximum client compatibility
+  io.to(room).emit("newOrder", orderData);
   io.to(room).emit("newWarehouseOrder", orderData);
-  console.log(`📩 [Socket] Emitted newWarehouseOrder to room ${room}`);
+  console.log(`📩 [Socket] Emitted newOrder & newWarehouseOrder to room ${room}`);
 };
 
 /**
@@ -57,6 +64,7 @@ export const notifyWarehouse = async (io, warehouseId, orderData) => {
  * 2. The specific order room (for user/rider listeners)
  */
 export const emitWarehouseOrderUpdate = async (io, warehouseId, orderId, order) => {
+  if (!io || !order) return;
   const payload = {
     _id: order._id,
     orderStatus: order.orderStatus,
@@ -79,11 +87,27 @@ export const emitWarehouseOrderUpdate = async (io, warehouseId, orderId, order) 
     trialPhaseEnd: order.trialPhaseEnd,
     trialPhaseDuration: order.trialPhaseDuration,
     fulfillmentType: order.fulfillmentType,
+    settlementStatus: order.settlementStatus,
+    packingPhotos: order.packingPhotos,
+    reason: order.reason,
+    cancellationRequest: order.cancellationRequest,
+    cancellationRequestReason: order.cancellationRequestReason,
   };
 
-  // Emit to the warehouse operator
-  io.to(`warehouse:${String(warehouseId)}`).emit("warehouseOrderUpdate", payload);
+  const whRoom = `warehouse:${String(warehouseId)}`;
+  // Emit both event names to warehouse room
+  io.to(whRoom).emit("orderUpdate", payload);
+  io.to(whRoom).emit("warehouseOrderUpdate", payload);
 
   // Emit to the order-specific room (user, rider)
+  io.to(String(orderId)).emit("orderUpdate", payload);
   io.to(String(orderId)).emit("warehouseOrderUpdate", payload);
+
+  // Emit to user room so customer app updates in real-time
+  const userId = order.userId?._id ? order.userId._id.toString() : order.userId?.toString();
+  if (userId) {
+    const cleanUserId = String(userId).replace(/^["']|["']$/g, '').trim();
+    io.to(`user:${cleanUserId}`).emit("orderUpdate", payload);
+    io.to(`user:${cleanUserId}`).emit("warehouseOrderUpdate", payload);
+  }
 };

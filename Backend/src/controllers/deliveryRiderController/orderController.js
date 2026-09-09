@@ -1,12 +1,46 @@
 import Order from "../../models/order.model.js";
+import WarehouseOrder from "../../models/warehouseOrder.model.js";
 import deliveryRiderModel from "../../models/deliveryRider.model.js";
 import PendingOrder from "../../models/pendingOrders.model.js";
 import { getRiderMeta, setRiderMeta, geoAdd, setHeartbeat } from "../../helperFns/deliveryRiderFns.js";
+import { getIO } from "../../config/socket.js";
 import { emitOrderUpdate } from "../../sockets/order.socket.js";
 import { notifyOrderEvent } from "../../helperFns/notificationHelper.js";
 import { clearRiderTimeout } from "../../helperFns/riderTimeoutHelper.js";
 import { inferZone } from "../../utils/zoneInfer.js";
 import { heartbeatSession, addOrderToSession } from "../../helperFns/onlineSessionHelper.js";
+import { calculateFinalBilling } from "../../helperFns/calculateFinalBilling.js";
+
+// Universal helper to find Order or WarehouseOrder by ID
+const findAnyOrderById = async (orderId) => {
+  if (!orderId) return null;
+  const cleanId = String(orderId).replace(/^["']|["']$/g, '').trim();
+  let order = await Order.findById(cleanId);
+  if (!order) {
+    order = await WarehouseOrder.findById(cleanId);
+  }
+  return order;
+};
+
+const findAnyOrderPopulated = async (orderId) => {
+  if (!orderId) return null;
+  const cleanId = String(orderId).replace(/^["']|["']$/g, '').trim();
+  let order = await Order.findById(cleanId).populate('merchantId');
+  if (!order) {
+    order = await WarehouseOrder.findById(cleanId)
+      .populate('warehouseId')
+      .populate('sourceMerchantId');
+    if (order && !order.merchantId) {
+      order.merchantId = {
+        _id: order.warehouseId?._id || order.warehouseId,
+        shopName: order.warehouseDetails?.name || order.warehouseId?.name || "Warehouse Hub",
+        address: order.warehouseId?.address || order.pickupLocation,
+        phone: order.warehouseId?.phone || order.merchantDetails?.phone || null,
+      };
+    }
+  }
+  return order;
+};
 
 // Haversine formula to calculate distance between two points in meters
 const getDistance = (lat1, lon1, lat2, lon2) => {
@@ -31,9 +65,7 @@ export const acceptOrder = async (req, res) => {
       return res.status(404).json({ message: 'Rider not found' });
     }
 
-    const order = await Order.findById(orderId)
-      .populate('items.productId')
-      .populate('merchantId');
+    const order = await findAnyOrderPopulated(orderId);
 
     if (!order) {
       return res.status(404).json({ message: 'Order not found' });
@@ -44,8 +76,8 @@ export const acceptOrder = async (req, res) => {
       return res.status(403).json({ message: 'Order already assigned to another rider' });
     }
 
-    // Guard: only allow acceptance when order is merchant-approved
-    if (order.orderStatus !== 'accepted') {
+    // Guard: allow acceptance when order is merchant-approved or packed
+    if (!['accepted', 'packed'].includes(order.orderStatus)) {
       return res.status(400).json({ message: `Order cannot be accepted in "${order.orderStatus}" status` });
     }
 
@@ -64,10 +96,28 @@ export const acceptOrder = async (req, res) => {
 
     // ⏰ Clear the 2-minute timeout — rider accepted in time
     clearRiderTimeout(orderId);
+    clearRiderTimeout(order._id.toString());
+
+    // ✅ Remove from the matching queue so ghost assignments don't happen later
+    await PendingOrder.deleteMany({ orderId: { $in: [orderId, order._id.toString()] } });
 
     // Update rider's current order
     rider.currentOrderId = orderId;
+    rider.isBusy = true;
     await rider.save();
+
+    // Sync busy status to Redis
+    try {
+      const meta = await getRiderMeta(rider._id.toString());
+      await setRiderMeta(rider._id.toString(), meta?.zoneId || 'global', {
+        ...meta,
+        isBusy: true,
+        assignedOrderId: order._id.toString(),
+        lastSeenAt: Date.now()
+      });
+    } catch (redisErr) {
+      console.error("Failed to update Redis meta on acceptOrder:", redisErr);
+    }
 
     // Emit real-time update
     emitOrderUpdate(req.io, orderId, order);
@@ -76,6 +126,7 @@ export const acceptOrder = async (req, res) => {
       message: 'Order accepted successfully',
       order: {
         _id: order._id,
+        orderStatus: order.orderStatus,
         deliveryCharge: order.deliveryCharge,
         totalAmount: order.totalAmount,
         finalBilling: order.finalBilling,
@@ -106,7 +157,7 @@ export const reachedPickupLocation = async (req, res) => {
     }
 
     // Validate order
-    const order = await Order.findById(orderId);
+    const order = await findAnyOrderById(orderId);
     if (!order) {
       return res.status(404).json({ message: 'Order not found' });
     }
@@ -160,7 +211,7 @@ export const verifyOtp = async (req, res) => {
     const { orderId, otp } = req.body;
     console.log(orderId, otp, "orderId,otp");
 
-    const order = await Order.findById(orderId);
+    const order = await findAnyOrderById(orderId);
     if (!order) {
       return res.status(404).json({ message: "Order not found" });
     }
@@ -202,7 +253,7 @@ export const reachedCustomerLocation = async (req, res) => {
 
     console.log(orderId, latitude, longitude, "orderId,latitude,longitude");
 
-    const order = await Order.findById(orderId);
+    const order = await findAnyOrderById(orderId);
     if (!order) {
       return res.status(404).json({ message: "Order not found" });
     }
@@ -246,7 +297,8 @@ export const reachedCustomerLocation = async (req, res) => {
 export const handOutProducts = async (req, res) => {
   const { orderId, otp } = req.body;
   try {
-    const order = await Order.findById(orderId);
+    const cleanOrderId = orderId ? String(orderId).replace(/^["']|["']$/g, '').trim() : '';
+    const order = await findAnyOrderById(cleanOrderId);
     if (!order) return res.status(404).json({ message: "Order not found" });
 
     if (String(order.otp) !== String(otp)) {
@@ -266,14 +318,25 @@ export const handOutProducts = async (req, res) => {
     await order.save();
 
     // Emit orderUpdate event
-    emitOrderUpdate(req.io, orderId, order);
+    emitOrderUpdate(req.io, cleanOrderId, order);
 
-    // Emit trialPhaseStart event to the orderId room
-    req.io.to(orderId).emit('trialPhaseStart', {
-      orderId,
+    // Emit trialPhaseStart event to the orderId room and customer user room
+    const trialPayload = {
+      orderId: cleanOrderId,
       trialPhaseStart: order.trialPhaseStart.toISOString(),
       trialPhaseDuration: order.trialPhaseDuration,
-    });
+    };
+
+    req.io.to(cleanOrderId).emit('trialPhaseStart', trialPayload);
+    if (orderId && String(orderId) !== cleanOrderId) {
+      req.io.to(String(orderId)).emit('trialPhaseStart', trialPayload);
+    }
+    const userId = order.userId?._id ? order.userId._id.toString() : order.userId?.toString();
+    if (userId) {
+      const cleanUserId = String(userId).replace(/^["']|["']$/g, '').trim();
+      req.io.to(`user:${cleanUserId}`).emit('trialPhaseStart', trialPayload);
+      req.io.to(cleanUserId).emit('trialPhaseStart', trialPayload);
+    }
 
     return res.status(200).json({ message: "Order status updated" });
   } catch (error) {
@@ -282,38 +345,101 @@ export const handOutProducts = async (req, res) => {
   }
 };
 export const endTrialPhase = async (req, res) => {
-  const { orderId } = req.body;
+  const { orderId, otp } = req.body;
   try {
-    const order = await Order.findById(orderId);
+    const cleanOrderId = orderId ? String(orderId).replace(/^["']|["']$/g, '').trim() : '';
+    const order = await findAnyOrderById(cleanOrderId);
     if (!order) return res.status(404).json({ message: "Order not found" });
 
-    // Fixed: status string uses space, not underscore
-    if (order.orderStatus !== "try_phase") {
+    if (order.orderStatus === "completed" || order.orderStatus === "cancelled") {
       return res.status(400).json({
-        message: `Order is not in trial phase (current: ${order.orderStatus})`
+        message: `Order is already ${order.orderStatus}`
       });
+    }
+
+    const validStatuses = ["try_phase", "selection_made", "in_transit", "return_in_progress"];
+    const validRiderStatuses = ["try_phase", "at_delivery", "returning"];
+    if (!validStatuses.includes(order.orderStatus) && !validRiderStatuses.includes(order.deliveryRiderStatus)) {
+      return res.status(400).json({
+        message: `Order is not in trial phase (current status: ${order.orderStatus}, rider status: ${order.deliveryRiderStatus})`
+      });
+    }
+
+    if (!otp || String(order.otp) !== String(otp).trim()) {
+      return res.status(400).json({ message: "Invalid OTP. Please enter the valid OTP from customer." });
     }
 
     // Record end time and compute actual duration
     const now = new Date();
     order.trialPhaseEnd = now;
 
-    const startTime = new Date(order.trialPhaseStart);
+    const startTime = order.trialPhaseStart ? new Date(order.trialPhaseStart) : now;
     const durationMs = now - startTime;
     const durationMinutes = Math.max(0, Math.floor(durationMs / (1000 * 60)));
 
     order.trialPhaseDuration = durationMinutes;
-    // The customer side decides items → sets actual final status
-    // Rider just signals end of wait; customer app takes over selection
-    order.deliveryRiderStatus = "try_phase";
-    order.customerDeliveryStatus = "awaiting_payment";
+
+    // Overtime penalty: ₹2/min over 10 mins
+    let overtimePenalty = 0;
+    if (durationMinutes > 10) {
+      overtimePenalty = (durationMinutes - 10) * 2;
+    }
+    order.overtimePenalty = overtimePenalty;
+
+    // Recalculate billing with overtime penalty
+    const billing = calculateFinalBilling({
+      orderItems: order.items,
+      returnCharge: order.returnCharge || 0,
+      trialPhaseStart: order.trialPhaseStart,
+      trialPhaseEnd: order.trialPhaseEnd,
+      discountToApply: order.finalBilling?.discount || 0,
+    });
+
+    order.finalBilling = {
+      ...order.finalBilling,
+      ...billing,
+      overtimePenalty,
+      totalPayable: Math.max(0, (billing.baseAmount || 0) + overtimePenalty - (order.finalBilling?.discount || 0)),
+    };
+
+    // If orderStatus was already selection_made or returning, preserve it
+    if (order.orderStatus === "try_phase") {
+      order.deliveryRiderStatus = "try_phase";
+      order.customerDeliveryStatus = "awaiting_payment";
+    }
+
+    // Clear OTP after successful verification so it cannot be reused
+    order.otp = null;
 
     await order.save();
-    emitOrderUpdate(req.io, orderId, order);
+
+    const io = req.io || getIO();
+    emitOrderUpdate(io, cleanOrderId, order);
+
+    const trialEndedPayload = {
+      orderId: cleanOrderId,
+      trialPhaseEnd: order.trialPhaseEnd.toISOString(),
+      trialPhaseDuration: durationMinutes,
+      overtimePenalty,
+      finalBilling: order.finalBilling,
+      totalPayable: order.finalBilling?.totalPayable ?? 0,
+      customerDeliveryStatus: order.customerDeliveryStatus,
+    };
+
+    // Emit trialPhaseEnded event to all relevant rooms
+    io.to(cleanOrderId).emit('trialPhaseEnded', trialEndedPayload);
+    if (orderId && orderId !== cleanOrderId) {
+      io.to(orderId).emit('trialPhaseEnded', trialEndedPayload);
+    }
+    if (order._id && String(order._id) !== cleanOrderId) {
+      io.to(String(order._id)).emit('trialPhaseEnded', trialEndedPayload);
+    }
 
     return res.status(200).json({
-      message: "Trial phase timer ended — awaiting customer item selection",
+      message: "Trial phase ended successfully. Amount calculated.",
       trialPhaseDurationMinutes: durationMinutes,
+      overtimePenalty,
+      finalBilling: order.finalBilling,
       order,
     });
   } catch (error) {
@@ -325,8 +451,9 @@ export const endTrialPhase = async (req, res) => {
 export const verifyOtpOnReturn = async (req, res) => {
   try {
     const { orderId, otp } = req.body;
+    const cleanOrderId = orderId ? String(orderId).replace(/^["']|["']$/g, '').trim() : '';
 
-    const order = await Order.findById(orderId);
+    const order = await findAnyOrderById(cleanOrderId);
     if (!order) return res.status(404).json({ message: "Order not found" });
     if (String(order.otp) !== String(otp)) return res.status(400).json({ message: "Invalid OTP" });
 
@@ -336,7 +463,7 @@ export const verifyOtpOnReturn = async (req, res) => {
     order.otp = null; // Clear OTP after use
 
     await order.save();
-    emitOrderUpdate(req.io, orderId, order);
+    emitOrderUpdate(req.io, cleanOrderId, order);
 
     // 📱 Rider notification: "Return verified, you're done!"
     notifyOrderEvent("rider", "return_complete", {
@@ -350,12 +477,12 @@ export const verifyOtpOnReturn = async (req, res) => {
       orderId: order._id,
     });
 
-    res.status(200).json({ message: "Return OTP verified. Order complete." });
+    res.status(200).json({ message: "Return OTP verified. Order complete.", order });
   } catch (error) {
     console.error("Error in verifyOtpOnReturn:", error);
     res.status(500).json({ message: "❌ " + error.message });
   }
-}
+};
 
 export const reachedReturnMerchant = async (req, res) => {
   try {
@@ -365,9 +492,7 @@ export const reachedReturnMerchant = async (req, res) => {
       return res.status(400).json({ message: "orderId is required" });
     }
 
-
-
-    const order = await Order.findById(orderId);
+    const order = await findAnyOrderById(orderId);
     if (!order) {
       return res.status(404).json({ message: "Order not found" });
     }
@@ -375,8 +500,10 @@ export const reachedReturnMerchant = async (req, res) => {
       return res.status(403).json({ message: "Not authorized for this order" });
     }
 
-    // Generate a NEW OTP for merchant to verify the return handover
-    order.otp = Math.floor(1000 + Math.random() * 9000);
+    // Generate a return OTP for merchant to verify the return handover (preserve existing if already generated)
+    if (!order.otp) {
+      order.otp = Math.floor(1000 + Math.random() * 9000);
+    }
 
     // Geo-check: only if coordinates are provided and merchant coords exist
     if (latitude != null && longitude != null && order.pickupLocation?.coordinates?.length === 2) {
@@ -414,7 +541,7 @@ export const verifyMerchantReturnOtp= async (req, res) => {
   try {
     const { orderId, otp } = req.body;
 
-    const order = await Order.findById(orderId);
+    const order = await findAnyOrderById(orderId);
     if (!order) return res.status(404).json({ message: "Order not found" });
     if (String(order.otp) !== String(otp)) return res.status(400).json({ message: "Invalid OTP" });
 
@@ -483,19 +610,22 @@ export const updateRiderLocation = async (req, res) => {
     const currentMeta = await getRiderMeta(riderId.toString());
     const zoneId = await inferZone(lat, lng);
 
+    let assignedOrderId = currentMeta?.assignedOrderId || "";
+    if (!assignedOrderId) {
+      const rider = await deliveryRiderModel.findById(riderId);
+      if (rider?.currentOrderId) {
+        assignedOrderId = rider.currentOrderId.toString();
+      }
+    }
+
     const newMeta = {
       isOnline: true,
-      isBusy: currentMeta?.isBusy === "true" || currentMeta?.isBusy === true || false,
+      isBusy: !!assignedOrderId || currentMeta?.isBusy === "true" || currentMeta?.isBusy === true,
       socketId: currentMeta?.socketId || "",
       lastSeenAt: Date.now(),
       zoneId,
+      assignedOrderId,
     };
-
-    // If rider has an active order, find it
-    const rider = await deliveryRiderModel.findById(riderId);
-    if (rider?.currentOrderId) {
-      newMeta.assignedOrderId = rider.currentOrderId.toString();
-    }
 
     await setRiderMeta(riderId.toString(), zoneId, newMeta);
 
@@ -511,7 +641,9 @@ export const updateRiderLocation = async (req, res) => {
 
     // Emit live updates to any socket rooms
     if (req.io) {
-      req.io.emit(`riderAvailable:${zoneId}`, { zoneId, riderId: riderId.toString() });
+      if (!newMeta.isBusy && !newMeta.assignedOrderId) {
+        req.io.emit(`riderAvailable:${zoneId}`, { zoneId, riderId: riderId.toString() });
+      }
 
       const assignedOrderId = newMeta.assignedOrderId;
       if (assignedOrderId) {
@@ -551,9 +683,7 @@ export const getActiveOrder = async (req, res) => {
     // Try finding by currentOrderId
     let order = null;
     if (rider.currentOrderId) {
-      order = await Order.findById(rider.currentOrderId)
-        .populate("items.productId")
-        .populate("merchantId");
+      order = await findAnyOrderPopulated(rider.currentOrderId);
     }
 
     // Fallback: search for any active order assigned to this rider
@@ -561,9 +691,22 @@ export const getActiveOrder = async (req, res) => {
       order = await Order.findOne({
         deliveryRiderId: riderId,
         orderStatus: { $nin: ["completed", "cancelled", "returned"] },
-      })
-        .populate("items.productId")
-        .populate("merchantId");
+      }).populate("merchantId");
+
+      if (!order) {
+        order = await WarehouseOrder.findOne({
+          deliveryRiderId: riderId,
+          orderStatus: { $nin: ["completed", "cancelled", "returned"] },
+        }).populate("warehouseId").populate("sourceMerchantId");
+        if (order && !order.merchantId) {
+          order.merchantId = {
+            _id: order.warehouseId?._id || order.warehouseId,
+            shopName: order.warehouseDetails?.name || order.warehouseId?.name || "Warehouse Hub",
+            address: order.warehouseId?.address || order.pickupLocation,
+            phone: order.warehouseId?.phone || order.merchantDetails?.phone || null,
+          };
+        }
+      }
     }
 
     // Filter out completed/cancelled ones that might be stuck in currentOrderId
@@ -578,3 +721,219 @@ export const getActiveOrder = async (req, res) => {
   }
 };
 
+/**
+ * Rider confirms they collected the delivery fee directly from customer via QR.
+ * This triggers settlement with riderPaidDirectly flag, so FlashFits doesn't double-pay.
+ */
+export const confirmQrCollection = async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    const riderId = req.riderId;
+
+    const order = await findAnyOrderById(orderId);
+    if (!order) return res.status(404).json({ message: "Order not found" });
+
+    // Validate rider is assigned to this order
+    if (order.deliveryRiderId?.toString() !== riderId) {
+      return res.status(403).json({ message: "You are not assigned to this order" });
+    }
+
+    // Validate delivery fee recovery is pending
+    if (!order.deliveryFeeRecovery?.required || order.deliveryFeeRecovery?.status !== 'pending') {
+      return res.status(400).json({ message: "No pending delivery fee recovery for this order" });
+    }
+
+    // Mark as collected via QR
+    order.deliveryFeeRecovery.status = 'paid_via_qr';
+    order.deliveryFeeRecovery.collectedByRider = true;
+    order.deliveryFeeRecovery.paidAt = new Date();
+
+    // Complete the order flow
+    order.orderStatus = "selection_made";
+    order.customerDeliveryStatus = "completed";
+    order.deliveryRiderStatus = "returning";
+
+    // Settle the order — settlement will see collectedByRider=true and skip rider payout
+    try {
+      const { settleOrder } = await import("../../helperFns/orderSettlement.js");
+      await settleOrder(order);
+    } catch (settleErr) {
+      console.error("Settlement error (QR collection, non-fatal):", settleErr.message);
+      order.settlementStatus = 'failed';
+    }
+
+    await order.save();
+
+    // Emit real-time update to customer app
+    const io = getIO();
+    emitOrderUpdate(io, orderId, order);
+
+    // Notify customer
+    try {
+      await notifyOrderEvent('customer', 'delivery_fee_collected', {
+        userId: order.userId,
+        orderId: order._id,
+        amount: order.deliveryFeeRecovery?.amount,
+      });
+    } catch (e) {
+      console.error("Notification error (non-fatal):", e);
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: `Delivery fee ₹${order.deliveryFeeRecovery.amount} marked as collected via QR.`,
+      order,
+    });
+  } catch (error) {
+    console.error("Error in confirmQrCollection:", error);
+    return res.status(500).json({ message: "Server error" });
+  }
+};
+
+/**
+ * Rider reports that the customer refused to pay the delivery fee.
+ * Admin will be notified. FlashFits absorbs the cost + customer gets a penalty.
+ */
+export const reportDeliveryFeeRefusal = async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    const riderId = req.riderId;
+
+    const order = await findAnyOrderById(orderId);
+    if (!order) return res.status(404).json({ message: "Order not found" });
+
+    // Validate rider is assigned to this order
+    if (order.deliveryRiderId?.toString() !== riderId) {
+      return res.status(403).json({ message: "You are not assigned to this order" });
+    }
+
+    if (!order.deliveryFeeRecovery?.required || order.deliveryFeeRecovery?.status !== 'pending') {
+      return res.status(400).json({ message: "No pending delivery fee recovery for this order" });
+    }
+
+    // FlashFits absorbs the cost
+    order.deliveryFeeRecovery.status = 'absorbed';
+    order.orderStatus = "selection_made";
+    order.customerDeliveryStatus = "completed";
+    order.deliveryRiderStatus = "returning";
+
+    // Settle normally — FlashFits pays rider since customer didn't pay
+    try {
+      const { settleOrder } = await import("../../helperFns/orderSettlement.js");
+      await settleOrder(order);
+    } catch (settleErr) {
+      console.error("Settlement error (fee refusal, non-fatal):", settleErr.message);
+      order.settlementStatus = 'failed';
+    }
+
+    await order.save();
+
+    // Increment customer's penalty counter
+    try {
+      const User = (await import("../../models/user.model.js")).default;
+      await User.findByIdAndUpdate(order.userId, { $inc: { deliveryFeePenalties: 1 } });
+    } catch (e) {
+      console.error("Error incrementing penalty (non-fatal):", e);
+    }
+
+    // Emit real-time update
+    const ioReport = getIO();
+    emitOrderUpdate(ioReport, orderId, order);
+
+    // Notify admin
+    try {
+      const { notifyAdmin } = await import("../../helperFns/notificationHelper.js");
+      await notifyAdmin({
+        type: 'warning',
+        title: '⚠️ Delivery Fee Refusal',
+        body: `Customer refused to pay ₹${order.deliveryFeeRecovery.amount} delivery fee for order #${order._id.toString().slice(-5).toUpperCase()}. Cost absorbed by FlashFits. Customer penalty incremented.`,
+        data: { orderId: order._id.toString() },
+      });
+    } catch (e) {
+      console.error("Admin notification error (non-fatal):", e);
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Delivery fee refusal reported. Admin will be notified.",
+      order,
+    });
+  } catch (error) {
+    console.error("Error in reportDeliveryFeeRefusal:", error);
+    return res.status(500).json({ message: "Server error" });
+  }
+};
+
+/**
+ * Rider confirms cash collected from customer for kept items / delivery fee / overtime.
+ */
+export const confirmCashCollection = async (req, res) => {
+  try {
+    const rawOrderId = req.params.orderId || req.body.orderId;
+    const cleanOrderId = rawOrderId ? String(rawOrderId).replace(/^["']|["']$/g, '').trim() : '';
+    const riderId = req.riderId;
+
+    const order = await findAnyOrderById(cleanOrderId);
+    if (!order) return res.status(404).json({ message: "Order not found" });
+
+    // Validate rider is assigned to this order
+    if (order.deliveryRiderId?.toString() !== riderId) {
+      return res.status(403).json({ message: "You are not assigned to this order" });
+    }
+
+    // Mark payment status as paid
+    order.paymentStatus = "paid";
+
+    if (order.deliveryFeeRecovery?.required) {
+      order.deliveryFeeRecovery.status = "paid_cash";
+      order.deliveryFeeRecovery.collectedByRider = true;
+      order.deliveryFeeRecovery.paidAt = new Date();
+    }
+
+    const hasReturns = (order.items || []).some((i) => i.tryStatus === "returned");
+
+    order.orderStatus = hasReturns ? "return_in_progress" : "completed";
+    order.customerDeliveryStatus = "completed";
+    order.deliveryRiderStatus = hasReturns ? "returning" : "completed";
+
+    // Run settlement
+    try {
+      const { settleOrder } = await import("../../helperFns/orderSettlement.js");
+      await settleOrder(order);
+    } catch (settleErr) {
+      console.error("Settlement error (cash collection, non-fatal):", settleErr.message);
+    }
+
+    await order.save();
+
+    const io = req.io || getIO();
+    emitOrderUpdate(io, cleanOrderId, order);
+
+    const cashCollectedPayload = {
+      orderId: cleanOrderId,
+      amountCollected: order.finalBilling?.totalPayable ?? order.totalAmount ?? 0,
+      hasReturns,
+      paymentStatus: 'paid',
+      orderStatus: order.orderStatus,
+      customerDeliveryStatus: order.customerDeliveryStatus,
+    };
+
+    io.to(cleanOrderId).emit('cashCollected', cashCollectedPayload);
+    if (rawOrderId && rawOrderId !== cleanOrderId) {
+      io.to(rawOrderId).emit('cashCollected', cashCollectedPayload);
+    }
+    if (order._id && String(order._id) !== cleanOrderId) {
+      io.to(String(order._id)).emit('cashCollected', cashCollectedPayload);
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Cash collection confirmed. Order marked as paid.",
+      order,
+      hasReturns,
+    });
+  } catch (error) {
+    console.error("Error in confirmCashCollection:", error);
+    return res.status(500).json({ message: "Server error", error: error.message });
+  }
+};

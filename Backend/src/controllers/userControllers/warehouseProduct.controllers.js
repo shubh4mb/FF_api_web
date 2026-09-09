@@ -1,10 +1,11 @@
-import Product from '../../models/product.model.js';
+import ProductFlat from '../../models/productFlat.model.js';
 import Warehouse from '../../models/warehouse.model.js';
 import Merchant from '../../models/merchant.model.js';
 import Cart from '../../models/cart.model.js';
 import CourierCart from '../../models/courierCart.model.js';
 import { asyncHandler } from '../../utils/asyncHandler.js';
 import { ApiError } from '../../utils/ApiError.js';
+import { generateColorVariantId } from '../../utils/variantAdapter.js';
 
 /**
  * Helper: check if a warehouse is currently active and serving the user's zone.
@@ -22,7 +23,6 @@ export const getWarehouseMerchants = asyncHandler(async (req, res) => {
     return res.status(200).json({ merchants: [] });
   }
 
-  // Optimize: directly query Merchant collection for assigned warehouses
   const merchants = await Merchant.find({
     isActive: true,
     isVerified: true,
@@ -38,19 +38,14 @@ export const getWarehouseMerchants = asyncHandler(async (req, res) => {
 /**
  * GET /user/warehouse/products
  * List warehouse products for the customer home screen.
- * Supports: gender, categoryId, page, limit filters.
- * 
- * Each card shows: name, brand, price, mrp, discount, images, isTriable,
- * sellerLabel = "Fulfilled by FlashFits" + merchant brand info.
  */
 export const getWarehouseProducts = asyncHandler(async (req, res) => {
   const { gender, categoryId, subCategoryId, page = 1, limit = 20 } = req.query;
 
   const filter = {
-    source: 'warehouse',
+    $or: [{ source: 'warehouse' }, { warehouseId: { $exists: true, $ne: null } }],
     isActive: { $ne: false },
     isDeleted: { $ne: true },
-    'variants.0': { $exists: true }, // must have at least one variant
   };
 
   if (gender && gender !== 'All') {
@@ -61,44 +56,52 @@ export const getWarehouseProducts = asyncHandler(async (req, res) => {
 
   const skip = (Number(page) - 1) * Number(limit);
 
-  const products = await Product.find(filter)
-    .select('name productCode warehouseId merchantId brandId categoryId gender isTriable ratings numReviews variants')
-    .populate('brandId', 'name logo')
-    .populate('merchantId', 'shopName logo')
-    .populate('warehouseId', 'name code supportsTryAndBuy supportsCourier')
-    .sort({ createdAt: -1 })
-    .skip(skip)
-    .limit(Number(limit))
-    .lean();
+  const pipeline = [
+    { $match: filter },
+    { $sort: { createdAt: -1 } },
+    {
+      $group: {
+        _id: '$styleGroupId',
+        doc: { $first: '$$ROOT' }
+      }
+    },
+    { $replaceRoot: { newRoot: '$doc' } },
+    { $sort: { createdAt: -1 } },
+    { $skip: skip },
+    { $limit: Number(limit) },
+  ];
 
-  // Shape the response: one card per product (first variant for card thumbnail)
+  const products = await ProductFlat.aggregate(pipeline);
+  await ProductFlat.populate(products, [
+    { path: 'brandId', select: 'name logo' },
+    { path: 'merchantId', select: 'shopName logo' },
+    { path: 'warehouseId', select: 'name code supportsTryAndBuy supportsCourier' }
+  ]);
+
   const cards = products.map((p) => {
-    const v = p.variants?.[0];
     return {
-      _id: p._id,
+      _id: p.styleGroupId,
       productCode: p.productCode,
       name: p.name,
       brandId: p.brandId,
       gender: p.gender,
       ratings: p.ratings,
       numReviews: p.numReviews,
-      variantId: v?._id,
-      price: v?.price,
-      mrp: v?.mrp,
-      discount: v?.discount || 0,
-      images: v?.images,
-      color: v?.color,
+      variantId: p._id,
+      price: p.price,
+      mrp: p.mrp,
+      discount: p.discount || 0,
+      images: p.images,
+      color: p.color,
       isTriable: p.isTriable,
-      // Warehouse listing labels (Q5 answer: show merchant brand, "Fulfilled by FlashFits")
       sellerLabel: 'Fulfilled by FlashFits',
-      merchantId: p.merchantId, // Include full populated object for frontend brand mapping
+      merchantId: p.merchantId,
       merchantBrand: p.merchantId?.shopName || null,
       merchantLogo: p.merchantId?.logo || null,
       warehouseId: p.warehouseId?._id,
       warehouseName: p.warehouseId?.name,
       supportsTryAndBuy: p.warehouseId?.supportsTryAndBuy ?? false,
       supportsCourier: p.warehouseId?.supportsCourier ?? false,
-      // Flag so the frontend knows this is a warehouse listing (not a merchant shop listing)
       isWarehouseListing: true,
     };
   });
@@ -109,15 +112,16 @@ export const getWarehouseProducts = asyncHandler(async (req, res) => {
 /**
  * GET /user/warehouse/products/:id
  * Full product detail for a warehouse listing.
- * Returns all variants and sizes (for size picker).
+ * Returns activeProduct and siblings flat structure.
  */
 export const getWarehouseProductDetail = asyncHandler(async (req, res) => {
-  const product = await Product.findOne({
-    _id: req.params.id,
-    source: 'warehouse',
+  const flatProductDoc = await ProductFlat.findOne({
+    $and: [
+      { $or: [{ _id: req.params.id }, { styleGroupId: req.params.id }] },
+      { $or: [{ source: 'warehouse' }, { warehouseId: { $exists: true, $ne: null } }] }
+    ],
     isActive: true,
-    isVerified: true,
-    isDeleted: false,
+    isDeleted: { $ne: true },
   })
     .populate('brandId', 'name logo')
     .populate('merchantId', 'shopName logo address isOnline isZoneLive')
@@ -127,30 +131,37 @@ export const getWarehouseProductDetail = asyncHandler(async (req, res) => {
     .populate('attributes.attributeId', 'name')
     .lean();
 
-  if (!product) {
+  if (!flatProductDoc) {
     return res.status(404).json({ message: 'Warehouse product not found' });
   }
 
-  const warehouse = product.warehouseId;
+  const siblings = await ProductFlat.find({
+    styleGroupId: flatProductDoc.styleGroupId,
+    _id: { $ne: flatProductDoc._id },
+    isActive: true,
+    isDeleted: { $ne: true }
+  });
+
+  const warehouse = flatProductDoc.warehouseId;
 
   // Check if same product is also available in a nearby live merchant store
   let availableInShop = false;
   let shopMerchantId = null;
   let shopMerchantName = null;
 
-  if (product.merchantId && req.nearbyMerchantIds) {
-    const merchantIdStr = (product.merchantId._id || product.merchantId).toString();
+  if (flatProductDoc.merchantId && req.nearbyMerchantIds) {
+    const merchantIdStr = (flatProductDoc.merchantId._id || flatProductDoc.merchantId).toString();
     const nearbySet = new Set(req.nearbyMerchantIds.map(id => id.toString()));
 
     if (nearbySet.has(merchantIdStr)) {
-      const isMerchantLive = product.merchantId.isOnline !== false && product.merchantId.isZoneLive !== false;
+      const isMerchantLive = flatProductDoc.merchantId.isOnline !== false && flatProductDoc.merchantId.isZoneLive !== false;
       if (isMerchantLive) {
-        const shopProduct = await Product.findOne({
-          merchantId: product.merchantId._id || product.merchantId,
+        const shopProduct = await ProductFlat.findOne({
+          merchantId: flatProductDoc.merchantId._id || flatProductDoc.merchantId,
           $or: [
-            ...(product.sourceProductId ? [{ _id: product.sourceProductId }] : []),
-            { sourceProductId: product._id },
-            { name: product.name }
+            ...(flatProductDoc.sourceProductId ? [{ styleGroupId: flatProductDoc.sourceProductId }] : []),
+            { sourceProductId: flatProductDoc.styleGroupId },
+            { name: flatProductDoc.name }
           ],
           source: { $ne: 'warehouse' },
           isActive: true,
@@ -158,12 +169,25 @@ export const getWarehouseProductDetail = asyncHandler(async (req, res) => {
 
         if (shopProduct) {
           availableInShop = true;
-          shopMerchantId = product.merchantId._id || product.merchantId;
-          shopMerchantName = product.merchantId.shopName || null;
+          shopMerchantId = flatProductDoc.merchantId._id || flatProductDoc.merchantId;
+          shopMerchantName = flatProductDoc.merchantId.shopName || null;
         }
       }
     }
   }
+
+  const siblingsMapped = siblings.map(s => {
+    const doc = s.toObject ? s.toObject() : s;
+    return {
+      ...doc,
+      colorVariantId: generateColorVariantId(flatProductDoc.styleGroupId, doc.color?.name || 'Default')
+    };
+  });
+
+  const activeDocMapped = {
+    ...flatProductDoc,
+    colorVariantId: generateColorVariantId(flatProductDoc.styleGroupId, flatProductDoc.color?.name || 'Default')
+  };
 
   const fulfillmentOptions = {
     flashmart: {
@@ -177,8 +201,8 @@ export const getWarehouseProductDetail = asyncHandler(async (req, res) => {
       available: availableInShop,
       estimatedTime: "45-60 Mins",
       label: "Direct Store",
-      shopName: shopMerchantName || product.merchantId?.shopName || "Partner Shop",
-      merchantId: shopMerchantId || product.merchantId?._id,
+      shopName: shopMerchantName || flatProductDoc.merchantId?.shopName || "Partner Shop",
+      merchantId: shopMerchantId || flatProductDoc.merchantId?._id,
     },
     courier: {
       available: warehouse?.supportsCourier ?? true,
@@ -188,17 +212,21 @@ export const getWarehouseProductDetail = asyncHandler(async (req, res) => {
   };
 
   return res.status(200).json({
-    ...product,
-    sellerLabel: 'Fulfilled by FlashFits',
-    merchantBrand: product.merchantId?.shopName || null,
-    merchantLogo: product.merchantId?.logo || null,
-    warehouseName: warehouse?.name,
-    supportsTryAndBuy: warehouse?.supportsTryAndBuy ?? false,
-    supportsCourier: warehouse?.supportsCourier ?? false,
-    isWarehouseListing: true,
-    availableInShop,
-    shopMerchantId,
-    shopMerchantName,
+    isFlatPayload: true,
+    activeProduct: {
+      ...activeDocMapped,
+      sellerLabel: 'Fulfilled by FlashFits',
+      merchantBrand: flatProductDoc.merchantId?.shopName || null,
+      merchantLogo: flatProductDoc.merchantId?.logo || null,
+      warehouseName: warehouse?.name,
+      supportsTryAndBuy: warehouse?.supportsTryAndBuy ?? false,
+      supportsCourier: warehouse?.supportsCourier ?? false,
+      isWarehouseListing: true,
+      availableInShop,
+      shopMerchantId,
+      shopMerchantName,
+    },
+    siblings: siblingsMapped,
     fulfillmentOptions,
   });
 });
@@ -206,7 +234,6 @@ export const getWarehouseProductDetail = asyncHandler(async (req, res) => {
 /**
  * POST /user/warehouse/cart/add
  * Add a warehouse product to the T&B cart (source = 'warehouse').
- * Validates stock availability.
  */
 export const addWarehouseProductToCart = asyncHandler(async (req, res) => {
   const userId = req.user.userId;
@@ -216,12 +243,13 @@ export const addWarehouseProductToCart = asyncHandler(async (req, res) => {
     throw new ApiError(400, 'warehouseProductId, variantId, size, and quantity are required');
   }
 
-  const whProduct = await Product.findOne({
-    _id: warehouseProductId,
+  const whProduct = await ProductFlat.findOne({
+    _id: variantId, // For flat schema, variantId is the _id of the document
+    styleGroupId: warehouseProductId,
+    size: size,
     source: 'warehouse',
     isActive: true,
-    isVerified: true,
-    isDeleted: false,
+    isDeleted: { $ne: true },
   });
 
   if (!whProduct) throw new ApiError(404, 'Warehouse product not found');
@@ -232,25 +260,16 @@ export const addWarehouseProductToCart = asyncHandler(async (req, res) => {
     throw new ApiError(400, 'This warehouse does not support Try & Buy');
   }
 
-  // Check stock
-  const variant = whProduct.variants.id(variantId);
-  if (!variant) throw new ApiError(404, 'Variant not found');
-
-  const sizeObj = variant.sizes.find((s) => s.size === size);
-  if (!sizeObj) throw new ApiError(400, `Size ${size} not available`);
-
-  const availableStock = sizeObj.stock - (sizeObj.reservedStock || 0);
+  const availableStock = whProduct.stock - (whProduct.reservedStock || 0);
   if (availableStock < quantity) {
     throw new ApiError(400, `Only ${availableStock} units available for this size`);
   }
 
-  // Add to T&B cart
   let cart = await Cart.findOne({ userId });
   if (!cart) {
     cart = await Cart.create({ userId, items: [] });
   }
 
-  // Check if this exact item is already in cart
   const existingIdx = cart.items.findIndex(
     (i) =>
       i.source === 'warehouse' &&
@@ -263,7 +282,6 @@ export const addWarehouseProductToCart = asyncHandler(async (req, res) => {
     cart.items[existingIdx].quantity += quantity;
   } else {
     cart.items.push({
-      // productId and merchantId are null for warehouse items
       productId: null,
       variantId,
       size,
@@ -295,12 +313,13 @@ export const addWarehouseProductToCourierCart = asyncHandler(async (req, res) =>
     throw new ApiError(400, 'warehouseProductId, variantId, size, and quantity are required');
   }
 
-  const whProduct = await Product.findOne({
-    _id: warehouseProductId,
+  const whProduct = await ProductFlat.findOne({
+    _id: variantId, // For flat schema, variantId is the _id of the document
+    styleGroupId: warehouseProductId,
+    size: size,
     source: 'warehouse',
     isActive: true,
-    isVerified: true,
-    isDeleted: false,
+    isDeleted: { $ne: true },
   });
 
   if (!whProduct) throw new ApiError(404, 'Warehouse product not found');
@@ -311,13 +330,7 @@ export const addWarehouseProductToCourierCart = asyncHandler(async (req, res) =>
     throw new ApiError(400, 'This warehouse does not support courier delivery');
   }
 
-  const variant = whProduct.variants.id(variantId);
-  if (!variant) throw new ApiError(404, 'Variant not found');
-
-  const sizeObj = variant.sizes.find((s) => s.size === size);
-  if (!sizeObj) throw new ApiError(400, `Size ${size} not available`);
-
-  const availableStock = sizeObj.stock - (sizeObj.reservedStock || 0);
+  const availableStock = whProduct.stock - (whProduct.reservedStock || 0);
   if (availableStock < quantity) {
     throw new ApiError(400, `Only ${availableStock} units available`);
   }

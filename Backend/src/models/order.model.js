@@ -26,7 +26,7 @@ const OrderSchema = new mongoose.Schema({
   },
   items: [
     {
-      productId: { type: mongoose.Schema.Types.ObjectId, ref: 'Product' },
+      productId: { type: mongoose.Schema.Types.ObjectId, ref: 'ProductFlat' },
       variantId: { type: mongoose.Schema.Types.ObjectId },
       name: String,
       quantity: Number,
@@ -190,6 +190,7 @@ const OrderSchema = new mongoose.Schema({
   trialPhaseStart: { type: Date, default: null },
   trialPhaseEnd: { type: Date, default: null },
   trialPhaseDuration: { type: Number, default: 0 },
+  photoVerified: { type: Boolean, default: false },
   razorpayOrderId: { type: String },
   razorpayPaymentId: { type: String },
   overtimePenalty: { type: Number, default: 0 },
@@ -216,6 +217,22 @@ const OrderSchema = new mongoose.Schema({
     reportedBy: { type: String, enum: ['user', 'merchant', 'none'], default: 'none' },
     status: { type: String, enum: ['none', 'pending', 'resolved'], default: 'none' },
     reportedAt: { type: Date }
+  },
+
+  // ── Post-Try Delivery Fee Recovery ──
+  // When a free delivery offer condition is not met after the try phase
+  deliveryFeeRecovery: {
+    required: { type: Boolean, default: false },
+    amount: { type: Number, default: 0 },
+    status: {
+      type: String,
+      enum: ['none', 'pending', 'paid_online', 'paid_via_qr', 'paid_cash', 'waived', 'absorbed'],
+      default: 'none'
+    },
+    paidAt: { type: Date, default: null },
+    razorpayOrderId: { type: String, default: null },
+    razorpayPaymentId: { type: String, default: null },
+    collectedByRider: { type: Boolean, default: false },
   }
 
 }, { timestamps: true });

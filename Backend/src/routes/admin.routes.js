@@ -14,7 +14,17 @@ import adminBannerRoutes from './adminBanner.routes.js';
 import { createAttribute, getAttributes, updateAttribute, deleteAttribute } from '../controllers/adminControllers/attribute.controllers.js';
 import { addHub, getAllHubs, updateHub, deleteHub } from '../controllers/adminControllers/hub.controllers.js';
 import { createOffer, getAllOffers, getOfferById, updateOffer, toggleOffer, deleteOffer, getAllOffersOverview } from '../controllers/adminControllers/offer.controllers.js';
-import { createCollection, getAllCollections, updateCollection, deleteCollection } from '../controllers/adminControllers/collection.controllers.js';
+import { 
+  createCollection, 
+  getAllCollections, 
+  getCollectionById,
+  updateCollection, 
+  deleteCollection,
+  getCollectionProductsAdmin,
+  togglePinProduct,
+  excludeProduct,
+  bulkAddProducts
+} from '../controllers/adminControllers/collection.controllers.js';
 import { createIncentive, getAllIncentives, updateIncentive, toggleIncentive, deleteIncentive } from '../controllers/adminControllers/incentive.controllers.js';
 import { getPayouts, triggerPayout, getPayoutById, getPendingPayouts, markPayoutPaid } from '../controllers/adminControllers/payout.controllers.js';
 import { getCancellationRequests, adminCancelOrder, getUnresponsiveRiderReports, resolveUnresponsiveRider } from '../controllers/adminControllers/order.controllers.js';
@@ -55,11 +65,16 @@ router.patch('/updateCategory/:id', verifyAdmin, upload.fields([
     { name: 'title_banners', maxCount: 5 }
 ]), handleMulterError, updateCategory);
 
-// ── Collections (Standardized & Prioritized) ──
-router.post('/addCollection', verifyAdmin, upload.single('bannerImage'), handleMulterError, createCollection);
+// ── Collections & Campaigns (Standardized, Prioritized & Curated) ──
+router.post('/addCollection', verifyAdmin, upload.fields([{ name: 'bannerImage', maxCount: 1 }, { name: 'heroBannerImage', maxCount: 1 }]), handleMulterError, createCollection);
 router.get('/getCollections', verifyAdmin, getAllCollections);
-router.patch('/updateCollection/:id', verifyAdmin, upload.single('bannerImage'), handleMulterError, updateCollection);
+router.get('/collection/:id', verifyAdmin, getCollectionById);
+router.patch('/updateCollection/:id', verifyAdmin, upload.fields([{ name: 'bannerImage', maxCount: 1 }, { name: 'heroBannerImage', maxCount: 1 }]), handleMulterError, updateCollection);
 router.delete('/deleteCollection/:id', verifyAdmin, deleteCollection);
+router.get('/collection/:id/products', verifyAdmin, getCollectionProductsAdmin);
+router.post('/collection/:id/toggle-pin', verifyAdmin, togglePinProduct);
+router.post('/collection/:id/exclude-product', verifyAdmin, excludeProduct);
+router.post('/collection/:id/bulk-add-products', verifyAdmin, bulkAddProducts);
 
 // ── Merchants ──
 router.post('/addMerchant', verifyAdmin, upload.fields([{ name: 'logo', maxCount: 1 }, { name: 'backgroundImage', maxCount: 1 }]), handleMulterError, addMerchant);
@@ -241,8 +256,6 @@ import {
   createWarehouseOperator,
 } from '../controllers/adminControllers/warehouse.controllers.js';
 import {
-  addWarehouseProduct,
-  addWarehouseProductVariant,
   getWarehouseProducts,
   getWarehouseProductById,
   updateWarehouseProduct,
@@ -256,6 +269,9 @@ import {
   updateWarehouseOrderStatus,
   settleWarehouseOrder,
   getWarehouseOrderStats,
+  adminAcceptWarehouseOrder,
+  adminRejectWarehouseOrder,
+  adminPackWarehouseOrder,
 } from '../controllers/adminControllers/warehouseOrder.controllers.js';
 
 // Warehouse CRUD
@@ -269,14 +285,7 @@ router.delete('/warehouse/:id', verifyAdmin, deleteWarehouse);
 router.post('/warehouse/:warehouseId/operator', verifyAdmin, createWarehouseOperator);
 
 // Warehouse Products
-router.post('/warehouse/:warehouseId/products/add', verifyAdmin, addWarehouseProduct);
-router.post(
-  '/warehouse/products/:warehouseProductId/variants',
-  verifyAdmin,
-  upload.array('images', 5),
-  handleMulterError,
-  addWarehouseProductVariant
-);
+// (Warehouse Product addition endpoints have been deprecated and removed. Warehouse Operators add products directly via merchant routes.)
 router.get('/warehouse/:warehouseId/products', verifyAdmin, getWarehouseProducts);
 router.get('/warehouse/products/:warehouseProductId', verifyAdmin, getWarehouseProductById);
 router.patch('/warehouse/products/:warehouseProductId', verifyAdmin, updateWarehouseProduct);
@@ -289,6 +298,9 @@ router.get('/warehouse/orders/stats', verifyAdmin, getWarehouseOrderStats);
 router.get('/warehouse/orders', verifyAdmin, getAllWarehouseOrders);
 router.get('/warehouse/orders/:orderId', verifyAdmin, getWarehouseOrderById);
 router.patch('/warehouse/orders/:orderId/status', verifyAdmin, updateWarehouseOrderStatus);
+router.patch('/warehouse/orders/:orderId/accept', verifyAdmin, adminAcceptWarehouseOrder);
+router.patch('/warehouse/orders/:orderId/reject', verifyAdmin, adminRejectWarehouseOrder);
+router.patch('/warehouse/orders/:orderId/pack', verifyAdmin, adminPackWarehouseOrder);
 router.post('/warehouse/orders/:orderId/settle', verifyAdmin, settleWarehouseOrder);
 
 export default router;

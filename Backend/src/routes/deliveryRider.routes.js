@@ -5,8 +5,11 @@ import upload from '../middleware/multer.js';
 import { handleMulterError } from '../middleware/multer.js';
 import Notification from "../models/notification.model.js";
 import Order from "../models/order.model.js";
+import WarehouseOrder from "../models/warehouseOrder.model.js";
 import { getWalletDetails } from "../helperFns/walletHelper.js";
 import { v2 as cloudinary } from "cloudinary";
+import { emitOrderUpdate } from "../sockets/order.socket.js";
+import { getIO } from "../config/socket.js";
 import {
   acceptOrder,
   reachedPickupLocation,
@@ -18,7 +21,10 @@ import {
   reachedReturnMerchant,
   verifyMerchantReturnOtp,
   updateRiderLocation,
-  getActiveOrder
+  getActiveOrder,
+  confirmQrCollection,
+  reportDeliveryFeeRefusal,
+  confirmCashCollection
 } from '../controllers/deliveryRiderController/orderController.js';
 import { getAllZones } from '../controllers/adminControllers/zone.controllers.js';
 import { startOnlineSession, endOnlineSession, getSessionHistory } from '../controllers/deliveryRiderController/sessionController.js';
@@ -59,6 +65,12 @@ router.post("/order/verifyOtpOnReturn", authMiddlewareRider, verifyOtpOnReturn);
 router.post("/order/reachedReturnMerchant", authMiddlewareRider, reachedReturnMerchant);   // ✅ was missing!
 router.post("/order/verifyMerchantReturnOtp", authMiddlewareRider, verifyMerchantReturnOtp);
 router.get("/order/active", authMiddlewareRider, getActiveOrder);
+
+// Post-try delivery fee recovery (QR Collection)
+router.post("/orders/:orderId/confirm-qr-collection", authMiddlewareRider, confirmQrCollection);
+router.post("/orders/:orderId/confirm-cash-collection", authMiddlewareRider, confirmCashCollection);
+router.post("/order/confirmCashCollection", authMiddlewareRider, confirmCashCollection);
+router.post("/orders/:orderId/report-delivery-fee-refusal", authMiddlewareRider, reportDeliveryFeeRefusal);
 
 // === Online Session ===
 router.post("/session/start", authMiddlewareRider, startOnlineSession);
@@ -111,7 +123,10 @@ router.post(
       const { orderId } = req.body;
       if (!orderId) return res.status(400).json({ message: "orderId is required" });
 
-      const order = await Order.findById(orderId);
+      let order = await Order.findById(orderId);
+      if (!order) {
+        order = await WarehouseOrder.findById(orderId);
+      }
       if (!order) return res.status(404).json({ message: "Order not found" });
       if (order.deliveryRiderId?.toString() !== req.riderId.toString()) {
         return res.status(403).json({ message: "Not authorized" });
@@ -150,12 +165,18 @@ router.post(
         uploadedPhotos.push(photo);
       }
 
+      order.photoVerified = true;
       await order.save();
+
+      const io = req.io || getIO();
+      emitOrderUpdate(io, orderId, order);
+      io.to(orderId).emit('photoVerified', { orderId, photoVerified: true, returnPhotos: order.returnPhotos });
 
       return res.status(200).json({
         success: true,
         message: `${uploadedPhotos.length} photo(s) uploaded for return evidence.`,
         photos: uploadedPhotos,
+        order,
       });
     } catch (err) {
       console.error("Return photo upload error:", err);

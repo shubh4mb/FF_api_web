@@ -51,12 +51,17 @@ export const getMerchantById = async (id) => {
     }
 }
 
-export const verifyMerchant = async (id, isVerified, kycVerifications, rejectionReason) => {
+export const verifyMerchant = async (id, isVerified, kycVerifications, rejectionReason, status) => {
     try {
-        const response = await axiosInstance.patch(`/admin/updateMerchant/${id}/verify`, { isVerified, kycVerifications, rejectionReason });
+        const payload = {};
+        if (isVerified !== undefined) payload.isVerified = isVerified;
+        if (kycVerifications !== undefined) payload.kycVerifications = kycVerifications;
+        if (rejectionReason !== undefined) payload.rejectionReason = rejectionReason;
+        if (status !== undefined) payload.status = status;
+        const response = await axiosInstance.patch(`/admin/updateMerchant/${id}/verify`, payload);
         return response.data;
     } catch (error) {
-        console.log(error)
+        console.log(error);
         throw error.response ? error.response.data : new Error('Network Error');
     }
 }

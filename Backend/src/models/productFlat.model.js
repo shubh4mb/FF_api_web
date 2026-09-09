@@ -11,6 +11,25 @@ const productFlatSchema = new mongoose.Schema({
   },
   
   // Shared metadata
+  source: {
+    type: String,
+    enum: ['merchant', 'warehouse'],
+    default: 'merchant',
+  },
+  warehouseId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Warehouse',
+  },
+  commissionRate: {
+    type: Number,
+    default: null,
+    min: 0,
+    max: 100,
+  },
+  addedByOperator: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Merchant',
+  },
   merchantId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Merchant',
@@ -42,14 +61,12 @@ const productFlatSchema = new mongoose.Schema({
   soldBy: { type: String, required: false },
   styleName: { type: String, required: false },
   description: String,
+  linkedMerchantProductId: {
+    type: String,
+    default: null
+  },
   matchingProducts: [
-    {
-      productId: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'ProductFlat',
-        required: true,
-      }
-    }
+    { type: String } // stores styleGroupIds of matching products
   ],
   features: {
     type: Map,
@@ -85,7 +102,9 @@ const productFlatSchema = new mongoose.Schema({
     hex: { type: String }
   },
   size: { type: String, required: true },
+  merchantSizeCode: { type: String, required: false },
   stock: { type: Number, default: 0 },
+  reservedStock: { type: Number, default: 0 },
   mrp: { type: Number, required: true },
   price: { type: Number, required: true },
   discount: { type: Number, default: 0 },

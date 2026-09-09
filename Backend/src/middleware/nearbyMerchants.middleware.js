@@ -47,37 +47,42 @@ export const resolveNearbyMerchants = async (req, res, next) => {
     const lat = parseFloat(req.query.lat || req.body?.lat);
     const lng = parseFloat(req.query.lng || req.body?.lng);
 
-    console.log(`[NearbyMiddleware] Incoming Coords - Lat: ${lat}, Lng: ${lng}`);
-
     // No coords → No merchants are "nearby"
     if (isNaN(lat) || isNaN(lng)) {
-      console.log(`[NearbyMiddleware] Lat/Lng is NaN. Returning empty nearbyMerchantIds.`);
       req.nearbyMerchantIds = [];
+      req.nearbyWarehouseIds = [];
       return next();
     }
 
     // 1. Fetch configurable radius
-    const config = await AppConfig.getConfig();
-    const tryAndBuyRadius = config.tryAndBuyRadius;
+    let tryAndBuyRadius = 7;
+    try {
+      const config = await AppConfig.getConfig();
+      if (config?.tryAndBuyRadius) {
+        tryAndBuyRadius = config.tryAndBuyRadius;
+      }
+    } catch (cfgErr) {
+      console.warn("[NearbyMerchants] Config read error, using default 7km:", cfgErr.message);
+    }
 
     // 2. Compute geohash cache key
     const geoHash = encodeGeohash(lat, lng, GEOHASH_PRECISION);
     const cacheKey = `tb:merchants:${geoHash}`;
 
-    // 2. Check Redis cache
+    // 3. Check Redis cache
     let cachedIds = null;
     try {
-      const cached = await redis.get(cacheKey);
-      if (cached && typeof cached === 'string') {
-        cachedIds = JSON.parse(cached);
-        console.log(`[NearbyMerchants] Cache HIT for ${geoHash} — ${cachedIds.length} merchants`);
+      if (redis) {
+        const cached = await redis.get(cacheKey);
+        if (cached && typeof cached === 'string') {
+          cachedIds = JSON.parse(cached);
+        }
       }
     } catch (cacheErr) {
-      console.error("[NearbyMerchants] Redis read error:", cacheErr);
-      await redis.del(cacheKey).catch(() => {});
+      console.warn("[NearbyMerchants] Redis read error (falling back to DB):", cacheErr.message);
     }
 
-    // 3. Cache miss → query DB
+    // 4. Cache miss → query DB
     if (!cachedIds) {
       const Merchant = (await import("../models/merchant.model.js")).default;
       const allMerchants = await Merchant.find({
@@ -88,8 +93,6 @@ export const resolveNearbyMerchants = async (req, res, next) => {
         .select("_id address.location")
         .lean();
 
-      console.log(`[NearbyMiddleware] Total active/verified merchants in DB: ${allMerchants.length}`);
-
       const nearbyMerchants = await filterMerchantsByRoadDistance(
         allMerchants,
         [Number(lng), Number(lat)], // [lng, lat]
@@ -97,18 +100,19 @@ export const resolveNearbyMerchants = async (req, res, next) => {
       );
 
       cachedIds = nearbyMerchants.map((m) => m._id.toString());
-      console.log(`[NearbyMerchants] Cache MISS for ${geoHash} — found ${cachedIds.length} merchants in ${tryAndBuyRadius}km`);
 
-      // 4. Store in Redis
+      // Store in Redis safely
       try {
-        await redis.set(cacheKey, JSON.stringify(cachedIds), { EX: CACHE_TTL_SEC });
+        if (redis) {
+          await redis.set(cacheKey, JSON.stringify(cachedIds), { EX: CACHE_TTL_SEC });
+        }
       } catch (writeErr) {
-        console.error("[NearbyMiddleware] Redis write error:", writeErr);
+        // Silently ignore cache write errors
       }
     }
 
     // 5. Convert to ObjectIds and attach
-    req.nearbyMerchantIds = cachedIds.map(
+    req.nearbyMerchantIds = (cachedIds || []).map(
       (id) => new mongoose.Types.ObjectId(id)
     );
 
@@ -116,13 +120,14 @@ export const resolveNearbyMerchants = async (req, res, next) => {
     const whCacheKey = `tb:warehouses:${geoHash}`;
     let cachedWhIds = null;
     try {
-      const cachedWh = await redis.get(whCacheKey);
-      if (cachedWh && typeof cachedWh === 'string') {
-        cachedWhIds = JSON.parse(cachedWh);
+      if (redis) {
+        const cachedWh = await redis.get(whCacheKey);
+        if (cachedWh && typeof cachedWh === 'string') {
+          cachedWhIds = JSON.parse(cachedWh);
+        }
       }
     } catch (whCacheErr) {
-      console.error("[NearbyMerchants] Warehouse Redis read error:", whCacheErr);
-      await redis.del(whCacheKey).catch(() => {});
+      // Ignore cache error
     }
 
     if (!cachedWhIds) {
@@ -133,7 +138,6 @@ export const resolveNearbyMerchants = async (req, res, next) => {
         .select("_id address.location")
         .lean();
 
-      // Reuse the same road-distance filter (warehouses have same address structure as merchants)
       const nearbyWarehouses = await filterMerchantsByRoadDistance(
         allWarehouses,
         [Number(lng), Number(lat)],
@@ -141,24 +145,43 @@ export const resolveNearbyMerchants = async (req, res, next) => {
       );
 
       cachedWhIds = nearbyWarehouses.map((w) => w._id.toString());
-      console.log(`[NearbyMerchants] Found ${cachedWhIds.length} warehouses in ${tryAndBuyRadius}km`);
 
       try {
-        await redis.set(whCacheKey, JSON.stringify(cachedWhIds), { EX: CACHE_TTL_SEC });
+        if (redis) {
+          await redis.set(whCacheKey, JSON.stringify(cachedWhIds), { EX: CACHE_TTL_SEC });
+        }
       } catch (whWriteErr) {
-        console.error("[NearbyMiddleware] Warehouse Redis write error:", whWriteErr);
+        // Ignore cache error
       }
     }
 
-    req.nearbyWarehouseIds = cachedWhIds.map(
+    req.nearbyWarehouseIds = (cachedWhIds || []).map(
       (id) => new mongoose.Types.ObjectId(id)
     );
 
     next();
   } catch (err) {
     console.error("[NearbyMiddleware] Middleware error:", err);
-    req.nearbyMerchantIds = null;
-    req.nearbyWarehouseIds = null;
+    // Robust fallback: direct DB query so customer screen never breaks
+    try {
+      const lat = parseFloat(req.query.lat || req.body?.lat);
+      const lng = parseFloat(req.query.lng || req.body?.lng);
+      if (!isNaN(lat) && !isNaN(lng)) {
+        const Merchant = (await import("../models/merchant.model.js")).default;
+        const allMerchants = await Merchant.find({
+          isActive: true,
+          isVerified: true,
+          "address.location.coordinates": { $exists: true },
+        }).select("_id address.location").lean();
+        const nearby = await filterMerchantsByRoadDistance(allMerchants, [lng, lat], 7);
+        req.nearbyMerchantIds = nearby.map(m => new mongoose.Types.ObjectId(m._id));
+      } else {
+        req.nearbyMerchantIds = [];
+      }
+    } catch (fallbackErr) {
+      req.nearbyMerchantIds = [];
+    }
+    req.nearbyWarehouseIds = req.nearbyWarehouseIds || [];
     next();
   }
 };

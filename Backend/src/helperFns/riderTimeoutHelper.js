@@ -9,6 +9,7 @@
  */
 
 import Order from "../models/order.model.js";
+import WarehouseOrder from "../models/warehouseOrder.model.js";
 import PendingOrder from "../models/pendingOrders.model.js";
 import deliveryRiderModel from "../models/deliveryRider.model.js";
 import { setRiderMeta, getRiderMeta } from "./deliveryRiderFns.js";
@@ -27,28 +28,55 @@ const activeTimeouts = new Map();
  * gets re-queued to the next rider.
  */
 export function startRiderTimeout(orderId, riderId, zoneId) {
+    const cleanId = String(orderId).replace(/^["']|["']$/g, '').trim();
+
     // Clear any existing timeout for this order
-    clearRiderTimeout(orderId);
+    clearRiderTimeout(cleanId);
 
     const timeoutId = setTimeout(async () => {
         try {
-            activeTimeouts.delete(orderId);
+            activeTimeouts.delete(cleanId);
 
-            // Check if the rider actually accepted in the meantime
-            const order = await Order.findById(orderId);
+            // Check if the rider actually accepted in the meantime (check Order & WarehouseOrder)
+            let order = await Order.findById(cleanId);
+            if (!order) {
+                order = await WarehouseOrder.findById(cleanId);
+            }
             if (!order) return;
 
+            // If the order is assigned to this rider, they accepted — do NOT timeout
+            if (
+                order.deliveryRiderId &&
+                order.deliveryRiderId.toString() === riderId.toString() &&
+                !["queued", "unassigned"].includes(order.deliveryRiderStatus)
+            ) {
+                console.log(`⏰ Rider ${riderId} already accepted order ${cleanId} (status: ${order.deliveryRiderStatus}) — ignoring timeout`);
+                return;
+            }
+
+            // If the rider has progressed past acceptance, do not timeout
+            const hasProgressed = [
+                "assigned",
+                "en_route_pickup",
+                "at_pickup",
+                "picked_up",
+                "en_route_delivery",
+                "at_delivery",
+                "try_phase",
+                "returning",
+                "completed"
+            ].includes(order.deliveryRiderStatus);
+
+            if (hasProgressed) {
+                return; // Rider is actively fulfilling the order
+            }
+
             // If the order is still in "queued" or "unassigned" state, the rider didn't accept
-            if (!["queued", "placed", "accepted"].includes(order.orderStatus)) {
+            if (!["queued", "placed", "accepted", "packed"].includes(order.orderStatus)) {
                 return; // order already moved past acceptance — no timeout needed
             }
 
-            // Check if rider actually accepted the order (deliveryRiderId is set AND status moved)
-            if (
-                order.deliveryRiderId?.toString() === riderId &&
-                order.deliveryRiderStatus === "assigned"
-            ) {
-                // Rider was assigned but didn't take action — revoke
+            // Rider was offered/assigned this order but did not progress — revoke assignment
 
                 // 1. Free the rider
                 const meta = await getRiderMeta(riderId);
@@ -85,7 +113,8 @@ export function startRiderTimeout(orderId, riderId, zoneId) {
                 // 5. Emit update and trigger re-match
                 const io = getIO();
                 io.to(orderId.toString()).emit("orderUpdate", {
-                    orderId,
+                    _id: orderId.toString(),
+                    orderId: orderId.toString(),
                     orderStatus: order.orderStatus,
                     deliveryRiderStatus: "queued",
                     message: "Previous rider timed out, finding new rider...",
@@ -97,23 +126,24 @@ export function startRiderTimeout(orderId, riderId, zoneId) {
                 console.log(
                     `⏰ Rider ${riderId} timed out on order ${orderId} — re-queued in zone ${zoneId}`
                 );
-            }
         } catch (err) {
             console.error("Rider timeout handler error:", err);
         }
     }, RIDER_TIMEOUT_MS);
 
-    activeTimeouts.set(orderId.toString(), timeoutId);
+    activeTimeouts.set(cleanId, timeoutId);
 }
 
 /**
  * Clear the timeout for an order (called when rider explicitly accepts).
  */
 export function clearRiderTimeout(orderId) {
-    const key = orderId.toString();
+    if (!orderId) return;
+    const key = String(orderId).replace(/^["']|["']$/g, '').trim();
     if (activeTimeouts.has(key)) {
         clearTimeout(activeTimeouts.get(key));
         activeTimeouts.delete(key);
+        console.log(`⏰ Cleared rider timeout for order ${key}`);
     }
 }
 
@@ -121,5 +151,7 @@ export function clearRiderTimeout(orderId) {
  * Check if an order has an active timeout.
  */
 export function hasActiveTimeout(orderId) {
-    return activeTimeouts.has(orderId.toString());
+    if (!orderId) return false;
+    const key = String(orderId).replace(/^["']|["']$/g, '').trim();
+    return activeTimeouts.has(key);
 }

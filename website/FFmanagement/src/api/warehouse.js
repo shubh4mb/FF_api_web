@@ -87,6 +87,21 @@ export const updateWarehouseOrderStatus = async (orderId, data) => {
   return response.data;
 };
 
+export const acceptWarehouseOrderAdmin = async (orderId) => {
+  const response = await axiosInstance.patch(`/admin/warehouse/orders/${orderId}/accept`);
+  return response.data;
+};
+
+export const rejectWarehouseOrderAdmin = async (orderId, reason) => {
+  const response = await axiosInstance.patch(`/admin/warehouse/orders/${orderId}/reject`, { reason });
+  return response.data;
+};
+
+export const packWarehouseOrderAdmin = async (orderId) => {
+  const response = await axiosInstance.patch(`/admin/warehouse/orders/${orderId}/pack`);
+  return response.data;
+};
+
 export const settleWarehouseOrder = async (orderId) => {
   const response = await axiosInstance.post(`/admin/warehouse/orders/${orderId}/settle`);
   return response.data;

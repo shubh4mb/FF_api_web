@@ -1,4 +1,3 @@
-import Product from '../../models/product.model.js';
 import { storageService } from '../../services/storage.service.js';
 import { asyncHandler } from '../../utils/asyncHandler.js';
 import { ApiError } from '../../utils/ApiError.js';
@@ -6,34 +5,72 @@ import { ApiResponse } from '../../utils/ApiResponse.js';
 import ProductFlat from '../../models/productFlat.model.js';
 import { convertToLegacyFormat } from '../../utils/variantAdapter.js';
 
+/**
+ * Helper: Groups flat product docs by styleGroupId and converts each group
+ * into the legacy nested product format for response compatibility.
+ */
+const groupFlatToLegacy = (flatProducts) => {
+  const groups = {};
+  flatProducts.forEach(p => {
+    const key = p.styleGroupId;
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(p);
+  });
+
+  return Object.values(groups).map(siblings => {
+    return convertToLegacyFormat(siblings[0], siblings.slice(1));
+  }).filter(Boolean);
+};
 
 export const getBaseProducts = asyncHandler(async (req, res) => {
-  const products = await Product.find({})
+  const flatProducts = await ProductFlat.find({ isDeleted: { $ne: true } })
     .populate('brandId', 'name')
     .populate('categoryId', 'name')
     .populate('subCategoryId', 'name')
-    .populate('subSubCategoryId', 'name')
-    .populate('merchantId', 'name');
+    .populate('merchantId', 'shopName email')
+    .sort({ createdAt: -1 });
 
+  const products = groupFlatToLegacy(flatProducts);
   return res.status(200).json(new ApiResponse(200, { products }, "Products retrieved successfully"));
 });
 
 export const getVariants = asyncHandler(async (req, res) => {
-  const products = await Product.find({});
+  const flatProducts = await ProductFlat.find({ isDeleted: { $ne: true } })
+    .sort({ createdAt: -1 });
+  const products = groupFlatToLegacy(flatProducts);
   return res.status(200).json(new ApiResponse(200, products, "Variants retrieved successfully"));
 });
 
 export const getBaseProductById = asyncHandler(async (req, res) => {
-  const product = await Product.findById(req.params.productId)
+  const productId = req.params.productId;
+  // Try to find by styleGroupId first, then by _id
+  let flatProducts = await ProductFlat.find({ styleGroupId: productId, isDeleted: { $ne: true } })
     .populate('brandId', 'name')
     .populate('categoryId', 'name')
     .populate('subCategoryId', 'name')
-    .populate('subSubCategoryId', 'name')
-    .populate('merchantId', 'name');
+    .populate('merchantId', 'shopName email');
 
-  if (!product) {
+  if (!flatProducts.length) {
+    // Maybe the productId is the _id of a single flat doc
+    const singleDoc = await ProductFlat.findById(productId)
+      .populate('brandId', 'name')
+      .populate('categoryId', 'name')
+      .populate('subCategoryId', 'name')
+      .populate('merchantId', 'shopName email');
+    if (singleDoc) {
+      flatProducts = await ProductFlat.find({ styleGroupId: singleDoc.styleGroupId, isDeleted: { $ne: true } })
+        .populate('brandId', 'name')
+        .populate('categoryId', 'name')
+        .populate('subCategoryId', 'name')
+        .populate('merchantId', 'shopName email');
+    }
+  }
+
+  if (!flatProducts.length) {
     throw new ApiError(404, "Product not found");
   }
+
+  const product = convertToLegacyFormat(flatProducts[0], flatProducts.slice(1));
   return res.status(200).json(new ApiResponse(200, product, "Product retrieved"));
 });
 
@@ -69,101 +106,79 @@ export const addVariant = asyncHandler(async (req, res) => {
     uploadedImages.push(...results);
   }
 
-  if (process.env.USE_FLAT_PRODUCT_SCHEMA === 'true') {
-    const existingFlatProduct = await ProductFlat.findOne({ styleGroupId: productId });
-    if (!existingFlatProduct) {
-      throw new ApiError(404, "Product group not found");
-    }
+  const existingFlatProduct = await ProductFlat.findOne({ styleGroupId: productId });
+  if (!existingFlatProduct) {
+    throw new ApiError(404, "Product group not found");
+  }
 
-    const base = existingFlatProduct.toObject();
-    delete base._id;
-    delete base.__v;
-    delete base.createdAt;
-    delete base.updatedAt;
+  const base = existingFlatProduct.toObject();
+  delete base._id;
+  delete base.__v;
+  delete base.createdAt;
+  delete base.updatedAt;
 
-    const parentProductCode = existingFlatProduct.productCode.split('-')[0] || existingFlatProduct.productCode;
-    const cleanColor = (parsedColor?.name || 'Default').replace(/\s+/g, '').toUpperCase();
+  const parentProductCode = existingFlatProduct.productCode.split('-')[0] || existingFlatProduct.productCode;
+  const cleanColor = (parsedColor?.name || 'Default').replace(/\s+/g, '').toUpperCase();
 
-    for (const sizeObj of parsedSizes) {
-      const cleanSize = sizeObj.size.replace(/\s+/g, '').toUpperCase();
-      const flatDoc = new ProductFlat({
-        ...base,
-        productCode: `${parentProductCode}-${cleanColor}-${cleanSize}`,
-        color: parsedColor,
-        size: sizeObj.size,
-        stock: isNaN(Number(sizeObj.stock)) ? 0 : Number(sizeObj.stock),
-        mrp: safeMrp,
-        price: safePrice,
-        discount: safeDiscount,
-        images: uploadedImages
-      });
-      await flatDoc.save();
-    }
-
-    await ProductFlat.deleteOne({
-      styleGroupId: productId,
-      size: 'Free',
-      'color.name': 'Default',
-      stock: 0,
-      price: 0
+  for (const sizeObj of parsedSizes) {
+    const cleanSize = sizeObj.size.replace(/\s+/g, '').toUpperCase();
+    const flatDoc = new ProductFlat({
+      ...base,
+      productCode: `${parentProductCode}-${cleanColor}-${cleanSize}`,
+      color: parsedColor,
+      size: sizeObj.size,
+      stock: isNaN(Number(sizeObj.stock)) ? 0 : Number(sizeObj.stock),
+      mrp: safeMrp,
+      price: safePrice,
+      discount: safeDiscount,
+      images: uploadedImages
     });
-
-    const siblings = await ProductFlat.find({ styleGroupId: productId, isActive: true });
-    const legacyProduct = convertToLegacyFormat(siblings[0], siblings.slice(1));
-
-    return res.status(200).json(new ApiResponse(200, { product: legacyProduct }, "Variant added successfully"));
+    await flatDoc.save();
   }
 
-  const newVariant = {
-    color: parsedColor,
-    sizes: parsedSizes,
-    mrp: safeMrp,
-    price: safePrice,
-    discount: safeDiscount,
-    images: uploadedImages,
-  };
+  await ProductFlat.deleteOne({
+    styleGroupId: productId,
+    size: 'Free',
+    'color.name': 'Default',
+    stock: 0,
+    price: 0
+  });
 
-  const updatedProduct = await Product.findByIdAndUpdate(
-    productId,
-    { $push: { variants: newVariant } },
-    { new: true, runValidators: true }
-  );
+  const siblings = await ProductFlat.find({ styleGroupId: productId, isActive: true });
+  const legacyProduct = convertToLegacyFormat(siblings[0], siblings.slice(1));
 
-  if (!updatedProduct) {
-    throw new ApiError(404, "Product not found");
-  }
-
-  return res.status(200).json(new ApiResponse(200, { product: updatedProduct }, "Variant added successfully"));
+  return res.status(200).json(new ApiResponse(200, { product: legacyProduct }, "Variant added successfully"));
 });
 
 export const getFilteredProducts = asyncHandler(async (req, res) => {
-  const products = await Product.find({
-    categoryId: req.params.categoryId,
-    subCategoryId: req.params.subCategoryId,
-    subSubCategoryId: req.params.subSubCategoryId,
-  })
+  const filter = { isDeleted: { $ne: true } };
+  if (req.params.categoryId) filter.categoryId = req.params.categoryId;
+  if (req.params.subCategoryId) filter.subCategoryId = req.params.subCategoryId;
+  if (req.params.subSubCategoryId) filter.subSubCategoryId = req.params.subSubCategoryId;
+
+  const flatProducts = await ProductFlat.find(filter)
     .populate('brandId', 'name')
     .populate('categoryId', 'name')
     .populate('subCategoryId', 'name')
-    .populate('subSubCategoryId', 'name')
-    .populate('merchantId', 'name');
+    .populate('merchantId', 'shopName email');
 
+  const products = groupFlatToLegacy(flatProducts);
   return res.status(200).json(new ApiResponse(200, products, "Filtered products retrieved"));
 });
-
 
 export const getProductsByMerchantId = asyncHandler(async (req, res) => {
   const { merchantId } = req.params;
 
-  const products = await Product.find({ merchantId: merchantId }).populate([
-    { path: 'brandId', select: 'name' },
-    { path: 'categoryId', select: 'name' },
-    { path: 'subCategoryId', select: 'name' },
-    { path: 'subSubCategoryId', select: 'name' },
-  ]);
+  const flatProducts = await ProductFlat.find({ merchantId, isDeleted: { $ne: true } })
+    .populate('brandId', 'name')
+    .populate('categoryId', 'name')
+    .populate('subCategoryId', 'name')
+    .populate('merchantId', 'shopName email');
 
-  const modifiedProducts = products.map(product => {
-    const mainVariant = product.variants[0]; // only the first variant
+  const legacyProducts = groupFlatToLegacy(flatProducts);
+
+  const modifiedProducts = legacyProducts.map(product => {
+    const mainVariant = product.variants?.[0];
     if (!mainVariant) return null;
 
     return {
@@ -175,6 +190,8 @@ export const getProductsByMerchantId = asyncHandler(async (req, res) => {
       categoryId: product.categoryId,
       subCategoryId: product.subCategoryId,
       subSubCategoryId: product.subSubCategoryId,
+      isActive: product.isActive,
+      isVerified: product.isVerified,
 
       variantId: mainVariant._id,
       price: mainVariant.price,
@@ -198,41 +215,63 @@ export const updateMatchingProducts = asyncHandler(async (req, res) => {
   const { productId } = req.params;
   const { matchingProducts } = req.body;
 
-  const product = await Product.findById(productId);
-  if (!product) {
+  // Update all siblings in the style group
+  const result = await ProductFlat.updateMany(
+    { styleGroupId: productId },
+    { $set: { matchingProducts } }
+  );
+
+  if (result.matchedCount === 0) {
     throw new ApiError(404, "Product not found");
   }
-
-  product.matchingProducts = matchingProducts;
-  await product.save();
 
   return res.status(200).json(new ApiResponse(200, {}, "Matching products updated successfully"));
 });
 
 export const toggleProductStatus = asyncHandler(async (req, res) => {
   const { productId } = req.params;
-  const product = await Product.findById(productId);
-  
-  if (!product) {
+
+  // Find one sibling to determine current status
+  const doc = await ProductFlat.findOne({
+    $or: [{ styleGroupId: productId }, { _id: productId }],
+    isDeleted: { $ne: true }
+  });
+
+  if (!doc) {
     throw new ApiError(404, "Product not found");
   }
 
-  product.isActive = !product.isActive;
-  await product.save();
+  const newStatus = !doc.isActive;
 
-  return res.status(200).json(new ApiResponse(200, { isActive: product.isActive }, "Product status updated successfully"));
+  // Toggle ALL siblings in the same style group
+  await ProductFlat.updateMany(
+    { styleGroupId: doc.styleGroupId },
+    { $set: { isActive: newStatus } }
+  );
+
+  return res.status(200).json(new ApiResponse(200, { isActive: newStatus }, "Product status updated successfully"));
 });
 
 export const toggleProductVerification = asyncHandler(async (req, res) => {
   const { productId } = req.params;
-  const product = await Product.findById(productId);
-  
-  if (!product) {
+
+  // Find one sibling to determine current status
+  const doc = await ProductFlat.findOne({
+    $or: [{ styleGroupId: productId }, { _id: productId }],
+    isDeleted: { $ne: true }
+  });
+
+  if (!doc) {
     throw new ApiError(404, "Product not found");
   }
 
-  product.isVerified = !product.isVerified;
-  await product.save();
+  const newStatus = !doc.isVerified;
 
-  return res.status(200).json(new ApiResponse(200, { isVerified: product.isVerified }, "Product verification updated successfully"));
+  // Toggle ALL siblings in the same style group
+  await ProductFlat.updateMany(
+    { styleGroupId: doc.styleGroupId },
+    { $set: { isVerified: newStatus } }
+  );
+
+  return res.status(200).json(new ApiResponse(200, { isVerified: newStatus }, "Product verification updated successfully"));
 });

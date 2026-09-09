@@ -1,5 +1,4 @@
 import mongoose from "mongoose";
-import Product from '../../models/product.model.js';
 import Category from '../../models/category.model.js';
 import { productSchema } from '../../utils/validators/product.validator.js';
 import Brand from "../../models/brand.model.js";
@@ -42,6 +41,7 @@ export const addVariant = async (req, res) => {
     }
     parsedSizes = parsedSizes.map((s) => ({
       size: s.size,
+      merchantSizeCode: s.merchantSizeCode,
       stock: isNaN(Number(s.stock)) ? 0 : Number(s.stock),
     }));
     sizes = parsedSizes;
@@ -67,7 +67,6 @@ export const addVariant = async (req, res) => {
       }
     }
 
-    if (process.env.USE_FLAT_PRODUCT_SCHEMA === 'true') {
       const existingFlatProduct = await ProductFlat.findOne({ styleGroupId: productId, merchantId: req.merchantId });
       if (!existingFlatProduct) {
         return res.status(404).json({ success: false, message: "Product group not found" });
@@ -86,11 +85,19 @@ export const addVariant = async (req, res) => {
       delete base.createdAt;
       delete base.updatedAt;
 
+      const { name: reqName, styleName: reqStyleName, description: reqDesc, gender: reqGender, isTriable: reqTriable } = req.body;
+      if (reqName && reqName.trim()) base.name = reqName.trim();
+      if (reqStyleName && reqStyleName.trim()) base.styleName = reqStyleName.trim();
+      if (reqDesc && reqDesc.trim()) base.description = reqDesc.trim();
+      if (reqGender) base.gender = safeParse(reqGender);
+      if (reqTriable !== undefined) base.isTriable = reqTriable === 'true' || reqTriable === true;
+
       for (const sizeObj of sizes) {
         const cleanSize = sizeObj.size.replace(/\s+/g, '').toUpperCase();
         let productCode;
-        if (productSku) {
-          productCode = `${merchantPrefix}-${productSku.toUpperCase().replace(/\s+/g, '')}-${cleanSize}`;
+        let baseSku = sizeObj.merchantSizeCode || productSku;
+        if (baseSku) {
+          productCode = `${merchantPrefix}-${baseSku.toUpperCase().replace(/\s+/g, '')}-${cleanSize}`;
         } else {
           const parentProductCode = existingFlatProduct.productCode.split('-')[0] || existingFlatProduct.productCode;
           const cleanColor = (color?.name || 'Default').replace(/\s+/g, '').toUpperCase();
@@ -102,6 +109,7 @@ export const addVariant = async (req, res) => {
           productCode,
           color,
           size: sizeObj.size,
+          merchantSizeCode: sizeObj.merchantSizeCode,
           stock: sizeObj.stock,
           mrp,
           price,
@@ -127,30 +135,6 @@ export const addVariant = async (req, res) => {
         message: "Variant added successfully",
         product: makeFlatPayload(siblings, { addedColorName: color.name })
       });
-    }
-
-    const newVariant = {
-      color,
-      sizes,
-      mrp,
-      price,
-      discount,
-      images: finalImages,
-    };
-    const updatedProduct = await Product.findOneAndUpdate(
-      { _id: productId, merchantId: req.merchantId },
-      { $push: { variants: newVariant } },
-      { new: true }
-    );
-    if (!updatedProduct) {
-      return res.status(404).json({ success: false, message: "Product not found or unauthorized" });
-    }
-    return res.json({
-      success: true,
-      message: "Variant added successfully",
-      variant: updatedProduct.variants.at(-1),
-      product: updatedProduct,
-    });
   } catch (err) {
     console.error("Error adding variant:", err);
     res.status(500).json({ success: false, message: "Internal server error", error: err.message });
@@ -175,7 +159,6 @@ export const updateVariant = async (req, res) => {
     const safePrice = safeNumber(price);
     const safeDiscount = safeNumber(discount);
 
-    if (process.env.USE_FLAT_PRODUCT_SCHEMA === 'true') {
       const allFlatVariants = await ProductFlat.find({ styleGroupId: productId, merchantId: req.merchantId });
       const targetColorVariants = allFlatVariants.filter(
         v => generateColorVariantId(productId, v.color.name) === variantId
@@ -260,70 +243,6 @@ export const updateVariant = async (req, res) => {
         message: "Variant updated successfully.",
         product: makeFlatPayload(updatedSiblings),
       });
-    }
-
-    const product = await Product.findOne({
-      _id: productId,
-      merchantId: req.merchantId,
-      "variants._id": variantId,
-    });
-    if (!product) return res.status(404).json({ message: "Product or variant not found" });
-
-    const variant = product.variants.id(variantId);
-    const oldImages = variant.images || [];
-    const incomingPublicIDs = parsedImages.map((img) => img.public_id);
-    const deletedImages = oldImages.filter(
-      (old) => !incomingPublicIDs.includes(old.public_id)
-    );
-
-    const finalImages = [];
-    const MAX_IMAGES = 5;
-    let fileIndex = 0;
-    for (let i = 0; i < parsedImages.length; i++) {
-      const img = parsedImages[i];
-      if (finalImages.length >= MAX_IMAGES) {
-        if (img.url.startsWith("blob")) fileIndex++;
-        continue;
-      }
-      if (img.url.startsWith("http")) {
-        finalImages.push({ public_id: img.public_id, url: img.url });
-        continue;
-      }
-      if (img.url.startsWith("blob")) {
-        const file = req.files?.[fileIndex];
-        if (file) {
-          const result = await storageService.uploadSingle(file, "products");
-          if (result) finalImages.push(result);
-        }
-        fileIndex++;
-      }
-    }
-
-    for (const img of deletedImages) {
-      if (img.public_id) {
-        await storageService.deleteFile(img.public_id);
-      }
-    }
-
-    const updateData = {
-      "variants.$.color": parsedColor,
-      "variants.$.mrp": safeMrp,
-      "variants.$.price": safePrice,
-      "variants.$.discount": safeDiscount,
-      "variants.$.images": finalImages,
-    };
-
-    const updatedProduct = await Product.findOneAndUpdate(
-      { _id: productId, merchantId: req.merchantId, "variants._id": variantId },
-      { $set: updateData },
-      { new: true, runValidators: true }
-    );
-
-    res.status(200).json({
-      success: true,
-      message: "Variant updated successfully.",
-      product: updatedProduct,
-    });
   } catch (err) {
     console.error("Error updating variant:", err);
     res.status(500).json({ message: "Internal Server Error", error: err.message });
@@ -339,8 +258,13 @@ export const updateSize = async (req, res) => {
     if (process.env.USE_FLAT_PRODUCT_SCHEMA === 'true') {
       let updatedFlatDoc;
       if (sizeId) {
+        const isObjId = mongoose.Types.ObjectId.isValid(sizeId);
+        const query = isObjId
+          ? { _id: sizeId, merchantId: req.merchantId }
+          : { styleGroupId: productId, size: sizeId, merchantId: req.merchantId };
+
         updatedFlatDoc = await ProductFlat.findOneAndUpdate(
-          { _id: sizeId, styleGroupId: productId, merchantId: req.merchantId },
+          query,
           { $set: { stock: safeStock } },
           { new: true }
         );
@@ -844,18 +768,40 @@ export const getBaseProductById = async (req, res) => {
   try {
     const { productId } = req.params;
     if (process.env.USE_FLAT_PRODUCT_SCHEMA === 'true') {
-      const doc = await ProductFlat.findById(productId);
-      if (!doc) {
-        // Fallback to legacy Product collection (used by warehouse products)
-        const legacyProd = await Product.findById(productId)
+      let doc = null;
+
+      // 1. Try finding ProductFlat by _id if valid ObjectId
+      if (mongoose.Types.ObjectId.isValid(productId)) {
+        doc = await ProductFlat.findById(productId)
           .populate('brandId', 'name')
           .populate('categoryId', 'name')
           .populate('subCategoryId', 'name')
-          .populate('merchantId', 'shopName name');
+          .populate('merchantId', 'name');
+      }
+
+      // 2. If not found by _id, try finding ProductFlat by styleGroupId
+      if (!doc) {
+        doc = await ProductFlat.findOne({ styleGroupId: productId, isDeleted: { $ne: true } })
+          .populate('brandId', 'name')
+          .populate('categoryId', 'name')
+          .populate('subCategoryId', 'name')
+          .populate('merchantId', 'name');
+      }
+
+      if (!doc) {
+        // 3. Fallback to legacy Product collection (used by warehouse products)
+        let legacyProd = null;
+        if (mongoose.Types.ObjectId.isValid(productId)) {
+          legacyProd = await Product.findById(productId)
+            .populate('brandId', 'name')
+            .populate('categoryId', 'name')
+            .populate('subCategoryId', 'name')
+            .populate('merchantId', 'shopName name');
+        }
 
         if (legacyProd) {
           const firstVariant = legacyProd.variants?.[0];
-          return res.status(200).json({
+          const legacyObj = {
             _id: legacyProd._id.toString(),
             name: legacyProd.name,
             brand: legacyProd.brandId?.name || "",
@@ -875,29 +821,36 @@ export const getBaseProductById = async (req, res) => {
             discount: firstVariant?.discount || 0,
             images: firstVariant?.images || [],
             sizes: firstVariant?.sizes || []
+          };
+          return res.status(200).json({
+            ...legacyObj,
+            product: legacyObj
           });
         }
         return res.status(404).json({ message: "Product not found" });
       }
+
       const siblings = await ProductFlat.find({ 
         styleGroupId: doc.styleGroupId, 
-        "color.name": doc.color.name,
+        "color.name": doc.color?.name || "Default",
         isDeleted: { $ne: true }
       }).populate('brandId', 'name')
         .populate('categoryId', 'name')
         .populate('subCategoryId', 'name')
         .populate('merchantId', 'name');
 
-      const grouped = {
+      const productDetails = {
         _id: doc._id.toString(),
         styleGroupId: doc.styleGroupId,
         name: doc.name,
-        brand: doc.brandId?.name || "",
-        brandId: doc.brandId?._id?.toString() || "",
-        category: doc.categoryId?.name || "",
-        categoryId: doc.categoryId?._id?.toString() || "",
-        subCategory: doc.subCategoryId?.name || "",
-        subCategoryId: doc.subCategoryId?._id?.toString() || "",
+        brand: typeof doc.brandId === 'object' && doc.brandId ? doc.brandId.name : (doc.brand || doc.soldBy || ""),
+        brandId: typeof doc.brandId === 'object' && doc.brandId ? doc.brandId._id?.toString() : (doc.brandId || ""),
+        soldBy: doc.soldBy || "",
+        styleName: doc.styleName || "",
+        category: typeof doc.categoryId === 'object' && doc.categoryId ? doc.categoryId.name : (doc.category || ""),
+        categoryId: typeof doc.categoryId === 'object' && doc.categoryId ? doc.categoryId._id?.toString() : (doc.categoryId || ""),
+        subCategory: typeof doc.subCategoryId === 'object' && doc.subCategoryId ? doc.subCategoryId.name : (doc.subCategory || ""),
+        subCategoryId: typeof doc.subCategoryId === 'object' && doc.subCategoryId ? doc.subCategoryId._id?.toString() : (doc.subCategoryId || ""),
         gender: doc.gender,
         description: doc.description,
         tags: doc.tags,
@@ -908,25 +861,61 @@ export const getBaseProductById = async (req, res) => {
         price: doc.price,
         discount: doc.discount,
         images: doc.images,
+        attributes: (doc.attributes || []).map(a => ({
+          attributeId: a.attributeId?._id?.toString() || a.attributeId?.toString() || "",
+          value: a.value
+        })),
+        features: doc.features instanceof Map ? Object.fromEntries(doc.features) : (doc.features || {}),
+        collectionIds: (doc.collectionIds || []).map(c => c?._id?.toString() || c?.toString() || ""),
         sizes: siblings.map(s => ({
           _id: s._id.toString(),
           size: s.size,
+          merchantSizeCode: s.merchantSizeCode,
           stock: s.stock
         }))
       };
-      return res.status(200).json(grouped);
-    }
-    const product = await Product.findById(productId)
-      .populate('brandId', 'name')
-      .populate('categoryId', 'name')
-      .populate('subCategoryId', 'name')
-      .populate('merchantId', 'name');
 
-    res.status(200).json(product);
+      return res.status(200).json({
+        ...productDetails,
+        product: productDetails
+      });
+    }
+
+    let product = null;
+    if (mongoose.Types.ObjectId.isValid(productId)) {
+      product = await Product.findById(productId)
+        .populate('brandId', 'name')
+        .populate('categoryId', 'name')
+        .populate('subCategoryId', 'name')
+        .populate('merchantId', 'name');
+    }
+
+    if (!product) {
+      return res.status(404).json({ message: "Product not found" });
+    }
+
+    res.status(200).json({
+      ...product.toObject(),
+      product
+    });
   } catch (error) {
-    console.log(error);
+    console.error(error);
     res.status(500).json({ message: '❌ ' + error.message });
   }
+};
+
+const cleanAttributesHelper = (attrs) => {
+  if (!Array.isArray(attrs)) return [];
+  return attrs.map(a => {
+    let rawId = a.attributeId || a.attribute;
+    if (rawId && typeof rawId === 'object') {
+      rawId = rawId._id || rawId.id;
+    }
+    return {
+      attributeId: rawId ? rawId.toString() : '',
+      value: a.value
+    };
+  }).filter(a => a.attributeId);
 };
 
 export const getProductsByMerchantId = async (req, res) => {
@@ -957,6 +946,9 @@ export const getProductsByMerchantId = async (req, res) => {
               brand: p.brandId?.name || "", category: p.categoryId?.name || "", subCategory: p.subCategoryId?.name || "",
               brandId: p.brandId?._id?.toString() || null, categoryId: p.categoryId?._id?.toString() || null, subCategoryId: p.subCategoryId?._id?.toString() || null,
               gender: p.gender, description: p.description, tags: p.tags, isTriable: p.isTriable,
+              styleName: p.styleName || "",
+              attributes: cleanAttributesHelper(p.attributes),
+              features: p.features || {},
               ratings: p.ratings, numReviews: p.numReviews, isActive: p.isActive,
               createdAt: p.createdAt, updatedAt: p.updatedAt,
               sizes: []
@@ -969,6 +961,9 @@ export const getProductsByMerchantId = async (req, res) => {
               id: v._id.toString(), // use variant ID as row ID for editing
               styleGroupId: p._id.toString(),
               name: p.name, productCode: p.productCode,
+              styleName: p.styleName || "",
+              attributes: cleanAttributesHelper(p.attributes),
+              features: p.features || {},
               merchant: { id: p.merchantId?._id?.toString(), shopName: p.merchantId?.shopName || "", email: p.merchantId?.email || "" },
               brand: p.brandId?.name || "", category: p.categoryId?.name || "", subCategory: p.subCategoryId?.name || "",
               brandId: p.brandId?._id?.toString() || null, categoryId: p.categoryId?._id?.toString() || null, subCategoryId: p.subCategoryId?._id?.toString() || null,
@@ -985,7 +980,10 @@ export const getProductsByMerchantId = async (req, res) => {
     }
 
     if (process.env.USE_FLAT_PRODUCT_SCHEMA === 'true') {
-      const flatProducts = await ProductFlat.find({ merchantId, isDeleted: { $ne: true } })
+      const flatProducts = await ProductFlat.find({
+        merchantId,
+        isDeleted: { $ne: true }
+      })
         .populate("brandId", "name")
         .populate("categoryId", "name")
         .populate("subCategoryId", "name")
@@ -996,17 +994,41 @@ export const getProductsByMerchantId = async (req, res) => {
         return res.status(404).json({ message: "No products found for this merchant" });
       }
 
+      // Group all flat products by styleGroupId to check if product is present in shop
+      const styleGroups = {};
+      flatProducts.forEach(p => {
+        const sgId = p.styleGroupId || p._id.toString();
+        if (!styleGroups[sgId]) styleGroups[sgId] = [];
+        styleGroups[sgId].push(p);
+      });
+
+      // Keep products (style groups) that have at least one shop variant (or were created by merchant)
+      const validFlatProducts = [];
+      Object.values(styleGroups).forEach(groupDocs => {
+        const hasShopVariant = groupDocs.some(p => p.source !== 'warehouse' && !p.warehouseId && !p.addedByOperator);
+        if (hasShopVariant) {
+          validFlatProducts.push(...groupDocs);
+        }
+      });
+
+      if (validFlatProducts.length === 0) {
+        return res.status(404).json({ message: "No products found for this merchant" });
+      }
+
       // Group by styleGroupId + color.name
       const groups = {};
-      flatProducts.forEach(p => {
+      validFlatProducts.forEach(p => {
         const colorName = p.color?.name || 'Default';
         const key = `${p.styleGroupId}_${colorName}`;
         if (!groups[key]) {
           groups[key] = {
-            id: p._id.toString(),
-            styleGroupId: p.styleGroupId,
+            id: p.styleGroupId || p._id.toString(),
+            styleGroupId: p.styleGroupId || p._id.toString(),
             name: p.name,
             productCode: p.productCode,
+            source: p.source || 'shop',
+            warehouseId: p.warehouseId || null,
+            addedByOperator: p.addedByOperator || null,
             merchant: {
               id: p.merchantId?._id?.toString(),
               shopName: p.merchantId?.shopName || "",
@@ -1019,8 +1041,11 @@ export const getProductsByMerchantId = async (req, res) => {
             categoryId: p.categoryId?._id?.toString() || null,
             subCategoryId: p.subCategoryId?._id?.toString() || null,
             gender: p.gender,
+            styleName: p.styleName || "",
             description: p.description,
             tags: p.tags,
+            attributes: cleanAttributesHelper(p.attributes),
+            features: p.features || {},
             isTriable: p.isTriable,
             ratings: p.ratings,
             numReviews: p.numReviews,
@@ -1047,7 +1072,13 @@ export const getProductsByMerchantId = async (req, res) => {
       return res.status(200).json(transformed);
     }
 
-    const products = await Product.find({ merchantId, isDeleted: { $ne: true } })
+    const products = await Product.find({
+      merchantId,
+      source: { $ne: 'warehouse' },
+      warehouseId: null,
+      addedByOperator: null,
+      isDeleted: { $ne: true }
+    })
       .populate("brandId", "name")
       .populate("categoryId", "name")
       .populate("subCategoryId", "name")
@@ -1062,6 +1093,7 @@ export const getProductsByMerchantId = async (req, res) => {
     const transformed = products.map((p) => ({
       id: p._id.toString(),
       name: p.name,
+      styleName: p.styleName || "",
       productCode: p.productCode,
       merchant: {
         id: p.merchantId?._id?.toString(),
@@ -1077,6 +1109,8 @@ export const getProductsByMerchantId = async (req, res) => {
       gender: p.gender,
       description: p.description,
       tags: p.tags,
+      attributes: cleanAttributesHelper(p.attributes),
+      features: p.features || {},
       isTriable: p.isTriable,
       ratings: p.ratings,
       numReviews: p.numReviews,
@@ -1300,6 +1334,10 @@ export const editProduct = async (req, res) => {
         return res.status(404).json({ success: false, message: 'Product not found' });
       }
 
+      if (doc.source === 'warehouse' || doc.warehouseId || doc.addedByOperator) {
+        return res.status(403).json({ success: false, message: 'Products stored in central warehouses cannot be edited directly by merchants.' });
+      }
+
       const { sizes, ...sharedFields } = updateData;
 
       // Find all existing sizes for this color group
@@ -1323,16 +1361,18 @@ export const editProduct = async (req, res) => {
           const cleanSize = sizeObj.size.replace(/\s+/g, '').toUpperCase();
           
           if (sizeObj._id) {
+            const setFields = { 
+              ...sharedFields,
+              size: sizeObj.size,
+              stock: Number(sizeObj.stock)
+            };
+            if (sizeObj.merchantSizeCode !== undefined) {
+               setFields.merchantSizeCode = sizeObj.merchantSizeCode;
+            }
             // Update existing size doc
             await ProductFlat.updateOne(
               { _id: sizeObj._id },
-              { 
-                $set: { 
-                  ...sharedFields,
-                  size: sizeObj.size,
-                  stock: Number(sizeObj.stock)
-                } 
-              }
+              { $set: setFields }
             );
           } else {
             // Create new size doc
@@ -1345,12 +1385,21 @@ export const editProduct = async (req, res) => {
             const parentProductCode = base.productCode.split('-')[0] || base.productCode;
             const cleanColor = base.color.name.replace(/\s+/g, '').toUpperCase();
 
+            let productCode;
+            if (sizeObj.merchantSizeCode) {
+               const merchantPrefix = base.productCode.split('-').slice(0, 2).join('-');
+               productCode = `${merchantPrefix}-${sizeObj.merchantSizeCode.toUpperCase().replace(/\s+/g, '')}-${cleanSize}`;
+            } else {
+               productCode = `${parentProductCode}-${cleanColor}-${cleanSize}`;
+            }
+
             const newSizeDoc = new ProductFlat({
               ...base,
               ...sharedFields,
               size: sizeObj.size,
               stock: Number(sizeObj.stock),
-              productCode: `${parentProductCode}-${cleanColor}-${cleanSize}`
+              merchantSizeCode: sizeObj.merchantSizeCode,
+              productCode: productCode
             });
             await newSizeDoc.save();
           }
@@ -1416,6 +1465,10 @@ export const editVariant = async (req, res) => {
         return res.status(404).json({ success: false, message: 'Variant not found' });
       }
 
+      if (targetColorVariants[0].source === 'warehouse' || targetColorVariants[0].warehouseId || targetColorVariants[0].addedByOperator) {
+        return res.status(403).json({ success: false, message: 'Products stored in central warehouses cannot be edited directly by merchants.' });
+      }
+
       const colorName = targetColorVariants[0].color.name;
       const restrictedFields = ['_id', 'createdAt', 'updatedAt', 'variants', 'soldBy'];
       restrictedFields.forEach((field) => delete updateData[field]);
@@ -1473,16 +1526,21 @@ export const updateVariantSizeStock = async (req, res) => {
 
     if (process.env.USE_FLAT_PRODUCT_SCHEMA === 'true') {
       const allFlatVariants = await ProductFlat.find({ styleGroupId: productId, merchantId: req.merchantId });
-      const targetColorVariants = allFlatVariants.filter(
-        v => generateColorVariantId(productId, v.color.name) === variantId
+      let targetColorVariants = allFlatVariants.filter(
+        v => generateColorVariantId(productId, v.color?.name) === variantId || v._id?.toString() === variantId
       );
-      if (!targetColorVariants.length) {
-        return res.status(404).json({ success: false, message: 'Variant not found' });
+
+      if (targetColorVariants.length && (targetColorVariants[0].source === 'warehouse' || targetColorVariants[0].warehouseId || targetColorVariants[0].addedByOperator)) {
+        return res.status(403).json({ success: false, message: 'Products stored in central warehouses cannot be edited directly by merchants.' });
       }
 
-      const colorName = targetColorVariants[0].color.name;
+      const colorName = targetColorVariants.length ? targetColorVariants[0].color?.name : null;
+      const query = colorName
+        ? { styleGroupId: productId, "color.name": colorName, size: sizeName, merchantId: req.merchantId }
+        : { styleGroupId: productId, size: sizeName, merchantId: req.merchantId };
+
       const updatedProduct = await ProductFlat.findOneAndUpdate(
-        { styleGroupId: productId, "color.name": colorName, size: sizeName, merchantId: req.merchantId },
+        query,
         { $set: { stock } },
         { new: true }
       );
@@ -1556,6 +1614,10 @@ export const updateMultipleVariantSizes = async (req, res) => {
         return res.status(404).json({ success: false, message: "Product or variant not found" });
       }
 
+      if (targetColorVariants[0].source === 'warehouse' || targetColorVariants[0].warehouseId || targetColorVariants[0].addedByOperator) {
+        return res.status(403).json({ success: false, message: 'Products stored in central warehouses cannot be edited directly by merchants.' });
+      }
+
       const baseVariantDoc = targetColorVariants[0];
       const colorName = baseVariantDoc.color.name;
       const incomingSizeNames = sizes.map((s) => s.size);
@@ -1565,7 +1627,11 @@ export const updateMultipleVariantSizes = async (req, res) => {
 
         const existingSizeDoc = targetColorVariants.find(v => v.size === sizeObj.size);
         if (existingSizeDoc) {
-          await ProductFlat.updateOne({ _id: existingSizeDoc._id }, { $set: { stock: sizeObj.stock } });
+          const updateData = { stock: sizeObj.stock };
+          if (sizeObj.merchantSizeCode !== undefined) {
+             updateData.merchantSizeCode = sizeObj.merchantSizeCode;
+          }
+          await ProductFlat.updateOne({ _id: existingSizeDoc._id }, { $set: updateData });
         } else {
           const base = baseVariantDoc.toObject();
           delete base._id;
@@ -1577,11 +1643,20 @@ export const updateMultipleVariantSizes = async (req, res) => {
           const cleanColor = base.color.name.replace(/\s+/g, '').toUpperCase();
           const cleanSize = sizeObj.size.replace(/\s+/g, '').toUpperCase();
 
+          let productCode;
+          if (sizeObj.merchantSizeCode) {
+             const merchantPrefix = base.productCode.split('-').slice(0, 2).join('-');
+             productCode = `${merchantPrefix}-${sizeObj.merchantSizeCode.toUpperCase().replace(/\s+/g, '')}-${cleanSize}`;
+          } else {
+             productCode = `${parentProductCode}-${cleanColor}-${cleanSize}`;
+          }
+
           const newSizeDoc = new ProductFlat({
             ...base,
             size: sizeObj.size,
             stock: sizeObj.stock,
-            productCode: `${parentProductCode}-${cleanColor}-${cleanSize}`
+            merchantSizeCode: sizeObj.merchantSizeCode,
+            productCode: productCode
           });
           await newSizeDoc.save();
         }
@@ -1614,14 +1689,15 @@ export const updateMultipleVariantSizes = async (req, res) => {
 
     const incomingSizeNames = sizes.map((s) => s.size);
 
-    sizes.forEach(({ size, stock }) => {
+    sizes.forEach(({ size, stock, merchantSizeCode }) => {
       if (!size || stock === undefined) return;
 
       const existingSize = variant.sizes.find((s) => s.size === size);
       if (existingSize) {
         existingSize.stock = stock;
+        if (merchantSizeCode !== undefined) existingSize.merchantSizeCode = merchantSizeCode;
       } else {
-        variant.sizes.push({ size, stock });
+        variant.sizes.push({ size, stock, merchantSizeCode });
       }
     });
 
@@ -1889,8 +1965,9 @@ export const createProductFull = async (req, res) => {
         for (const sizeInfo of variant.sizes) {
           const cleanSize = sizeInfo.size.replace(/\s+/g, '').toUpperCase();
           let productCode;
-          if (variant.productSku) {
-            productCode = `${merchantPrefix}-${variant.productSku.toUpperCase().replace(/\s+/g, '')}-${cleanSize}`;
+          let baseSku = sizeInfo.merchantSizeCode || variant.productSku;
+          if (baseSku) {
+            productCode = `${merchantPrefix}-${baseSku.toUpperCase().replace(/\s+/g, '')}-${cleanSize}`;
           } else {
             productCode = `${baseProductCode}-${cleanColor}-${cleanSize}`;
           }
@@ -1913,6 +1990,7 @@ export const createProductFull = async (req, res) => {
             productCode,
             color: variant.color,
             size: sizeInfo.size,
+            merchantSizeCode: sizeInfo.merchantSizeCode,
             stock: isNaN(Number(sizeInfo.stock)) ? 0 : Number(sizeInfo.stock),
             mrp: isNaN(Number(variant.mrp)) ? 0 : Number(variant.mrp),
             price: isNaN(Number(variant.price)) ? 0 : Number(variant.price),
@@ -1948,6 +2026,7 @@ export const createProductFull = async (req, res) => {
 
         const sizeStockList = variant.sizes.map(s => ({
           size: s.size,
+          merchantSizeCode: s.merchantSizeCode,
           stock: isNaN(Number(s.stock)) ? 0 : Number(s.stock)
         }));
 
@@ -2077,5 +2156,52 @@ export const searchBaseProducts = async (req, res) => {
     res.status(500).json({ success: false, message: "Server error" });
   }
 };
+
+export const updateMatchingProducts = async (req, res) => {
+  try {
+    const { productId } = req.params;
+    const { matchingProducts } = req.body; // Array of styleGroupIds
+    const merchantId = req.merchantId;
+
+    if (!Array.isArray(matchingProducts)) {
+      return res.status(400).json({ message: "matchingProducts must be an array of strings" });
+    }
+    
+    // Check limit
+    if (matchingProducts.length > 3) {
+      return res.status(400).json({ message: "You can only select up to 3 matching products." });
+    }
+
+    if (process.env.USE_FLAT_PRODUCT_SCHEMA === 'true') {
+      const ProductFlat = (await import('../../models/productFlat.model.js')).default;
+      
+      // Verify ownership
+      const product = await ProductFlat.findOne({ styleGroupId: productId, merchantId });
+      if (!product) {
+        // Fallback: check if the productId is actually an _id and it belongs to merchant
+        const productById = await ProductFlat.findOne({ _id: productId, merchantId });
+        if (!productById) {
+          return res.status(404).json({ message: "Product not found or not owned by you" });
+        }
+        await ProductFlat.updateMany(
+          { styleGroupId: productById.styleGroupId, merchantId },
+          { $set: { matchingProducts } }
+        );
+      } else {
+        await ProductFlat.updateMany(
+          { styleGroupId: productId, merchantId },
+          { $set: { matchingProducts } }
+        );
+      }
+      return res.status(200).json({ message: "Matching products updated successfully" });
+    } else {
+      return res.status(400).json({ message: "Only flat schema is supported for this operation." });
+    }
+  } catch (error) {
+    console.error("Error in updateMatchingProducts:", error);
+    res.status(500).json({ message: "Internal server error" });
+  }
+};
+
 
 

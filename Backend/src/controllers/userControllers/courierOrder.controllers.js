@@ -1,7 +1,6 @@
 import CourierOrder from "../../models/courierOrder.model.js";
 import CourierCart from "../../models/courierCart.model.js";
 import Merchant from "../../models/merchant.model.js";
-import Product from "../../models/product.model.js";
 import Address from "../../models/address.model.js";
 import ProductFlat from "../../models/productFlat.model.js";
 import { generateColorVariantId } from "../../utils/variantAdapter.js";
@@ -173,7 +172,8 @@ export const initiateCourierOrder = async (req, res) => {
     }
 
     const finalDeliveryCharge = offerFreeDelivery ? 0 : (deliveryCharge !== undefined ? Number(deliveryCharge) : COURIER_DELIVERY_CHARGE);
-    const totalPayable = Math.round(totalAmount - offerDiscount + finalDeliveryCharge + deliveryTip);
+    const tipAmount = Math.max(0, Number(deliveryTip) || 0);
+    const totalPayable = Math.round(totalAmount - offerDiscount + finalDeliveryCharge + tipAmount);
     const amountInPaise = totalPayable * 100;
 
     // 5. Create real Razorpay order
@@ -206,7 +206,7 @@ export const initiateCourierOrder = async (req, res) => {
       discount: offerDiscount,
       deliveryCharge: COURIER_DELIVERY_CHARGE,
       serviceGST,
-      deliveryTip,
+      deliveryTip: tipAmount,
       totalPayable,
       appliedOffers,
       deliveryLocation: {
@@ -311,27 +311,23 @@ export const initiateCourierCheckout = async (req, res) => {
 
     // 2. Fetch active courier cart items
     let cart;
-    if (process.env.USE_FLAT_PRODUCT_SCHEMA === 'true') {
-      const cartDoc = await CourierCart.findOne({ userId });
-      if (cartDoc) {
-        cart = cartDoc.toObject();
-        for (const item of cart.items) {
-          if (!item.productId) continue;
-          const styleGroupId = item.productId.toString();
-          const siblings = await ProductFlat.find({ styleGroupId, size: item.size, isDeleted: { $ne: true } }).lean();
-          if (siblings.length > 0) {
-            const matched = siblings.find(
-              (v) => generateColorVariantId(styleGroupId, v.color.name) === item.variantId.toString()
-            ) || siblings[0];
+    const cartDoc = await CourierCart.findOne({ userId });
+    if (cartDoc) {
+      cart = cartDoc.toObject();
+      for (const item of cart.items) {
+        if (!item.productId) continue;
+        const styleGroupId = item.productId.toString();
+        const siblings = await ProductFlat.find({ styleGroupId, size: item.size, isDeleted: { $ne: true } }).lean();
+        if (siblings.length > 0) {
+          const matched = siblings.find(
+            (v) => generateColorVariantId(styleGroupId, v.color.name) === item.variantId.toString()
+          ) || siblings[0];
 
-            item.productId = matched;
-          } else {
-            item.productId = null;
-          }
+          item.productId = matched;
+        } else {
+          item.productId = null;
         }
       }
-    } else {
-      cart = await CourierCart.findOne({ userId }).populate("items.productId");
     }
     if (!cart || !cart.items || cart.items.length === 0) {
       return res.status(400).json({ success: false, message: "Courier cart is empty" });
@@ -368,18 +364,9 @@ export const initiateCourierCheckout = async (req, res) => {
         let name = '';
         let pId = null;
 
-        if (process.env.USE_FLAT_PRODUCT_SCHEMA === 'true') {
-          price = product.price || 0;
-          name = product.name;
-          pId = product.styleGroupId || product._id;
-        } else {
-          const variant = product?.variants?.find(
-            (v) => v._id.toString() === item.variantId.toString()
-          );
-          price = variant?.price || 0;
-          name = product.name;
-          pId = product._id;
-        }
+        price = product.price || 0;
+        name = product.name;
+        pId = product.styleGroupId || product._id;
 
         globalSubtotal += price * item.quantity;
         globalMerchantTotals[merchantId] = (globalMerchantTotals[merchantId] || 0) + price * item.quantity;
@@ -446,18 +433,9 @@ export const initiateCourierCheckout = async (req, res) => {
         let name = '';
         let pId = null;
 
-        if (process.env.USE_FLAT_PRODUCT_SCHEMA === 'true') {
-          price = product.price || 0;
-          name = product.name;
-          pId = product.styleGroupId || product._id;
-        } else {
-          const variant = product?.variants?.find(
-            (v) => v._id.toString() === item.variantId.toString()
-          );
-          price = variant?.price || 0;
-          name = product.name;
-          pId = product._id;
-        }
+        price = product.price || 0;
+        name = product.name;
+        pId = product.styleGroupId || product._id;
 
         totalAmount += price * item.quantity;
 
@@ -502,7 +480,7 @@ export const initiateCourierCheckout = async (req, res) => {
       // First merchant order gets the tip and the delivery fee (if not free)
       const isFirst = index === 0;
       const merchantDeliveryCharge = offerFreeDelivery ? 0 : (isFirst ? 40 : 0);
-      const merchantTip = isFirst ? Number(deliveryTip) : 0;
+      const merchantTip = isFirst ? Math.max(0, Number(deliveryTip) || 0) : 0;
       const serviceGST = 0;
 
       const totalPayable = Math.round(totalAmount - offerDiscount + merchantDeliveryCharge + merchantTip);
@@ -703,21 +681,13 @@ export const verifyCourierOrderPayment = async (req, res) => {
 
         // === STEP 3: Deduct Stock ===
         for (const item of order.items) {
-          if (process.env.USE_FLAT_PRODUCT_SCHEMA === 'true') {
-            const docs = await ProductFlat.find({ styleGroupId: item.productId, size: item.size });
-            const targetDoc = docs.find(d => generateColorVariantId(item.productId.toString(), d.color.name) === item.variantId.toString());
-            if (targetDoc) {
-              await ProductFlat.updateOne(
-                { _id: targetDoc._id },
-                { $inc: { stock: -item.quantity } },
-                { session }
-              );
-            }
-          } else {
-            await Product.updateOne(
-              { _id: item.productId, "variants._id": item.variantId },
-              { $inc: { "variants.$[variant].sizes.$[size].stock": -item.quantity } },
-              { arrayFilters: [{ "variant._id": item.variantId }, { "size.size": item.size }], session }
+          const docs = await ProductFlat.find({ styleGroupId: item.productId, size: item.size });
+          const targetDoc = docs.find(d => generateColorVariantId(item.productId.toString(), d.color.name) === item.variantId.toString());
+          if (targetDoc) {
+            await ProductFlat.updateOne(
+              { _id: targetDoc._id },
+              { $inc: { stock: -item.quantity } },
+              { session }
             );
           }
         }

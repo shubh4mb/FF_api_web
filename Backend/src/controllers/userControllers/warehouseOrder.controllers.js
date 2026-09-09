@@ -1,5 +1,5 @@
 import WarehouseOrder from '../../models/warehouseOrder.model.js';
-import Product from '../../models/product.model.js';
+import ProductFlat from '../../models/productFlat.model.js';
 import Warehouse from '../../models/warehouse.model.js';
 import Cart from '../../models/cart.model.js';
 import CourierCart from '../../models/courierCart.model.js';
@@ -10,8 +10,11 @@ import { isWithinTBRadius } from '../../helperFns/geoHelpers.js';
 import razorpay from '../../config/RazorPay.js';
 import crypto from 'crypto';
 import mongoose from 'mongoose';
+import Merchant from '../../models/merchant.model.js';
 import { asyncHandler } from '../../utils/asyncHandler.js';
 import { ApiError } from '../../utils/ApiError.js';
+import { getIO } from '../../config/socket.js';
+import { notifyWarehouse } from '../../sockets/warehouseOrder.socket.js';
 
 /**
  * Helper: resolve the effective commission rate for a warehouse order.
@@ -100,20 +103,18 @@ export const createWarehouseTBOrder = asyncHandler(async (req, res) => {
   const orderItems = [];
 
   for (const cartItem of warehouseItems) {
-    const whProduct = await Product.findOne({
-      _id: cartItem.warehouseProductId,
-      isActive: true,
-      isVerified: true,
+    const whProduct = await ProductFlat.findOne({
+      _id: cartItem.variantId,
+      $or: [
+        { source: 'warehouse' },
+        { warehouseId: { $exists: true, $ne: null } }
+      ],
+      isActive: { $ne: false },
+      isDeleted: { $ne: true },
     });
     if (!whProduct) continue;
 
-    const variant = whProduct.variants.id(cartItem.variantId);
-    if (!variant) continue;
-
-    const sizeObj = variant.sizes.find((s) => s.size === cartItem.size);
-    if (!sizeObj) continue;
-
-    const available = sizeObj.stock - (sizeObj.reservedStock || 0);
+    const available = whProduct.stock - (whProduct.reservedStock || 0);
     if (available < cartItem.quantity) {
       throw new ApiError(
         400,
@@ -122,15 +123,15 @@ export const createWarehouseTBOrder = asyncHandler(async (req, res) => {
     }
 
     for (let i = 0; i < cartItem.quantity; i++) {
-      totalAmount += variant.price;
+      totalAmount += whProduct.price;
       orderItems.push({
-        warehouseProductId: whProduct._id,
+        warehouseProductId: whProduct.styleGroupId || whProduct._id,
         variantId: cartItem.variantId,
         name: whProduct.name,
         quantity: 1,
-        price: variant.price,
+        price: whProduct.price,
         size: cartItem.size,
-        image: cartItem.image?.url || '',
+        image: cartItem.image?.url || (typeof cartItem.image === 'string' ? cartItem.image : '') || whProduct.images?.[0]?.url || '',
         tryStatus: whProduct.isTriable ? 'pending' : 'not-triable',
       });
     }
@@ -139,41 +140,34 @@ export const createWarehouseTBOrder = asyncHandler(async (req, res) => {
   if (!orderItems.length) throw new ApiError(400, 'No valid items to order');
 
   // ── 6. Commission calculation ──
-  // Use the first warehouse product's commission rate as representative
-  // (all items from same warehouse, rates should be consistent or averaged)
-  const firstProduct = await Product.findById(warehouseItems[0].warehouseProductId);
+  const firstProduct = await ProductFlat.findById(warehouseItems[0].variantId);
   const commissionRate = resolveCommissionRate(firstProduct, warehouse, config);
   const commissionAmount = Math.round((totalAmount * commissionRate) / 100);
   const merchantPayout = totalAmount - commissionAmount;
 
+  const sourceMerchantId = firstProduct?.merchantId || firstProduct?.sourceMerchantId || warehouse._id;
+  const sourceMerchant = await Merchant.findById(sourceMerchantId).lean();
+
   // ── 7. Payment ──
   const serviceGST = 0;
-  const upfrontPayable = Math.round(deliveryCharge + returnCharge + deliveryTip + serviceGST);
-  const finalPayable = Math.round(totalAmount + upfrontPayable);
+  const tipAmount = Math.max(0, Number(deliveryTip) || 0);
+  // In Try & Buy, upfront delivery fee is ₹0 (all settled post-trial)
+  const upfrontPayable = 0;
+  const finalPayable = Math.round(totalAmount + deliveryCharge + returnCharge + tipAmount + serviceGST);
 
-  let razorpayOrderId = `free_${Date.now()}`;
-  let paymentStatus = 'delivery_fee_paid';
-
-  if (upfrontPayable > 0 && paymentMethod === 'online') {
-    const razorpayOrder = await razorpay.orders.create({
-      amount: upfrontPayable * 100,
-      currency: 'INR',
-      receipt: `wh_receipt_${Date.now()}`,
-      payment_capture: 1,
-    });
-    razorpayOrderId = razorpayOrder.id;
-    paymentStatus = 'pending';
-  }
+  const razorpayOrderId = `free_${Date.now()}`;
+  const paymentStatus = 'delivery_fee_paid';
+  const orderStatus = 'placed';
 
   // ── 8. Create WarehouseOrder ──
   const pendingOrder = new WarehouseOrder({
     userId,
     warehouseId: warehouse._id,
     warehouseDetails: { name: warehouse.name, code: warehouse.code },
-    sourceMerchantId: firstProduct.sourceMerchantId,
+    sourceMerchantId,
     merchantDetails: {
-      name: null, // populated below
-      phone: null,
+      name: sourceMerchant?.shopName || 'FlashFits Hub',
+      phone: sourceMerchant?.phoneNumber || null,
     },
     fulfillmentType: 'try_and_buy',
     items: orderItems,
@@ -183,7 +177,7 @@ export const createWarehouseTBOrder = asyncHandler(async (req, res) => {
     merchantPayout,
     finalBilling: {
       baseAmount: totalAmount,
-      deliveryTip,
+      deliveryTip: tipAmount,
       serviceGST,
       totalPayable: finalPayable,
     },
@@ -212,7 +206,7 @@ export const createWarehouseTBOrder = asyncHandler(async (req, res) => {
     pickupLocation: { coordinates: warehouseCoords },
     razorpayOrderId,
     paymentStatus,
-    orderStatus: paymentStatus === 'delivery_fee_paid' ? 'placed' : 'pending',
+    orderStatus,
     paymentMethod,
   });
 
@@ -220,31 +214,57 @@ export const createWarehouseTBOrder = asyncHandler(async (req, res) => {
 
   // ── 9. Reserve stock ──
   for (const cartItem of warehouseItems) {
-    await Product.updateOne(
+    await ProductFlat.updateOne(
       {
-        _id: cartItem.warehouseProductId,
-        'variants._id': cartItem.variantId,
-        'variants.sizes.size': cartItem.size,
+        _id: cartItem.variantId,
       },
       {
-        $inc: { 'variants.$[v].sizes.$[s].reservedStock': cartItem.quantity },
-      },
-      {
-        arrayFilters: [{ 'v._id': cartItem.variantId }, { 's.size': cartItem.size }],
+        $inc: { reservedStock: cartItem.quantity },
       }
     );
+  }
+
+  // ── 10. Clear ordered warehouse items from cart ──
+  await Cart.updateOne(
+    { userId },
+    {
+      $pull: {
+        items: {
+          $or: [
+            { source: 'warehouse', warehouseId: warehouse._id },
+            { _id: { $in: warehouseItems.map(i => i._id).filter(Boolean) } }
+          ]
+        }
+      }
+    }
+  );
+
+  // ── Notify Warehouse via socket ──
+  try {
+    const io = getIO();
+    notifyWarehouse(io, warehouse._id, pendingOrder.toObject ? pendingOrder.toObject() : pendingOrder);
+  } catch (err) {
+    console.error("Failed to notify warehouse via socket:", err);
   }
 
   return res.status(201).json({
     success: true,
     orderId: pendingOrder._id,
     razorpayOrderId,
+    amount: 0,
+    key_id: process.env.RAZORPAY_KEY_ID,
     totalAmount,
-    upfrontPayable,
+    totalDeliveryFee: 0,
+    upfrontPayable: 0,
     finalPayable,
     deliveryCharge,
     returnCharge,
+    deliveryTip: Number(deliveryTip || 0),
     commissionRate,
+    contact: deliveryAddress.phone,
+    name: deliveryAddress.name,
+    email: req.user.email || "customer@example.com",
+    isFreeOrder: true,
   });
 });
 
@@ -288,43 +308,44 @@ export const createWarehouseCourierOrder = asyncHandler(async (req, res) => {
   const orderItems = [];
 
   for (const cartItem of warehouseItems) {
-    const whProduct = await Product.findOne({
-      _id: cartItem.warehouseProductId,
-      isActive: true,
-      isVerified: true,
+    const whProduct = await ProductFlat.findOne({
+      _id: cartItem.variantId,
+      $or: [
+        { source: 'warehouse' },
+        { warehouseId: { $exists: true, $ne: null } }
+      ],
+      isActive: { $ne: false },
+      isDeleted: { $ne: true },
     });
     if (!whProduct) continue;
 
-    const variant = whProduct.variants.id(cartItem.variantId);
-    if (!variant) continue;
-
-    const sizeObj = variant.sizes.find((s) => s.size === cartItem.size);
-    if (!sizeObj) continue;
-
-    const available = sizeObj.stock - (sizeObj.reservedStock || 0);
+    const available = whProduct.stock - (whProduct.reservedStock || 0);
     if (available < cartItem.quantity) {
       throw new ApiError(400, `Insufficient stock for ${whProduct.name} (${cartItem.size}). Available: ${available}`);
     }
 
-    totalAmount += variant.price * cartItem.quantity;
+    totalAmount += whProduct.price * cartItem.quantity;
     orderItems.push({
-      warehouseProductId: whProduct._id,
+      warehouseProductId: whProduct.styleGroupId || whProduct._id,
       variantId: cartItem.variantId,
       name: whProduct.name,
       quantity: cartItem.quantity,
-      price: variant.price,
+      price: whProduct.price,
       size: cartItem.size,
-      image: cartItem.image?.url || '',
+      image: cartItem.image?.url || (typeof cartItem.image === 'string' ? cartItem.image : '') || whProduct.images?.[0]?.url || '',
       tryStatus: 'not-triable',
     });
   }
 
   if (!orderItems.length) throw new ApiError(400, 'No valid items');
 
-  const firstProduct = await Product.findById(warehouseItems[0].warehouseProductId);
+  const firstProduct = await ProductFlat.findById(warehouseItems[0].variantId);
   const commissionRate = resolveCommissionRate(firstProduct, warehouse, config);
   const commissionAmount = Math.round((totalAmount * commissionRate) / 100);
   const merchantPayout = totalAmount - commissionAmount;
+
+  const sourceMerchantId = firstProduct?.merchantId || firstProduct?.sourceMerchantId || warehouse._id;
+  const sourceMerchant = await Merchant.findById(sourceMerchantId).lean();
 
   const totalPayable = totalAmount + deliveryCharge;
 
@@ -347,7 +368,11 @@ export const createWarehouseCourierOrder = asyncHandler(async (req, res) => {
     userId,
     warehouseId: warehouse._id,
     warehouseDetails: { name: warehouse.name, code: warehouse.code },
-    sourceMerchantId: firstProduct.sourceMerchantId,
+    sourceMerchantId,
+    merchantDetails: {
+      name: sourceMerchant?.shopName || 'FlashFits Hub',
+      phone: sourceMerchant?.phoneNumber || null,
+    },
     fulfillmentType: 'courier',
     items: orderItems,
     totalAmount,
@@ -380,15 +405,36 @@ export const createWarehouseCourierOrder = asyncHandler(async (req, res) => {
 
   // Reserve stock
   for (const cartItem of warehouseItems) {
-    await Product.updateOne(
-      {
-        _id: cartItem.warehouseProductId,
-        'variants._id': cartItem.variantId,
-        'variants.sizes.size': cartItem.size,
-      },
-      { $inc: { 'variants.$[v].sizes.$[s].reservedStock': cartItem.quantity } },
-      { arrayFilters: [{ 'v._id': cartItem.variantId }, { 's.size': cartItem.size }] }
+    await ProductFlat.updateOne(
+      { _id: cartItem.variantId },
+      { $inc: { reservedStock: cartItem.quantity } }
     );
+  }
+
+  // Clear from courier cart if placed (e.g. COD)
+  if (paymentMethod === 'cod') {
+    await CourierCart.updateOne(
+      { userId },
+      {
+        $pull: {
+          items: {
+            $or: [
+              { source: 'warehouse', warehouseId: warehouse._id },
+              { _id: { $in: warehouseItems.map(i => i._id).filter(Boolean) } }
+            ]
+          }
+        }
+      }
+    );
+  }
+
+  if (order.orderStatus === 'placed') {
+    try {
+      const io = getIO();
+      notifyWarehouse(io, warehouse._id, order.toObject ? order.toObject() : order);
+    } catch (err) {
+      console.error("Failed to notify warehouse via socket:", err);
+    }
   }
 
   return res.status(201).json({
@@ -428,6 +474,13 @@ export const verifyWarehousePayment = asyncHandler(async (req, res) => {
   order.paymentStatus = order.fulfillmentType === 'courier' ? 'paid' : 'delivery_fee_paid';
   order.orderStatus = 'placed';
   await order.save();
+
+  try {
+    const io = getIO();
+    notifyWarehouse(io, order.warehouseId, order.toObject ? order.toObject() : order);
+  } catch (err) {
+    console.error("Failed to notify warehouse via socket:", err);
+  }
 
   return res.status(200).json({ success: true, orderId: order._id, orderStatus: order.orderStatus });
 });

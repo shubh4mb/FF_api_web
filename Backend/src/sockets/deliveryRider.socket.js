@@ -6,65 +6,173 @@ import { inferZone } from "../utils/zoneInfer.js";
 import { heartbeatSession } from "../helperFns/onlineSessionHelper.js";
 import PendingOrder from "../models/pendingOrders.model.js";
 import Order from "../models/order.model.js";
+import WarehouseOrder from "../models/warehouseOrder.model.js";
 import { clearRiderTimeout } from "../helperFns/riderTimeoutHelper.js";
 import { matchQueuedOrders } from "../helperFns/orderFns.js";
 export const registerDeliveryRiderSockets = (io, socket) => {
+  // Pre-join rooms immediately upon socket connection if riderId was sent in handshake query
+  const queryRiderId = socket.handshake?.query?.riderId;
+  if (queryRiderId) {
+    const qStr = queryRiderId.toString();
+    socket.join(`riderSocket:${qStr}`);
+    socket.join(`rider:${qStr}`);
+    socket.join(qStr);
+    socket.data.riderId = qStr;
+    console.log(`🔌 Delivery rider socket ${socket.id} pre-joined rooms for ${qStr}`);
+  }
+
+  // ── Rider Heartbeat Ping ──
+  socket.on("ping", async (data) => {
+    const riderId = data?.riderId || socket.data?.riderId || socket.handshake?.query?.riderId;
+    if (riderId) {
+      try {
+        const riderIdStr = riderId.toString();
+        const meta = await getRiderMeta(riderIdStr);
+        const zoneId = meta?.zoneId || 'global';
+        await setHeartbeat(riderIdStr, zoneId, 120);
+        await heartbeatSession(riderIdStr);
+        if (meta && Object.keys(meta).length > 0) {
+          await setRiderMeta(riderIdStr, zoneId, {
+            ...meta,
+            lastSeenAt: Date.now(),
+            isOnline: "true",
+          });
+        }
+      } catch (err) {
+        console.error("Error handling rider ping:", err.message);
+      }
+    }
+    socket.emit("pong");
+  });
 
   socket.on("registerRider", async ({ riderId }) => {
+    const targetId = riderId || socket.handshake?.query?.riderId || socket.data?.riderId;
+    if (!targetId) {
+      return console.warn(`registerRider called with no riderId on socket ${socket.id}`);
+    }
+    const riderIdStr = targetId.toString();
+
+    // Guard: if already registered on THIS exact socket connection, just refresh heartbeat and do not re-emit
+    if (socket.data?.riderId === riderIdStr && socket.data?.isRegistered) {
+      await heartbeatSession(riderIdStr);
+      return;
+    }
+    socket.data.isRegistered = true;
+
     // map socket -> rider room and store socketId in meta
-    const rider = await DeliveryRider.findByIdAndUpdate(riderId, { isAvailable: true });
+    const rider = await DeliveryRider.findByIdAndUpdate(riderIdStr, { isAvailable: true });
     if (!rider) {
       return socket.emit("error", "Rider not found");
     }
-    socket.join(`riderSocket:${riderId}`);    // join a personal socket room
-    socket.join(`rider:${riderId}`);
-    socket.data.riderId = riderId; // Save riderId for O(1) lookup on disconnect
-    // await geoAdd("riders:geo", lng, lat, riderId);       // alternative room for fallback messages
+    socket.join(`riderSocket:${riderIdStr}`);    // join a personal socket room
+    socket.join(`rider:${riderIdStr}`);
+    socket.join(riderIdStr);
+    socket.data.riderId = riderIdStr; // Save riderId for O(1) lookup on disconnect
 
-    const currentMeta = await getRiderMeta(riderId);
-    const keepOrder = currentMeta?.assignedOrderId || "";
+    const currentMeta = await getRiderMeta(riderIdStr);
+    const keepOrder = currentMeta?.assignedOrderId || rider?.currentOrderId?.toString() || "";
     const isBusy = currentMeta?.isBusy || !!keepOrder;
     const zoneId = currentMeta?.zoneId || 'global';
 
-    await setRiderMeta(riderId, zoneId, {
+    await setRiderMeta(riderIdStr, zoneId, {
       socketId: socket.id,
       isOnline: "true",
       isBusy: isBusy.toString(),
       assignedOrderId: keepOrder
     });
-    await setHeartbeat(riderId, zoneId, 120);
-    await heartbeatSession(riderId);
-    console.log(`Rider ${riderId} registered on socket ${socket.id}. Busy: ${isBusy}`);
+    await setHeartbeat(riderIdStr, zoneId, 120);
+    await heartbeatSession(riderIdStr);
+    console.log(`Rider ${riderIdStr} registered on socket ${socket.id}. Busy: ${isBusy}`);
+
+    // If rider is online and not busy, ensure they are in Geo and trigger matcher
+    if (!isBusy && rider.location?.coordinates?.length === 2) {
+      const [lng, lat] = rider.location.coordinates;
+      if (lng && lat) {
+        await geoAdd(zoneId, lng, lat, riderIdStr);
+        io.emit(`riderAvailable:${zoneId}`, { zoneId, riderId: riderIdStr });
+      }
+    }
 
     // If rider has an active order, emit it again so their frontend can resume
     if (keepOrder) {
       try {
-        const fullOrder = await Order.findById(keepOrder).populate('merchantId', 'shopName address').lean();
+        let fullOrder = await Order.findById(keepOrder).populate('merchantId', 'shopName address').lean();
+        if (!fullOrder) {
+          fullOrder = await WarehouseOrder.findById(keepOrder)
+            .populate('warehouseId', 'name address')
+            .populate('sourceMerchantId', 'shopName')
+            .lean();
+          if (fullOrder) {
+            fullOrder.merchantId = {
+              _id: fullOrder.warehouseId?._id || fullOrder.warehouseId,
+              shopName: fullOrder.warehouseDetails?.name || fullOrder.warehouseId?.name || "Warehouse Hub",
+              address: fullOrder.warehouseId?.address || fullOrder.pickupLocation,
+            };
+          }
+        }
 
-        if (fullOrder && fullOrder.deliveryRiderId?.toString() === riderId && !["completed", "cancelled"].includes(fullOrder.deliveryRiderStatus)) {
-          const riderPayload = {
-            _id: fullOrder._id,
-            orderId: fullOrder._id.toString(),
-            orderStatus: fullOrder.orderStatus,
-            deliveryRiderStatus: fullOrder.deliveryRiderStatus,
-            pickupLocation: fullOrder.pickupLocation,
-            deliveryLocation: fullOrder.deliveryLocation,
-            address: fullOrder.deliveryLocation?.addressLine1 || fullOrder.deliveryLocation?.street || "No address",
-            merchantId: fullOrder.merchantId,
-            items: fullOrder.items,
-            deliveryCharge: fullOrder.finalBilling?.deliveryCharge || 0,
-            totalAmount: fullOrder.finalBilling?.totalPayable || fullOrder.totalAmount,
-            deliveryAmount: fullOrder.deliveryCharge || 100,
-            customerLocation: fullOrder.deliveryLocation?.coordinates
-              ? {
-                lat: fullOrder.deliveryLocation.coordinates[1],
-                lng: fullOrder.deliveryLocation.coordinates[0]
-              }
-              : null,
-            cutomerAddress: fullOrder.deliveryLocation?.addressLine1 || "No address",
-          };
-          socket.emit('orderAssigned', { orderId: keepOrder, orderPayload: riderPayload });
-          console.log(`Re-sent active order ${keepOrder} to reconnecting rider ${riderId}`);
+        const isCompletedOrCancelled =
+          !fullOrder ||
+          ["completed", "cancelled"].includes(fullOrder.deliveryRiderStatus) ||
+          ["completed", "cancelled"].includes(fullOrder.orderStatus);
+
+        if (isCompletedOrCancelled) {
+          // Clear completed/cancelled order from redis meta
+          await setRiderMeta(riderIdStr, zoneId, {
+            assignedOrderId: "",
+            isBusy: "false",
+          });
+        } else {
+          const isAssignedOrOffered = fullOrder.deliveryRiderId?.toString() === riderIdStr || keepOrder === fullOrder._id.toString();
+          if (isAssignedOrOffered) {
+            const baseDeliveryCharge = fullOrder.originalDeliveryCharge ?? fullOrder.finalBilling?.deliveryCharge ?? fullOrder.deliveryCharge ?? 0;
+            const returnCharge = fullOrder.originalReturnCharge ?? fullOrder.returnCharge ?? 0;
+            const deliveryTip = fullOrder.finalBilling?.deliveryTip ?? fullOrder.deliveryTip ?? 0;
+            const totalRiderEarnings = baseDeliveryCharge + returnCharge + deliveryTip;
+
+            const riderPayload = {
+              _id: fullOrder._id,
+              orderId: fullOrder._id.toString(),
+              orderStatus: fullOrder.orderStatus,
+              deliveryRiderStatus: fullOrder.deliveryRiderStatus,
+              pickupLocation: fullOrder.pickupLocation,
+              deliveryLocation: fullOrder.deliveryLocation,
+              address: fullOrder.deliveryLocation?.addressLine1 || fullOrder.deliveryLocation?.street || "No address",
+              merchantId: fullOrder.merchantId,
+              items: fullOrder.items,
+              deliveryCharge: baseDeliveryCharge,
+              originalDeliveryCharge: fullOrder.originalDeliveryCharge || baseDeliveryCharge,
+              returnCharge: returnCharge,
+              originalReturnCharge: fullOrder.originalReturnCharge || returnCharge,
+              tip: deliveryTip,
+              deliveryTip: deliveryTip,
+              finalBilling: fullOrder.finalBilling,
+              totalAmount: fullOrder.finalBilling?.totalPayable || fullOrder.totalAmount,
+              deliveryAmount: totalRiderEarnings > 0 ? totalRiderEarnings : (fullOrder.deliveryCharge || 100),
+              customerLocation: fullOrder.deliveryLocation?.coordinates
+                ? {
+                  lat: fullOrder.deliveryLocation.coordinates[1],
+                  lng: fullOrder.deliveryLocation.coordinates[0]
+                }
+                : null,
+              cutomerAddress: fullOrder.deliveryLocation?.addressLine1 || "No address",
+            };
+
+            const isAlreadyAccepted =
+              (fullOrder.deliveryRiderId?.toString() === riderIdStr || !!fullOrder.deliveryRiderId) &&
+              !["queued", "unassigned"].includes(fullOrder.deliveryRiderStatus);
+
+            if (isAlreadyAccepted) {
+              // Order already accepted and in-progress: emit orderUpdate to resume state
+              // NEVER emit orderAssigned here as that triggers the new order siren alert and resets to step 0
+              socket.emit('orderUpdate', riderPayload);
+              console.log(`Re-sent active order ${keepOrder} (status: ${fullOrder.deliveryRiderStatus}) as orderUpdate to reconnecting rider ${riderIdStr}`);
+            } else {
+              // Order is still an unaccepted offer (in 2-minute decision window)
+              socket.emit('orderAssigned', { orderId: keepOrder, orderPayload: riderPayload });
+              console.log(`Re-sent pending order offer ${keepOrder} to reconnecting rider ${riderIdStr}`);
+            }
+          }
         }
       } catch (err) {
         console.error("Error resuming order for rider:", err);
@@ -85,33 +193,50 @@ export const registerDeliveryRiderSockets = (io, socket) => {
     // THIS IS THE MAGIC LINE — GET ZONE FROM YOUR DB
     const zoneId = await inferZone(lat, lng);
 
+    let assignedOrderId = orderIdIfAny || "";
+    if (!assignedOrderId && currentMeta?.assignedOrderId) {
+      try {
+        let checkOrder = await Order.findById(currentMeta.assignedOrderId).select("orderStatus deliveryRiderStatus");
+        if (!checkOrder) {
+          checkOrder = await WarehouseOrder.findById(currentMeta.assignedOrderId).select("orderStatus deliveryRiderStatus");
+        }
+        if (checkOrder && !["completed", "cancelled"].includes(checkOrder.orderStatus) && !["completed", "cancelled"].includes(checkOrder.deliveryRiderStatus)) {
+          assignedOrderId = currentMeta.assignedOrderId;
+        } else {
+          assignedOrderId = "";
+        }
+      } catch (err) {
+        assignedOrderId = "";
+      }
+    }
+
     const newMeta = {
       isOnline: true,
-      isBusy: currentMeta?.isBusy === true || false,
+      isBusy: !!assignedOrderId,
       socketId: socket.id,
       lastSeenAt: Date.now(),
       zoneId,  // ← Save zone in rider's meta
+      assignedOrderId,
     };
-    if (orderIdIfAny) newMeta.assignedOrderId = orderIdIfAny;
 
     // Save meta with zone
     await setRiderMeta(riderId, zoneId, newMeta);
 
-    // Put rider in the correct zoned Redis geo set
-    if (newMeta.isOnline && !newMeta.assignedOrderId) {
+    // Put rider in the correct zoned Redis geo set only if online and NOT busy
+    if (newMeta.isOnline && !newMeta.isBusy && !newMeta.assignedOrderId) {
       await geoAdd(zoneId, lng, lat, riderId);
     }
-
 
     // Heartbeat with zone
     await setHeartbeat(riderId, zoneId, 120);
     await heartbeatSession(riderId);
 
-    // THIS TRIGGERS THE QUEUE MATCHER
-    io.emit(`riderAvailable:${zoneId}`, { zoneId, riderId });
+    // ONLY TRIGGER THE QUEUE MATCHER IF RIDER IS TRULY AVAILABLE (not busy, no assigned order)
+    if (newMeta.isOnline && !newMeta.isBusy && !newMeta.assignedOrderId) {
+      io.emit(`riderAvailable:${zoneId}`, { zoneId, riderId });
+    }
 
     // Send live location to customer if rider has an order
-    const assignedOrderId = newMeta.assignedOrderId || orderIdIfAny;
     if (assignedOrderId) {
       io.to(assignedOrderId).emit("riderLocationUpdate", {
         riderId,
@@ -224,7 +349,8 @@ export const registerDeliveryRiderSockets = (io, socket) => {
 
           // 5. Emit update to order room (customer gets notified)
           io.to(keepOrder.toString()).emit("orderUpdate", {
-            orderId: keepOrder,
+            _id: keepOrder.toString(),
+            orderId: keepOrder.toString(),
             orderStatus: order.orderStatus,
             deliveryRiderStatus: "queued",
             message: "Rider unavailable, finding new rider...",

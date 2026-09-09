@@ -34,12 +34,58 @@ export const updateAppConfig = async (req, res) => {
         if (tryAndBuyRadius !== undefined) config.tryAndBuyRadius = tryAndBuyRadius;
         if (merchantRegistrationFee !== undefined) config.merchantRegistrationFee = merchantRegistrationFee;
 
+        if (req.body.customerAppVersion) {
+            config.customerAppVersion = {
+                ...(config.customerAppVersion?.toObject?.() || config.customerAppVersion || {}),
+                ...req.body.customerAppVersion
+            };
+        }
+        if (req.body.deliveryAppVersion) {
+            config.deliveryAppVersion = {
+                ...(config.deliveryAppVersion?.toObject?.() || config.deliveryAppVersion || {}),
+                ...req.body.deliveryAppVersion
+            };
+        }
+        if (req.body.merchantAppVersion) {
+            config.merchantAppVersion = {
+                ...(config.merchantAppVersion?.toObject?.() || config.merchantAppVersion || {}),
+                ...req.body.merchantAppVersion
+            };
+        }
+
         await config.save();
 
         return res.status(200).json(new ApiResponse(200, { config }, "Config updated successfully"));
     } catch (error) {
         console.error("Update AppConfig Error:", error);
         return res.status(500).json({ message: "Failed to update config" });
+    }
+};
+
+/**
+ * GET /api/user/app-version?app=customer
+ * Public endpoint to fetch app version update policy for a given app.
+ */
+export const getAppVersionPolicy = async (req, res) => {
+    try {
+        const { app = "customer" } = req.query;
+        const config = await AppConfig.getConfig();
+
+        let versionPolicy;
+        if (app === "delivery") {
+            versionPolicy = config.deliveryAppVersion;
+        } else if (app === "merchant") {
+            versionPolicy = config.merchantAppVersion;
+        } else {
+            versionPolicy = config.customerAppVersion;
+        }
+
+        return res.status(200).json(
+            new ApiResponse(200, versionPolicy, "App version policy fetched successfully")
+        );
+    } catch (error) {
+        console.error("Get AppVersionPolicy Error:", error);
+        return res.status(500).json({ message: "Failed to fetch app version policy" });
     }
 };
 

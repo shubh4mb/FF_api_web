@@ -7,6 +7,7 @@ import jwt from 'jsonwebtoken';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { ApiError } from '../utils/ApiError.js';
 import { ApiResponse } from '../utils/ApiResponse.js';
+import { issueReferralCoupon } from '../helperFns/referralHelper.js';
 
 // ── Twilio client (lazy init to fail gracefully if creds missing) ────
 let twilioClient = null;
@@ -117,7 +118,7 @@ const sendOTP = asyncHandler(async (req, res) => {
 //  VERIFY OTP
 // ══════════════════════════════════════════════════════════════════════
 const verifyOTP = asyncHandler(async (req, res) => {
-  const { phone, otp } = req.body;
+  const { phone, otp, referralCode } = req.body;
   const cleanPhone = validatePhone(phone);
 
   if (!otp || typeof otp !== 'string') {
@@ -164,13 +165,29 @@ const verifyOTP = asyncHandler(async (req, res) => {
   // ── OTP is valid — find or create user ────────────────────────────
   let user = await User.findOne({ phoneNumber: cleanPhone });
   let isNewUser = false;
+  let referrerId = null;
 
   if (!user) {
+    // Check if referral code is valid
+    if (referralCode) {
+      const referrer = await User.findOne({ referralCode: referralCode.toUpperCase() });
+      if (referrer) {
+        referrerId = referrer._id;
+      }
+    }
+
     user = await User.create({
       phoneNumber: cleanPhone,
       isVerified: true,
+      referredBy: referrerId,
     });
     isNewUser = true;
+
+    // Issue welcome coupon to new user if they used a referral code
+    if (referrerId) {
+      // Background issue coupon
+      issueReferralCoupon(user._id, false).catch(err => console.error(err));
+    }
   } else {
     // Update existing user
     user.isVerified = true;

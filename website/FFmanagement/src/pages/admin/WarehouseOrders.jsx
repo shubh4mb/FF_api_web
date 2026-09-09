@@ -4,10 +4,13 @@ import {
   getWarehouseOrderStats,
   settleWarehouseOrder,
   updateWarehouseOrderStatus,
+  acceptWarehouseOrderAdmin,
+  rejectWarehouseOrderAdmin,
+  packWarehouseOrderAdmin,
   getAllWarehouses
 } from '@/api/warehouse';
 import { toast } from 'react-hot-toast';
-import { ShoppingCart, DollarSign, Percent, ShieldCheck, Clock, User, Phone, MapPin, Truck, RefreshCw } from 'lucide-react';
+import { ShoppingCart, DollarSign, Percent, ShieldCheck, Clock, User, Phone, MapPin, Truck, RefreshCw, Key, CheckCircle, XCircle, PackageCheck } from 'lucide-react';
 
 const WarehouseOrders = () => {
   const [warehouses, setWarehouses] = useState([]);
@@ -70,6 +73,50 @@ const WarehouseOrders = () => {
     setSelectedWarehouseId(whId);
     fetchOrdersAndStats(whId);
     setSelectedOrder(null);
+  };
+
+  const handleAdminAccept = async (orderId) => {
+    try {
+      const res = await acceptWarehouseOrderAdmin(orderId);
+      toast.success(res.message || 'Order accepted and queued for rider');
+      fetchOrdersAndStats(selectedWarehouseId);
+      if (selectedOrder?._id === orderId) {
+        setSelectedOrder(res.order || { ...selectedOrder, orderStatus: 'accepted', deliveryRiderStatus: 'queued' });
+        setStatusUpdate('accepted');
+      }
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Failed to accept order');
+    }
+  };
+
+  const handleAdminReject = async (orderId) => {
+    const reason = window.prompt("Reason for rejection:");
+    if (reason === null) return;
+    try {
+      const res = await rejectWarehouseOrderAdmin(orderId, reason);
+      toast.success(res.message || 'Order rejected and refunded');
+      fetchOrdersAndStats(selectedWarehouseId);
+      if (selectedOrder?._id === orderId) {
+        setSelectedOrder(res.order || { ...selectedOrder, orderStatus: 'rejected' });
+        setStatusUpdate('rejected');
+      }
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Failed to reject order');
+    }
+  };
+
+  const handleAdminPack = async (orderId) => {
+    try {
+      const res = await packWarehouseOrderAdmin(orderId);
+      toast.success(`Order packed! Pickup OTP: ${res.otp}`);
+      fetchOrdersAndStats(selectedWarehouseId);
+      if (selectedOrder?._id === orderId) {
+        setSelectedOrder(res.order || { ...selectedOrder, orderStatus: 'packed', otp: res.otp });
+        setStatusUpdate('packed');
+      }
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Failed to pack order');
+    }
   };
 
   const handleSettle = async (orderId) => {
@@ -276,6 +323,54 @@ const WarehouseOrders = () => {
                 )}
               </div>
 
+              {/* Quick Lifecycle Actions */}
+              {selectedOrder.orderStatus === 'placed' && (
+                <div className="space-y-1.5">
+                  <div className="text-xs font-semibold text-slate-500">Quick Actions</div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => handleAdminAccept(selectedOrder._id)}
+                      className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white text-xs px-3 py-2 rounded-xl font-bold transition-all shadow-sm flex items-center justify-center gap-1"
+                    >
+                      <CheckCircle size={14} /> Accept & Queue Rider
+                    </button>
+                    <button
+                      onClick={() => handleAdminReject(selectedOrder._id)}
+                      className="bg-rose-50 hover:bg-rose-100 text-rose-600 text-xs px-3 py-2 rounded-xl font-bold transition-all border border-rose-200 flex items-center gap-1"
+                    >
+                      <XCircle size={14} /> Reject
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {selectedOrder.orderStatus === 'accepted' && (
+                <div className="space-y-1.5">
+                  <button
+                    onClick={() => handleAdminPack(selectedOrder._id)}
+                    className="w-full bg-purple-600 hover:bg-purple-700 text-white text-xs px-3 py-2.5 rounded-xl font-bold transition-all shadow-sm flex items-center justify-center gap-1.5"
+                  >
+                    <PackageCheck size={16} /> Pack Order & Generate Pickup OTP
+                  </button>
+                </div>
+              )}
+
+              {/* Pickup OTP Banner */}
+              {selectedOrder.otp && (
+                <div className="bg-amber-50 border border-amber-200/80 rounded-xl p-3 flex items-center justify-between shadow-xs">
+                  <div className="flex items-center gap-2.5">
+                    <div className="p-2 bg-amber-100 rounded-lg text-amber-700">
+                      <Key className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-amber-600 block">Pickup OTP</span>
+                      <p className="text-xl font-mono font-bold text-amber-950 tracking-widest leading-none mt-0.5">{selectedOrder.otp}</p>
+                    </div>
+                  </div>
+                  <span className="text-[11px] text-amber-700 bg-amber-100/70 px-2 py-1 rounded-md font-medium">Verify on pickup</span>
+                </div>
+              )}
+
               {/* Status Update Form */}
               <form onSubmit={handleStatusChangeSubmit} className="flex gap-2">
                 <select
@@ -301,6 +396,28 @@ const WarehouseOrders = () => {
                   Update
                 </button>
               </form>
+
+              {/* Delivery Rider Card */}
+              {(selectedOrder.deliveryRiderDetails?.name || selectedOrder.deliveryRiderId || selectedOrder.deliveryRiderStatus) && (
+                <div className="space-y-2">
+                  <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Delivery Rider</h4>
+                  <div className="bg-slate-50 border border-slate-200/60 rounded-xl p-3 text-sm">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <p className="font-semibold text-slate-800">{selectedOrder.deliveryRiderDetails?.name || (selectedOrder.deliveryRiderId ? 'Assigned Rider' : 'Unassigned')}</p>
+                        {selectedOrder.deliveryRiderDetails?.phone && (
+                          <p className="text-xs text-slate-500 flex items-center gap-1 mt-0.5">
+                            <Phone size={11} /> {selectedOrder.deliveryRiderDetails.phone}
+                          </p>
+                        )}
+                      </div>
+                      <span className="px-2 py-0.5 rounded text-[11px] font-semibold uppercase bg-sky-100 text-sky-700">
+                        {selectedOrder.deliveryRiderStatus?.replace(/_/g, ' ') || 'unassigned'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* Customer Info */}
               <div className="space-y-2">

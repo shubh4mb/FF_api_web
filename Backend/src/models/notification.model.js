@@ -32,7 +32,9 @@ const notificationSchema = new mongoose.Schema(
                 "rider_arriving",       // covers both "rider assigned" + "arriving soon"
                 "delivery_complete",
                 "payment_confirmed",
+                "delivery_fee_collected",
                 "order_rejected",
+                "order_cancelled",
                 "refund_credited",
 
                 // Rider notifications (verbose — show all steps)

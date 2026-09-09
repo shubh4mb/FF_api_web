@@ -1,7 +1,8 @@
 import Order from "../../models/order.model.js";
-import Product from "../../models/product.model.js";
+import ProductFlat from "../../models/productFlat.model.js";
 import WarehouseOrder from "../../models/warehouseOrder.model.js";
 import { emitOrderUpdate } from "../../sockets/order.socket.js";
+import { emitWarehouseOrderUpdate } from "../../sockets/warehouseOrder.socket.js";
 import { getIO } from "../../config/socket.js";
 import DeliveryRider from "../../models/deliveryRider.model.js";
 import { assignNearestRider } from "../../helperFns/deliveryRiderFns.js";
@@ -11,6 +12,7 @@ import { creditWallet } from "../../helperFns/walletHelper.js";
 import { notifyOrderEvent } from "../../helperFns/notificationHelper.js";
 import { inferZone } from "../../utils/zoneInfer.js";
 import { storageService } from "../../services/storage.service.js";
+import { cancelAndCleanupOrder } from "../../helperFns/orderCancellationHelper.js";
 
 const generateOTP = () => Math.floor(1000 + Math.random() * 9000);
 
@@ -39,15 +41,18 @@ export const saveProductDetails = async (req, res) => {
     if (description !== undefined) updateFields.description = description;
 
     // Find and update product
-    const updatedProduct = await Product.findOneAndUpdate(
-      { _id: productId, isActive: true },
-      updateFields,
-      { new: true, runValidators: true }
-    )
+    const flatDoc = await ProductFlat.findById(productId).select('styleGroupId');
+    const sgId = flatDoc ? flatDoc.styleGroupId : productId;
+    
+    await ProductFlat.updateMany(
+      { $or: [{ _id: productId }, { styleGroupId: sgId }] },
+      { $set: updateFields }
+    );
+    
+    const updatedProduct = await ProductFlat.findById(productId)
       .populate('brandId', 'name')
       .populate('categoryId', 'name')
       .populate('subCategoryId', 'name')
-      .populate('subSubCategoryId', 'name')
       .populate('merchantId', 'name');
 
     if (!updatedProduct) {
@@ -67,12 +72,25 @@ export const saveProductDetails = async (req, res) => {
 
 
 export const getPlacedOrder = async (req, res) => {
-  console.log(req.merchantId,"sdadasd");
-  const orders = await Order.find({ merchantId: req.merchantId, orderStatus: "placed" })
-    .select('orderStatus items totalAmount deliveryRiderStatus createdAt deliveryLocation userId')
-    .sort({ createdAt: -1 })
-    .lean();
-  return res.status(200).json({ orders });
+  try {
+    const merchant = await Merchant.findById(req.merchantId).select('accountType warehouseId');
+    if (merchant?.accountType === 'warehouse' && merchant.warehouseId) {
+      const orders = await WarehouseOrder.find({ warehouseId: merchant.warehouseId, orderStatus: "placed" })
+        .select('orderStatus items totalAmount deliveryRiderStatus createdAt deliveryLocation userId fulfillmentType')
+        .sort({ createdAt: -1 })
+        .lean();
+      return res.status(200).json({ orders });
+    }
+
+    const orders = await Order.find({ merchantId: req.merchantId, orderStatus: "placed" })
+      .select('orderStatus items totalAmount deliveryRiderStatus createdAt deliveryLocation userId')
+      .sort({ createdAt: -1 })
+      .lean();
+    return res.status(200).json({ orders });
+  } catch (err) {
+    console.error("getPlacedOrder error:", err);
+    return res.status(500).json({ message: "Error fetching placed orders" });
+  }
 };
 
 
@@ -84,66 +102,88 @@ export const orderRequestForMerchant = async (req, res) => {
     const { orderId } = req.params;
     const { status } = req.body;
 
-    const order = await Order.findById(orderId).populate('merchantId', 'shopName address');
+    const merchant = await Merchant.findById(req.merchantId);
+    if (!merchant) return res.status(404).json({ message: "Merchant not found" });
+
+    let order = await Order.findById(orderId).populate('merchantId', 'shopName address');
+    let isWarehouseOrder = false;
+
+    if (!order && merchant.accountType === 'warehouse') {
+      order = await WarehouseOrder.findById(orderId);
+      if (order) isWarehouseOrder = true;
+    }
+
     if (!order) return res.status(404).json({ message: "Order not found" });
 
     // Authorization check
-    if (order.merchantId._id.toString() !== req.merchantId.toString()) {
-      return res.status(403).json({ message: "Forbidden: You do not own this order" });
+    if (isWarehouseOrder) {
+      if (order.warehouseId.toString() !== merchant.warehouseId.toString()) {
+        return res.status(403).json({ message: "Forbidden: You do not own this order" });
+      }
+    } else {
+      if (order.merchantId._id.toString() !== req.merchantId.toString()) {
+        return res.status(403).json({ message: "Forbidden: You do not own this order" });
+      }
     }
 
     if (status === "accept" || status === "ACCEPTED") {
-      order.orderStatus = "accepted";
+      order.orderStatus = (isWarehouseOrder && order.fulfillmentType === 'courier') ? 'confirmed' : 'accepted';
       order.customerDeliveryStatus = "accepted";
 
-      // Validate that order has required coordinates
-      if (!order.pickupLocation?.coordinates?.length || !order.deliveryLocation?.coordinates?.length) {
-        return res.status(400).json({ message: "Order missing pickup or delivery coordinates" });
-      }
+      if (!isWarehouseOrder || order.fulfillmentType === 'try_and_buy') {
+        // Validate that order has required coordinates
+        if (!order.pickupLocation?.coordinates?.length || !order.deliveryLocation?.coordinates?.length) {
+          return res.status(400).json({ message: "Order missing pickup or delivery coordinates" });
+        }
 
-      const pickupCoordinates = order.pickupLocation.coordinates;
-      const pickupLocation = {
-        lat: pickupCoordinates[1],
-        lng: pickupCoordinates[0],
-      };
+        const pickupCoordinates = order.pickupLocation.coordinates;
+        const pickupLocation = {
+          lat: pickupCoordinates[1],
+          lng: pickupCoordinates[0],
+        };
 
-      const customerCoordinates = order.deliveryLocation.coordinates;
-      const customerLocation = {
-        lat: customerCoordinates[1],
-        lng: customerCoordinates[0],
-      };
+        const customerCoordinates = order.deliveryLocation.coordinates;
+        const customerLocation = {
+          lat: customerCoordinates[1],
+          lng: customerCoordinates[0],
+        };
 
-      const merchant = await Merchant.findById(order.merchantId);
-      // Dynamic zone inference ensures perfect sync with Rider's inference
-      const zoneId = await inferZone(pickupLocation.lat, pickupLocation.lng);
+        const zoneId = await inferZone(pickupLocation.lat, pickupLocation.lng);
 
-      queueResult = await enqueueOrder({
-        orderId: order._id.toString(),
-        merchantId: order.merchantId.toString(),
-        zoneId,
-        pickupLat: pickupLocation.lat,
-        pickupLng: pickupLocation.lng,
-        customerLat: customerLocation.lat,
-        customerLng: customerLocation.lng,
-      });
+        queueResult = await enqueueOrder({
+          orderId: order._id.toString(),
+          merchantId: (isWarehouseOrder ? (order.sourceMerchantId || merchant._id) : order.merchantId).toString(),
+          zoneId,
+          pickupLat: pickupLocation.lat,
+          pickupLng: pickupLocation.lng,
+          customerLat: customerLocation.lat,
+          customerLng: customerLocation.lng,
+          isWarehouseOrder,
+        });
 
-      if (queueResult.success) {
-        order.deliveryRiderStatus = "queued";
-        order.queuedZone = queueResult.zoneId;
-      } else {
-        order.deliveryRiderStatus = "unassigned";
+        if (queueResult?.success) {
+          order.deliveryRiderStatus = "queued";
+          order.queuedZone = queueResult.zoneId;
+        } else {
+          order.deliveryRiderStatus = "unassigned";
+        }
       }
 
       const emitPayload = {
+        _id: orderId,
         orderId,
         orderStatus: order.orderStatus,
         deliveryRiderStatus: order.deliveryRiderStatus,
         queuedZone: queueResult?.zoneId,
-        merchantId: order.merchantId,
+        merchantId: order.merchantId || merchant._id,
+        warehouseId: order.warehouseId,
       };
 
-      io.in(`merchant:${order.merchantId}`).socketsJoin(orderId);
-      io.to(`merchant:${order.merchantId}`).emit("orderUpdate", emitPayload);
+      io.in(`merchant:${merchant._id}`).socketsJoin(orderId);
+      io.to(`merchant:${merchant._id}`).emit("orderUpdate", emitPayload);
+      if (order.warehouseId) {
+        io.to(`warehouse:${order.warehouseId}`).emit("orderUpdate", emitPayload);
+      }
       io.to(orderId).emit("orderUpdate", emitPayload);
 
       // 📱 Customer notification: "Order Confirmed" (selective milestone #2)
@@ -154,47 +194,33 @@ export const orderRequestForMerchant = async (req, res) => {
     }
 
     if (status === "reject" || status === "REJECTED") {
-      order.orderStatus = "rejected";
-      order.customerDeliveryStatus = "cancelled";
-      order.reason = req.body.reason || "Merchant rejected the order";
+      const result = await cancelAndCleanupOrder({
+        orderId,
+        cancelledBy: isWarehouseOrder ? 'warehouse' : 'merchant',
+        reason: req.body.reason || "Merchant rejected the order",
+        action: 'rejected',
+        req,
+      });
 
-      // 💰 Refund full upfront amount to customer wallet
-      const refundAmount = (order.deliveryCharge || 0) + (order.returnCharge || 0) + (order.finalBilling?.deliveryTip || 0) + (order.finalBilling?.serviceGST || 0);
-
-      if (refundAmount > 0) {
-        await creditWallet({
-          ownerType: "user",
-          ownerId: order.userId,
-          amount: refundAmount,
-          description: `Refund: Merchant declined order #${orderId.toString().slice(-5).toUpperCase()}`,
-          orderId: order._id,
-        });
-        order.paymentStatus = "refunded";
-
-        // 📱 Customer notification: "Refund credited"
-        notifyOrderEvent("customer", "order_rejected", {
-          userId: order.userId,
-          orderId: order._id,
-          amount: refundAmount,
-        });
-      } else {
-        notifyOrderEvent("customer", "order_rejected", {
-          userId: order.userId,
-          orderId: order._id,
-        });
+      if (!result.success) {
+        return res.status(result.statusCode || 400).json({ message: result.error });
       }
+
+      return res.status(200).json({
+        message: "Order rejected.",
+        orderId,
+        order: result.order,
+      });
     }
 
     await order.save();
     emitOrderUpdate(io, orderId, order);
-    console.log(order,'order');
+    console.log(order, 'order');
     return res.status(200).json({
-      message: (status === "reject" || status === "REJECTED")
-        ? `Order rejected. ₹${order.deliveryCharge || 0} refunded to customer wallet.`
-        : "Order accepted & queued for rider.",
+      message: "Order accepted & queued for rider.",
       orderId,
       order,
-      queuedZone: (status === "accept" || status === "ACCEPTED") && queueResult?.success ? queueResult.zoneId : undefined,
+      queuedZone: queueResult?.success ? queueResult.zoneId : undefined,
     });
 
   } catch (err) {
@@ -204,6 +230,15 @@ export const orderRequestForMerchant = async (req, res) => {
 };
 export const getAllOrder = async (req, res) => {
   try {
+    const merchant = await Merchant.findById(req.merchantId).select('accountType warehouseId');
+    if (merchant?.accountType === 'warehouse' && merchant.warehouseId) {
+      const orders = await WarehouseOrder.find({ warehouseId: merchant.warehouseId, orderStatus: { $ne: 'pending' } })
+        .select('orderStatus items totalAmount deliveryRiderStatus createdAt updatedAt deliveryRiderId deliveryRiderDetails deliveryLocation userId otp cancellationRequest cancellationRequestReason riderUnresponsiveReport fulfillmentType settlementStatus')
+        .sort({ createdAt: -1 })
+        .lean();
+      return res.status(200).json({ orders });
+    }
+
     const orders = await Order.find({ merchantId: req.merchantId, orderStatus: { $ne: 'pending' } })
       .select('orderStatus items totalAmount deliveryRiderStatus createdAt updatedAt deliveryRiderId deliveryRiderDetails deliveryLocation userId otp cancellationRequest cancellationRequestReason riderUnresponsiveReport')
       .sort({ createdAt: -1 })
@@ -214,19 +249,40 @@ export const getAllOrder = async (req, res) => {
   }
 };
 
+const findOrderForMerchant = async (orderId, merchantId) => {
+  const merchant = await Merchant.findById(merchantId);
+  if (!merchant) return { error: "Merchant not found", status: 404 };
+
+  let order = await Order.findById(orderId);
+  let isWarehouseOrder = false;
+
+  if (!order && merchant.accountType === 'warehouse') {
+    order = await WarehouseOrder.findById(orderId);
+    if (order) isWarehouseOrder = true;
+  }
+
+  if (!order) return { error: "Order not found", status: 404 };
+
+  if (isWarehouseOrder) {
+    if (order.warehouseId?.toString() !== merchant.warehouseId?.toString()) {
+      return { error: "Forbidden: You do not own this order", status: 403 };
+    }
+  } else {
+    if (order.merchantId?.toString() !== merchantId.toString()) {
+      return { error: "Forbidden: You do not own this order", status: 403 };
+    }
+  }
+
+  return { order, isWarehouseOrder, merchant };
+};
+
 export const requestOrderCancellation = async (req, res) => {
   const { orderId } = req.params;
   const { reason } = req.body;
 
   try {
-    const order = await Order.findById(orderId);
-    if (!order) {
-      return res.status(404).json({ message: "Order not found" });
-    }
-
-    if (order.merchantId.toString() !== req.merchantId.toString()) {
-      return res.status(403).json({ message: "Forbidden: You do not own this order" });
-    }
+    const { order, isWarehouseOrder, error, status } = await findOrderForMerchant(orderId, req.merchantId);
+    if (error) return res.status(status).json({ message: error });
 
     const terminalStatuses = ["completed", "cancelled", "rejected"];
     if (terminalStatuses.includes(order.orderStatus)) {
@@ -239,6 +295,9 @@ export const requestOrderCancellation = async (req, res) => {
 
     const io = getIO();
     emitOrderUpdate(io, orderId, order);
+    if (isWarehouseOrder && order.warehouseId) {
+      await emitWarehouseOrderUpdate(io, order.warehouseId, orderId, order);
+    }
 
     return res.status(200).json({
       success: true,
@@ -255,15 +314,8 @@ export const orderPacked = async (req, res) => {
   const io = getIO();
   const { orderId } = req.params;
   try {
-    const order = await Order.findById(orderId);
-    if (!order) return res.status(404).json({ message: "Order not found" });
-
-    // Authorization check
-    if (order.merchantId.toString() !== req.merchantId.toString()) {
-      return res.status(403).json({ message: "Forbidden: You do not own this order" });
-    }
-
-    // Packing proof photos are optional, so we do not block status change if photos are missing
+    const { order, isWarehouseOrder, error, status } = await findOrderForMerchant(orderId, req.merchantId);
+    if (error) return res.status(status).json({ message: error });
 
     order.orderStatus = "packed";
     order.otp = generateOTP();
@@ -280,6 +332,7 @@ export const orderPacked = async (req, res) => {
 
     return res.status(200).json({ message: "Order packed & OTP generated", otp: order.otp });
   } catch (error) {
+    console.error("orderPacked error:", error);
     return res.status(500).json({ message: "Error updating order status" });
   }
 };
@@ -287,7 +340,10 @@ export const orderPacked = async (req, res) => {
 export const getPackingPhotos = async (req, res) => {
   try {
     const { orderId } = req.params;
-    const order = await Order.findById(orderId).select('packingPhotos items');
+    let order = await Order.findById(orderId).select('packingPhotos items');
+    if (!order) {
+      order = await WarehouseOrder.findById(orderId).select('packingPhotos items');
+    }
     if (!order) {
       return res.status(404).json({ message: "Order not found" });
     }
@@ -309,13 +365,19 @@ export const uploadPackingPhoto = async (req, res) => {
       return res.status(400).json({ message: "orderId and itemId are required" });
     }
 
-    const order = await Order.findById(orderId);
+    let order = await Order.findById(orderId);
+    if (!order) {
+      order = await WarehouseOrder.findById(orderId);
+    }
     if (!order) {
       return res.status(404).json({ message: "Order not found" });
     }
 
     // Verify item exists in order
-    const itemExists = order.items.some(item => item._id.toString() === itemId.toString());
+    const itemExists = order.items.some(item => 
+      item._id?.toString() === itemId.toString() || 
+      item.variantId?.toString() === itemId.toString()
+    );
     if (!itemExists) {
       return res.status(400).json({ message: "Item does not belong to this order" });
     }
@@ -355,13 +417,8 @@ export const uploadPackingPhoto = async (req, res) => {
 export const deletePackingPhoto = async (req, res) => {
   try {
     const { orderId, photoId } = req.params;
-    const order = await Order.findById(orderId);
-    if (!order) return res.status(404).json({ message: "Order not found" });
-
-    // Authorization check
-    if (order.merchantId.toString() !== req.merchantId.toString()) {
-      return res.status(403).json({ message: "Forbidden: You do not own this order" });
-    }
+    const { order, error, status } = await findOrderForMerchant(orderId, req.merchantId);
+    if (error) return res.status(status).json({ message: error });
 
     const photo = (order.packingPhotos || []).find(p => p._id.toString() === photoId);
     if (!photo) return res.status(404).json({ message: "Photo not found" });
@@ -388,7 +445,10 @@ export const deletePackingPhoto = async (req, res) => {
 export const getPackingInfoPublic = async (req, res) => {
   try {
     const { orderId } = req.params;
-    const order = await Order.findById(orderId).select('packingPhotos items orderStatus');
+    let order = await Order.findById(orderId).select('packingPhotos items orderStatus');
+    if (!order) {
+      order = await WarehouseOrder.findById(orderId).select('packingPhotos items orderStatus');
+    }
     if (!order) {
       return res.status(404).json({ message: "Order not found" });
     }
@@ -412,12 +472,8 @@ export const getPackingInfoPublic = async (req, res) => {
 export const reportUnresponsiveRider = async (req, res) => {
   try {
     const { orderId } = req.params;
-    const merchantId = req.merchantId;
-
-    const order = await Order.findOne({ _id: orderId, merchantId });
-    if (!order) {
-      return res.status(404).json({ success: false, message: "Order not found" });
-    }
+    const { order, error, status } = await findOrderForMerchant(orderId, req.merchantId);
+    if (error) return res.status(status).json({ success: false, message: error });
 
     if (!order.deliveryRiderId) {
       return res.status(400).json({ success: false, message: "No rider assigned to this order" });

@@ -4,6 +4,7 @@ import jwt from 'jsonwebtoken';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { ApiError } from '../utils/ApiError.js';
 import { ApiResponse } from '../utils/ApiResponse.js';
+import { issueReferralCoupon } from '../helperFns/referralHelper.js';
 
 const getOAuthClient = () => {
   const clientId = process.env.GOOGLE_WEB_CLIENT_ID;
@@ -15,7 +16,7 @@ const getOAuthClient = () => {
 };
 
 export const googleLogin = asyncHandler(async (req, res) => {
-  const { idToken } = req.body;
+  const { idToken, referralCode } = req.body;
 
   if (!idToken) {
     throw new ApiError(400, "Google ID Token is required");
@@ -76,16 +77,30 @@ export const googleLogin = asyncHandler(async (req, res) => {
   }
 
   let isNewUser = false;
+  let referrerId = null;
   // 3. If still doesn't exist, create a new user
   if (!user) {
+    if (referralCode) {
+      const referrer = await User.findOne({ referralCode: referralCode.toUpperCase() });
+      if (referrer) {
+        referrerId = referrer._id;
+      }
+    }
+
     user = await User.create({
       googleId,
       email,
       name: name || '',
       profilePicture: picture || '',
       isVerified: true, // Google accounts are pre-verified
+      referredBy: referrerId,
     });
     isNewUser = true;
+
+    // Issue welcome coupon to new user if they used a referral code
+    if (referrerId) {
+      issueReferralCoupon(user._id, false).catch(err => console.error(err));
+    }
   } else {
     // Update existing user's last login
     user.lastLogin = new Date();

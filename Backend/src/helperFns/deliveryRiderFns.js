@@ -2,6 +2,7 @@
 import { redis, inMemoryIndex } from "../config/redisConfig.js";
 import { getIO } from "../config/socket.js";
 import Order from "../models/order.model.js";
+import WarehouseOrder from "../models/warehouseOrder.model.js";
 import { startRiderTimeout } from "./riderTimeoutHelper.js";
 import { notifyOrderEvent } from "./notificationHelper.js";
 import { getRoadDistance } from "./orsHelper.js";
@@ -136,62 +137,96 @@ async function assignNearestRider(zoneId = 'global', pickupLocation, orderId, or
 
       // Emits unchanged—your socketId/merchant rooms work as-is
       // Inside assignNearestRider — after successful assignment
-      if (meta.socketId) {
-        // Fetch the FULL order from your main Order collection
-        const fullOrder = await Order.findById(orderId)
-          .populate('merchantId', 'shopName address')
+      // Fetch the FULL order from Order or WarehouseOrder collection
+      let fullOrder = await Order.findById(orderId)
+        .populate('merchantId', 'shopName address')
+        .lean();
+
+      if (!fullOrder) {
+        fullOrder = await WarehouseOrder.findById(orderId)
+          .populate('warehouseId', 'name address')
+          .populate('sourceMerchantId', 'shopName')
           .lean();
-        console.log(fullOrder, orderId, "fullOrder");
 
         if (fullOrder) {
-          // 🛣️ NEW: Calculate road distance from rider's current location to the merchant
-          let riderToShopKm = null;
-          let riderToShopMins = null;
-          try {
-            const pos = await redis.geoPos(`riders:geo:${zoneId}`, riderId);
-            if (pos && pos[0]) {
-              const riderCoords = [parseFloat(pos[0].longitude), parseFloat(pos[0].latitude)];
-              const merchantCoords = fullOrder.pickupLocation.coordinates;
-              const road = await getRoadDistance(riderCoords, merchantCoords);
-              if (road) {
-                riderToShopKm = road.distanceKm;
-                riderToShopMins = road.durationMins;
-              }
-            }
-          } catch (err) {
-            console.error("Failed to calculate rider-to-shop road distance:", err.message);
-          }
-
-          // This matches EXACTLY what your frontend expects
-          const riderPayload = {
-            _id: fullOrder._id,
-            orderId: fullOrder._id.toString(),
-            pickupLocation: fullOrder.pickupLocation,
-            deliveryLocation: fullOrder.deliveryLocation,
-            address: fullOrder.deliveryLocation?.addressLine1 || fullOrder.deliveryLocation?.street || "No address",
-            merchantId: fullOrder.merchantId,
-            items: fullOrder.items,
-            deliveryCharge: fullOrder.finalBilling?.deliveryCharge || 0,
-            totalAmount: fullOrder.finalBilling?.totalPayable || fullOrder.totalAmount,
-            deliveryAmount: fullOrder.deliveryCharge || 100,
-            customerLocation: fullOrder.deliveryLocation?.coordinates
-              ? {
-                lat: fullOrder.deliveryLocation.coordinates[1],
-                lng: fullOrder.deliveryLocation.coordinates[0]
-              }
-              : null,
-            cutomerAddress: fullOrder.deliveryLocation?.addressLine1 || "No address",
-            // 🆕 New road distance fields
-            deliveryDistance: fullOrder.deliveryDistance || 0,
-            estimatedTimeToCustomer: fullOrder.estimatedTime || 0,
-            riderToShopKm: riderToShopKm ? Number(riderToShopKm.toFixed(2)) : null,
-            riderToShopMins: riderToShopMins,
+          // Normalize merchantId so rider app displays the warehouse as pickup spot
+          fullOrder.merchantId = {
+            _id: fullOrder.warehouseId?._id || fullOrder.warehouseId,
+            shopName: fullOrder.warehouseDetails?.name || fullOrder.warehouseId?.name || "Warehouse Hub",
+            address: fullOrder.warehouseId?.address || fullOrder.pickupLocation,
           };
-
-          const io = getIO();
-          io.to(meta.socketId).emit('orderAssigned', { orderId, orderPayload: riderPayload });
-          console.log("Sent full order to rider:", riderPayload.orderId);
         }
+      }
+      console.log(fullOrder, orderId, "fullOrder");
+
+      if (fullOrder) {
+        // 🛣️ NEW: Calculate road distance from rider's current location to the merchant
+        let riderToShopKm = null;
+        let riderToShopMins = null;
+        try {
+          const pos = await redis.geoPos(`riders:geo:${zoneId}`, riderId);
+          if (pos && pos[0]) {
+            const riderCoords = [parseFloat(pos[0].longitude), parseFloat(pos[0].latitude)];
+            const merchantCoords = fullOrder.pickupLocation.coordinates;
+            const road = await getRoadDistance(riderCoords, merchantCoords);
+            if (road) {
+              riderToShopKm = road.distanceKm;
+              riderToShopMins = road.durationMins;
+            }
+          }
+        } catch (err) {
+          console.error("Failed to calculate rider-to-shop road distance:", err.message);
+        }
+
+        const baseDeliveryCharge = fullOrder.originalDeliveryCharge ?? fullOrder.finalBilling?.deliveryCharge ?? fullOrder.deliveryCharge ?? 0;
+        const returnCharge = fullOrder.originalReturnCharge ?? fullOrder.returnCharge ?? 0;
+        const deliveryTip = fullOrder.finalBilling?.deliveryTip ?? fullOrder.deliveryTip ?? 0;
+        const totalRiderEarnings = baseDeliveryCharge + returnCharge + deliveryTip;
+
+        // This matches EXACTLY what your frontend expects
+        const riderPayload = {
+          _id: fullOrder._id,
+          orderId: fullOrder._id.toString(),
+          orderStatus: fullOrder.orderStatus,
+          deliveryRiderStatus: fullOrder.deliveryRiderStatus,
+          pickupLocation: fullOrder.pickupLocation,
+          deliveryLocation: fullOrder.deliveryLocation,
+          address: fullOrder.deliveryLocation?.addressLine1 || fullOrder.deliveryLocation?.street || "No address",
+          merchantId: fullOrder.merchantId,
+          items: fullOrder.items,
+          deliveryCharge: baseDeliveryCharge,
+          originalDeliveryCharge: fullOrder.originalDeliveryCharge || baseDeliveryCharge,
+          returnCharge: returnCharge,
+          originalReturnCharge: fullOrder.originalReturnCharge || returnCharge,
+          tip: deliveryTip,
+          deliveryTip: deliveryTip,
+          finalBilling: fullOrder.finalBilling,
+          totalAmount: fullOrder.finalBilling?.totalPayable || fullOrder.totalAmount,
+          deliveryAmount: totalRiderEarnings > 0 ? totalRiderEarnings : (fullOrder.deliveryCharge || 100),
+          customerLocation: fullOrder.deliveryLocation?.coordinates
+            ? {
+              lat: fullOrder.deliveryLocation.coordinates[1],
+              lng: fullOrder.deliveryLocation.coordinates[0]
+            }
+            : null,
+          cutomerAddress: fullOrder.deliveryLocation?.addressLine1 || "No address",
+          // 🆕 New road distance fields
+          deliveryDistance: fullOrder.deliveryDistance || 0,
+          estimatedTimeToCustomer: fullOrder.estimatedTime || 0,
+          riderToShopKm: riderToShopKm ? Number(riderToShopKm.toFixed(2)) : null,
+          riderToShopMins: riderToShopMins,
+        };
+
+        const io = getIO();
+        const riderIdStr = riderId.toString();
+        // Emit to rooms and direct socket if available
+        io.to(`riderSocket:${riderIdStr}`).emit('orderAssigned', { orderId, orderPayload: riderPayload });
+        io.to(`rider:${riderIdStr}`).emit('orderAssigned', { orderId, orderPayload: riderPayload });
+        io.to(riderIdStr).emit('orderAssigned', { orderId, orderPayload: riderPayload });
+        if (meta?.socketId) {
+          io.to(meta.socketId).emit('orderAssigned', { orderId, orderPayload: riderPayload });
+        }
+        console.log(`Sent full order ${riderPayload.orderId} to rider ${riderIdStr} (meta socket: ${meta?.socketId})`);
       }
 
       const merchantRoom = orderPayload.merchantId ? `merchant:${orderPayload.merchantId}` : null;

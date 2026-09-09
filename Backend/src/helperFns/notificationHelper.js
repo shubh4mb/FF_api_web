@@ -42,12 +42,15 @@ export async function sendPushNotifications(userId, riderId, title, body, data, 
             continue;
         }
         let soundOpt = data?.silent ? null : 'default';
+        const isOrderAlert = isRider && data?.type === 'new_order_request';
         messages.push({
             to: pushToken,
             sound: soundOpt,
             title,
             body,
             data,
+            channelId: isOrderAlert ? 'order_alerts' : 'default',
+            priority: isOrderAlert ? 'high' : 'default',
         });
     }
 
@@ -193,6 +196,31 @@ export async function notifyMerchant({ merchantId, orderId, type, title, body, d
     }
 }
 
+export async function notifyAdmin({ type = "admin_notification", title, body, data = {} }) {
+    try {
+        const notification = await Notification.create({
+            type: "admin_notification",
+            title,
+            body,
+            data,
+        });
+
+        const io = getIO();
+        io.to("admin:room").emit("admin_notification", {
+            _id: notification._id,
+            type,
+            title,
+            body,
+            data,
+            createdAt: notification.createdAt,
+        });
+
+        return notification;
+    } catch (err) {
+        console.error("notifyAdmin error:", err.message);
+    }
+}
+
 /* ════════════════════════════════════════════════
    BATCH: fire-and-forget convenience for order events
    ════════════════════════════════════════════════ */
@@ -205,7 +233,7 @@ export async function notifyMerchant({ merchantId, orderId, type, title, body, d
  * @param {string} event - one of the notification type enum values
  * @param {object} ctx - { userId?, riderId?, orderId, orderShortId? }
  */
-export async function notifyOrderEvent(target, event, ctx) {
+export async function notifyOrderEvent(target, event, ctx = {}) {
     const shortId = ctx.orderShortId || ctx.orderId?.toString().slice(-5).toUpperCase();
 
     const templates = {
@@ -234,9 +262,17 @@ export async function notifyOrderEvent(target, event, ctx) {
             title: "Payment Successful 💳",
             body: `Payment for order #${shortId} confirmed.`,
         },
+        delivery_fee_collected: {
+            title: "Delivery Fee Collected ✅",
+            body: `₹${ctx.amount || 0} delivery fee has been collected by your rider for order #${shortId}.`,
+        },
         order_rejected: {
             title: "Order Declined 😔",
             body: `The merchant couldn't fulfill order #${shortId}. Refund has been credited to your wallet.`,
+        },
+        order_cancelled: {
+            title: "Order Cancelled 🚫",
+            body: ctx.message || `Order #${shortId} was cancelled. ${ctx.amount > 0 ? `₹${ctx.amount} refunded to wallet.` : ''}`.trim(),
         },
         refund_credited: {
             title: "Refund Credited 💰",

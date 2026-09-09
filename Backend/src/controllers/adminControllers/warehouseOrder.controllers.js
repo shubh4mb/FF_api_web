@@ -1,10 +1,18 @@
 import WarehouseOrder from '../../models/warehouseOrder.model.js';
-import Product from '../../models/product.model.js';
 import Merchant from '../../models/merchant.model.js';
+import ProductFlat from '../../models/productFlat.model.js';
+import Warehouse from '../../models/warehouse.model.js';
 import WeeklyPayout from '../../models/weeklyPayout.model.js';
 import { asyncHandler } from '../../utils/asyncHandler.js';
 import { ApiError } from '../../utils/ApiError.js';
 import { ApiResponse } from '../../utils/ApiResponse.js';
+import { getIO } from '../../config/socket.js';
+import { emitWarehouseOrderUpdate } from '../../sockets/warehouseOrder.socket.js';
+import { enqueueOrder } from '../../helperFns/orderFns.js';
+import { inferZone } from '../../utils/zoneInfer.js';
+import { creditWallet } from '../../helperFns/walletHelper.js';
+import { notifyOrderEvent } from '../../helperFns/notificationHelper.js';
+import { cancelAndCleanupOrder } from '../../helperFns/orderCancellationHelper.js';
 import mongoose from 'mongoose';
 
 /**
@@ -64,8 +72,140 @@ export const getWarehouseOrderById = asyncHandler(async (req, res) => {
 });
 
 /**
+ * PATCH /admin/warehouse/orders/:orderId/accept
+ * Admin accepts warehouse order -> queues for rider matching (if T&B) or confirms (if courier).
+ */
+export const adminAcceptWarehouseOrder = asyncHandler(async (req, res) => {
+  const { orderId } = req.params;
+  const order = await WarehouseOrder.findById(orderId);
+  if (!order) throw new ApiError(404, 'Warehouse order not found');
+
+  if (order.orderStatus !== 'placed') {
+    throw new ApiError(400, `Cannot accept order in status: ${order.orderStatus}`);
+  }
+
+  order.orderStatus = order.fulfillmentType === 'courier' ? 'confirmed' : 'accepted';
+  order.customerDeliveryStatus = 'accepted';
+
+  // Queue for rider assignment if Try & Buy
+  if (order.fulfillmentType === 'try_and_buy') {
+    const pickupCoords = order.pickupLocation?.coordinates;
+    const deliveryCoords = order.deliveryLocation?.coordinates;
+
+    if (pickupCoords && deliveryCoords) {
+      const zoneId = await inferZone(pickupCoords[1], pickupCoords[0]);
+
+      const queueResult = await enqueueOrder({
+        orderId: order._id.toString(),
+        merchantId: (order.sourceMerchantId || order.warehouseId).toString(),
+        zoneId,
+        pickupLat: pickupCoords[1],
+        pickupLng: pickupCoords[0],
+        customerLat: deliveryCoords[1],
+        customerLng: deliveryCoords[0],
+        isWarehouseOrder: true,
+      });
+
+      if (queueResult?.success) {
+        order.deliveryRiderStatus = 'queued';
+      }
+    }
+  }
+
+  await order.save();
+
+  try {
+    const io = getIO();
+    await emitWarehouseOrderUpdate(io, order.warehouseId, order._id.toString(), order);
+  } catch (socketErr) {
+    console.error('Socket emit error in adminAcceptWarehouseOrder:', socketErr);
+  }
+
+  try {
+    notifyOrderEvent('customer', 'order_accepted', {
+      userId: order.userId,
+      orderId: order._id,
+    });
+  } catch (notifErr) {
+    console.error('Customer notification error in adminAcceptWarehouseOrder:', notifErr);
+  }
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, { order }, 'Order accepted and queued for fulfillment'));
+});
+
+/**
+ * PATCH /admin/warehouse/orders/:orderId/reject
+ * Admin rejects warehouse order -> releases stock, refunds user wallet if applicable.
+ */
+export const adminRejectWarehouseOrder = asyncHandler(async (req, res) => {
+  const { orderId } = req.params;
+  const { reason } = req.body;
+
+  const result = await cancelAndCleanupOrder({
+    orderId,
+    cancelledBy: 'admin',
+    reason: reason || 'Rejected by warehouse admin',
+    action: 'rejected',
+    req,
+  });
+
+  if (!result.success) {
+    throw new ApiError(result.statusCode || 400, result.error || 'Failed to reject warehouse order');
+  }
+
+  return res
+    .status(200)
+    .json(
+      new ApiResponse(
+        200,
+        { order: result.order, refundAmount: result.refundAmount },
+        'Order rejected, stock released, and resources cleaned up'
+      )
+    );
+});
+
+/**
+ * PATCH /admin/warehouse/orders/:orderId/pack
+ * Admin marks warehouse order packed -> generates OTP for rider pickup, notifies rider.
+ */
+export const adminPackWarehouseOrder = asyncHandler(async (req, res) => {
+  const { orderId } = req.params;
+  const order = await WarehouseOrder.findById(orderId);
+  if (!order) throw new ApiError(404, 'Warehouse order not found');
+
+  order.orderStatus = 'packed';
+  order.otp = String(Math.floor(1000 + Math.random() * 9000));
+
+  await order.save();
+
+  try {
+    const io = getIO();
+    await emitWarehouseOrderUpdate(io, order.warehouseId, order._id.toString(), order);
+  } catch (socketErr) {
+    console.error('Socket emit error in adminPackWarehouseOrder:', socketErr);
+  }
+
+  if (order.deliveryRiderId) {
+    try {
+      notifyOrderEvent('rider', 'pickup_ready', {
+        riderId: order.deliveryRiderId,
+        orderId: order._id,
+      });
+    } catch (notifErr) {
+      console.error('Rider notification error in adminPackWarehouseOrder:', notifErr);
+    }
+  }
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, { order, otp: order.otp }, 'Order packed and pickup OTP generated'));
+});
+
+/**
  * PATCH /admin/warehouse/orders/:orderId/status
- * Update order status (admin override)
+ * Update order status (admin override with side effects)
  */
 export const updateWarehouseOrderStatus = asyncHandler(async (req, res) => {
   const { orderStatus, reason } = req.body;
@@ -80,17 +220,55 @@ export const updateWarehouseOrderStatus = asyncHandler(async (req, res) => {
     throw new ApiError(400, `Invalid orderStatus. Must be one of: ${validStatuses.join(', ')}`);
   }
 
-  const order = await WarehouseOrder.findByIdAndUpdate(
-    req.params.orderId,
-    { $set: { orderStatus, ...(reason ? { reason } : {}) } },
-    { new: true }
-  );
-
+  const order = await WarehouseOrder.findById(req.params.orderId);
   if (!order) throw new ApiError(404, 'Warehouse order not found');
 
-  return res
-    .status(200)
-    .json(new ApiResponse(200, { order }, 'Order status updated'));
+  const prevStatus = order.orderStatus;
+  order.orderStatus = orderStatus;
+  if (reason) order.reason = reason;
+
+  // Lifecycle side effects
+  if (orderStatus === 'accepted' && prevStatus === 'placed') {
+    order.customerDeliveryStatus = 'accepted';
+    if (order.fulfillmentType === 'try_and_buy') {
+      const pickupCoords = order.pickupLocation?.coordinates;
+      const deliveryCoords = order.deliveryLocation?.coordinates;
+      if (pickupCoords && deliveryCoords) {
+        const zoneId = await inferZone(pickupCoords[1], pickupCoords[0]);
+        const queueResult = await enqueueOrder({
+          orderId: order._id.toString(),
+          merchantId: (order.sourceMerchantId || order.warehouseId).toString(),
+          zoneId,
+          pickupLat: pickupCoords[1],
+          pickupLng: pickupCoords[0],
+          customerLat: deliveryCoords[1],
+          customerLng: deliveryCoords[0],
+          isWarehouseOrder: true,
+        });
+        if (queueResult?.success) {
+          order.deliveryRiderStatus = 'queued';
+        }
+      }
+    }
+  } else if (orderStatus === 'packed' && !order.otp) {
+    order.otp = String(Math.floor(1000 + Math.random() * 9000));
+  } else if (['cancelled', 'rejected'].includes(orderStatus) && !['cancelled', 'rejected'].includes(prevStatus)) {
+    const result = await cancelAndCleanupOrder({
+      orderId: order._id,
+      cancelledBy: 'admin',
+      reason: reason || `Order marked as ${orderStatus} by admin`,
+      action: orderStatus,
+      req,
+    });
+
+    if (!result.success) {
+      throw new ApiError(result.statusCode || 400, result.error || `Failed to update order status to ${orderStatus}`);
+    }
+
+    return res
+      .status(200)
+      .json(new ApiResponse(200, { order: result.order, refundAmount: result.refundAmount }, 'Order status updated and resources cleaned up'));
+  }
 });
 
 /**

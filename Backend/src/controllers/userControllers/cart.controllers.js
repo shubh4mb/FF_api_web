@@ -1,6 +1,5 @@
 import Cart from "../../models/cart.model.js";
 import mongoose from "mongoose";
-import Product from '../../models/product.model.js';
 import { log } from "console";
 import Address from '../../models/address.model.js'
 import { calculateDeliveryCharge } from '../../helperFns/deliveryChargeFns.js'
@@ -26,62 +25,34 @@ export const addToCart = async (req, res) => {
     let isWarehouseItem = source === 'warehouse';
     let warehouseIdObj = null;
 
-    if (isWarehouseItem || process.env.USE_FLAT_PRODUCT_SCHEMA !== 'true') {
-      const product = await Product.findById(productId).populate('categoryId');
-      if (product && product.source === 'warehouse') {
-        isWarehouseItem = true;
-        warehouseIdObj = product.warehouseId;
-        const variant = product.variants.id(variantId);
-        if (!variant) return res.status(404).json({ message: "Variant not found" });
+    const matchingFlatVariants = await ProductFlat.find({
+      $or: [
+        { styleGroupId: productId },
+        ...(mongoose.Types.ObjectId.isValid(productId) ? [{ _id: productId }] : []),
+        ...(mongoose.Types.ObjectId.isValid(variantId) ? [{ _id: variantId }] : []),
+      ],
+      size: size,
+      isDeleted: { $ne: true }
+    }).populate('categoryId');
+    const matchedDoc = matchingFlatVariants.find(v => 
+      v._id.toString() === variantId ||
+      generateColorVariantId(v.styleGroupId || productId, v.color?.name) === variantId
+    ) || matchingFlatVariants[0];
 
-        const sizeObj = variant.sizes.find(s => s.size === size);
-        if (!sizeObj) return res.status(400).json({ message: "Invalid size selected" });
-
-        if (sizeObj.stock < quantity) {
-          return res.status(400).json({ message: `Only ${sizeObj.stock} items left in stock` });
-        }
-        sizeObjStock = sizeObj.stock;
-        targetCatName = product.categoryId?.name?.toLowerCase() || '';
-      } else if (product) {
-        const variant = product.variants.id(variantId);
-        if (!variant) return res.status(404).json({ message: "Variant not found" });
-
-        const sizeObj = variant.sizes.find(s => s.size === size);
-        if (!sizeObj) return res.status(400).json({ message: "Invalid size selected" });
-
-        if (sizeObj.stock < quantity) {
-          return res.status(400).json({ message: `Only ${sizeObj.stock} items left in stock` });
-        }
-        sizeObjStock = sizeObj.stock;
-        targetCatName = product.categoryId?.name?.toLowerCase() || '';
-      } else {
-        return res.status(404).json({ message: "Product not found" });
-      }
-    } else {
-      const matchingFlatVariants = await ProductFlat.find({ styleGroupId: productId, size: size, isDeleted: { $ne: true } }).populate('categoryId');
-      const matchedDoc = matchingFlatVariants.find(v => generateColorVariantId(productId, v.color.name) === variantId);
-
-      if (matchedDoc) {
-        if (matchedDoc.stock < quantity) {
-          return res.status(400).json({ message: `Only ${matchedDoc.stock} items left in stock` });
-        }
-        sizeObjStock = matchedDoc.stock;
-        targetCatName = matchedDoc.categoryId?.name?.toLowerCase() || '';
-      } else {
-        // Fallback to legacy Product model
-        const product = await Product.findById(productId).populate('categoryId');
-        if (!product) return res.status(404).json({ message: "Product not found" });
-        const variant = product.variants.id(variantId);
-        if (!variant) return res.status(404).json({ message: "Product variant size not found" });
-        const sizeObj = variant.sizes.find(s => s.size === size);
-        if (!sizeObj) return res.status(400).json({ message: "Invalid size selected" });
-        if (sizeObj.stock < quantity) {
-          return res.status(400).json({ message: `Only ${sizeObj.stock} items left in stock` });
-        }
-        sizeObjStock = sizeObj.stock;
-        targetCatName = product.categoryId?.name?.toLowerCase() || '';
-      }
+    if (!matchedDoc) {
+      return res.status(404).json({ message: "Product not found" });
     }
+
+    if (matchedDoc.source === 'warehouse') {
+      isWarehouseItem = true;
+      warehouseIdObj = matchedDoc.warehouseId;
+    }
+
+    if (matchedDoc.stock < quantity) {
+      return res.status(400).json({ message: `Only ${matchedDoc.stock} items left in stock` });
+    }
+    sizeObjStock = matchedDoc.stock;
+    targetCatName = matchedDoc.categoryId?.name?.toLowerCase() || '';
 
     let cart = await Cart.findOne({ userId });
 
@@ -90,18 +61,7 @@ export const addToCart = async (req, res) => {
     if (cart) {
       const productIds = cart.items.map(i => i.productId);
       
-      let products;
-      if (process.env.USE_FLAT_PRODUCT_SCHEMA === 'true') {
-        products = await ProductFlat.find({ styleGroupId: { $in: productIds } }).populate('categoryId').lean();
-        const foundProductIds = new Set(products.map(p => p.styleGroupId.toString()));
-        const missingProductIds = productIds.filter(id => !foundProductIds.has(id.toString()));
-        if (missingProductIds.length > 0) {
-          const legacyProducts = await Product.find({ _id: { $in: missingProductIds } }).populate('categoryId').lean();
-          products = [...products, ...legacyProducts];
-        }
-      } else {
-        products = await Product.find({ _id: { $in: productIds } }).populate('categoryId').lean();
-      }
+      const products = await ProductFlat.find({ styleGroupId: { $in: productIds } }).populate('categoryId').lean();
       
       const productMap = products.reduce((acc, p) => { 
         const key = p.styleGroupId ? p.styleGroupId.toString() : p._id.toString();
@@ -197,11 +157,7 @@ export const addToCart = async (req, res) => {
 export const getCartCount = async (req, res) => {
   const userId = req.user.userId;
   try {
-    let cartQuery = Cart.findOne({ userId });
-    if (process.env.USE_FLAT_PRODUCT_SCHEMA !== 'true') {
-      cartQuery = cartQuery.populate("items.productId", "name variants images");
-    }
-    const cart = await cartQuery.lean();
+    const cart = await Cart.findOne({ userId }).lean();
     if (!cart) {
       return res.status(200).json({
         success: true,
@@ -211,14 +167,20 @@ export const getCartCount = async (req, res) => {
       });
     }
 
-    if (process.env.USE_FLAT_PRODUCT_SCHEMA === 'true') {
-      const itemsWithVariant = [];
-      for (const item of cart.items) {
+    const itemsWithVariant = [];
+    for (const item of cart.items) {
         if (!item.productId) continue;
         const styleGroupId = item.productId.toString();
-        const siblings = await ProductFlat.find({ styleGroupId, size: item.size, isDeleted: { $ne: true } }).lean();
+        const siblings = await ProductFlat.find({
+          $or: [
+            { styleGroupId },
+            ...(mongoose.Types.ObjectId.isValid(styleGroupId) ? [{ _id: styleGroupId }] : [])
+          ],
+          size: item.size,
+          isDeleted: { $ne: true }
+        }).lean();
         const matched = siblings.find(
-          (v) => generateColorVariantId(styleGroupId, v.color.name) === item.variantId.toString()
+          (v) => v._id.toString() === item.variantId.toString() || generateColorVariantId(styleGroupId, v.color?.name) === item.variantId.toString()
         ) || siblings[0];
 
         itemsWithVariant.push({
@@ -235,26 +197,6 @@ export const getCartCount = async (req, res) => {
         totalItems: itemsWithVariant.length,
         items: itemsWithVariant,
       });
-    }
-
-    const itemsWithVariant = cart.items.map((item) => {
-      const product = item.productId;
-      const variant = product?.variants?.find(
-        (v) => v._id.toString() === item.variantId.toString()
-      );
-      return {
-        ...item,
-        price: variant?.price || null,
-        mrp: variant?.mrp || null,
-      };
-    });
-    const merchantSet = new Set(cart.items.map(i => i.merchantId?.toString()));
-    res.status(200).json({
-      success: true,
-      totalCarts: merchantSet.size,
-      totalItems: itemsWithVariant.length,
-      items: itemsWithVariant,
-    });
   } catch (err) {
     console.error("Get cart count error:", err.message);
     res.status(500).json({ message: "Server error" });
@@ -268,12 +210,6 @@ export const getCart = async (req, res) => {
   try {
     let cartQuery = Cart.findOne({ userId })
       .populate("items.merchantId", "shopName address isOnline logo");
-    if (process.env.USE_FLAT_PRODUCT_SCHEMA !== 'true') {
-      cartQuery = cartQuery.populate({
-        path: "items.productId",
-        select: "name variants images categoryId subCategoryId brandId gender tags collectionIds",
-      });
-    }
 
     const cartDoc = await cartQuery.exec();
 
@@ -289,46 +225,52 @@ export const getCart = async (req, res) => {
 
     const cart = cartDoc.toObject();
 
-    if (process.env.USE_FLAT_PRODUCT_SCHEMA === 'true') {
-      for (const item of cart.items) {
-        if (!item.productId && !item.warehouseProductId) continue;
+    for (const item of cart.items) {
+      if (!item.productId && !item.warehouseProductId) continue;
 
-        if (item.source === 'warehouse') {
-          const whProduct = await Product.findById(item.warehouseProductId || item.productId).lean();
-          if (whProduct) {
-            const variant = whProduct.variants?.find(v => v._id.toString() === item.variantId.toString()) || whProduct.variants?.[0];
-            item.productId = whProduct;
-            item.price = variant?.price || 0;
-            item.mrp = variant?.mrp || 0;
-          } else {
-            item.price = 0;
-            item.mrp = 0;
-          }
-          continue;
-        }
-
-        const styleGroupId = item.productId.toString();
-        const siblings = await ProductFlat.find({ styleGroupId, size: item.size, isDeleted: { $ne: true } })
-          .populate('categoryId')
-          .populate('subCategoryId')
-          .populate('brandId')
-          .lean();
-        if (siblings.length > 0) {
-          const matched = siblings.find(
-            (v) => generateColorVariantId(styleGroupId, v.color.name) === item.variantId.toString()
-          ) || siblings[0];
-
-          item.productId = {
-            ...matched,
-            _id: styleGroupId, // Re-map _id to styleGroupId so routing/details lookups work
-          };
-          item.price = matched.price || 0;
-          item.mrp = matched.mrp || 0;
+      if (item.source === 'warehouse') {
+        const whProduct = await ProductFlat.findOne({
+          $or: [{ styleGroupId: item.warehouseProductId }, { _id: item.variantId }]
+        }).lean();
+        if (whProduct) {
+          item.productId = whProduct;
+          item.price = whProduct.price || 0;
+          item.mrp = whProduct.mrp || 0;
         } else {
-          item.productId = null;
           item.price = 0;
           item.mrp = 0;
         }
+        continue;
+      }
+
+      const styleGroupId = item.productId.toString();
+      const siblings = await ProductFlat.find({
+        $or: [
+          { styleGroupId },
+          ...(mongoose.Types.ObjectId.isValid(styleGroupId) ? [{ _id: styleGroupId }] : [])
+        ],
+        size: item.size,
+        isDeleted: { $ne: true }
+      })
+        .populate('categoryId')
+        .populate('subCategoryId')
+        .populate('brandId')
+        .lean();
+      if (siblings.length > 0) {
+        const matched = siblings.find(
+          (v) => v._id.toString() === item.variantId.toString() || generateColorVariantId(styleGroupId, v.color?.name) === item.variantId.toString()
+        ) || siblings[0];
+
+        item.productId = {
+          ...matched,
+          _id: styleGroupId,
+        };
+        item.price = matched.price || 0;
+        item.mrp = matched.mrp || 0;
+      } else {
+        item.productId = null;
+        item.price = 0;
+        item.mrp = 0;
       }
     }
 
@@ -366,21 +308,8 @@ export const getCart = async (req, res) => {
         };
       }
       
-      let price = 0;
-      let mrp = 0;
-      if (item.source === 'warehouse') {
-        price = item.price || 0;
-        mrp = item.mrp || 0;
-      } else if (process.env.USE_FLAT_PRODUCT_SCHEMA === 'true') {
-        price = item.price || 0;
-        mrp = item.mrp || 0;
-      } else {
-        const variant = product?.variants?.find(
-          (v) => v._id.toString() === item.variantId.toString()
-        );
-        price = variant?.price || 0;
-        mrp = variant?.mrp || 0;
-      }
+      const price = item.price || 0;
+      const mrp = item.mrp || 0;
 
       if (!merchantGroupMap[merchantKey]) {
         merchantGroupMap[merchantKey] = { merchant, items: [] };
@@ -449,7 +378,8 @@ export const getCart = async (req, res) => {
       const mReturnCharge = Math.round(deliveryInfo?.returnCharge || 0);
       const tip = Math.round(Number(deliveryTip) || 0);
       const mServiceGST = 0;
-      const mUpfrontPayable = Math.round(mDeliveryCharge + mReturnCharge + tip + mServiceGST);
+      // In Try & Buy, upfront payable is ₹0 (all fees settled post-trial)
+      const mUpfrontPayable = 0;
 
       const mTotals = {
         subtotal: Math.round(mSubtotal),
@@ -459,8 +389,8 @@ export const getCart = async (req, res) => {
         totalReturnCharge: mReturnCharge,
         deliveryTip: tip,
         serviceGST: mServiceGST,
-        totalUpfrontPayable: mUpfrontPayable,
-        finalTotal: Math.round(mSubtotal + mUpfrontPayable),
+        totalUpfrontPayable: 0,
+        finalTotal: Math.round(mSubtotal + mDeliveryCharge + mReturnCharge + tip + mServiceGST),
       };
 
       let mAppliedOffers = { appliedOffers: [], totalDiscount: 0, freeDelivery: false };
@@ -478,10 +408,11 @@ export const getCart = async (req, res) => {
           mTotals.totalDeliveryCharge = 0;
           mTotals.totalReturnCharge = 0;
           mTotals.serviceGST = 0;
-          mTotals.totalUpfrontPayable = Math.round(0 + 0 + tip + mTotals.serviceGST);
-          mTotals.finalTotal = Math.round(mSubtotal - mAppliedOffers.totalDiscount + mTotals.totalUpfrontPayable);
+          mTotals.totalUpfrontPayable = 0;
+          mTotals.finalTotal = Math.round(mSubtotal - mAppliedOffers.totalDiscount);
         } else {
-          mTotals.finalTotal = Math.round(mSubtotal - (mAppliedOffers.totalDiscount || 0) + mTotals.totalUpfrontPayable);
+          mTotals.totalUpfrontPayable = 0;
+          mTotals.finalTotal = Math.round(mSubtotal - (mAppliedOffers.totalDiscount || 0) + mDeliveryCharge + mReturnCharge + tip + mServiceGST);
         }
         mTotals.discount = Math.round((mMrpTotal - mSubtotal) + (mAppliedOffers.totalDiscount || 0));
       } catch (offerErr) {
@@ -566,18 +497,7 @@ export const updateCartQuantity = async (req, res) => {
     
     const productIds = cart.items.map(i => i.productId);
     
-    let products;
-    if (process.env.USE_FLAT_PRODUCT_SCHEMA === 'true') {
-      products = await ProductFlat.find({ styleGroupId: { $in: productIds } }).populate('categoryId').lean();
-      const foundProductIds = new Set(products.map(p => p.styleGroupId.toString()));
-      const missingProductIds = productIds.filter(id => !foundProductIds.has(id.toString()));
-      if (missingProductIds.length > 0) {
-        const legacyProducts = await Product.find({ _id: { $in: missingProductIds } }).populate('categoryId').lean();
-        products = [...products, ...legacyProducts];
-      }
-    } else {
-      products = await Product.find({ _id: { $in: productIds } }).populate('categoryId').lean();
-    }
+    const products = await ProductFlat.find({ styleGroupId: { $in: productIds } }).populate('categoryId').lean();
     
     const productMap = products.reduce((acc, p) => { 
       const key = p.styleGroupId ? p.styleGroupId.toString() : p._id.toString();

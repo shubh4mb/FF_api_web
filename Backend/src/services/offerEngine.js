@@ -298,8 +298,7 @@ export const findBestOffers = async (userId, cartContext, couponCode = null, sel
     validOffers.push(processedOffer);
   }
 
-  // --- NEW LOGIC: Manual Selection ---
-  // We no longer auto-apply the "best" stack. We only apply what the user selected.
+  // --- AUTO-APPLY QUALIFYING STORE OFFERS + EXPLICIT COUPONS ---
   let winningOffers = [];
   let availableOffers = [...validOffers]; // Return all that are eligible
 
@@ -308,14 +307,24 @@ export const findBestOffers = async (userId, cartContext, couponCode = null, sel
     return so.offerId?.toString() || so._id?.toString();
   });
 
-  // Filter valid offers by what the user explicitly selected
-  for (const offer of validOffers) {
-    if (selectedOfferIdsStr.includes(offer._id.toString())) {
-      winningOffers.push(offer);
+  if (selectedOfferIdsStr.length > 0) {
+    // User explicitly selected specific offer(s)
+    for (const offer of validOffers) {
+      if (selectedOfferIdsStr.includes(offer._id.toString())) {
+        winningOffers.push(offer);
+      }
+    }
+  } else {
+    // Automatically apply the best qualifying store/platform offer (offers that do NOT require a coupon code)
+    const autoQualifyingOffers = validOffers.filter(o => !o.requiresCoupon && !o.couponCode);
+    if (autoQualifyingOffers.length > 0) {
+      // Sort by highest totalValue/discountAmount
+      const sortedAuto = [...autoQualifyingOffers].sort((a, b) => (b.totalValue || b.discountAmount || 0) - (a.totalValue || a.discountAmount || 0));
+      winningOffers.push(sortedAuto[0]);
     }
   }
 
-  // Always apply explicit coupon if valid
+  // Always apply explicit coupon if user entered or selected a valid coupon code
   if (explicitCoupon && !winningOffers.find(o => o._id.toString() === explicitCoupon._id.toString())) {
     winningOffers.push(explicitCoupon);
   }

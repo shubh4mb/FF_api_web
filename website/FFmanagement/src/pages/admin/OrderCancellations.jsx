@@ -101,8 +101,13 @@ const OrderCancellations = () => {
 
                     {/* Merchant */}
                     <td className="px-6 py-4">
-                      <div className="font-semibold text-slate-800">
+                      <div className="font-semibold text-slate-800 flex items-center gap-1.5 flex-wrap">
                         {order.merchantId?.shopName || 'N/A'}
+                        {order.isWarehouseOrder && (
+                          <span className="text-[10px] bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full font-bold">
+                            Warehouse Order
+                          </span>
+                        )}
                       </div>
                     </td>
 

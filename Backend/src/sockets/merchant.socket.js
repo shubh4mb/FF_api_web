@@ -12,8 +12,14 @@ export const registerMerchantSockets = (io, socket) => {
     socket.join(`merchant:${merchantId}`);
     socket.data.merchantId = merchantId; // store merchantId on socket itself
 
-    // Update Redis State
-    await setMerchantMeta(merchantId, { lastSeenAt: Date.now() });
+    if (merchant.accountType === 'warehouse' && merchant.warehouseId) {
+      socket.join(`warehouse:${merchant.warehouseId}`);
+      socket.data.warehouseId = merchant.warehouseId;
+      console.log(`✅ Warehouse operator ${merchantId} joined room warehouse:${merchant.warehouseId}`);
+    }
+
+    // Update Redis State — mark merchant ONLINE so emitOrderUpdate delivers events
+    await setMerchantMeta(merchantId, { lastSeenAt: Date.now(), isOnline: true });
 
     console.log(`✅ Merchant ${merchantId} connected with socket ${socket.id} to room merchant:${merchantId}`);
   });
@@ -27,7 +33,7 @@ export const registerMerchantSockets = (io, socket) => {
 
       if (remainingSockets.length === 0) {
         // no more active sockets for this merchant in the entire cluster
-        await setMerchantMeta(merchantId, { lastSeenAt: Date.now() });
+        await setMerchantMeta(merchantId, { lastSeenAt: Date.now(), isOnline: false });
         console.log(`❌ Merchant ${merchantId} fully disconnected`);
       } else {
         console.log(

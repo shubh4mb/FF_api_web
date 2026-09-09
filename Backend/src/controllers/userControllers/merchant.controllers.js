@@ -25,16 +25,22 @@ export const getNearbyMerchants = async (req, res) => {
     }
 
     if (gender && gender !== 'All') {
-      filter.genderCategory = { $in: [gender, 'Unisex'] };
+      const gUpper = gender.toUpperCase();
+      const gTitle = gender.charAt(0).toUpperCase() + gender.slice(1).toLowerCase();
+      const variants = [gender, gUpper, gTitle, gender.toLowerCase(), 'Unisex', 'UNISEX', 'unisex'];
+      if (gUpper === 'KIDS' || gUpper === 'BOYS' || gUpper === 'GIRLS') {
+        variants.push('Kids', 'KIDS', 'kids', 'Boys', 'BOYS', 'boys', 'Girls', 'GIRLS', 'girls');
+      }
+      filter.genderCategory = { $in: [...new Set(variants)] };
     }
 
     const merchants = await Merchant.find(filter)
       .select('shopName logo genderCategory shipsWithinHours isOnline zoneId isZoneLive address backgroundImage rating stats')
       .lean();
 
-    const Product = (await import("../../models/product.model.js")).default;
+    const ProductFlat = (await import("../../models/productFlat.model.js")).default;
     const merchantsWithCount = await Promise.all(merchants.map(async (m) => {
-      const count = await Product.countDocuments({ merchantId: m._id, isActive: true });
+      const count = await ProductFlat.countDocuments({ merchantId: m._id, isActive: true, isDeleted: { $ne: true } });
       return {
         ...m,
         stats: {
@@ -57,11 +63,19 @@ export const getNearbyMerchants = async (req, res) => {
     try {
       const Warehouse = (await import("../../models/warehouse.model.js")).default;
       const activeWarehouses = await Warehouse.find({ isActive: true }).lean();
-      const totalWarehouseProducts = await Product.countDocuments({ source: 'warehouse', isActive: true });
+      const totalWarehouseProducts = await ProductFlat.countDocuments({
+        $or: [{ source: 'warehouse' }, { warehouseId: { $exists: true, $ne: null } }],
+        isActive: true,
+        isDeleted: { $ne: true }
+      });
 
       if (activeWarehouses.length > 0) {
         for (const wh of activeWarehouses) {
-          const whCount = await Product.countDocuments({ warehouseId: wh._id, source: 'warehouse', isActive: true });
+          const whCount = await ProductFlat.countDocuments({
+            $or: [{ warehouseId: wh._id }, { source: 'warehouse' }],
+            isActive: true,
+            isDeleted: { $ne: true }
+          });
           warehouseStores.push({
             _id: wh._id.toString(),
             shopName: wh.name || 'FlashFits Warehouse Hub',

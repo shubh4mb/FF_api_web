@@ -1,5 +1,5 @@
 import Order from "../../models/order.model.js";
-import Product from "../../models/product.model.js";
+import WarehouseOrder from "../../models/warehouseOrder.model.js";
 import Cart from '../../models/cart.model.js';
 import CourierOrder from "../../models/courierOrder.model.js";
 import DeliveryRider from '../../models/deliveryRider.model.js';
@@ -27,6 +27,7 @@ import AppConfig from "../../models/appConfig.model.js";
 import { generateReceiptPDF } from "../../utils/pdfGenerator.js";
 import { sendMerchantPaymentReceiptEmail } from "../../services/mail.service.js";
 import { createWarehouseTBOrder } from "./warehouseOrder.controllers.js";
+import { cancelAndCleanupOrder } from "../../helperFns/orderCancellationHelper.js";
 
 export const createRazorpayOrder = async (req, res) => {
   try {
@@ -48,29 +49,23 @@ export const createRazorpayOrder = async (req, res) => {
 
     // === VALIDATE CART ===
     let cart;
-    if (process.env.USE_FLAT_PRODUCT_SCHEMA === 'true') {
-      const cartDoc = await Cart.findOne({ userId }).populate("items.merchantId");
-      if (cartDoc) {
-        cart = cartDoc.toObject();
-        for (const item of cart.items) {
-          if (!item.productId) continue;
-          const styleGroupId = item.productId.toString();
-          const siblings = await ProductFlat.find({ styleGroupId, size: item.size, isDeleted: { $ne: true } }).lean();
-          if (siblings.length > 0) {
-            const matched = siblings.find(
-              (v) => generateColorVariantId(styleGroupId, v.color.name) === item.variantId.toString()
-            ) || siblings[0];
+    const cartDoc = await Cart.findOne({ userId }).populate("items.merchantId");
+    if (cartDoc) {
+      cart = cartDoc.toObject();
+      for (const item of cart.items) {
+        if (!item.productId) continue;
+        const styleGroupId = item.productId.toString();
+        const siblings = await ProductFlat.find({ styleGroupId, size: item.size, isDeleted: { $ne: true } }).lean();
+        if (siblings.length > 0) {
+          const matched = siblings.find(
+            (v) => generateColorVariantId(styleGroupId, v.color?.name) === item.variantId?.toString()
+          ) || siblings[0];
 
-            item.productId = matched;
-          } else {
-            item.productId = null;
-          }
+          item.productId = matched;
+        } else {
+          item.productId = null;
         }
       }
-    } else {
-      cart = await Cart.findOne({ userId })
-        .populate("items.productId")
-        .populate("items.merchantId");
     }
 
     if (!cart || cart.items.length === 0) {
@@ -173,26 +168,11 @@ export const createRazorpayOrder = async (req, res) => {
       let isTriable = false;
       let pId = null;
 
-      if (process.env.USE_FLAT_PRODUCT_SCHEMA === 'true') {
-        price = product.price || 0;
-        stock = product.stock || 0;
-        name = product.name;
-        isTriable = product.isTriable;
-        pId = product.styleGroupId || product._id;
-      } else {
-        const variant = product.variants.id(item.variantId);
-        if (!variant) continue;
-
-        const sizeObj = variant.sizes.find(s => s.size === item.size);
-        if (!sizeObj) {
-          return res.status(400).json({ message: `Size ${item.size} not found for product ${product.name}` });
-        }
-        price = variant.price;
-        stock = sizeObj.stock;
-        name = product.name;
-        isTriable = product.isTriable;
-        pId = product._id;
-      }
+      price = product.price || 0;
+      stock = product.stock || 0;
+      name = product.name;
+      isTriable = product.isTriable;
+      pId = product.styleGroupId || product._id;
 
       if (stock < item.quantity) {
         return res.status(400).json({ message: `Insufficient stock for ${name} (Size: ${item.size}). Available: ${stock}, Requested: ${item.quantity}` });
@@ -257,24 +237,13 @@ export const createRazorpayOrder = async (req, res) => {
     const serviceGST = 0;
 
     // === FINAL PAYABLE ===
-    // Customer pays delivery + return charge + tip + service GST upfront.
-    const upfrontPayable = Math.round(deliveryCharge + returnCharge + deliveryTip + serviceGST);
-    const finalPayable = Math.round(totalAmount - offerDiscount + upfrontPayable);
+    // In Try & Buy, upfront delivery fee is ₹0 (all fees & kept items are settled post-trial at doorstep)
+    const upfrontPayable = 0;
+    const finalPayable = Math.round(totalAmount - offerDiscount + deliveryCharge + returnCharge + deliveryTip + serviceGST);
 
-    let razorpayOrderId = `free_${Date.now()}`;
-    let paymentStatus = "delivery_fee_paid";
-    
-    if (upfrontPayable > 0) {
-      // === RAZORPAY ORDER ===
-      const razorpayOrder = await razorpay.orders.create({
-        amount: upfrontPayable * 100, // Only pay delivery-related fees upfront
-        currency: "INR",
-        receipt: `receipt_${Date.now()}`,
-        payment_capture: 1,
-      });
-      razorpayOrderId = razorpayOrder.id;
-      paymentStatus = "pending";
-    }
+    const razorpayOrderId = `free_${Date.now()}`;
+    const paymentStatus = "delivery_fee_paid";
+    const orderStatus = "placed";
 
     // === SAVE ORDER IN DB ===
     const pendingOrder = new Order({
@@ -324,6 +293,20 @@ export const createRazorpayOrder = async (req, res) => {
 
   await pendingOrder.save();
 
+  // Reserve stock in ProductFlat for ordered merchant items
+  for (const item of merchantItems) {
+    if (item.variantId) {
+      try {
+        await ProductFlat.updateOne(
+          { _id: item.variantId },
+          { $inc: { reservedStock: item.quantity || 1 } }
+        );
+      } catch (stockErr) {
+        console.error(`Error reserving stock for variant ${item.variantId}:`, stockErr);
+      }
+    }
+  }
+
   // === RECORD OFFER USAGE ===
   if (paymentStatus === "delivery_fee_paid") {
     // Free order means placed directly
@@ -368,46 +351,31 @@ export const createRazorpayOrder = async (req, res) => {
   }
 
   // Log audit event
-  if (paymentStatus === "delivery_fee_paid") {
-    await logAuditEvent({
-      action: "ORDER_PLACED",
-      message: `Free order #${pendingOrder._id.toString().slice(-5).toUpperCase()} placed directly. No upfront fee required.`,
-      status: "success",
-      orderId: pendingOrder._id,
-      userId,
-      merchantId,
-      details: {
-        totalAmount,
-        finalPayable,
-      },
-      req,
-    });
-  } else {
-    await logAuditEvent({
-      action: "PAYMENT_INITIATED",
-      message: `Upfront payment of ₹${upfrontPayable} initiated for order #${pendingOrder._id.toString().slice(-5).toUpperCase()}`,
-      status: "pending",
-      orderId: pendingOrder._id,
-      userId,
-      merchantId,
-      details: {
-        razorpayOrderId,
-        upfrontPayable,
-        totalAmount,
-        finalPayable,
-      },
-      req,
-    });
-  }
+  await logAuditEvent({
+    action: "ORDER_PLACED",
+    message: `Free order #${pendingOrder._id.toString().slice(-5).toUpperCase()} placed directly. No upfront fee required.`,
+    status: "success",
+    orderId: pendingOrder._id,
+    userId,
+    merchantId,
+    details: {
+      totalAmount,
+      finalPayable,
+    },
+    req,
+  });
 
   // === RESPONSE ===
   return res.status(200).json({
     success: true,
     razorpayOrderId: razorpayOrderId,
-    amount: Math.round(upfrontPayable * 100),
+    amount: 0,
     key_id: process.env.RAZORPAY_KEY_ID,
     orderId: pendingOrder._id,
-    totalDeliveryFee: upfrontPayable,
+    totalAmount,
+    totalDeliveryFee: 0,
+    upfrontPayable: 0,
+    finalPayable,
     deliveryCharge,
     returnCharge,
     deliveryTip,
@@ -417,7 +385,7 @@ export const createRazorpayOrder = async (req, res) => {
     contact: deliveryAddress.phone,
     name: deliveryAddress.name,
     email: req.user.email || "customer@example.com",
-    isFreeOrder: paymentStatus === "delivery_fee_paid"
+    isFreeOrder: true
   });
 
 } catch (error) {
@@ -957,15 +925,34 @@ export const getOrderForUser = async (req, res) => {
 export const getAllOrders = async (req, res) => {
   try {
     const userId = req.user.userId;
-    const orders = await Order.find({ userId })
-      .select('orderStatus items totalAmount customerDeliveryStatus createdAt merchantDetails deliveryCharge finalBilling deliveryRiderStatus deliveryMode isCourier')
-      .sort({ createdAt: -1 })
-      .lean();
-    return res.status(200).json({ orders });
+    const [orders, warehouseOrders] = await Promise.all([
+      Order.find({ userId })
+        .select('orderStatus items totalAmount customerDeliveryStatus createdAt merchantDetails deliveryCharge finalBilling deliveryRiderStatus deliveryMode isCourier')
+        .sort({ createdAt: -1 })
+        .lean(),
+      WarehouseOrder.find({ userId })
+        .select('orderStatus items totalAmount customerDeliveryStatus createdAt warehouseDetails deliveryCharge finalBilling deliveryRiderStatus fulfillmentType')
+        .sort({ createdAt: -1 })
+        .lean(),
+    ]);
+
+    const formattedWarehouseOrders = (warehouseOrders || []).map(wo => ({
+      ...wo,
+      isWarehouseOrder: true,
+      deliveryMode: wo.fulfillmentType === 'courier' ? 'courier' : 'try_and_buy',
+      merchantDetails: wo.warehouseDetails || { name: 'FlashFits Warehouse' },
+    }));
+
+    const allOrders = [...(orders || []), ...formattedWarehouseOrders].sort(
+      (a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
+    );
+
+    return res.status(200).json({ orders: allOrders });
   } catch (error) {
+    console.error("Error in getAllOrders:", error);
     return res.status(500).json({ message: 'Failed to fetch orders' });
   }
-}
+};
 
 export const initiateReturn = async (req, res) => {
   const session = await mongoose.startSession();
@@ -985,7 +972,12 @@ export const initiateReturn = async (req, res) => {
       return res.status(400).json({ message: "Items array with tryStatus is required" });
     }
 
-    const order = await Order.findById(orderId).populate('items.productId').session(session);
+    let order = await Order.findById(orderId).populate('items.productId').session(session);
+    let isWarehouseOrder = false;
+    if (!order) {
+      order = await WarehouseOrder.findById(orderId).session(session);
+      if (order) isWarehouseOrder = true;
+    }
     if (!order) {
       await session.abortTransaction();
       session.endSession();
@@ -1090,13 +1082,41 @@ export const initiateReturn = async (req, res) => {
 export const getOrderById = async (req, res) => {
   try {
     const { orderId } = req.params;
-    const cleanOrderId = orderId.replace(/^"|"$/g, '');
-    const order = await Order.findById(cleanOrderId)
+    const cleanOrderId = orderId.replace(/^"|"$/g, '').trim();
+
+    let order = await Order.findById(cleanOrderId)
       .select('-deliveryTracking -razorpayPaymentId -razorpayOrderId')
+      .populate('deliveryRiderId', 'name phone location')
       .lean();
+
+    if (!order) {
+      order = await WarehouseOrder.findById(cleanOrderId)
+        .select('-deliveryTracking -razorpayPaymentId -razorpayOrderId')
+        .populate('deliveryRiderId', 'name phone location')
+        .lean();
+
+      if (order) {
+        order.isWarehouseOrder = true;
+        if (!order.merchantDetails && order.warehouseDetails) {
+          order.merchantDetails = { name: order.warehouseDetails.name || 'FlashFits Warehouse' };
+        }
+      }
+    }
+
     if (!order) return res.status(404).json({ message: "Order not found" });
+
+    // Include deliveryRiderDetails if deliveryRiderId is populated
+    if (order.deliveryRiderId && typeof order.deliveryRiderId === 'object') {
+      order.deliveryRiderDetails = {
+        name: order.deliveryRiderId.name,
+        phone: order.deliveryRiderId.phone,
+        location: order.deliveryRiderId.location,
+      };
+    }
+
     return res.status(200).json({ order });
   } catch (error) {
+    console.error("Error in getOrderById:", error);
     return res.status(500).json({ message: "Internal server error" });
   }
 };
@@ -1113,9 +1133,16 @@ export const createFinalPaymentRazorpayOrder = async (req, res) => {
       return res.status(400).json({ message: "Items array with tryStatus is required" });
     }
 
-    const order = await Order.findOne({ _id: orderId, userId })
+    let order = await Order.findOne({ _id: orderId, userId })
       .populate("items.productId")
       .populate("merchantId");
+    let isWarehouseOrder = false;
+
+    if (!order) {
+      order = await WarehouseOrder.findOne({ _id: orderId, userId })
+        .populate("warehouseId");
+      if (order) isWarehouseOrder = true;
+    }
 
     if (!order) {
       return res.status(404).json({ message: "Order not found" });
@@ -1147,28 +1174,24 @@ export const createFinalPaymentRazorpayOrder = async (req, res) => {
     );
 
     if (acceptedItems.length === 0) {
-      // All items returned - no payment needed
+      // All items returned - customer will pay delivery/return fee directly to rider
       order.orderStatus = "selection_made";
-      order.customerDeliveryStatus = 'completed';
-      order.deliveryRiderStatus = "returning";
+      order.customerDeliveryStatus = 'awaiting_payment';
+      // Keep rider in try_phase so rider stays on DeliveryDetails to verify OTP, photo, and collect cash
+      order.deliveryRiderStatus = "try_phase";
 
-      // === SETTLE RIDER even when all items returned ===
-      // Rider still did the delivery + return trip and deserves payment
-      try {
-        const { settleOrder } = await import("../../helperFns/orderSettlement.js");
-        await settleOrder(order);
-      } catch (settleErr) {
-        console.error("Settlement error (all returned, non-fatal):", settleErr.message);
-        order.settlementStatus = 'failed';
+      // Ensure valid OTP exists for the customer to share with the rider
+      if (!order.otp) {
+        order.otp = Math.floor(1000 + Math.random() * 9000);
       }
 
       await order.save();
       const io = getIO();
-      emitOrderUpdate(io, orderId, order)
+      emitOrderUpdate(io, orderId, order);
 
       await logAuditEvent({
-        action: "ORDER_COMPLETED",
-        message: `Order #${order._id.toString().slice(-5).toUpperCase()} completed. All items returned, no payment required.`,
+        action: "ORDER_SELECTION_MADE",
+        message: `Order #${order._id.toString().slice(-5).toUpperCase()} marked all items return. Awaiting rider OTP verification and cash collection.`,
         status: "success",
         orderId: order._id,
         userId,
@@ -1182,10 +1205,12 @@ export const createFinalPaymentRazorpayOrder = async (req, res) => {
 
       return res.status(200).json({
         success: true,
-        message: "All items returned. No payment required.",
+        message: "All items marked as return. Please share OTP and payment directly with delivery partner.",
         orderId: order._id,
         order: order,
         requiresPayment: false,
+        requiresDeliveryFee: true,
+        deliveryFeeAmount: (order.deliveryCharge || 40) + (order.returnCharge || 30),
       });
     }
 
@@ -1243,7 +1268,9 @@ export const createFinalPaymentRazorpayOrder = async (req, res) => {
     // === STEP 2: Use Helper Function for Billing Calculation ===
     const billing = calculateFinalBilling({
       orderItems: order.items,
-      returnCharge: order.returnCharge,
+      deliveryCharge: order.deliveryCharge || 0,
+      returnCharge: order.returnCharge || 0,
+      deliveryTip: order.finalBilling?.deliveryTip || 0,
       trialPhaseStart: order.trialPhaseStart,
       trialPhaseEnd: order.trialPhaseEnd,
       discountToApply: recalculatedDiscount
@@ -1344,8 +1371,15 @@ export const verifyFinalPayment = async (req, res) => {
       return res.status(400).json({ success: false, message: "Invalid signature" });
     }
 
-    const order = await Order.findOne({ _id: orderId, userId }).session(session);
+    let order = await Order.findOne({ _id: orderId, userId }).session(session);
+    let isWarehouseOrder = false;
+    if (!order) {
+      order = await WarehouseOrder.findOne({ _id: orderId, userId }).session(session);
+      if (order) isWarehouseOrder = true;
+    }
     if (!order || order.razorpayOrderId !== razorpay_order_id) {
+      await session.abortTransaction();
+      session.endSession();
       return res.status(400).json({ message: "Invalid order" });
     }
 
@@ -1383,31 +1417,25 @@ export const verifyFinalPayment = async (req, res) => {
     // === Deduct stock ONLY for accepted/kept items ===
     const stockUpdateErrors = [];
     for (const item of acceptedItems) {
-      if (process.env.USE_FLAT_PRODUCT_SCHEMA === 'true') {
+      let targetDoc = null;
+      if (item.variantId) {
+        targetDoc = await ProductFlat.findById(item.variantId);
+      }
+      if (!targetDoc && item.productId) {
         const docs = await ProductFlat.find({ styleGroupId: item.productId, size: item.size });
-        const targetDoc = docs.find(d => generateColorVariantId(item.productId.toString(), d.color.name) === item.variantId.toString());
-        if (targetDoc) {
-          const result = await ProductFlat.updateOne(
-            { _id: targetDoc._id },
-            { $inc: { stock: -item.quantity } },
-            { session }
-          );
-          if (result.modifiedCount === 0) {
-            stockUpdateErrors.push(item.productId);
-          }
-        } else {
-          stockUpdateErrors.push(item.productId);
-        }
-      } else {
-        const result = await Product.updateOne(
-          { _id: item.productId, "variants._id": item.variantId },
-          { $inc: { "variants.$[variant].sizes.$[size].stock": -item.quantity } },
-          { arrayFilters: [{ "variant._id": item.variantId }, { "size.size": item.size }], session }
+        targetDoc = docs.find(d => generateColorVariantId(item.productId.toString(), d.color?.name) === item.variantId?.toString()) || docs[0];
+      }
+      if (targetDoc) {
+        const result = await ProductFlat.updateOne(
+          { _id: targetDoc._id },
+          { $inc: { stock: -item.quantity } },
+          { session }
         );
         if (result.modifiedCount === 0) {
           stockUpdateErrors.push(item.productId);
-          console.warn(`Stock not updated for product ${item.productId} — may already be 0`);
         }
+      } else {
+        stockUpdateErrors.push(item.productId);
       }
     }
 
@@ -1516,7 +1544,12 @@ export const verifyFinalPaymentCod = async (req, res) => {
       cleanOrderId = cleanOrderId.replace(/^["']|["']$/g, '').trim();
     }
 
-    const order = await Order.findOne({ _id: cleanOrderId, userId }).session(session);
+    let order = await Order.findOne({ _id: cleanOrderId, userId }).session(session);
+    let isWarehouseOrder = false;
+    if (!order) {
+      order = await WarehouseOrder.findOne({ _id: cleanOrderId, userId }).session(session);
+      if (order) isWarehouseOrder = true;
+    }
     if (!order) {
       await session.abortTransaction();
       session.endSession();
@@ -1603,7 +1636,9 @@ export const verifyFinalPaymentCod = async (req, res) => {
 
     const billing = calculateFinalBilling({
       orderItems: order.items,
-      returnCharge: order.returnCharge,
+      deliveryCharge: order.deliveryCharge || 0,
+      returnCharge: order.returnCharge || 0,
+      deliveryTip: order.finalBilling?.deliveryTip || 0,
       trialPhaseStart: order.trialPhaseStart,
       trialPhaseEnd: order.trialPhaseEnd,
       discountToApply: recalculatedDiscount
@@ -1654,30 +1689,25 @@ export const verifyFinalPaymentCod = async (req, res) => {
     // === Deduct stock for accepted items ===
     const stockUpdateErrors = [];
     for (const item of acceptedItems) {
-      if (process.env.USE_FLAT_PRODUCT_SCHEMA === 'true') {
+      let targetDoc = null;
+      if (item.variantId) {
+        targetDoc = await ProductFlat.findById(item.variantId);
+      }
+      if (!targetDoc && item.productId) {
         const docs = await ProductFlat.find({ styleGroupId: item.productId, size: item.size });
-        const targetDoc = docs.find(d => generateColorVariantId(item.productId.toString(), d.color.name) === item.variantId.toString());
-        if (targetDoc) {
-          const result = await ProductFlat.updateOne(
-            { _id: targetDoc._id },
-            { $inc: { stock: -item.quantity } },
-            { session }
-          );
-          if (result.modifiedCount === 0) {
-            stockUpdateErrors.push(item.productId);
-          }
-        } else {
-          stockUpdateErrors.push(item.productId);
-        }
-      } else {
-        const result = await Product.updateOne(
-          { _id: item.productId, "variants._id": item.variantId },
-          { $inc: { "variants.$[variant].sizes.$[size].stock": -item.quantity } },
-          { arrayFilters: [{ "variant._id": item.variantId }, { "size.size": item.size }], session }
+        targetDoc = docs.find(d => generateColorVariantId(item.productId.toString(), d.color?.name) === item.variantId?.toString()) || docs[0];
+      }
+      if (targetDoc) {
+        const result = await ProductFlat.updateOne(
+          { _id: targetDoc._id },
+          { $inc: { stock: -item.quantity } },
+          { session }
         );
         if (result.modifiedCount === 0) {
           stockUpdateErrors.push(item.productId);
         }
+      } else {
+        stockUpdateErrors.push(item.productId);
       }
     }
 
@@ -1764,119 +1794,49 @@ export const verifyFinalPaymentCod = async (req, res) => {
 };
 
 export const cancelOrder = async (req, res) => {
-  const session = await mongoose.startSession();
-  session.startTransaction();
-
   try {
     const { orderId } = req.params;
     const userId = req.user.userId;
 
-    const order = await Order.findOne({ _id: orderId, userId }).session(session);
-    
+    let order = await Order.findById(orderId);
     if (!order) {
-      await session.abortTransaction();
-      session.endSession();
+      order = await WarehouseOrder.findById(orderId);
+    }
+
+    if (!order) {
       return res.status(404).json({ message: "Order not found" });
     }
 
+    // Ownership check
+    if (order.userId.toString() !== userId.toString()) {
+      return res.status(403).json({ message: "Forbidden: You do not own this order" });
+    }
+
     if (order.orderStatus !== "placed") {
-      await session.abortTransaction();
-      session.endSession();
       return res.status(400).json({ message: `Cannot cancel order in ${order.orderStatus} state` });
     }
 
-    // 💰 Refund full upfront amount to customer wallet
-    const refundAmount = (order.deliveryCharge || 0) + (order.returnCharge || 0) + (order.finalBilling?.deliveryTip || 0) + (order.finalBilling?.serviceGST || 0);
-
-    if (refundAmount > 0) {
-      const { creditWallet } = await import("../../helperFns/walletHelper.js");
-      await creditWallet({
-        ownerType: "user",
-        ownerId: order.userId,
-        amount: refundAmount,
-        description: `Refund: Cancelled order #${order._id.toString().slice(-5).toUpperCase()}`,
-        orderId: order._id,
-        session
-      });
-      order.paymentStatus = "refunded";
-    }
-
-    order.orderStatus = "cancelled";
-    order.customerDeliveryStatus = "cancelled";
-    await order.save({ session });
-
-    await logAuditEvent({
-      action: "ORDER_CANCELLED",
-      message: `Order #${order._id.toString().slice(-5).toUpperCase()} was cancelled by user. Upfront amount ₹${refundAmount} refunded to wallet.`,
-      status: "success",
-      orderId: order._id,
-      userId: order.userId,
-      merchantId: order.merchantId,
-      details: { refundAmount },
+    const result = await cancelAndCleanupOrder({
+      orderId,
+      cancelledBy: 'user',
+      reason: req.body.reason || 'Cancelled by user',
+      action: 'cancelled',
       req,
     });
 
-    // Remove from pending orders queue if it exists and free the assigned rider
-    const PendingOrder = (await import("../../models/pendingOrders.model.js")).default;
-    const pendingOrderDoc = await PendingOrder.findOne({ orderId: order._id }).session(session);
-    if (pendingOrderDoc) {
-      const riderIdToFree = pendingOrderDoc.assignedRider;
-      if (riderIdToFree) {
-        const deliveryRiderModel = (await import("../../models/deliveryRider.model.js")).default;
-        await deliveryRiderModel.findByIdAndUpdate(riderIdToFree, {
-          currentOrderId: null,
-          isBusy: false,
-          isAvailable: true,
-        }).session(session);
-
-        try {
-          const { getRiderMeta, setRiderMeta } = await import("../../helperFns/deliveryRiderFns.js");
-          const meta = await getRiderMeta(riderIdToFree);
-          await setRiderMeta(riderIdToFree, meta?.zoneId || 'global', {
-            isBusy: "false",
-            assignedOrderId: "",
-          });
-        } catch (redisErr) {
-          console.error("Redis meta cleanup error during cancellation (non-fatal):", redisErr);
-        }
-      }
-      await PendingOrder.deleteOne({ _id: pendingOrderDoc._id }).session(session);
+    if (!result.success) {
+      return res.status(result.statusCode || 400).json({ message: result.error });
     }
-
-    // Clear any active assignment timeout
-    try {
-      const { clearRiderTimeout } = await import("../../helperFns/riderTimeoutHelper.js");
-      clearRiderTimeout(order._id);
-    } catch (timeoutErr) {
-      console.error("Timeout cleanup error during cancellation (non-fatal):", timeoutErr);
-    }
-
-    await session.commitTransaction();
-    session.endSession();
-
-    // 📱 Customer notification: "Order Cancelled"
-    notifyOrderEvent("customer", "order_cancelled", {
-      userId: order.userId,
-      orderId: order._id,
-      amount: refundAmount,
-    });
-    
-    // Also notify merchant via socket since order is cancelled before they accepted
-    const io = getIO();
-    emitOrderUpdate(io, order._id.toString(), order);
-    const { notifyMerchant } = await import("../../sockets/merchant.socket.js");
-    notifyMerchant(io, order.merchantId, `Order #${order._id.toString().slice(-5).toUpperCase()} was cancelled by user.`);
 
     return res.status(200).json({
       success: true,
-      message: "Order cancelled successfully, upfront fee refunded to wallet",
-      order
+      message: result.message || "Order cancelled successfully, upfront fee refunded to wallet",
+      order: result.order,
+      refundAmount: result.refundAmount,
     });
 
   } catch (error) {
     console.error("Cancel Order Error:", error);
-    await session.abortTransaction();
-    session.endSession();
     return res.status(500).json({ message: "Server error" });
   }
 };
@@ -1884,9 +1844,15 @@ export const cancelOrder = async (req, res) => {
 export const reportUnresponsiveRider = async (req, res) => {
   try {
     const { orderId } = req.params;
-    const userId = req.userId;
+    const userId = req.user?.userId || req.user?._id || req.userId;
 
-    const order = await Order.findOne({ _id: orderId, userId });
+    let order = await Order.findOne({ _id: orderId, userId });
+    let isWarehouseOrder = false;
+    if (!order) {
+      order = await WarehouseOrder.findOne({ _id: orderId, userId });
+      if (order) isWarehouseOrder = true;
+    }
+
     if (!order) {
       return res.status(404).json({ success: false, message: "Order not found" });
     }

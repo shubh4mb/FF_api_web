@@ -65,12 +65,16 @@ io.on('connection', (socket) => {
 
   if (role === "merchant") {
     registerMerchantSockets(io, socket);
-  } else if (role === "warehouse") {
+  } else if (role === "warehouse" || role === "admin") {
     registerWarehouseOrderSockets(io, socket);
   } else if (role === "user") {
     registerUserSockets(io, socket);
   } else if (role === "deliveryRider") {
     registerDeliveryRiderSockets(io, socket);
+  } else {
+    // Default: register warehouse and merchant sockets
+    registerWarehouseOrderSockets(io, socket);
+    registerMerchantSockets(io, socket);
   }
 
   registerOrderSockets(io, socket);
@@ -78,9 +82,6 @@ io.on('connection', (socket) => {
   socket.on('disconnect', () => {
     console.log(`❌ Socket disconnected: ${socket.id}`);
   });
-
-  socket.on("joinOrderRoom", (orderId) => socket.join(orderId));
-  socket.on("leaveOrderRoom", (orderId) => socket.leave(orderId));
 });
 
 // Start server (Render compatible)

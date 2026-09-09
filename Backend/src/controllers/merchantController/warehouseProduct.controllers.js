@@ -1,16 +1,32 @@
-import Product from '../../models/product.model.js';
+import ProductFlat from '../../models/productFlat.model.js';
 import Warehouse from '../../models/warehouse.model.js';
 import Merchant from '../../models/merchant.model.js';
-import Category from '../../models/category.model.js';
 import Brand from '../../models/brand.model.js';
 import { storageService } from '../../services/storage.service.js';
 import { asyncHandler } from '../../utils/asyncHandler.js';
 import { ApiError } from '../../utils/ApiError.js';
 import { ApiResponse } from '../../utils/ApiResponse.js';
+import crypto from 'crypto';
+import mongoose from 'mongoose';
+
+/**
+ * Helper to group flat variants for the response
+ */
+const makeFlatPayload = (siblings, extraData = {}) => {
+  if (!siblings || !siblings.length) return null;
+  const activeProduct = siblings[0];
+  const otherSiblings = siblings.slice(1);
+  return {
+    isFlatPayload: true,
+    activeProduct,
+    siblings: otherSiblings,
+    ...extraData
+  };
+};
 
 /**
  * GET /merchant/warehouse-products
- * List all products for the logged-in operator's warehouse.
+ * List all products for the logged-in operator's warehouse, grouped by styleGroupId.
  */
 export const getMyWarehouseProducts = asyncHandler(async (req, res) => {
   const merchant = await Merchant.findById(req.merchantId);
@@ -25,18 +41,32 @@ export const getMyWarehouseProducts = asyncHandler(async (req, res) => {
   if (gender) filter.gender = gender;
 
   const skip = (Number(page) - 1) * Number(limit);
-  const [products, total] = await Promise.all([
-    Product.find(filter)
-      .populate('merchantId', 'shopName phoneNumber')
-      .populate('brandId', 'name')
-      .populate('categoryId', 'name')
-      .populate('subCategoryId', 'name')
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(Number(limit))
-      .lean(),
-    Product.countDocuments(filter),
+
+  const pipeline = [
+    { $match: filter },
+    { $sort: { createdAt: -1 } },
+    {
+      $group: {
+        _id: '$styleGroupId',
+        doc: { $first: '$$ROOT' }
+      }
+    },
+    { $replaceRoot: { newRoot: '$doc' } },
+    { $sort: { createdAt: -1 } },
+    { $skip: skip },
+    { $limit: Number(limit) },
+  ];
+
+  const products = await ProductFlat.aggregate(pipeline);
+  await ProductFlat.populate(products, [
+    { path: 'merchantId', select: 'shopName phoneNumber' },
+    { path: 'brandId', select: 'name' },
+    { path: 'categoryId', select: 'name' },
+    { path: 'subCategoryId', select: 'name' }
   ]);
+
+  const uniqueStyleGroups = await ProductFlat.distinct('styleGroupId', filter);
+  const total = uniqueStyleGroups.length;
 
   return res
     .status(200)
@@ -44,212 +74,9 @@ export const getMyWarehouseProducts = asyncHandler(async (req, res) => {
 });
 
 /**
- * POST /merchant/warehouse-products/add
- * Add a new product listing to the operator's warehouse.
- */
-export const addMyWarehouseProduct = asyncHandler(async (req, res) => {
-  const merchant = await Merchant.findById(req.merchantId);
-  if (!merchant || merchant.accountType !== 'warehouse' || !merchant.warehouseId) {
-    throw new ApiError(403, 'Not a warehouse operator or no warehouse linked');
-  }
-
-  const {
-    sourceProductId,
-    merchantId,
-    name,
-    description,
-    brandId,
-    categoryId,
-    subCategoryId,
-    subSubCategoryId,
-    gender,
-    tags,
-    features,
-    attributes,
-    isTriable,
-    commissionRate,
-  } = req.body;
-
-  if (!merchantId || !name || !categoryId || !gender) {
-    throw new ApiError(400, 'merchantId, name, categoryId, and gender are required');
-  }
-
-  const sourceMerchant = await Merchant.findById(merchantId);
-  if (!sourceMerchant) throw new ApiError(404, 'Source Merchant not found');
-
-  const warehouseProduct = await Product.create({
-    sourceProductId: sourceProductId || null,
-    merchantId: merchantId,
-    source: 'warehouse',
-    warehouseId: merchant.warehouseId,
-    name,
-    description,
-    brandId,
-    categoryId,
-    subCategoryId,
-    subSubCategoryId,
-    gender: (Array.isArray(gender) ? gender : [gender]).map(g => String(g).toUpperCase()),
-    tags: tags || [],
-    features: features || {},
-    attributes: attributes || [],
-    isTriable: isTriable ?? true,
-    commissionRate: commissionRate ?? null,
-    variants: [],
-  });
-
-  return res
-    .status(201)
-    .json(new ApiResponse(201, { warehouseProduct }, 'Warehouse product created. Add variants next.'));
-});
-
-/**
- * POST /merchant/warehouse-products/:warehouseProductId/variants
- * Add a variant to a product in the operator's warehouse.
- */
-export const addMyWarehouseProductVariant = asyncHandler(async (req, res) => {
-  const merchant = await Merchant.findById(req.merchantId);
-  if (!merchant || merchant.accountType !== 'warehouse' || !merchant.warehouseId) {
-    throw new ApiError(403, 'Not a warehouse operator');
-  }
-
-  const { warehouseProductId } = req.params;
-  const { color, sizes, mrp, price, discount } = req.body;
-
-  let parsedColor, parsedSizes;
-  try {
-    parsedColor = typeof color === 'string' ? JSON.parse(color) : color;
-    parsedSizes = typeof sizes === 'string' ? JSON.parse(sizes) : sizes;
-  } catch {
-    throw new ApiError(400, 'Invalid JSON in color or sizes');
-  }
-
-  const safeNum = (v) => { const n = Number(v); return isNaN(n) ? 0 : n; };
-
-  let uploadedImages = [];
-  if (req.files && req.files.length > 0) {
-    uploadedImages = await storageService.uploadMultiple(req.files, 'warehouse-products');
-  }
-
-  const warehouseProduct = await Product.findOne({
-    _id: warehouseProductId,
-    warehouseId: merchant.warehouseId,
-  });
-  if (!warehouseProduct) throw new ApiError(404, 'Warehouse product not found');
-
-  const newVariant = {
-    color: parsedColor,
-    sizes: parsedSizes.map((s) => ({
-      size: s.size,
-      stock: safeNum(s.stock),
-      reservedStock: 0,
-    })),
-    mrp: safeNum(mrp),
-    price: safeNum(price),
-    discount: safeNum(discount),
-    images: uploadedImages,
-  };
-
-  warehouseProduct.variants.push(newVariant);
-  await warehouseProduct.save();
-
-  return res
-    .status(200)
-    .json(new ApiResponse(200, { warehouseProduct }, 'Variant added successfully'));
-});
-
-/**
- * PATCH /merchant/warehouse-products/:warehouseProductId
- * Update product details for the operator's warehouse.
- */
-export const updateMyWarehouseProduct = asyncHandler(async (req, res) => {
-  const merchant = await Merchant.findById(req.merchantId);
-  if (!merchant || merchant.accountType !== 'warehouse' || !merchant.warehouseId) {
-    throw new ApiError(403, 'Not a warehouse operator');
-  }
-
-  const { warehouseProductId } = req.params;
-  const allowedFields = [
-    'name', 'description', 'brandId', 'categoryId', 'merchantId', 'subCategoryId',
-    'subSubCategoryId', 'gender', 'tags', 'features', 'attributes',
-    'isTriable', 'commissionRate'
-  ];
-
-  const updates = {};
-  for (const field of allowedFields) {
-    if (req.body[field] !== undefined) updates[field] = req.body[field];
-  }
-
-  const product = await Product.findOneAndUpdate(
-    { _id: warehouseProductId, warehouseId: merchant.warehouseId },
-    { $set: updates },
-    { new: true, runValidators: true }
-  );
-
-  if (!product) throw new ApiError(404, 'Warehouse product not found');
-
-  return res.status(200).json(new ApiResponse(200, { product }, 'Product updated successfully'));
-});
-
-/**
- * PATCH /merchant/warehouse-products/:warehouseProductId/stock
- * Update stock of a product variant size in the operator's warehouse.
- */
-export const updateMyWarehouseProductStock = asyncHandler(async (req, res) => {
-  const merchant = await Merchant.findById(req.merchantId);
-  if (!merchant || merchant.accountType !== 'warehouse' || !merchant.warehouseId) {
-    throw new ApiError(403, 'Not a warehouse operator');
-  }
-
-  const { warehouseProductId } = req.params;
-  const { variantId, size, stock } = req.body;
-
-  if (!variantId || !size || stock === undefined) {
-    throw new ApiError(400, 'variantId, size, and stock are required');
-  }
-
-  const product = await Product.findOne({
-    _id: warehouseProductId,
-    warehouseId: merchant.warehouseId,
-  });
-  if (!product) throw new ApiError(404, 'Warehouse product not found');
-
-  const variant = product.variants.id(variantId);
-  if (!variant) throw new ApiError(404, 'Variant not found');
-
-  const sizeObj = variant.sizes.find((s) => s.size === size);
-  if (!sizeObj) {
-    variant.sizes.push({ size, stock: Number(stock), reservedStock: 0 });
-  } else {
-    sizeObj.stock = Number(stock);
-  }
-
-  await product.save();
-  return res.status(200).json(new ApiResponse(200, { product }, 'Stock updated successfully'));
-});
-
-/**
- * DELETE /merchant/warehouse-products/:warehouseProductId
- * Delete product from the operator's warehouse.
- */
-export const deleteMyWarehouseProduct = asyncHandler(async (req, res) => {
-  const merchant = await Merchant.findById(req.merchantId);
-  if (!merchant || merchant.accountType !== 'warehouse' || !merchant.warehouseId) {
-    throw new ApiError(403, 'Not a warehouse operator');
-  }
-
-  const product = await Product.findOneAndUpdate(
-    { _id: req.params.warehouseProductId, warehouseId: merchant.warehouseId },
-    { $set: { isDeleted: true } },
-    { new: true }
-  );
-
-  if (!product) throw new ApiError(404, 'Warehouse product not found');
-  return res.status(200).json(new ApiResponse(200, {}, 'Product deleted successfully'));
-});
-
-/**
  * POST /merchant/warehouse-products/full
  * Create a full warehouse product with variants and images in one go (like the detailed merchant UI).
+ * Generates ProductFlat documents.
  */
 export const createWarehouseProductFull = asyncHandler(async (req, res) => {
   const operator = await Merchant.findById(req.merchantId);
@@ -259,7 +86,7 @@ export const createWarehouseProductFull = asyncHandler(async (req, res) => {
 
   let { 
     merchantId, commissionRate, name, description, styleName, categoryId, subCategoryId, gender, 
-    attributes, tags, collectionIds, variants 
+    attributes, tags, collectionIds, variants, linkedMerchantProductId 
   } = req.body;
 
   const safeParse = (value) => {
@@ -275,6 +102,22 @@ export const createWarehouseProductFull = asyncHandler(async (req, res) => {
   tags = safeParse(tags) || [];
   collectionIds = safeParse(collectionIds) || [];
   variants = safeParse(variants) || [];
+
+  const cleanAttributes = (Array.isArray(attributes) ? attributes : [])
+    .map(a => {
+      let rawId = a.attributeId || a.attribute;
+      if (rawId && typeof rawId === 'object') {
+        rawId = rawId._id || rawId.id;
+      }
+      if (!rawId) return null;
+      return {
+        attributeId: mongoose.Types.ObjectId.isValid(String(rawId))
+          ? new mongoose.Types.ObjectId(String(rawId))
+          : String(rawId),
+        value: a.value
+      };
+    })
+    .filter(Boolean);
 
   if (!name || !categoryId || !merchantId || !variants.length) {
     throw new ApiError(400, 'name, categoryId, merchantId (source merchant), and variants are required');
@@ -305,10 +148,31 @@ export const createWarehouseProductFull = asyncHandler(async (req, res) => {
     }
   }
 
-  const legacyVariants = [];
+  const generatedGroupId = new mongoose.Types.ObjectId().toString();
+  const parentProductCode = `PRD-${crypto.randomBytes(4).toString('hex').toUpperCase()}`;
+  const formattedGender = (Array.isArray(gender) ? gender : [gender]).map(g => String(g).toUpperCase());
+  
+  const createdProducts = [];
+
   for (let vIdx = 0; vIdx < variants.length; vIdx++) {
     const variant = variants[vIdx];
     const finalImages = [];
+
+    const pushNormalizedImage = (img) => {
+      if (!img) return;
+      if (typeof img === 'string') {
+        finalImages.push({ url: img, public_id: '' });
+      } else if (img.url) {
+        finalImages.push({ url: img.url, public_id: img.public_id || '' });
+      }
+    };
+
+    if (variant.existingImages && Array.isArray(variant.existingImages)) {
+      variant.existingImages.forEach(pushNormalizedImage);
+    } else if (variant.images && Array.isArray(variant.images)) {
+      variant.images.forEach(pushNormalizedImage);
+    }
+
     if (variant.imageFields && Array.isArray(variant.imageFields)) {
       for (const field of variant.imageFields) {
         const file = req.files ? req.files.find(f => f.fieldname === field) : null;
@@ -319,47 +183,133 @@ export const createWarehouseProductFull = asyncHandler(async (req, res) => {
       }
     }
 
-    const sizeStockList = (variant.sizes || []).map(s => ({
-      size: s.size,
-      stock: isNaN(Number(s.stock)) ? 0 : Number(s.stock),
-      reservedStock: 0
-    }));
+    const sizes = variant.sizes || [];
+    const colorObj = variant.color || { name: 'Default', hex: '' };
 
-    legacyVariants.push({
-      color: variant.color,
-      mrp: isNaN(Number(variant.mrp)) ? 0 : Number(variant.mrp),
-      price: isNaN(Number(variant.price)) ? 0 : Number(variant.price),
-      discount: isNaN(Number(variant.discount)) ? 0 : Number(variant.discount),
-      images: finalImages,
-      sizes: sizeStockList,
-    });
+    for (const sizeObj of sizes) {
+      const cleanColor = (colorObj.name || 'DEFAULT').replace(/\s+/g, '').toUpperCase();
+      const cleanSize = (sizeObj.size || 'FREE').replace(/\s+/g, '').toUpperCase();
+      const productCode = `${parentProductCode}-${cleanColor}-${cleanSize}`;
+
+      const newProduct = new ProductFlat({
+        name,
+        description,
+        styleName,
+        categoryId,
+        subCategoryId,
+        brandId,
+        merchantId: sourceMerchant._id,
+        source: 'warehouse',
+        warehouseId: operator.warehouseId,
+        addedByOperator: operator._id,
+        commissionRate: commissionRate ? parseFloat(commissionRate) : null,
+        linkedMerchantProductId: linkedMerchantProductId || req.body.selectedBaseProductId || null,
+        gender: formattedGender,
+        attributes: cleanAttributes,
+        tags,
+        collectionIds,
+        isTriable: req.body.isTriable === 'true' || req.body.isTriable === true,
+        isActive: true,
+        
+        styleGroupId: generatedGroupId,
+        productCode: productCode,
+        color: colorObj,
+        size: sizeObj.size,
+        merchantSizeCode: sizeObj.merchantSizeCode,
+        stock: isNaN(Number(sizeObj.stock)) ? 0 : Number(sizeObj.stock),
+        mrp: isNaN(Number(variant.mrp)) ? 0 : Number(variant.mrp),
+        price: isNaN(Number(variant.price)) ? 0 : Number(variant.price),
+        discount: isNaN(Number(variant.discount)) ? 0 : Number(variant.discount),
+        images: finalImages
+      });
+
+      await newProduct.save();
+      createdProducts.push(newProduct);
+    }
   }
 
-  const formattedGender = (Array.isArray(gender) ? gender : [gender]).map(g => String(g).toUpperCase());
+  return res.status(201).json(new ApiResponse(201, { product: makeFlatPayload(createdProducts) }, 'Warehouse product created successfully'));
+});
 
-  const newProduct = new Product({
-    name,
-    description,
-    styleName,
-    categoryId,
-    subCategoryId,
-    brandId,
-    merchantId: sourceMerchant._id,
-    source: 'warehouse',
-    warehouseId: operator.warehouseId,
-    commissionRate: commissionRate ? parseFloat(commissionRate) : null,
-    gender: formattedGender,
-    attributes,
-    tags,
-    collectionIds,
-    isTriable: req.body.isTriable === 'true' || req.body.isTriable === true,
-    isActive: true,
-    variants: legacyVariants,
-  });
+/**
+ * PATCH /merchant/warehouse-products/:warehouseProductId
+ * Update product details for the operator's warehouse across the styleGroupId
+ */
+export const updateMyWarehouseProduct = asyncHandler(async (req, res) => {
+  const merchant = await Merchant.findById(req.merchantId);
+  if (!merchant || merchant.accountType !== 'warehouse' || !merchant.warehouseId) {
+    throw new ApiError(403, 'Not a warehouse operator');
+  }
 
-  await newProduct.save();
+  const { warehouseProductId } = req.params; // styleGroupId
+  const allowedFields = [
+    'name', 'description', 'brandId', 'categoryId', 'merchantId', 'subCategoryId',
+    'subSubCategoryId', 'gender', 'tags', 'features', 'attributes',
+    'isTriable', 'commissionRate'
+  ];
 
-  return res.status(201).json(new ApiResponse(201, { product: newProduct }, 'Warehouse product created with variants successfully'));
+  const updates = {};
+  for (const field of allowedFields) {
+    if (req.body[field] !== undefined) updates[field] = req.body[field];
+  }
+
+  const result = await ProductFlat.updateMany(
+    { styleGroupId: warehouseProductId, warehouseId: merchant.warehouseId, source: 'warehouse' },
+    { $set: updates },
+    { runValidators: true }
+  );
+
+  if (result.matchedCount === 0) throw new ApiError(404, 'Warehouse product not found');
+
+  return res.status(200).json(new ApiResponse(200, { updatedCount: result.modifiedCount }, 'Product updated successfully'));
+});
+
+/**
+ * PATCH /merchant/warehouse-products/:warehouseProductId/stock
+ * Update stock of a product flat document
+ */
+export const updateMyWarehouseProductStock = asyncHandler(async (req, res) => {
+  const merchant = await Merchant.findById(req.merchantId);
+  if (!merchant || merchant.accountType !== 'warehouse' || !merchant.warehouseId) {
+    throw new ApiError(403, 'Not a warehouse operator');
+  }
+
+  const { warehouseProductId } = req.params; // Not really needed for flat if we have variantId, but we can use it to verify
+  const { variantId, stock } = req.body;
+
+  if (!variantId || stock === undefined) {
+    throw new ApiError(400, 'variantId and stock are required');
+  }
+
+  const product = await ProductFlat.findOneAndUpdate(
+    { _id: variantId, warehouseId: merchant.warehouseId, source: 'warehouse' },
+    { $set: { stock: Number(stock) } },
+    { new: true }
+  );
+
+  if (!product) throw new ApiError(404, 'Warehouse variant not found');
+
+  return res.status(200).json(new ApiResponse(200, { product }, 'Stock updated successfully'));
+});
+
+/**
+ * DELETE /merchant/warehouse-products/:warehouseProductId
+ * Soft-delete product from the operator's warehouse (across styleGroupId).
+ */
+export const deleteMyWarehouseProduct = asyncHandler(async (req, res) => {
+  const merchant = await Merchant.findById(req.merchantId);
+  if (!merchant || merchant.accountType !== 'warehouse' || !merchant.warehouseId) {
+    throw new ApiError(403, 'Not a warehouse operator');
+  }
+
+  const result = await ProductFlat.updateMany(
+    { styleGroupId: req.params.warehouseProductId, warehouseId: merchant.warehouseId, source: 'warehouse' },
+    { $set: { isDeleted: true } }
+  );
+
+  if (result.matchedCount === 0) throw new ApiError(404, 'Warehouse product not found');
+
+  return res.status(200).json(new ApiResponse(200, {}, 'Product deleted successfully'));
 });
 
 /**
@@ -368,15 +318,26 @@ export const createWarehouseProductFull = asyncHandler(async (req, res) => {
  */
 export const getMyConsignedWarehouseStock = asyncHandler(async (req, res) => {
   const merchantId = req.merchantId;
-  const products = await Product.find({
-    merchantId,
-    source: 'warehouse',
-    isDeleted: { $ne: true }
-  })
-    .populate('warehouseId', 'name address code')
-    .populate('categoryId', 'name')
-    .populate('brandId', 'name')
-    .sort({ createdAt: -1 });
+  
+  const pipeline = [
+    { $match: { merchantId: new mongoose.Types.ObjectId(merchantId), source: 'warehouse', isDeleted: { $ne: true } } },
+    { $sort: { createdAt: -1 } },
+    {
+      $group: {
+        _id: '$styleGroupId',
+        doc: { $first: '$$ROOT' }
+      }
+    },
+    { $replaceRoot: { newRoot: '$doc' } },
+    { $sort: { createdAt: -1 } }
+  ];
+
+  const products = await ProductFlat.aggregate(pipeline);
+  await ProductFlat.populate(products, [
+    { path: 'warehouseId', select: 'name address code' },
+    { path: 'categoryId', select: 'name' },
+    { path: 'brandId', select: 'name' }
+  ]);
 
   const merchant = await Merchant.findById(merchantId).select('warehouseStatus');
 
@@ -403,4 +364,13 @@ export const applyForWarehouseService = asyncHandler(async (req, res) => {
   await merchant.save();
 
   return res.status(200).json(new ApiResponse(200, { warehouseStatus: 'pending' }, 'Application submitted successfully. Under review by Admin.'));
+});
+
+// Polyfill for deprecated endpoints that some frontend might still call
+export const addMyWarehouseProduct = asyncHandler(async (req, res) => {
+  throw new ApiError(400, 'Deprecated. Use /warehouse-products/full instead.');
+});
+
+export const addMyWarehouseProductVariant = asyncHandler(async (req, res) => {
+  throw new ApiError(400, 'Deprecated. Use /warehouse-products/full instead.');
 });

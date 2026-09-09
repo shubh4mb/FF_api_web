@@ -39,15 +39,24 @@ app.use(
   })
 );
 
+const isDev = process.env.NODE_ENV !== 'production';
+
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 500, // limit each IP to 500 requests per windowMs
-  message: 'Too many requests from this IP, please try again after 15 minutes',
+  max: isDev ? 100000 : 5000, // 100k in dev, 5000 in prod per 15 mins per IP
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    message: 'Too many requests from this IP, please try again in a moment.',
+  },
   skip: (req) => {
+    // Skip webhooks
+    if (req.path.includes('webhook')) return true;
     const authHeader = req.headers.authorization;
     const expectedSecret = process.env.CRON_SECRET_KEY;
     // Skip rate limiting if the request has the valid cron secret
-    return expectedSecret && authHeader === `Bearer ${expectedSecret}`;
+    return Boolean(expectedSecret && authHeader === `Bearer ${expectedSecret}`);
   }
 });
 // Apply the rate limiter to all api requests

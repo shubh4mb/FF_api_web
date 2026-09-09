@@ -1,7 +1,7 @@
 import express from 'express'
 import upload, { handleMulterError } from '../middleware/multer.js'
 import { addBaseProduct, addVariant, getBaseProducts, getVariants, updateVariant, updateSize, deleteVariantSizes, updateSizeCount, createProductFull, searchBaseProducts } from '../controllers/merchantController/product.controllers.js';
-import { deleteVariant, addBrand, getBrands, getBaseProductById, getProductsByMerchantId, uploadProductImage, deleteImage, deleteProduct, updatePrice, editProduct, editVariant, updateVariantSizeStock, updateMultipleVariantSizes, getAllBrands, bulkUploadProducts } from '../controllers/merchantController/product.controllers.js';
+import { deleteVariant, addBrand, getBrands, getBaseProductById, getProductsByMerchantId, uploadProductImage, deleteImage, deleteProduct, updatePrice, editProduct, editVariant, updateVariantSizeStock, updateMultipleVariantSizes, getAllBrands, bulkUploadProducts, updateMatchingProducts } from '../controllers/merchantController/product.controllers.js';
 
 import { addMerchant } from '../controllers/merchantController/merchant.controller.js';
 import { loginMerchant, registerMerchant, updateMerchantShopDetails, updateMerchantBankDetails, updateMerchantKYC, updateMerchantOperatingHours, activateMerchant, registerPhone, sendEmailOtp, verifyEmailOtp, getMerchantByEmail, toggleMerchantOnlineStatus, refreshMerchantToken, logoutMerchant, addPushToken } from '../controllers/merchantController/authControllers.js';
@@ -210,6 +210,7 @@ router.patch('/updateVariantSizeStock/:productId/:variantId/:sizeName', authMidd
 router.patch('/updateMultipleVariantSizes/:productId/:variantId', authMiddlewareMerchant, updateMultipleVariantSizes)
 router.post('/createProductFull', authMiddlewareMerchant, upload.any(), handleMulterError, createProductFull);
 router.get('/searchBaseProducts', authMiddlewareMerchant, searchBaseProducts);
+router.put('/updateMatchingProducts/:productId', authMiddlewareMerchant, updateMatchingProducts);
 
 
 router.get('/getAllOrders', authMiddlewareMerchant, getAllOrder)

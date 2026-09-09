@@ -1,4 +1,4 @@
-import Product from "../models/product.model.js";
+import ProductFlat from "../models/productFlat.model.js";
 import Category from "../models/category.model.js";
 import mongoose from "mongoose";
 import { addToWeeklyPayout, incrementOrderCount } from "./weeklyPayoutHelper.js";
@@ -38,7 +38,7 @@ export const settleOrder = async (order, providedSession = null) => {
         );
 
         for (const item of acceptedItems) {
-            const product = await Product.findById(item.productId).select("categoryId subCategoryId").session(session);
+            let product = await ProductFlat.findById(item.productId).select("categoryId subCategoryId").session(session);
             if (!product) continue;
 
             let commissionPercentage = 0;
@@ -82,19 +82,26 @@ export const settleOrder = async (order, providedSession = null) => {
             order.trialPhaseDuration = waitingMinutes;
         }
 
-        const riderPayout = (order.originalDeliveryCharge || 0) 
-            + (hasReturns ? (order.originalReturnCharge || 0) : 0)
-            + tipAmount
-            + waitingTimeCharge;
+        const deliveryFee = order.originalDeliveryCharge || order.deliveryCharge || 0;
+        const returnFee = order.originalReturnCharge || order.returnCharge || 0;
+        const riderPayout = deliveryFee + returnFee + tipAmount + waitingTimeCharge;
 
         if (riderPayout > 0) {
             // Check if any applied offer gave free delivery
-            const freeDeliveryOffer = (order.appliedOffers || []).find(o => o.freeDelivery === true);
-            if (freeDeliveryOffer) {
-                if (freeDeliveryOffer.scope === "admin") {
-                    adminDiscount += riderPayout;
-                } else if (freeDeliveryOffer.scope === "merchant") {
+            // Prioritize Merchant offer over Admin offer so delivery charge is funded from Merchant's fund
+            const freeDeliveryOffers = (order.appliedOffers || []).filter(o => o.freeDelivery === true);
+            const freeDeliveryOffer = freeDeliveryOffers.find(o => o.scope === "merchant") || freeDeliveryOffers.find(o => o.scope === "admin");
+            
+            // Only subsidize free delivery if the customer didn't pay the recovery fee
+            // (If deliveryFeeRecovery was triggered and paid, the customer covered the cost)
+            const deliveryFeeRecovered = order.deliveryFeeRecovery?.required && 
+                ['paid_online', 'paid_via_qr', 'paid_cash'].includes(order.deliveryFeeRecovery?.status);
+            
+            if (freeDeliveryOffer && !deliveryFeeRecovered) {
+                if (freeDeliveryOffer.scope === "merchant") {
                     merchantDiscount += riderPayout;
+                } else if (freeDeliveryOffer.scope === "admin") {
+                    adminDiscount += riderPayout;
                 }
             }
         }
@@ -157,22 +164,39 @@ export const settleOrder = async (order, providedSession = null) => {
         }
 
         // ── Rider: goes into Weekly Payout ledger ──
+        const riderPaidDirectly = order.deliveryFeeRecovery?.collectedByRider === true;
+        
         if (riderPayout > 0 && order.deliveryRiderId) {
-            await addToWeeklyPayout({
-                ownerType: "rider",
-                ownerId: order.deliveryRiderId,
-                orderId: order._id,
-                amount: riderPayout,
-                type: "credit",
-                description: `Delivery payout for order ${order._id}`,
-                session,
-            });
+            if (riderPaidDirectly) {
+                // Rider already received payment directly from customer via QR
+                // Record ₹0 from FlashFits but note the direct collection amount for transparency
+                await addToWeeklyPayout({
+                    ownerType: "rider",
+                    ownerId: order.deliveryRiderId,
+                    orderId: order._id,
+                    amount: 0,
+                    type: "credit",
+                    description: `Delivery for order ${order._id} (Collected ₹${riderPayout} directly from customer via QR)`,
+                    session,
+                });
+            } else {
+                // Normal flow: FlashFits pays rider via weekly payout
+                await addToWeeklyPayout({
+                    ownerType: "rider",
+                    ownerId: order.deliveryRiderId,
+                    orderId: order._id,
+                    amount: riderPayout,
+                    type: "credit",
+                    description: `Delivery payout for order ${order._id}`,
+                    session,
+                });
+            }
 
             // Track completed order count for incentive evaluation
             await incrementOrderCount({
                 riderId: order.deliveryRiderId,
                 cancelled: false,
-                amount: riderPayout,
+                amount: riderPayout, // Always track full amount for incentive calc
                 session
             });
         }
@@ -184,6 +208,25 @@ export const settleOrder = async (order, providedSession = null) => {
             await order.save({ session });
             await session.commitTransaction();
             session.endSession();
+        }
+
+        // ── Referral System: Trigger reward if this is the user's first completed order ──
+        if (order.userId) {
+            try {
+                const Order = mongoose.models.Order || mongoose.model("Order");
+                const completedCount = await Order.countDocuments({
+                    userId: order.userId,
+                    settlementStatus: "settled"
+                });
+                
+                // If count is 1, this is the first successfully settled order
+                if (completedCount <= 1) {
+                    const { handleFirstOrderCompletion } = await import("./referralHelper.js");
+                    handleFirstOrderCompletion(order.userId).catch(err => console.error("Referral Reward Error:", err));
+                }
+            } catch (err) {
+                console.error("Error triggering referral reward:", err);
+            }
         }
         
         return true;

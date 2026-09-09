@@ -50,8 +50,7 @@ const WarehouseOrderSchema = new mongoose.Schema(
     items: [
       {
         warehouseProductId: {
-          type: mongoose.Schema.Types.ObjectId,
-          ref: 'Product',
+          type: mongoose.Schema.Types.Mixed,
         },
         variantId: { type: mongoose.Schema.Types.ObjectId },
         name: String,
@@ -204,7 +203,7 @@ const WarehouseOrderSchema = new mongoose.Schema(
       reason: { type: String, default: null },
       items: [
         {
-          warehouseProductId: { type: mongoose.Schema.Types.ObjectId },
+          warehouseProductId: { type: mongoose.Schema.Types.Mixed },
           name: String,
           quantity: Number,
           price: Number,
@@ -249,6 +248,11 @@ const WarehouseOrderSchema = new mongoose.Schema(
       default: 'none',
     },
     cancellationRequestReason: { type: String, default: null },
+    riderUnresponsiveReport: {
+      reportedBy: { type: String, enum: ['merchant', 'rider', 'admin'] },
+      status: { type: String, enum: ['pending', 'resolved', 'dismissed'], default: 'pending' },
+      reportedAt: { type: Date, default: Date.now },
+    },
   },
   { timestamps: true }
 );

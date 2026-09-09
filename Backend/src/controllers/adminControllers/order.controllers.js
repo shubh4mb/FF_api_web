@@ -1,25 +1,46 @@
 import Order from "../../models/order.model.js";
+import WarehouseOrder from "../../models/warehouseOrder.model.js";
 import DeliveryRider from "../../models/deliveryRider.model.js";
 import PendingOrder from "../../models/pendingOrders.model.js";
 import { getIO } from "../../config/socket.js";
 import { emitOrderUpdate } from "../../sockets/order.socket.js";
-import { creditWallet } from "../../helperFns/walletHelper.js";
-import { notifyOrderEvent } from "../../helperFns/notificationHelper.js";
-import { setRiderMeta, getRiderMeta } from "../../helperFns/deliveryRiderFns.js";
+import { emitWarehouseOrderUpdate } from "../../sockets/warehouseOrder.socket.js";
 import { logAuditEvent } from "../../utils/auditLogger.js";
+import { cancelAndCleanupOrder } from "../../helperFns/orderCancellationHelper.js";
 
 /**
- * Get all orders with a pending cancellation request from a merchant
+ * Get all orders with a pending cancellation request from a merchant or warehouse
  */
 export const getCancellationRequests = async (req, res) => {
   try {
-    const orders = await Order.find({ cancellationRequest: 'pending' })
-      .populate('merchantId', 'shopName')
-      .populate('userId', 'name phone')
-      .sort({ updatedAt: -1 })
-      .lean();
+    const [orders, warehouseOrders] = await Promise.all([
+      Order.find({ cancellationRequest: 'pending' })
+        .populate('merchantId', 'shopName')
+        .populate('userId', 'name phone')
+        .sort({ updatedAt: -1 })
+        .lean(),
+      WarehouseOrder.find({ cancellationRequest: 'pending' })
+        .populate('warehouseId', 'name code')
+        .populate('sourceMerchantId', 'shopName')
+        .populate('userId', 'name phone')
+        .sort({ updatedAt: -1 })
+        .lean(),
+    ]);
 
-    return res.status(200).json({ success: true, orders });
+    const formattedWarehouseOrders = warehouseOrders.map(wo => ({
+      ...wo,
+      isWarehouseOrder: true,
+      merchantId: {
+        _id: wo.warehouseId?._id || wo.sourceMerchantId?._id,
+        shopName: wo.warehouseId?.name || wo.sourceMerchantId?.shopName || 'Warehouse',
+      },
+    }));
+
+    const allRequests = [...orders, ...formattedWarehouseOrders].sort(
+      (a, b) => new Date(b.updatedAt) - new Date(a.updatedAt)
+    );
+
+    return res.status(200).json({ success: true, orders: allRequests });
   } catch (error) {
     console.error("Get Cancellation Requests Error:", error);
     return res.status(500).json({ success: false, message: "Server error" });
@@ -27,14 +48,21 @@ export const getCancellationRequests = async (req, res) => {
 };
 
 /**
- * Approve or reject a merchant cancellation request
+ * Approve or reject a merchant/warehouse cancellation request
  */
 export const adminCancelOrder = async (req, res) => {
   const { orderId } = req.params;
   const { action } = req.body; // 'approve' or 'reject'
 
   try {
-    const order = await Order.findById(orderId);
+    let order = await Order.findById(orderId);
+    let isWarehouseOrder = false;
+
+    if (!order) {
+      order = await WarehouseOrder.findById(orderId);
+      if (order) isWarehouseOrder = true;
+    }
+
     if (!order) {
       return res.status(404).json({ success: false, message: "Order not found" });
     }
@@ -49,99 +77,37 @@ export const adminCancelOrder = async (req, res) => {
         status: "info",
         orderId: order._id,
         userId: order.userId,
-        merchantId: order.merchantId,
+        merchantId: order.merchantId || order.warehouseId,
         req,
       });
 
       const io = getIO();
       emitOrderUpdate(io, orderId, order);
+      if (isWarehouseOrder) {
+        emitWarehouseOrderUpdate(io, order.warehouseId, orderId, order);
+      }
 
       return res.status(200).json({ success: true, message: "Cancellation request rejected", order });
     }
 
     if (action === 'approve') {
-      // 1. Mark cancellation status
-      order.cancellationRequest = 'approved';
-      order.orderStatus = 'cancelled';
-      order.customerDeliveryStatus = 'cancelled';
-      order.deliveryRiderStatus = 'cancelled';
-
-      // 2. Refund upfront fees to customer if paid
-      const isRefundable = order.paymentStatus === 'delivery_fee_paid' || order.paymentStatus === 'paid';
-      const refundAmount = (order.deliveryCharge || 0) + (order.returnCharge || 0) + (order.finalBilling?.deliveryTip || 0) + (order.finalBilling?.serviceGST || 0);
-
-      if (isRefundable && refundAmount > 0) {
-        await creditWallet({
-          ownerType: "user",
-          ownerId: order.userId,
-          amount: refundAmount,
-          description: `Refund: Order #${order._id.toString().slice(-5).toUpperCase()} cancelled by Admin`,
-          orderId: order._id,
-        });
-        order.paymentStatus = 'refunded';
-      }
-
-      // 3. Free the rider in DB & Redis if assigned (either accepted or offered/assigned in queue)
-      let riderIdToFree = order.deliveryRiderId;
-      
-      const pendingOrderDoc = await PendingOrder.findOne({ orderId: order._id });
-      if (pendingOrderDoc) {
-        if (!riderIdToFree && pendingOrderDoc.assignedRider) {
-          riderIdToFree = pendingOrderDoc.assignedRider;
-        }
-        await PendingOrder.deleteOne({ _id: pendingOrderDoc._id });
-      }
-
-      if (riderIdToFree) {
-        await DeliveryRider.findByIdAndUpdate(riderIdToFree, {
-          currentOrderId: null,
-          isBusy: false,
-          isAvailable: true,
-        });
-
-        try {
-          const meta = await getRiderMeta(riderIdToFree.toString());
-          await setRiderMeta(riderIdToFree.toString(), meta?.zoneId || 'global', {
-            isBusy: "false",
-            assignedOrderId: "",
-          });
-        } catch (redisErr) {
-          console.error("Redis meta cleanup error (non-fatal):", redisErr);
-        }
-      }
-
-      // 4. Clear any active assignment timeout
-      try {
-        const { clearRiderTimeout } = await import("../../helperFns/riderTimeoutHelper.js");
-        clearRiderTimeout(order._id);
-      } catch (err) {
-        console.error("Error clearing rider timeout (non-fatal):", err);
-      }
-
-      await order.save();
-
-      await logAuditEvent({
-        action: "ORDER_CANCELLED",
-        message: `Admin approved cancellation request for order #${order._id.toString().slice(-5).toUpperCase()}. Refunded upfront fee of ₹${refundAmount} to customer wallet.`,
-        status: "success",
-        orderId: order._id,
-        userId: order.userId,
-        merchantId: order.merchantId,
-        details: { refundAmount },
+      const result = await cancelAndCleanupOrder({
+        orderId,
+        cancelledBy: 'admin',
+        reason: req.body.reason || 'Admin approved cancellation request',
+        action: 'cancelled',
         req,
       });
 
-      const io = getIO();
-      emitOrderUpdate(io, orderId, order);
+      if (!result.success) {
+        return res.status(result.statusCode || 400).json({ success: false, message: result.error });
+      }
 
-      // 5. Notify customer
-      notifyOrderEvent("customer", "order_cancelled", {
-        userId: order.userId,
-        orderId: order._id,
-        amount: isRefundable ? refundAmount : 0,
+      return res.status(200).json({
+        success: true,
+        message: result.message || "Order cancelled successfully and resources freed",
+        order: result.order,
       });
-
-      return res.status(200).json({ success: true, message: "Order cancelled successfully and rider/redis freed", order });
     }
 
     return res.status(400).json({ success: false, message: "Invalid action. Must be 'approve' or 'reject'" });
@@ -157,14 +123,37 @@ export const adminCancelOrder = async (req, res) => {
  */
 export const getUnresponsiveRiderReports = async (req, res) => {
   try {
-    const orders = await Order.find({ 'riderUnresponsiveReport.status': 'pending' })
-      .populate('merchantId', 'shopName')
-      .populate('userId', 'name phone')
-      .populate('deliveryRiderId', 'name phone')
-      .sort({ 'riderUnresponsiveReport.reportedAt': -1 })
-      .lean();
+    const [orders, warehouseOrders] = await Promise.all([
+      Order.find({ 'riderUnresponsiveReport.status': 'pending' })
+        .populate('merchantId', 'shopName')
+        .populate('userId', 'name phone')
+        .populate('deliveryRiderId', 'name phone')
+        .sort({ 'riderUnresponsiveReport.reportedAt': -1 })
+        .lean(),
+      WarehouseOrder.find({ 'riderUnresponsiveReport.status': 'pending' })
+        .populate('warehouseId', 'name code')
+        .populate('userId', 'name phone')
+        .populate('deliveryRiderId', 'name phone')
+        .sort({ 'riderUnresponsiveReport.reportedAt': -1 })
+        .lean(),
+    ]);
 
-    return res.status(200).json({ success: true, orders });
+    const formattedWarehouseOrders = warehouseOrders.map(wo => ({
+      ...wo,
+      isWarehouseOrder: true,
+      merchantId: {
+        _id: wo.warehouseId?._id,
+        shopName: wo.warehouseId?.name || 'Warehouse',
+      },
+    }));
+
+    const allReports = [...orders, ...formattedWarehouseOrders].sort(
+      (a, b) =>
+        new Date(b.riderUnresponsiveReport?.reportedAt || b.updatedAt) -
+        new Date(a.riderUnresponsiveReport?.reportedAt || a.updatedAt)
+    );
+
+    return res.status(200).json({ success: true, orders: allReports });
   } catch (error) {
     console.error("Get Unresponsive Rider Reports Error:", error);
     return res.status(500).json({ success: false, message: "Server error" });
@@ -179,7 +168,14 @@ export const resolveUnresponsiveRider = async (req, res) => {
   const { action } = req.body; // 'dismiss' or 'cancel_order'
 
   try {
-    const order = await Order.findById(orderId);
+    let order = await Order.findById(orderId);
+    let isWarehouseOrder = false;
+
+    if (!order) {
+      order = await WarehouseOrder.findById(orderId);
+      if (order) isWarehouseOrder = true;
+    }
+
     if (!order) {
       return res.status(404).json({ success: false, message: "Order not found" });
     }
@@ -195,74 +191,26 @@ export const resolveUnresponsiveRider = async (req, res) => {
     }
 
     if (action === 'cancel_order') {
-      // 1. Mark report status
       order.riderUnresponsiveReport.status = 'resolved';
-      order.orderStatus = 'cancelled';
-      order.customerDeliveryStatus = 'cancelled';
-      order.deliveryRiderStatus = 'cancelled';
-
-      // 2. Refund upfront fees to customer if paid
-      const isRefundable = order.paymentStatus === 'delivery_fee_paid' || order.paymentStatus === 'paid';
-      const refundAmount = (order.deliveryCharge || 0) + (order.returnCharge || 0) + (order.finalBilling?.deliveryTip || 0) + (order.finalBilling?.serviceGST || 0);
-
-      if (isRefundable && refundAmount > 0) {
-        await creditWallet({
-          ownerType: "user",
-          ownerId: order.userId,
-          amount: refundAmount,
-          description: `Refund: Order #${order._id.toString().slice(-5).toUpperCase()} cancelled due to unresponsive rider`,
-          orderId: order._id,
-        });
-        order.paymentStatus = 'refunded';
-      }
-
-      // 3. Free the rider
-      const riderIdToFree = order.deliveryRiderId;
-      if (riderIdToFree) {
-        await DeliveryRider.findByIdAndUpdate(riderIdToFree, {
-          currentOrderId: null,
-          isBusy: false,
-          isAvailable: true,
-        });
-
-        try {
-          const meta = await getRiderMeta(riderIdToFree.toString());
-          await setRiderMeta(riderIdToFree.toString(), meta?.zoneId || 'global', {
-            isBusy: "false",
-            assignedOrderId: "",
-          });
-        } catch (redisErr) {
-          console.error("Redis meta cleanup error:", redisErr);
-        }
-      }
-
       await order.save();
 
-      await logAuditEvent({
-        action: "ORDER_CANCELLED",
-        message: `Admin cancelled order #${order._id.toString().slice(-5).toUpperCase()} due to unresponsive rider.`,
-        status: "success",
-        orderId: order._id,
-        userId: order.userId,
-        merchantId: order.merchantId,
-        details: { refundAmount, riderId: riderIdToFree },
+      const result = await cancelAndCleanupOrder({
+        orderId,
+        cancelledBy: 'admin',
+        reason: 'Assigned rider was unresponsive',
+        action: 'cancelled',
         req,
       });
 
-      const io = getIO();
-      emitOrderUpdate(io, orderId, order);
+      if (!result.success) {
+        return res.status(result.statusCode || 400).json({ success: false, message: result.error });
+      }
 
-      // 5. Notify customer & merchant
-      notifyOrderEvent("customer", "order_cancelled", {
-        userId: order.userId,
-        orderId: order._id,
-        amount: isRefundable ? refundAmount : 0,
-        message: "Order was cancelled because the assigned rider was unresponsive."
+      return res.status(200).json({
+        success: true,
+        message: "Order cancelled successfully due to unresponsive rider",
+        order: result.order,
       });
-
-      // (Assuming you have a way to notify merchants too if needed)
-
-      return res.status(200).json({ success: true, message: "Order cancelled successfully", order });
     }
 
     return res.status(400).json({ success: false, message: "Invalid action. Must be 'dismiss' or 'cancel_order'" });
