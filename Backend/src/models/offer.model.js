@@ -146,7 +146,6 @@ const offerSchema = new mongoose.Schema({
     default: null,
     uppercase: true,
     trim: true,
-    sparse: true,
   },
   requiresCoupon: {
     type: Boolean,

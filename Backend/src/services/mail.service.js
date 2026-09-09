@@ -3,11 +3,20 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 const resendApiKey = process.env.RESEND_API || process.env.RESEND_API_KEY;
-const resend = new Resend(resendApiKey);
+const resend = resendApiKey ? new Resend(resendApiKey) : null;
+
+if (!resend) {
+  console.warn("⚠️ [mail.service] RESEND_API / RESEND_API_KEY is not configured. Outgoing emails will be skipped.");
+}
 
 const fromEmail = process.env.EMAIL_FROM || 'noreply@mail.theflashfits.com';
 
 export const sendMail = async (to, subject, text, html, attachments = []) => {
+  if (!resend) {
+    console.warn(`[mail.service] Email to ${to} skipped: Resend API key is missing.`);
+    return null;
+  }
+
   try {
     const payload = {
       from: `FlashFits <${fromEmail}>`,
