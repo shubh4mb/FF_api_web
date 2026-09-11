@@ -11,7 +11,7 @@ export function calculateFinalBilling({
 
   // === STEP 1: Accepted (kept or non-triable) items ===
   const acceptedItems = orderItems.filter(
-    item => item.tryStatus === "accepted" || item.tryStatus === "not-triable"
+    item => item.tryStatus === "accepted" || item.tryStatus === "keep" || item.tryStatus === "not-triable"
   );
 
   // Base amount calculation
@@ -30,7 +30,9 @@ export function calculateFinalBilling({
   }
 
   // === STEP 3: Return logic ===
-  const returnedItemsCount = orderItems.filter(i => i.tryStatus === "returned").length;
+  const returnedItemsCount = orderItems.filter(
+    i => i.tryStatus === "returned" || i.tryStatus === "return"
+  ).length;
   const totalItemsCount = orderItems.length;
   const allItemsKept = returnedItemsCount === 0 && totalItemsCount > 0;
 
@@ -38,10 +40,8 @@ export function calculateFinalBilling({
   const returnChargeDeduction = allItemsKept ? returnCharge : 0;
   const effectiveReturnCharge = allItemsKept ? 0 : returnCharge;
 
-  // === STEP 4: Delivery charge and tip included if buying at least 1 ===
-  const deliveryAndService = acceptedItems.length > 0
-    ? (Number(deliveryCharge) || 0) + (Number(effectiveReturnCharge) || 0) + (Number(deliveryTip) || 0)
-    : 0;
+  // === STEP 4: Delivery charge and tip included ===
+  const deliveryAndService = (Number(deliveryCharge) || 0) + (Number(effectiveReturnCharge) || 0) + (Number(deliveryTip) || 0);
 
   // === STEP 5: Final total for FlashFits payment ===
   const totalBeforeDeduction = baseAmount + overtimePenalty + deliveryAndService;

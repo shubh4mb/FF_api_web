@@ -140,12 +140,14 @@ async function assignNearestRider(zoneId = 'global', pickupLocation, orderId, or
       // Fetch the FULL order from Order or WarehouseOrder collection
       let fullOrder = await Order.findById(orderId)
         .populate('merchantId', 'shopName address')
+        .populate('userId', 'name phoneNumber')
         .lean();
 
       if (!fullOrder) {
         fullOrder = await WarehouseOrder.findById(orderId)
           .populate('warehouseId', 'name address')
           .populate('sourceMerchantId', 'shopName')
+          .populate('userId', 'name phoneNumber')
           .lean();
 
         if (fullOrder) {
@@ -183,6 +185,47 @@ async function assignNearestRider(zoneId = 'global', pickupLocation, orderId, or
         const deliveryTip = fullOrder.finalBilling?.deliveryTip ?? fullOrder.deliveryTip ?? 0;
         const totalRiderEarnings = baseDeliveryCharge + returnCharge + deliveryTip;
 
+        const customerPhone =
+          fullOrder.deliveryLocation?.phone ||
+          fullOrder.userId?.phoneNumber ||
+          fullOrder.deliveryLocation?.phoneNumber ||
+          null;
+        const customerName =
+          fullOrder.deliveryLocation?.name ||
+          fullOrder.userId?.name ||
+          "Customer";
+
+        // Format pickup address properly
+        const mAddr = fullOrder.merchantId?.address || fullOrder.warehouseId?.address;
+        let formattedPickupAddress = "Merchant location";
+        if (typeof mAddr === "string") {
+          formattedPickupAddress = mAddr;
+        } else if (mAddr && typeof mAddr === "object") {
+          const parts = [mAddr.street, mAddr.landmark, mAddr.city, mAddr.state, mAddr.postalCode].filter(Boolean);
+          if (parts.length > 0) formattedPickupAddress = parts.join(", ");
+        }
+
+        // Format customer address properly
+        const dAddr = fullOrder.deliveryLocation;
+        let formattedCustomerAddress = "Customer delivery address";
+        if (dAddr) {
+          const parts = [
+            dAddr.addressLine1 || dAddr.street,
+            dAddr.addressLine2,
+            dAddr.landmark,
+            dAddr.area,
+            dAddr.city,
+            dAddr.pincode
+          ].filter(Boolean);
+          if (parts.length > 0) formattedCustomerAddress = parts.join(", ");
+        }
+
+        const shopName =
+          fullOrder.merchantId?.shopName ||
+          fullOrder.warehouseDetails?.name ||
+          fullOrder.warehouseId?.name ||
+          "Merchant Store";
+
         // This matches EXACTLY what your frontend expects
         const riderPayload = {
           _id: fullOrder._id,
@@ -191,7 +234,13 @@ async function assignNearestRider(zoneId = 'global', pickupLocation, orderId, or
           deliveryRiderStatus: fullOrder.deliveryRiderStatus,
           pickupLocation: fullOrder.pickupLocation,
           deliveryLocation: fullOrder.deliveryLocation,
-          address: fullOrder.deliveryLocation?.addressLine1 || fullOrder.deliveryLocation?.street || "No address",
+          shopName,
+          pickupAddress: formattedPickupAddress,
+          customerAddress: formattedCustomerAddress,
+          deliveryAddress: formattedCustomerAddress,
+          address: formattedCustomerAddress,
+          customerPhone,
+          customerName,
           merchantId: fullOrder.merchantId,
           items: fullOrder.items,
           deliveryCharge: baseDeliveryCharge,
@@ -209,7 +258,7 @@ async function assignNearestRider(zoneId = 'global', pickupLocation, orderId, or
               lng: fullOrder.deliveryLocation.coordinates[0]
             }
             : null,
-          cutomerAddress: fullOrder.deliveryLocation?.addressLine1 || "No address",
+          cutomerAddress: formattedCustomerAddress,
           // 🆕 New road distance fields
           deliveryDistance: fullOrder.deliveryDistance || 0,
           estimatedTimeToCustomer: fullOrder.estimatedTime || 0,

@@ -113,9 +113,11 @@ const OrderSchema = new mongoose.Schema({
     deliveryCharge: { type: Number, default: 0 }, // Optional
     totalPayable: { type: Number, default: 0 }    // Final amount to be paid
   },
+  couponCode: { type: String, default: null },
   appliedOffers: [{
     offerId: { type: mongoose.Schema.Types.ObjectId, ref: 'Offer' },
     title: String,
+    couponCode: String,
     scope: { type: String, enum: ['admin', 'merchant'] },
     discountType: { type: String, enum: ['flat', 'percentage'] },
     discountValue: Number,

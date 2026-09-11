@@ -96,11 +96,15 @@ export const registerDeliveryRiderSockets = (io, socket) => {
     // If rider has an active order, emit it again so their frontend can resume
     if (keepOrder) {
       try {
-        let fullOrder = await Order.findById(keepOrder).populate('merchantId', 'shopName address').lean();
+        let fullOrder = await Order.findById(keepOrder)
+          .populate('merchantId', 'shopName address')
+          .populate('userId', 'name phoneNumber')
+          .lean();
         if (!fullOrder) {
           fullOrder = await WarehouseOrder.findById(keepOrder)
             .populate('warehouseId', 'name address')
             .populate('sourceMerchantId', 'shopName')
+            .populate('userId', 'name phoneNumber')
             .lean();
           if (fullOrder) {
             fullOrder.merchantId = {
@@ -130,6 +134,16 @@ export const registerDeliveryRiderSockets = (io, socket) => {
             const deliveryTip = fullOrder.finalBilling?.deliveryTip ?? fullOrder.deliveryTip ?? 0;
             const totalRiderEarnings = baseDeliveryCharge + returnCharge + deliveryTip;
 
+            const customerPhone =
+              fullOrder.deliveryLocation?.phone ||
+              fullOrder.userId?.phoneNumber ||
+              fullOrder.deliveryLocation?.phoneNumber ||
+              null;
+            const customerName =
+              fullOrder.deliveryLocation?.name ||
+              fullOrder.userId?.name ||
+              "Customer";
+
             const riderPayload = {
               _id: fullOrder._id,
               orderId: fullOrder._id.toString(),
@@ -138,6 +152,8 @@ export const registerDeliveryRiderSockets = (io, socket) => {
               pickupLocation: fullOrder.pickupLocation,
               deliveryLocation: fullOrder.deliveryLocation,
               address: fullOrder.deliveryLocation?.addressLine1 || fullOrder.deliveryLocation?.street || "No address",
+              customerPhone,
+              customerName,
               merchantId: fullOrder.merchantId,
               items: fullOrder.items,
               deliveryCharge: baseDeliveryCharge,

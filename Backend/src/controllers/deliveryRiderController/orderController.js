@@ -25,11 +25,14 @@ const findAnyOrderById = async (orderId) => {
 const findAnyOrderPopulated = async (orderId) => {
   if (!orderId) return null;
   const cleanId = String(orderId).replace(/^["']|["']$/g, '').trim();
-  let order = await Order.findById(cleanId).populate('merchantId');
+  let order = await Order.findById(cleanId)
+    .populate('merchantId')
+    .populate('userId', 'name phoneNumber');
   if (!order) {
     order = await WarehouseOrder.findById(cleanId)
       .populate('warehouseId')
-      .populate('sourceMerchantId');
+      .populate('sourceMerchantId')
+      .populate('userId', 'name phoneNumber');
     if (order && !order.merchantId) {
       order.merchantId = {
         _id: order.warehouseId?._id || order.warehouseId,
@@ -389,7 +392,9 @@ export const endTrialPhase = async (req, res) => {
     // Recalculate billing with overtime penalty
     const billing = calculateFinalBilling({
       orderItems: order.items,
+      deliveryCharge: order.deliveryCharge || 0,
       returnCharge: order.returnCharge || 0,
+      deliveryTip: order.finalBilling?.deliveryTip || 0,
       trialPhaseStart: order.trialPhaseStart,
       trialPhaseEnd: order.trialPhaseEnd,
       discountToApply: order.finalBilling?.discount || 0,
@@ -399,7 +404,7 @@ export const endTrialPhase = async (req, res) => {
       ...order.finalBilling,
       ...billing,
       overtimePenalty,
-      totalPayable: Math.max(0, (billing.baseAmount || 0) + overtimePenalty - (order.finalBilling?.discount || 0)),
+      totalPayable: billing.totalPayable,
     };
 
     // If orderStatus was already selection_made or returning, preserve it
@@ -691,13 +696,13 @@ export const getActiveOrder = async (req, res) => {
       order = await Order.findOne({
         deliveryRiderId: riderId,
         orderStatus: { $nin: ["completed", "cancelled", "returned"] },
-      }).populate("merchantId");
+      }).populate("merchantId").populate('userId', 'name phoneNumber');
 
       if (!order) {
         order = await WarehouseOrder.findOne({
           deliveryRiderId: riderId,
           orderStatus: { $nin: ["completed", "cancelled", "returned"] },
-        }).populate("warehouseId").populate("sourceMerchantId");
+        }).populate("warehouseId").populate("sourceMerchantId").populate('userId', 'name phoneNumber');
         if (order && !order.merchantId) {
           order.merchantId = {
             _id: order.warehouseId?._id || order.warehouseId,

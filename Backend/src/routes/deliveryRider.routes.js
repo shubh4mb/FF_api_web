@@ -118,6 +118,7 @@ router.post(
   "/order/return-photos",
   authMiddlewareRider,
   upload.array("photos", 10), // max 10 photos per return
+  handleMulterError,
   async (req, res) => {
     try {
       const { orderId } = req.body;
@@ -161,6 +162,9 @@ router.post(
           uploadedAt: new Date(),
         };
 
+        if (!order.returnPhotos) {
+          order.returnPhotos = [];
+        }
         order.returnPhotos.push(photo);
         uploadedPhotos.push(photo);
       }

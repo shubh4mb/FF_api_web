@@ -163,6 +163,7 @@ const WarehouseOrderSchema = new mongoose.Schema(
     trialPhaseEnd: { type: Date, default: null },
     trialPhaseDuration: { type: Number, default: 0 },
     overtimePenalty: { type: Number, default: 0 },
+    photoVerified: { type: Boolean, default: false },
 
     // ── Locations ──
     deliveryLocation: {

@@ -1005,12 +1005,12 @@ export const initiateReturn = async (req, res) => {
 
       if (!orderItem) continue;
 
-      if (payloadItem.tryStatus === "keep") {
+      if (payloadItem.tryStatus === "keep" || payloadItem.tryStatus === "accepted") {
         orderItem.tryStatus = "accepted"; // User decided to keep
         orderItem.returnReason = null;
         keptItemsCount++;
         baseAmount += orderItem.price * orderItem.quantity;
-      } else if (payloadItem.tryStatus === "return") {
+      } else if (payloadItem.tryStatus === "return" || payloadItem.tryStatus === "returned") {
         orderItem.tryStatus = "returned";
         orderItem.returnReason = payloadItem.returnReason || "Not liked"; // optional reason
         returnedItemsCount++;
@@ -1035,8 +1035,7 @@ export const initiateReturn = async (req, res) => {
       order.customerDeliveryStatus = "awaiting_payment";
     }
 
-    // Mark try phase as completed
-    order.trialPhaseEnd = new Date();
+    // Note: trialPhaseEnd will be recorded when the delivery partner verifies the customer's OTP
     await order.save({ session });
     
     await logAuditEvent({
@@ -1125,9 +1124,8 @@ export const createFinalPaymentRazorpayOrder = async (req, res) => {
   try {
     const { orderId } = req.params;
     const userId = req.user.userId;
-    const { items } = req.body;
+    const { items, couponCode } = req.body;
     console.log(req.body);
-
 
     if (!items || !Array.isArray(items) || items.length === 0) {
       return res.status(400).json({ message: "Items array with tryStatus is required" });
@@ -1159,7 +1157,7 @@ export const createFinalPaymentRazorpayOrder = async (req, res) => {
 
       if (!orderItem) continue;
 
-      if (payloadItem.tryStatus === "keep") {
+      if (payloadItem.tryStatus === "keep" || payloadItem.tryStatus === "accepted") {
         orderItem.tryStatus = "accepted";
         orderItem.returnReason = null;
       } else if (payloadItem.tryStatus === "return" || payloadItem.tryStatus === "returned") {
@@ -1170,14 +1168,12 @@ export const createFinalPaymentRazorpayOrder = async (req, res) => {
 
     // If user chooses to keep nothing
     const acceptedItems = order.items.filter(
-      item => item.tryStatus === "accepted" || item.tryStatus === "not-triable"
+      item => item.tryStatus === "accepted" || item.tryStatus === "keep" || item.tryStatus === "not-triable"
     );
 
     if (acceptedItems.length === 0) {
-      // All items returned - customer will pay delivery/return fee directly to rider
       order.orderStatus = "selection_made";
       order.customerDeliveryStatus = 'awaiting_payment';
-      // Keep rider in try_phase so rider stays on DeliveryDetails to verify OTP, photo, and collect cash
       order.deliveryRiderStatus = "try_phase";
 
       // Ensure valid OTP exists for the customer to share with the rider
@@ -1188,30 +1184,38 @@ export const createFinalPaymentRazorpayOrder = async (req, res) => {
       await order.save();
       const io = getIO();
       emitOrderUpdate(io, orderId, order);
+    }
 
-      await logAuditEvent({
-        action: "ORDER_SELECTION_MADE",
-        message: `Order #${order._id.toString().slice(-5).toUpperCase()} marked all items return. Awaiting rider OTP verification and cash collection.`,
-        status: "success",
-        orderId: order._id,
-        userId,
-        merchantId: order.merchantId,
-        details: {
-          itemsCount: order.items.length,
-          returnedItemsCount: order.items.length,
-        },
-        req,
-      });
+    // === If a couponCode is submitted in final payment request, attach it to order ===
+    if (couponCode !== undefined) {
+      if (couponCode && typeof couponCode === 'string' && couponCode.trim()) {
+        const normalizedCoupon = couponCode.trim().toUpperCase();
+        const couponOffer = await Offer.findOne({
+          couponCode: normalizedCoupon,
+          isActive: true,
+        }).lean();
 
-      return res.status(200).json({
-        success: true,
-        message: "All items marked as return. Please share OTP and payment directly with delivery partner.",
-        orderId: order._id,
-        order: order,
-        requiresPayment: false,
-        requiresDeliveryFee: true,
-        deliveryFeeAmount: (order.deliveryCharge || 40) + (order.returnCharge || 30),
-      });
+        if (couponOffer) {
+          if (!order.appliedOffers) order.appliedOffers = [];
+          order.appliedOffers = order.appliedOffers.filter(o => !o.couponCode);
+          order.appliedOffers.push({
+            offerId: couponOffer._id,
+            couponCode: couponOffer.couponCode,
+            title: couponOffer.title,
+            scope: couponOffer.scope || 'admin',
+            discountType: couponOffer.discountType,
+            discountValue: couponOffer.discountValue,
+            discountApplied: 0,
+            freeDelivery: couponOffer.freeDelivery || false,
+          });
+          order.couponCode = couponOffer.couponCode;
+        }
+      } else if (couponCode === null || couponCode === '') {
+        if (order.appliedOffers) {
+          order.appliedOffers = order.appliedOffers.filter(o => !o.couponCode);
+        }
+        order.couponCode = null;
+      }
     }
 
     // === NEW: Recalculate Offers based strictly on kept items ===
@@ -1266,15 +1270,22 @@ export const createFinalPaymentRazorpayOrder = async (req, res) => {
     }
 
     // === STEP 2: Use Helper Function for Billing Calculation ===
+    const effectiveTrialEnd = order.trialPhaseEnd || new Date();
+    const hasFreeDelivery = order.appliedOffers?.some(o => o.freeDelivery);
+    const effectiveDeliveryCharge = hasFreeDelivery ? 0 : (order.deliveryCharge || 0);
+
     const billing = calculateFinalBilling({
       orderItems: order.items,
-      deliveryCharge: order.deliveryCharge || 0,
+      deliveryCharge: effectiveDeliveryCharge,
       returnCharge: order.returnCharge || 0,
       deliveryTip: order.finalBilling?.deliveryTip || 0,
       trialPhaseStart: order.trialPhaseStart,
-      trialPhaseEnd: order.trialPhaseEnd,
+      trialPhaseEnd: effectiveTrialEnd,
       discountToApply: recalculatedDiscount
     });
+
+    // If order already had an overtime penalty recorded from rider verification, preserve it
+    const finalOvertimePenalty = order.overtimePenalty > 0 ? order.overtimePenalty : billing.overtimePenalty;
 
     console.log("Recalculated Final Billing Payload:", billing);
 
@@ -1282,12 +1293,38 @@ export const createFinalPaymentRazorpayOrder = async (req, res) => {
     order.finalBilling.baseAmount = billing.baseAmount;
     order.finalBilling.gst = billing.gst;
     order.finalBilling.discount = recalculatedDiscount + billing.returnChargeDeduction; 
-    order.finalBilling.totalPayable = billing.totalPayable; 
+    order.finalBilling.overtimePenalty = finalOvertimePenalty;
+    order.finalBilling.deliveryCharge = billing.deliveryCharge;
+    order.finalBilling.totalPayable = Math.max(
+      0,
+      (billing.baseAmount || 0) + finalOvertimePenalty + (billing.effectiveReturnCharge || 0) + (billing.deliveryCharge || 0) + (billing.deliveryTip || 0) - recalculatedDiscount
+    ); 
 
     // Note: deliveryTip and serviceGST are already in order.finalBilling from step 1
 
-    order.overtimePenalty = billing.overtimePenalty;
+    order.overtimePenalty = finalOvertimePenalty;
     await order.save();
+
+    // If nothing is payable (e.g. ₹0 due), complete directly without Razorpay
+    if (billing.totalPayable === 0) {
+      order.paymentStatus = "paid";
+      order.orderStatus = acceptedItems.length > 0 ? "completed" : "return_in_progress";
+      order.customerDeliveryStatus = "completed";
+      await order.save();
+
+      const io = getIO();
+      emitOrderUpdate(io, orderId, order);
+
+      return res.status(200).json({
+        success: true,
+        isDeliveryFree: true,
+        totalPayable: 0,
+        message: "No payment required. Order confirmed.",
+        orderId: order._id,
+        order,
+        breakdown: billing,
+      });
+    }
 
     // === STEP 4: Create Razorpay Order ===
     const razorpayOrder = await razorpay.orders.create({

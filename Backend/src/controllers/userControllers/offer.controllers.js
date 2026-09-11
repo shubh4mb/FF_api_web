@@ -111,6 +111,9 @@ export const applyCoupon = async (req, res) => {
         discountValue: result.offer.discountValue,
         scope: result.offer.scope,
         badgeText: result.offer.badgeText,
+        freeDelivery: Boolean(result.offer.freeDelivery),
+        conditions: result.offer.conditions,
+        maxDiscount: result.offer.maxDiscount,
       },
       discountAmount: result.discountAmount,
     });

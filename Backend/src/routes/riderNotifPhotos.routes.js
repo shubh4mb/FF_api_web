@@ -10,6 +10,8 @@ import { getWalletDetails } from "../helperFns/walletHelper.js";
 import { authMiddlewareRider, authMiddleware } from "../middleware/jwtAuth.js"; // authMiddleware added here
 import upload from "../middleware/multer.js";
 import { v2 as cloudinary } from "cloudinary";
+import { emitOrderUpdate } from "../sockets/order.socket.js";
+import { getIO } from "../config/socket.js";
 
 const router = express.Router();
 
@@ -96,12 +98,18 @@ router.post(
                 uploadedPhotos.push(photo);
             }
 
+            order.photoVerified = true;
             await order.save();
+
+            const io = req.io || getIO();
+            emitOrderUpdate(io, orderId, order);
+            io.to(orderId).emit('photoVerified', { orderId, photoVerified: true, returnPhotos: order.returnPhotos });
 
             return res.status(200).json({
                 success: true,
                 message: `${uploadedPhotos.length} photo(s) uploaded for return evidence.`,
                 photos: uploadedPhotos,
+                order,
             });
         } catch (err) {
             console.error("Return photo upload error:", err);
