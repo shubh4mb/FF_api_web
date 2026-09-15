@@ -2,7 +2,7 @@ import mongoose from 'mongoose';
 import crypto from 'crypto';
 
 const productFlatSchema = new mongoose.Schema({
-  name: { type: String, required: true },
+  name: { type: String, default: 'New Product' },
   productCode: { type: String, unique: true }, // unique variant product code
   styleGroupId: { 
     type: String, 
@@ -42,7 +42,7 @@ const productFlatSchema = new mongoose.Schema({
   categoryId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Category',
-    required: true,
+    required: false,
   },
   subCategoryId: {
     type: mongoose.Schema.Types.ObjectId,
@@ -105,7 +105,7 @@ const productFlatSchema = new mongoose.Schema({
   merchantSizeCode: { type: String, required: false },
   stock: { type: Number, default: 0 },
   reservedStock: { type: Number, default: 0 },
-  mrp: { type: Number, required: true },
+  mrp: { type: Number, default: function() { return this.price; } },
   price: { type: Number, required: true },
   discount: { type: Number, default: 0 },
   images: [{

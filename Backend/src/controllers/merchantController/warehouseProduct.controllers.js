@@ -117,11 +117,16 @@ export const createWarehouseProductFull = asyncHandler(async (req, res) => {
         value: a.value
       };
     })
-    .filter(Boolean);
+    .filter(Boolean)
+    .filter(a => a.value !== undefined && a.value !== null && a.value !== '' && (!Array.isArray(a.value) || a.value.length > 0));
 
-  if (!name || !categoryId || !merchantId || !variants.length) {
-    throw new ApiError(400, 'name, categoryId, merchantId (source merchant), and variants are required');
+  if (!merchantId || !variants.length) {
+    throw new ApiError(400, 'merchantId (source merchant) and variants are required');
   }
+
+  const finalName = name ? name.trim() : (styleName ? styleName.trim() : "New Product");
+  const validCategoryId = (categoryId && mongoose.Types.ObjectId.isValid(categoryId)) ? new mongoose.Types.ObjectId(categoryId) : undefined;
+  const validSubCategoryId = (subCategoryId && mongoose.Types.ObjectId.isValid(subCategoryId)) ? new mongoose.Types.ObjectId(subCategoryId) : undefined;
 
   const sourceMerchant = await Merchant.findById(merchantId);
   if (!sourceMerchant) throw new ApiError(404, 'Source Merchant not found');
@@ -192,11 +197,11 @@ export const createWarehouseProductFull = asyncHandler(async (req, res) => {
       const productCode = `${parentProductCode}-${cleanColor}-${cleanSize}`;
 
       const newProduct = new ProductFlat({
-        name,
+        name: finalName,
         description,
         styleName,
-        categoryId,
-        subCategoryId,
+        categoryId: validCategoryId,
+        subCategoryId: validSubCategoryId,
         brandId,
         merchantId: sourceMerchant._id,
         source: 'warehouse',

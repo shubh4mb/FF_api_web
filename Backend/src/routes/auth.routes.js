@@ -2,6 +2,7 @@ import express from 'express';
 import { sendOTP, verifyOTP, refreshUserToken } from '../controllers/auth.controllers.js';
 import { adminLogin, registerAdmin, refreshAdminToken } from '../controllers/adminAuth.controllers.js';
 import { googleLogin } from '../controllers/googleAuth.controllers.js';
+import { appleLogin } from '../controllers/appleAuth.controllers.js';
 import { verifyAdmin } from '../middleware/adminAuth.middleware.js';
 
 const router = express.Router();
@@ -99,6 +100,7 @@ router.post('/refresh', refreshUserToken);
  *         description: Invalid Google token
  */
 router.post('/google-login', googleLogin);
+router.post('/apple-login', appleLogin);
 
 /**
  * @swagger

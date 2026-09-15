@@ -25,6 +25,11 @@ const userSchema = new mongoose.Schema({
     unique: true,
     sparse: true,
   },
+  appleId: {
+    type: String,
+    unique: true,
+    sparse: true,
+  },
   profilePicture: {
     type: String,
     default: '',

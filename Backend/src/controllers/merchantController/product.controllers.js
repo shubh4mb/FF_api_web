@@ -1894,9 +1894,34 @@ export const createProductFull = async (req, res) => {
     collectionIds = safeParse(collectionIds) || [];
     variants = safeParse(variants) || [];
 
-    if (!name || !categoryId || !subCategoryId || !variants.length) {
-      return res.status(400).json({ success: false, message: "Missing required fields or variants" });
+    const cleanAttributes = (Array.isArray(attributes) ? attributes : [])
+      .map(a => {
+        let rawId = a.attributeId || a.attribute;
+        if (rawId && typeof rawId === 'object') {
+          rawId = rawId._id || rawId.id;
+        }
+        if (!rawId) return null;
+        return {
+          attributeId: mongoose.Types.ObjectId.isValid(String(rawId))
+            ? new mongoose.Types.ObjectId(String(rawId))
+            : rawId,
+          value: a.value
+        };
+      })
+      .filter(Boolean)
+      .filter(a => a.value !== undefined && a.value !== null && a.value !== '' && (!Array.isArray(a.value) || a.value.length > 0));
+
+    if (!variants.length) {
+      return res.status(400).json({ success: false, message: "Missing required variants" });
     }
+
+    const finalName = name ? name.trim() : (styleName ? styleName.trim() : "New Product");
+    if (!gender || (Array.isArray(gender) && gender.length === 0)) {
+      gender = ['MEN', 'WOMEN'];
+    }
+
+    const validCategoryId = (categoryId && mongoose.Types.ObjectId.isValid(categoryId)) ? new mongoose.Types.ObjectId(categoryId) : undefined;
+    const validSubCategoryId = (subCategoryId && mongoose.Types.ObjectId.isValid(subCategoryId)) ? new mongoose.Types.ObjectId(subCategoryId) : undefined;
 
     const merchantId = req.merchantId;
     const merchant = await Merchant.findById(merchantId);
@@ -1930,7 +1955,10 @@ export const createProductFull = async (req, res) => {
       console.error("Optional brand resolution failed:", brandErr);
     }
 
-    const category = await Category.findById(categoryId);
+    let category = null;
+    if (validCategoryId) {
+      category = await Category.findById(validCategoryId);
+    }
     const catPrefix = category ? category.name.slice(0, 2).toUpperCase() : "GP";
     const randPart = Math.floor(1000 + Math.random() * 9000);
     const baseProductCode = `${merchantPrefix}-${brandPrefix}-${catPrefix}-${randPart}`;
@@ -1949,7 +1977,11 @@ export const createProductFull = async (req, res) => {
 
       const createdDocs = [];
       for (const variant of variants) {
-        const cleanColor = variant.color.name.replace(/\s+/g, '').toUpperCase();
+        const variantColor = (variant.color && variant.color.name) ? variant.color : { name: 'Standard', hex: '#111827' };
+        const cleanColor = variantColor.name.replace(/\s+/g, '').toUpperCase();
+        const sellingPrice = isNaN(Number(variant.price)) ? 0 : Number(variant.price);
+        const variantMrp = (variant.mrp && !isNaN(Number(variant.mrp)) && Number(variant.mrp) > 0) ? Number(variant.mrp) : sellingPrice;
+        const variantDiscount = isNaN(Number(variant.discount)) ? 0 : Number(variant.discount);
         
         const finalImages = [];
         if (variant.imageFields && Array.isArray(variant.imageFields)) {
@@ -1974,27 +2006,27 @@ export const createProductFull = async (req, res) => {
 
           const newDoc = new ProductFlat({
             styleGroupId,
-            name,
+            name: finalName,
             description,
             styleName,
-            categoryId,
-            subCategoryId,
+            categoryId: validCategoryId,
+            subCategoryId: validSubCategoryId,
             brandId,
             merchantId,
             gender,
-            attributes,
+            attributes: cleanAttributes,
             tags,
             collectionIds,
             isTriable: req.body.isTriable === 'true' || req.body.isTriable === true,
             isActive: false, // Default false until approved
             productCode,
-            color: variant.color,
+            color: variantColor,
             size: sizeInfo.size,
             merchantSizeCode: sizeInfo.merchantSizeCode,
             stock: isNaN(Number(sizeInfo.stock)) ? 0 : Number(sizeInfo.stock),
-            mrp: isNaN(Number(variant.mrp)) ? 0 : Number(variant.mrp),
-            price: isNaN(Number(variant.price)) ? 0 : Number(variant.price),
-            discount: isNaN(Number(variant.discount)) ? 0 : Number(variant.discount),
+            mrp: variantMrp,
+            price: sellingPrice,
+            discount: variantDiscount,
             images: finalImages,
           });
 
@@ -2041,15 +2073,15 @@ export const createProductFull = async (req, res) => {
       }
 
       const newProduct = new Product({
-        name,
+        name: finalName,
         description,
         styleName,
-        categoryId,
-        subCategoryId,
+        categoryId: validCategoryId,
+        subCategoryId: validSubCategoryId,
         brandId,
         merchantId,
         gender,
-        attributes,
+        attributes: cleanAttributes,
         tags,
         collectionIds,
         isTriable: req.body.isTriable === 'true' || req.body.isTriable === true,

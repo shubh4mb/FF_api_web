@@ -35,9 +35,14 @@ export const googleLogin = asyncHandler(async (req, res) => {
   } else {
     try {
       const client = getOAuthClient();
+      const validAudiences = [
+        process.env.GOOGLE_WEB_CLIENT_ID,
+        process.env.GOOGLE_IOS_CLIENT_ID,
+      ].filter(Boolean);
+
       const ticket = await client.verifyIdToken({
         idToken,
-        audience: process.env.GOOGLE_WEB_CLIENT_ID,
+        audience: validAudiences.length === 1 ? validAudiences[0] : validAudiences,
       });
 
       const payload = ticket.getPayload();
