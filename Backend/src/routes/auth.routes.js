@@ -1,5 +1,15 @@
 import express from 'express';
-import { sendOTP, verifyOTP, refreshUserToken } from '../controllers/auth.controllers.js';
+import {
+  sendOTP,
+  verifyOTP,
+  refreshUserToken,
+  registerSendOtp,
+  registerVerifyOtp,
+  emailLogin,
+  resendEmailOtp,
+  forgotPasswordSendOtp,
+  resetPasswordWithOtp,
+} from '../controllers/auth.controllers.js';
 import { adminLogin, registerAdmin, refreshAdminToken } from '../controllers/adminAuth.controllers.js';
 import { googleLogin } from '../controllers/googleAuth.controllers.js';
 import { appleLogin } from '../controllers/appleAuth.controllers.js';
@@ -66,6 +76,60 @@ router.post('/send-otp', sendOTP);
  *         description: Invalid OTP
  */
 router.post('/verify-otp', verifyOTP);
+
+/**
+ * @swagger
+ * /api/auth/register-send-otp:
+ *   post:
+ *     summary: Send OTP for email registration
+ *     tags: [Auth]
+ */
+router.post('/register-send-otp', registerSendOtp);
+
+/**
+ * @swagger
+ * /api/auth/register-verify-otp:
+ *   post:
+ *     summary: Verify OTP and complete email registration
+ *     tags: [Auth]
+ */
+router.post('/register-verify-otp', registerVerifyOtp);
+
+/**
+ * @swagger
+ * /api/auth/login:
+ *   post:
+ *     summary: Email and password login for users
+ *     tags: [Auth]
+ */
+router.post('/login', emailLogin);
+
+/**
+ * @swagger
+ * /api/auth/resend-email-otp:
+ *   post:
+ *     summary: Resend OTP for email registration or password reset
+ *     tags: [Auth]
+ */
+router.post('/resend-email-otp', resendEmailOtp);
+
+/**
+ * @swagger
+ * /api/auth/forgot-password:
+ *   post:
+ *     summary: Send password reset OTP to email
+ *     tags: [Auth]
+ */
+router.post('/forgot-password', forgotPasswordSendOtp);
+
+/**
+ * @swagger
+ * /api/auth/reset-password:
+ *   post:
+ *     summary: Reset password with OTP
+ *     tags: [Auth]
+ */
+router.post('/reset-password', resetPasswordWithOtp);
 
 /**
  * @swagger

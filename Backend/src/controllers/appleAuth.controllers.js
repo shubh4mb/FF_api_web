@@ -109,7 +109,7 @@ export const appleLogin = asyncHandler(async (req, res) => {
 
   // Generate JWT (15 minutes for access, 30 days for refresh)
   const token = jwt.sign(
-    { userId: user._id, phoneNumber: user.phoneNumber },
+    { userId: user._id, phoneNumber: user.phoneNumber, email: user.email },
     process.env.JWT_SECRET,
     { expiresIn: '15m' }
   );

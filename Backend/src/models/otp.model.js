@@ -3,12 +3,26 @@ import mongoose from 'mongoose';
 const otpSchema = new mongoose.Schema({
   phone: {
     type: String,
-    required: true,
     index: true,
+    sparse: true,
+  },
+  email: {
+    type: String,
+    index: true,
+    sparse: true,
   },
   otp: {
     type: String,
     required: true,
+  },
+  purpose: {
+    type: String,
+    enum: ['phone_login', 'email_register', 'password_reset'],
+    default: 'email_register',
+  },
+  metadata: {
+    type: mongoose.Schema.Types.Mixed,
+    default: null,
   },
   expiresAt: {
     type: Date,

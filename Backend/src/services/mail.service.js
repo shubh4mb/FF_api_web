@@ -1,53 +1,160 @@
 import { Resend } from 'resend';
+import nodemailer from 'nodemailer';
 import dotenv from 'dotenv';
 dotenv.config();
 
 const resendApiKey = process.env.RESEND_API || process.env.RESEND_API_KEY;
 const resend = resendApiKey ? new Resend(resendApiKey) : null;
 
-if (!resend) {
-  console.warn("⚠️ [mail.service] RESEND_API / RESEND_API_KEY is not configured. Outgoing emails will be skipped.");
+// Initialize Nodemailer fallback
+let transporter = null;
+if (process.env.EMAIL_USER && process.env.EMAIL_PASS) {
+  transporter = nodemailer.createTransport({
+    service: 'gmail',
+    auth: {
+      user: process.env.EMAIL_USER,
+      pass: process.env.EMAIL_PASS,
+    },
+  });
+}
+
+if (!resend && !transporter) {
+  console.warn("⚠️ [mail.service] Neither Resend nor Nodemailer (EMAIL_USER/EMAIL_PASS) is configured. Outgoing emails will fail.");
 }
 
 const fromEmail = process.env.EMAIL_FROM || 'noreply@mail.theflashfits.com';
+const gmailUser = process.env.EMAIL_USER || fromEmail;
 
 export const sendMail = async (to, subject, text, html, attachments = []) => {
-  if (!resend) {
-    console.warn(`[mail.service] Email to ${to} skipped: Resend API key is missing.`);
-    return null;
+  let resendError = null;
+
+  // 1. Try Resend if configured
+  if (resend) {
+    try {
+      const payload = {
+        from: `FlashFits <${fromEmail}>`,
+        to,
+        subject,
+      };
+
+      if (text) payload.text = text;
+      if (html) payload.html = html;
+      if (attachments && attachments.length > 0) payload.attachments = attachments;
+
+      const { data, error } = await resend.emails.send(payload);
+      if (error) {
+        throw error;
+      }
+
+      console.log("[mail.service] Email sent successfully via Resend: %s", data?.id);
+      return { service: 'resend', id: data?.id };
+    } catch (err) {
+      console.warn("[mail.service] Resend failed, attempting fallback to Nodemailer:", err.message || err);
+      resendError = err;
+    }
   }
 
-  try {
-    const payload = {
-      from: `FlashFits <${fromEmail}>`,
-      to,
-      subject,
-    };
+  // 2. Fallback to Nodemailer
+  if (transporter) {
+    try {
+      const mailOptions = {
+        from: `FlashFits <${gmailUser}>`,
+        to,
+        subject,
+        text,
+        html,
+        attachments,
+      };
 
-    if (text) {
-      payload.text = text;
+      const info = await transporter.sendMail(mailOptions);
+      console.log("[mail.service] Email sent successfully via Nodemailer: %s", info.messageId);
+      return { service: 'nodemailer', id: info.messageId };
+    } catch (nmErr) {
+      console.error("[mail.service] Nodemailer also failed:", nmErr.message || nmErr);
+      throw nmErr;
     }
-
-    if (html) {
-      payload.html = html;
-    }
-
-    if (attachments && attachments.length > 0) {
-      payload.attachments = attachments;
-    }
-
-    const { data, error } = await resend.emails.send(payload);
-
-    if (error) {
-      throw error;
-    }
-
-    console.log("Email sent successfully: %s", data?.id);
-    return data;
-  } catch (error) {
-    console.error("Error sending email via Resend:", error);
-    throw error;
   }
+
+  if (resendError) {
+    throw resendError;
+  }
+
+  throw new Error("No available email transport configured (Resend or Nodemailer).");
+};
+
+export const sendOtpEmail = async (email, otp, purpose = 'email_register') => {
+  const isReset = purpose === 'password_reset';
+  const title = isReset ? 'Reset Your Password' : 'Verify Your Email';
+  const subject = isReset ? `FlashFits: ${otp} is your password reset code` : `FlashFits: ${otp} is your verification code`;
+  const message = isReset
+    ? 'Use the verification code below to reset your FlashFits account password. This code is valid for 10 minutes.'
+    : 'Welcome to FlashFits! Use the verification code below to verify your email address and complete your registration. This code is valid for 10 minutes.';
+
+  const html = `
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>${subject}</title>
+      </head>
+      <body style="margin: 0; padding: 0; background-color: #f1f5f9; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
+        <table width="100%" border="0" cellspacing="0" cellpadding="0" style="background-color: #f1f5f9; padding: 40px 20px;">
+          <tr>
+            <td align="center">
+              <table width="100%" border="0" cellspacing="0" cellpadding="0" style="max-width: 480px; background-color: #ffffff; border-radius: 20px; overflow: hidden; box-shadow: 0 4px 24px rgba(0,0,0,0.06); border: 1px solid #e2e8f0;">
+                <!-- Header -->
+                <tr>
+                  <td style="background-color: #0f172a; padding: 32px 24px; text-align: center;">
+                    <span style="color: #ffffff; font-size: 26px; font-weight: 900; letter-spacing: 3px; display: inline-block;">FLASHFITS</span>
+                    <div style="color: #94a3b8; font-size: 11px; letter-spacing: 1.5px; margin-top: 4px; text-transform: uppercase;">Style Delivered Fast</div>
+                  </td>
+                </tr>
+                <!-- Content -->
+                <tr>
+                  <td style="padding: 36px 28px; text-align: center;">
+                    <h2 style="font-size: 22px; font-weight: 800; color: #0f172a; margin: 0 0 12px 0;">${title}</h2>
+                    <p style="font-size: 15px; line-height: 24px; color: #475569; margin: 0 0 28px 0;">
+                      ${message}
+                    </p>
+                    
+                    <!-- OTP Box -->
+                    <div style="background-color: #f8fafc; border: 2px dashed #cbd5e1; border-radius: 14px; padding: 18px 24px; display: inline-block; margin-bottom: 28px;">
+                      <span style="font-size: 36px; font-weight: 900; letter-spacing: 10px; color: #0f172a; font-family: 'SF Mono', Consolas, Monaco, monospace; display: block; margin-left: 10px;">
+                        ${otp}
+                      </span>
+                    </div>
+
+                    <p style="font-size: 13px; color: #64748b; margin: 0 0 8px 0;">
+                      This code will expire in <strong style="color: #0f172a;">10 minutes</strong>.
+                    </p>
+                    <p style="font-size: 12px; color: #94a3b8; margin: 0;">
+                      If you didn't request this code, you can safely ignore this email.
+                    </p>
+                  </td>
+                </tr>
+                <!-- Footer -->
+                <tr>
+                  <td style="background-color: #f8fafc; border-top: 1px solid #f1f5f9; padding: 20px 24px; text-align: center;">
+                    <p style="font-size: 12px; color: #94a3b8; margin: 0;">
+                      &copy; ${new Date().getFullYear()} FlashFits. All rights reserved.
+                    </p>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+        </table>
+      </body>
+    </html>
+  `;
+
+  return sendMail(
+    email,
+    subject,
+    `Your FlashFits verification code is: ${otp}. Valid for 10 minutes. Do not share this code.`,
+    html
+  );
 };
 
 export const sendVerificationEmail = async (merchantEmail, shopName) => {
