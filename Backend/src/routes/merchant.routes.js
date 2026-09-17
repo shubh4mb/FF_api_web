@@ -6,7 +6,7 @@ import { deleteVariant, addBrand, getBrands, getBaseProductById, getProductsByMe
 import { addMerchant } from '../controllers/merchantController/merchant.controller.js';
 import { loginMerchant, registerMerchant, updateMerchantShopDetails, updateMerchantBankDetails, updateMerchantKYC, updateMerchantOperatingHours, activateMerchant, registerPhone, sendEmailOtp, verifyEmailOtp, getMerchantByEmail, toggleMerchantOnlineStatus, refreshMerchantToken, logoutMerchant, addPushToken } from '../controllers/merchantController/authControllers.js';
 import { getAllOrder, saveProductDetails, requestOrderCancellation, getMyWarehouseSales } from '../controllers/merchantController/order.controllers.js';
-import { authMiddlewareMerchant } from '../middleware/jwtAuth.js';
+import { authMiddlewareMerchant, authMiddlewareMerchantOptional } from '../middleware/jwtAuth.js';
 import { getWalletDetails } from '../helperFns/walletHelper.js';
 import { getPlacedOrder, orderRequestForMerchant, orderPacked, getPackingPhotos, uploadPackingPhoto, deletePackingPhoto, getPackingInfoPublic, reportUnresponsiveRider } from '../controllers/merchantController/order.controllers.js';
 import { getMerchantById } from '../controllers/merchantController/merchant.controller.js';
@@ -185,7 +185,7 @@ router.delete('/deleteProduct/:productId', authMiddlewareMerchant, deleteProduct
 router.get('/getBaseProducts', getBaseProducts);
 
 router.get('/getBaseProductById/:productId', getBaseProductById);
-router.get('/fetchProductsByMerchantId/:merchantId', getProductsByMerchantId);
+router.get('/fetchProductsByMerchantId/:merchantId?', authMiddlewareMerchantOptional, getProductsByMerchantId);
 router.get('/getVariants', getVariants);
 router.get('/getCategories', getCategories);
 router.get('/attributes', getAttributes);
