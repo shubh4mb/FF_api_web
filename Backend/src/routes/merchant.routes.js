@@ -185,7 +185,7 @@ router.delete('/deleteProduct/:productId', authMiddlewareMerchant, deleteProduct
 router.get('/getBaseProducts', getBaseProducts);
 
 router.get('/getBaseProductById/:productId', getBaseProductById);
-router.get('/fetchProductsByMerchantId/:merchantId?', authMiddlewareMerchantOptional, getProductsByMerchantId);
+router.get(['/fetchProductsByMerchantId', '/fetchProductsByMerchantId/:merchantId'], authMiddlewareMerchantOptional, getProductsByMerchantId);
 router.get('/getVariants', getVariants);
 router.get('/getCategories', getCategories);
 router.get('/attributes', getAttributes);
