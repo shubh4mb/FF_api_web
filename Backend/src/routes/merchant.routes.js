@@ -4,7 +4,7 @@ import { addBaseProduct, addVariant, getBaseProducts, getVariants, updateVariant
 import { deleteVariant, addBrand, getBrands, getBaseProductById, getProductsByMerchantId, uploadProductImage, deleteImage, deleteProduct, updatePrice, editProduct, editVariant, updateVariantSizeStock, updateMultipleVariantSizes, getAllBrands, bulkUploadProducts, updateMatchingProducts } from '../controllers/merchantController/product.controllers.js';
 
 import { addMerchant } from '../controllers/merchantController/merchant.controller.js';
-import { loginMerchant, registerMerchant, updateMerchantShopDetails, updateMerchantBankDetails, updateMerchantKYC, updateMerchantOperatingHours, activateMerchant, registerPhone, sendEmailOtp, verifyEmailOtp, getMerchantByEmail, toggleMerchantOnlineStatus, refreshMerchantToken, logoutMerchant, addPushToken } from '../controllers/merchantController/authControllers.js';
+import { loginMerchant, registerMerchant, updateMerchantShopDetails, updateMerchantBankDetails, updateMerchantKYC, updateMerchantOperatingHours, activateMerchant, registerPhone, sendEmailOtp, verifyEmailOtp, getMerchantByEmail, toggleMerchantOnlineStatus, refreshMerchantToken, logoutMerchant, addPushToken, forgotPasswordMerchant, resetPasswordMerchant } from '../controllers/merchantController/authControllers.js';
 import { getAllOrder, saveProductDetails, requestOrderCancellation, getMyWarehouseSales } from '../controllers/merchantController/order.controllers.js';
 import { authMiddlewareMerchant, authMiddlewareMerchantOptional } from '../middleware/jwtAuth.js';
 import { getWalletDetails } from '../helperFns/walletHelper.js';
@@ -81,6 +81,10 @@ router.post('/auth/verify-email-otp', verifyEmailOtp);
  */
 router.post('/auth/refresh', refreshMerchantToken);
 router.post('/auth/logout', logoutMerchant);
+router.post('/auth/forgot-password', forgotPasswordMerchant);
+router.post('/auth/reset-password', resetPasswordMerchant);
+router.post('/forgot-password', forgotPasswordMerchant);
+router.post('/reset-password', resetPasswordMerchant);
 
 /**
  * @swagger

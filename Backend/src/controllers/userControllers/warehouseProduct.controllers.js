@@ -46,6 +46,7 @@ export const getWarehouseProducts = asyncHandler(async (req, res) => {
     $or: [{ source: 'warehouse' }, { warehouseId: { $exists: true, $ne: null } }],
     isActive: { $ne: false },
     isDeleted: { $ne: true },
+    isVerified: true,
   };
 
   if (gender && gender !== 'All') {

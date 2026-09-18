@@ -2,7 +2,7 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import Merchant from "../../models/merchant.model.js";
 import Brand from "../../models/brand.model.js";
-import { sendMail } from '../../services/mail.service.js';
+import { sendMail, sendOtpEmail } from '../../services/mail.service.js';
 import Zone from "../../models/zone.model.js";
 import Hub from "../../models/hub.model.js";
 import dotenv from 'dotenv';
@@ -751,5 +751,72 @@ export const addPushToken = async (req, res) => {
   } catch (error) {
     console.error("Error saving merchant push token:", error);
     return res.status(500).json({ message: "Internal Server Error" });
+  }
+};
+
+export const forgotPasswordMerchant = async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) {
+      return res.status(400).json({ success: false, message: "Email is required" });
+    }
+
+    const cleanEmail = email.trim().toLowerCase();
+    const merchant = await Merchant.findOne({ email: cleanEmail });
+    if (!merchant) {
+      return res.status(404).json({ success: false, message: "No merchant account found with this email" });
+    }
+
+    const otp = generateOtp();
+    merchant.emailOtp = otp;
+    merchant.emailOtpExpiry = Date.now() + 10 * 60 * 1000; // 10 minutes
+    await merchant.save();
+
+    await sendOtpEmail(cleanEmail, otp, 'password_reset');
+
+    return res.status(200).json({
+      success: true,
+      message: "Password reset OTP sent to your email"
+    });
+  } catch (err) {
+    console.error("Merchant forgot password error:", err);
+    return res.status(500).json({ success: false, message: "Failed to send reset OTP", error: err.message });
+  }
+};
+
+export const resetPasswordMerchant = async (req, res) => {
+  try {
+    const { email, otp, newPassword } = req.body;
+    if (!email || !otp || !newPassword) {
+      return res.status(400).json({ success: false, message: "Email, OTP, and new password are required" });
+    }
+
+    if (newPassword.length < 6) {
+      return res.status(400).json({ success: false, message: "Password must be at least 6 characters long" });
+    }
+
+    const cleanEmail = email.trim().toLowerCase();
+    const merchant = await Merchant.findOne({ email: cleanEmail });
+    if (!merchant) {
+      return res.status(404).json({ success: false, message: "Merchant not found" });
+    }
+
+    if (!merchant.emailOtp || merchant.emailOtp !== String(otp).trim() || Date.now() > merchant.emailOtpExpiry) {
+      return res.status(400).json({ success: false, message: "Invalid or expired OTP" });
+    }
+
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    merchant.password = hashedPassword;
+    merchant.emailOtp = undefined;
+    merchant.emailOtpExpiry = undefined;
+    await merchant.save();
+
+    return res.status(200).json({
+      success: true,
+      message: "Password reset successfully. You can now login with your new password."
+    });
+  } catch (err) {
+    console.error("Merchant reset password error:", err);
+    return res.status(500).json({ success: false, message: "Failed to reset password", error: err.message });
   }
 };

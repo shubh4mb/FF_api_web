@@ -215,6 +215,7 @@ export const createWarehouseProductFull = asyncHandler(async (req, res) => {
         collectionIds,
         isTriable: req.body.isTriable === 'true' || req.body.isTriable === true,
         isActive: true,
+        isVerified: true, // Auto-verified: products added by Warehouse Admin/Operator are verified
         
         styleGroupId: generatedGroupId,
         productCode: productCode,
