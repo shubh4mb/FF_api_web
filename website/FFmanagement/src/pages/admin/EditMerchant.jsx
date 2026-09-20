@@ -92,6 +92,7 @@ const EditMerchant = () => {
     isRegistrationFeePaid: false,
     rejectionReason: '',
     zoneName: '',
+    fulfillmentType: 'store',
     createdAt: null,
     stats: { totalProducts: 0, totalOrders: 0, totalReturns: 0 }
   });
@@ -167,6 +168,7 @@ const EditMerchant = () => {
           closeTime: m.operatingHours?.close || m.operatingHours?.closeTime || '21:00',
           daysOpen: m.operatingHours?.daysOpen?.length ? m.operatingHours.daysOpen : DAYS_OF_WEEK,
         },
+        fulfillmentType: m.fulfillmentType || 'store',
         stats: m.stats || { totalProducts: 0, totalOrders: 0, totalReturns: 0 }
       });
     } catch (err) {
@@ -259,6 +261,7 @@ const EditMerchant = () => {
     setIsUpdating(true);
     const payload = new FormData();
     payload.append('shopName', form.shopName || '');
+    payload.append('fulfillmentType', form.fulfillmentType || 'store');
     payload.append('ownerName', form.ownerName || '');
     payload.append('shopDescription', form.shopDescription || '');
     payload.append('businessType', form.businessType || 'Individual');
@@ -1199,6 +1202,25 @@ const EditMerchant = () => {
                     <option value="Partnership">Partnership</option>
                     <option value="Company">Private Limited Company</option>
                   </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-600 uppercase mb-2">Fulfillment Model *</label>
+                  <select
+                    name="fulfillmentType"
+                    value={form.fulfillmentType || 'store'}
+                    onChange={handleChange}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-semibold focus:bg-white focus:border-slate-900 outline-hidden transition-all"
+                  >
+                    <option value="store">Physical Store (Retail Shop / Walk-in)</option>
+                    <option value="warehouse">Warehouse Brand (Consignment / Online Only - e.g. Calsioclub)</option>
+                    <option value="hybrid">Hybrid (Physical Store + Warehouse Stock)</option>
+                  </select>
+                  <p className="text-xs text-slate-500 mt-1">
+                    {form.fulfillmentType === 'warehouse'
+                      ? '⚠️ Excluded from customer "Stores" tab. Fulfilled from FlashFits Warehouse Hub.'
+                      : 'Active in customer "Stores" tab as a physical boutique.'}
+                  </p>
                 </div>
 
                 <div>

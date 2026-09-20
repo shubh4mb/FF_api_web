@@ -88,6 +88,7 @@ export const resolveNearbyMerchants = async (req, res, next) => {
       const allMerchants = await Merchant.find({
         isActive: true,
         isVerified: true,
+        fulfillmentType: { $ne: 'warehouse' },
         "address.location.coordinates": { $exists: true },
       })
         .select("_id address.location")
@@ -171,6 +172,7 @@ export const resolveNearbyMerchants = async (req, res, next) => {
         const allMerchants = await Merchant.find({
           isActive: true,
           isVerified: true,
+          fulfillmentType: { $ne: 'warehouse' },
           "address.location.coordinates": { $exists: true },
         }).select("_id address.location").lean();
         const nearby = await filterMerchantsByRoadDistance(allMerchants, [lng, lat], 7);

@@ -46,6 +46,7 @@ const offerSchema = new mongoose.Schema({
       'VENDOR_DISCOUNT',
       'VENDOR_MIN_ORDER',
       'VENDOR_CLEARANCE',
+      'FREE_DELIVERY',
     ],
     required: true,
     index: true,
@@ -174,7 +175,19 @@ const offerSchema = new mongoose.Schema({
   // ── Special Flags ──
   freeDelivery: {
     type: Boolean,
-    default: false,   // VENDOR_MIN_ORDER: free delivery when met
+    default: false,   // free delivery when met
+  },
+  freeReturn: {
+    type: Boolean,
+    default: false,   // free doorstep return charge
+  },
+  freeWaiting: {
+    type: Boolean,
+    default: false,   // free rider waiting time / overtime penalty
+  },
+  autoApply: {
+    type: Boolean,
+    default: false,   // auto-apply to cart even if couponCode is set
   },
 
   // ── Priority ──

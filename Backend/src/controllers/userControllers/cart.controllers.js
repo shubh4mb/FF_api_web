@@ -404,17 +404,22 @@ export const getCart = async (req, res) => {
           cart.selectedOffers,
           'try_and_buy'
         );
-        if (mAppliedOffers && mAppliedOffers.freeDelivery) {
-          mTotals.totalDeliveryCharge = 0;
-          mTotals.totalReturnCharge = 0;
+        if (mAppliedOffers && (mAppliedOffers.freeDelivery || mAppliedOffers.freeReturn)) {
+          mTotals.totalDeliveryCharge = mAppliedOffers.freeDelivery ? 0 : mDeliveryCharge;
+          mTotals.totalReturnCharge = (mAppliedOffers.freeReturn || mAppliedOffers.freeDelivery) ? 0 : mReturnCharge;
           mTotals.serviceGST = 0;
           mTotals.totalUpfrontPayable = 0;
-          mTotals.finalTotal = Math.round(mSubtotal - mAppliedOffers.totalDiscount);
+          mTotals.finalTotal = Math.round(mSubtotal - (mAppliedOffers.totalDiscount || 0) + mTotals.totalDeliveryCharge + mTotals.totalReturnCharge + tip);
         } else {
           mTotals.totalUpfrontPayable = 0;
           mTotals.finalTotal = Math.round(mSubtotal - (mAppliedOffers.totalDiscount || 0) + mDeliveryCharge + mReturnCharge + tip + mServiceGST);
         }
         mTotals.discount = Math.round((mMrpTotal - mSubtotal) + (mAppliedOffers.totalDiscount || 0));
+        mTotals.rawDeliveryCharge = mDeliveryCharge;
+        mTotals.rawReturnCharge = mReturnCharge;
+        mTotals.freeDelivery = Boolean(mAppliedOffers?.freeDelivery);
+        mTotals.freeReturn = Boolean(mAppliedOffers?.freeReturn || mAppliedOffers?.freeDelivery);
+        mTotals.freeWaiting = Boolean(mAppliedOffers?.freeWaiting || mAppliedOffers?.freeDelivery);
       } catch (offerErr) {
         console.error('Offer engine error:', offerErr.message);
       }

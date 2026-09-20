@@ -272,21 +272,30 @@ export const findBestOffers = async (userId, cartContext, couponCode = null, sel
     const applicableAmount = getApplicableAmount(offer, cartContext);
     const discount = calculateDiscount(offer, applicableAmount);
 
-    if (discount <= 0 && !offer.freeDelivery) {
+    const hasLogisticsBenefit = Boolean(offer.freeDelivery || offer.freeReturn || offer.freeWaiting || offer.type === 'FREE_DELIVERY');
+
+    if (discount <= 0 && !hasLogisticsBenefit) {
       continue;
     }
 
     let totalValue = discount;
     const isMerchantCourier = offer.scope === 'merchant' && (orderType === 'courier' || offer.applicableTo === 'courier');
-    const allowFreeDelivery = offer.freeDelivery && !isMerchantCourier;
+    const allowFreeDelivery = Boolean((offer.freeDelivery || offer.type === 'FREE_DELIVERY') && !isMerchantCourier);
+    const allowFreeReturn = Boolean((offer.freeReturn || offer.freeDelivery || offer.type === 'FREE_DELIVERY') && !isMerchantCourier);
+    const allowFreeWaiting = Boolean(offer.freeWaiting || offer.freeDelivery || offer.type === 'FREE_DELIVERY');
 
-    if (allowFreeDelivery) {
+    if (allowFreeDelivery || allowFreeReturn) {
       totalValue += (cartContext.totalDeliveryCharge || 0) + (cartContext.totalReturnCharge || 0);
+    }
+    if (allowFreeWaiting) {
+      totalValue += 20; // Estimated value for free waiting time benefit
     }
 
     const processedOffer = {
       ...offer,
       freeDelivery: allowFreeDelivery,
+      freeReturn: allowFreeReturn,
+      freeWaiting: allowFreeWaiting,
       discountAmount: discount,
       totalValue,
     };
@@ -315,12 +324,23 @@ export const findBestOffers = async (userId, cartContext, couponCode = null, sel
       }
     }
   } else {
-    // Automatically apply the best qualifying store/platform offer (offers that do NOT require a coupon code)
-    const autoQualifyingOffers = validOffers.filter(o => !o.requiresCoupon && !o.couponCode);
-    if (autoQualifyingOffers.length > 0) {
-      // Sort by highest totalValue/discountAmount
-      const sortedAuto = [...autoQualifyingOffers].sort((a, b) => (b.totalValue || b.discountAmount || 0) - (a.totalValue || a.discountAmount || 0));
-      winningOffers.push(sortedAuto[0]);
+    // Auto-qualifying offers (do not require coupon entry OR marked as autoApply)
+    const autoQualifyingOffers = validOffers.filter(o => o.autoApply || !o.requiresCoupon);
+
+    // Stacking: separate logistics/delivery offers from discount offers so they stack seamlessly
+    const deliveryOffers = autoQualifyingOffers.filter(o => o.benefitType === 'DELIVERY' || o.freeDelivery || o.type === 'FREE_DELIVERY');
+    const discountOffers = autoQualifyingOffers.filter(o => o.benefitType !== 'DELIVERY' && !o.freeDelivery && o.type !== 'FREE_DELIVERY');
+
+    if (discountOffers.length > 0) {
+      const sortedDiscounts = [...discountOffers].sort((a, b) => (b.totalValue || b.discountAmount || 0) - (a.totalValue || a.discountAmount || 0));
+      winningOffers.push(sortedDiscounts[0]);
+    }
+
+    if (deliveryOffers.length > 0) {
+      const sortedDelivery = [...deliveryOffers].sort((a, b) => (b.totalValue || 0) - (a.totalValue || 0));
+      if (!winningOffers.find(o => o._id.toString() === sortedDelivery[0]._id.toString())) {
+        winningOffers.push(sortedDelivery[0]);
+      }
     }
   }
 
@@ -332,8 +352,10 @@ export const findBestOffers = async (userId, cartContext, couponCode = null, sel
   const finalResult = {
     appliedOffers: winningOffers,
     availableOffers: availableOffers,
-    totalDiscount: winningOffers.reduce((sum, o) => sum + o.discountAmount, 0),
+    totalDiscount: winningOffers.reduce((sum, o) => sum + (o.discountAmount || 0), 0),
     freeDelivery: winningOffers.some(o => o.freeDelivery),
+    freeReturn: winningOffers.some(o => o.freeReturn || o.freeDelivery),
+    freeWaiting: winningOffers.some(o => o.freeWaiting || o.freeDelivery),
   };
   
   log(`--- FINAL RESULT: ${JSON.stringify(finalResult)}`);
@@ -414,9 +436,18 @@ export const validateCouponCode = async (couponCode, userId, cartContext, orderT
   const applicableAmount = getApplicableAmount(offer, cartContext);
   const discount = calculateDiscount(offer, applicableAmount);
 
+  const allowFreeDelivery = Boolean(offer.freeDelivery || offer.type === 'FREE_DELIVERY');
+  const allowFreeReturn = Boolean(offer.freeReturn || offer.freeDelivery || offer.type === 'FREE_DELIVERY');
+  const allowFreeWaiting = Boolean(offer.freeWaiting || offer.freeDelivery || offer.type === 'FREE_DELIVERY');
+
   return {
     valid: true,
-    offer,
+    offer: {
+      ...offer,
+      freeDelivery: allowFreeDelivery,
+      freeReturn: allowFreeReturn,
+      freeWaiting: allowFreeWaiting,
+    },
     discountAmount: discount,
   };
 };

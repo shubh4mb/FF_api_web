@@ -125,7 +125,7 @@ export const getWarehouseProductDetail = asyncHandler(async (req, res) => {
     isDeleted: { $ne: true },
   })
     .populate('brandId', 'name logo')
-    .populate('merchantId', 'shopName logo address isOnline isZoneLive')
+    .populate('merchantId', 'shopName logo address isOnline isZoneLive fulfillmentType isWarehouse warehouseName')
     .populate('warehouseId', 'name code supportsTryAndBuy supportsCourier operatingHours')
     .populate('categoryId', 'name')
     .populate('subCategoryId', 'name')

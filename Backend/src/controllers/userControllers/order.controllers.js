@@ -220,6 +220,8 @@ export const createRazorpayOrder = async (req, res) => {
             discountValue: offer.discountValue,
             discountApplied: offer.discountAmount,
             freeDelivery: offer.freeDelivery || false,
+            freeReturn: offer.freeReturn || offer.freeDelivery || false,
+            freeWaiting: offer.freeWaiting || offer.freeDelivery || false,
           });
           offerDiscount += offer.discountAmount;
         }
@@ -227,6 +229,8 @@ export const createRazorpayOrder = async (req, res) => {
 
       if (bestOffers.freeDelivery) {
         deliveryCharge = 0;
+      }
+      if (bestOffers.freeReturn || bestOffers.freeDelivery) {
         returnCharge = 0;
       }
     } catch (offerErr) {
@@ -1012,7 +1016,7 @@ export const initiateReturn = async (req, res) => {
         baseAmount += orderItem.price * orderItem.quantity;
       } else if (payloadItem.tryStatus === "return" || payloadItem.tryStatus === "returned") {
         orderItem.tryStatus = "returned";
-        orderItem.returnReason = payloadItem.returnReason || "Not liked"; // optional reason
+        orderItem.returnReason = (payloadItem.returnReason && payloadItem.returnReason.trim()) ? payloadItem.returnReason.trim() : null; // optional reason
         returnedItemsCount++;
       }
     }
@@ -1162,7 +1166,7 @@ export const createFinalPaymentRazorpayOrder = async (req, res) => {
         orderItem.returnReason = null;
       } else if (payloadItem.tryStatus === "return" || payloadItem.tryStatus === "returned") {
         orderItem.tryStatus = "returned";
-        orderItem.returnReason = payloadItem.returnReason || "Not liked";
+        orderItem.returnReason = (payloadItem.returnReason && payloadItem.returnReason.trim()) ? payloadItem.returnReason.trim() : null;
       }
     }
 
@@ -1271,21 +1275,39 @@ export const createFinalPaymentRazorpayOrder = async (req, res) => {
 
     // === STEP 2: Use Helper Function for Billing Calculation ===
     const effectiveTrialEnd = order.trialPhaseEnd || new Date();
-    const hasFreeDelivery = order.appliedOffers?.some(o => o.freeDelivery);
+    const hasFreeDelivery = Boolean(
+      order.appliedOffers?.some(o => o.freeDelivery) ||
+      order.deliveryCharge === 0 ||
+      order.originalDeliveryCharge === 0
+    );
+    const hasFreeReturn = Boolean(
+      hasFreeDelivery ||
+      order.appliedOffers?.some(o => o.freeReturn || o.freeDelivery) ||
+      order.returnCharge === 0 ||
+      order.originalReturnCharge === 0
+    );
+    const hasFreeWaiting = Boolean(
+      hasFreeDelivery ||
+      order.appliedOffers?.some(o => o.freeWaiting || o.freeDelivery)
+    );
     const effectiveDeliveryCharge = hasFreeDelivery ? 0 : (order.deliveryCharge || 0);
+    const effectiveReturnCharge = hasFreeReturn ? 0 : (order.returnCharge || 0);
 
     const billing = calculateFinalBilling({
       orderItems: order.items,
       deliveryCharge: effectiveDeliveryCharge,
-      returnCharge: order.returnCharge || 0,
+      returnCharge: effectiveReturnCharge,
       deliveryTip: order.finalBilling?.deliveryTip || 0,
       trialPhaseStart: order.trialPhaseStart,
       trialPhaseEnd: effectiveTrialEnd,
-      discountToApply: recalculatedDiscount
+      discountToApply: recalculatedDiscount,
+      freeWaiting: hasFreeWaiting,
+      freeDelivery: hasFreeDelivery,
+      freeReturn: hasFreeReturn,
     });
 
-    // If order already had an overtime penalty recorded from rider verification, preserve it
-    const finalOvertimePenalty = order.overtimePenalty > 0 ? order.overtimePenalty : billing.overtimePenalty;
+    // If order has free waiting, overtime penalty is always 0
+    const finalOvertimePenalty = hasFreeWaiting ? 0 : (order.overtimePenalty > 0 ? order.overtimePenalty : billing.overtimePenalty);
 
     console.log("Recalculated Final Billing Payload:", billing);
 
@@ -1613,7 +1635,7 @@ export const verifyFinalPaymentCod = async (req, res) => {
         orderItem.returnReason = null;
       } else if (payloadItem.tryStatus === "return" || payloadItem.tryStatus === "returned") {
         orderItem.tryStatus = "returned";
-        orderItem.returnReason = payloadItem.returnReason || "Not liked";
+        orderItem.returnReason = (payloadItem.returnReason && payloadItem.returnReason.trim()) ? payloadItem.returnReason.trim() : null;
       }
     }
 
@@ -1671,14 +1693,33 @@ export const verifyFinalPaymentCod = async (req, res) => {
       }
     }
 
+    const hasFreeDelivery = Boolean(
+      order.appliedOffers?.some(o => o.freeDelivery) ||
+      order.deliveryCharge === 0 ||
+      order.originalDeliveryCharge === 0
+    );
+    const hasFreeReturn = Boolean(
+      hasFreeDelivery ||
+      order.appliedOffers?.some(o => o.freeReturn || o.freeDelivery) ||
+      order.returnCharge === 0 ||
+      order.originalReturnCharge === 0
+    );
+    const hasFreeWaiting = Boolean(
+      hasFreeDelivery ||
+      order.appliedOffers?.some(o => o.freeWaiting || o.freeDelivery)
+    );
+
     const billing = calculateFinalBilling({
       orderItems: order.items,
-      deliveryCharge: order.deliveryCharge || 0,
-      returnCharge: order.returnCharge || 0,
+      deliveryCharge: hasFreeDelivery ? 0 : (order.deliveryCharge || 0),
+      returnCharge: hasFreeReturn ? 0 : (order.returnCharge || 0),
       deliveryTip: order.finalBilling?.deliveryTip || 0,
       trialPhaseStart: order.trialPhaseStart,
       trialPhaseEnd: order.trialPhaseEnd,
-      discountToApply: recalculatedDiscount
+      discountToApply: recalculatedDiscount,
+      freeWaiting: hasFreeWaiting,
+      freeDelivery: hasFreeDelivery,
+      freeReturn: hasFreeReturn,
     });
 
     // Enforce 1000 limit for kept items cash payment
@@ -1707,73 +1748,102 @@ export const verifyFinalPaymentCod = async (req, res) => {
     order.finalBilling.totalPayable = billing.totalPayable;
     order.overtimePenalty = billing.overtimePenalty;
 
-    order.paymentStatus = "paid";
-    order.razorpayPaymentId = `cod_cash_${Date.now()}`;
-
     const returnedItems = order.items.filter(item => item.tryStatus === 'returned');
     const allItemsAccepted = returnedItems.length === 0;
 
-    if (allItemsAccepted) {
-      order.orderStatus = "completed";
-      order.customerDeliveryStatus = "completed";
-      order.deliveryRiderStatus = "completed";
-    } else {
-      order.orderStatus = "return_in_progress";
-      order.customerDeliveryStatus = "completed";
-      order.deliveryRiderStatus = "returning";
-    }
+    // If total payable is 0 (fully free / discounted), complete immediately
+    if (billing.totalPayable === 0) {
+      order.paymentStatus = "paid";
+      order.razorpayPaymentId = `cod_free_${Date.now()}`;
+      if (allItemsAccepted) {
+        order.orderStatus = "completed";
+        order.customerDeliveryStatus = "completed";
+        order.deliveryRiderStatus = "completed";
+      } else {
+        order.orderStatus = "return_in_progress";
+        order.customerDeliveryStatus = "completed";
+        order.deliveryRiderStatus = "returning";
+      }
 
-    // === Deduct stock for accepted items ===
-    const stockUpdateErrors = [];
-    for (const item of acceptedItems) {
-      let targetDoc = null;
-      if (item.variantId) {
-        targetDoc = await ProductFlat.findById(item.variantId);
-      }
-      if (!targetDoc && item.productId) {
-        const docs = await ProductFlat.find({ styleGroupId: item.productId, size: item.size });
-        targetDoc = docs.find(d => generateColorVariantId(item.productId.toString(), d.color?.name) === item.variantId?.toString()) || docs[0];
-      }
-      if (targetDoc) {
-        const result = await ProductFlat.updateOne(
-          { _id: targetDoc._id },
-          { $inc: { stock: -item.quantity } },
-          { session }
-        );
-        if (result.modifiedCount === 0) {
+      // Deduct stock for accepted items
+      const stockUpdateErrors = [];
+      for (const item of acceptedItems) {
+        let targetDoc = null;
+        if (item.variantId) {
+          targetDoc = await ProductFlat.findById(item.variantId);
+        }
+        if (!targetDoc && item.productId) {
+          const docs = await ProductFlat.find({ styleGroupId: item.productId, size: item.size });
+          targetDoc = docs.find(d => generateColorVariantId(item.productId.toString(), d.color?.name) === item.variantId?.toString()) || docs[0];
+        }
+        if (targetDoc) {
+          const result = await ProductFlat.updateOne(
+            { _id: targetDoc._id },
+            { $inc: { stock: -item.quantity } },
+            { session }
+          );
+          if (result.modifiedCount === 0) {
+            stockUpdateErrors.push(item.productId);
+          }
+        } else {
           stockUpdateErrors.push(item.productId);
         }
-      } else {
-        stockUpdateErrors.push(item.productId);
       }
+
+      // Free up rider if all accepted
+      if (allItemsAccepted && order.deliveryRiderId) {
+        await DeliveryRider.findByIdAndUpdate(order.deliveryRiderId, {
+          currentOrderId: null,
+          isBusy: false,
+          isAvailable: true,
+        }, { session });
+
+        try {
+          const { setRiderMeta, getRiderMeta } = await import("../../helperFns/deliveryRiderFns.js");
+          const meta = await getRiderMeta(order.deliveryRiderId.toString());
+          await setRiderMeta(order.deliveryRiderId.toString(), meta?.zoneId || 'global', {
+            isBusy: "false",
+            assignedOrderId: "",
+          });
+        } catch (redisErr) {
+          console.error("Redis meta cleanup error in verifyFinalPaymentCod (non-fatal):", redisErr);
+        }
+      }
+
+      await order.save({ session });
+      await session.commitTransaction();
+      session.endSession();
+
+      const { settleOrder } = await import("../../helperFns/orderSettlement.js");
+      settleOrder(order).catch(err => console.error("Settlement failed asynchronously (COD 0 due):", err));
+
+      const io = getIO();
+      emitOrderUpdate(io, order._id.toString(), order);
+
+      return res.status(200).json({
+        success: true,
+        message: "Order completed (₹0 due).",
+        orderId: order._id,
+        order,
+        paymentStatus: "paid",
+        hasReturnItems: !allItemsAccepted,
+      });
     }
 
-    // === Free up rider if all accepted ===
-    if (allItemsAccepted && order.deliveryRiderId) {
-      await DeliveryRider.findByIdAndUpdate(order.deliveryRiderId, {
-        currentOrderId: null,
-        isBusy: false,
-        isAvailable: true,
-      }, { session });
-
-      try {
-        const { setRiderMeta, getRiderMeta } = await import("../../helperFns/deliveryRiderFns.js");
-        const meta = await getRiderMeta(order.deliveryRiderId.toString());
-        await setRiderMeta(order.deliveryRiderId.toString(), meta?.zoneId || 'global', {
-          isBusy: "false",
-          assignedOrderId: "",
-        });
-      } catch (redisErr) {
-        console.error("Redis meta cleanup error in verifyFinalPaymentCod (non-fatal):", redisErr);
-      }
-    }
+    // 2-WAY HANDSHAKE: When amount > 0, customer selects COD but paymentStatus remains pending
+    // until rider explicitly confirms cash/UPI receipt on rider app.
+    order.paymentMethod = "cod";
+    order.paymentStatus = "pending";
+    order.orderStatus = "selection_made";
+    order.customerDeliveryStatus = "in_progress";
+    order.deliveryRiderStatus = "collecting_cash";
 
     await order.save({ session });
     
     await logAuditEvent({
-      action: "PAYMENT_SUCCESS",
-      message: `Final payment of ₹${order.finalBilling.totalPayable} via COD verified successfully for order #${order._id.toString().slice(-5).toUpperCase()}`,
-      status: "success",
+      action: "COD_SELECTION_SUBMITTED",
+      message: `COD chosen for ₹${order.finalBilling.totalPayable}. Awaiting rider cash confirmation for order #${order._id.toString().slice(-5).toUpperCase()}`,
+      status: "pending",
       orderId: order._id,
       userId,
       merchantId: order.merchantId,
@@ -1788,38 +1858,25 @@ export const verifyFinalPaymentCod = async (req, res) => {
     await session.commitTransaction();
     session.endSession();
 
-    // Settle wallets
-    const { settleOrder } = await import("../../helperFns/orderSettlement.js");
-    settleOrder(order).catch(err => console.error("Settlement failed asynchronously (COD):", err));
-
     const io = getIO();
     emitOrderUpdate(io, order._id.toString(), order);
 
-    notifyOrderEvent("customer", "payment_confirmed", {
-      userId: order.userId,
-      orderId: order._id,
-    });
-
-    if (allItemsAccepted) {
-      notifyOrderEvent("customer", "delivery_complete", {
-        userId: order.userId,
-        orderId: order._id,
-      });
-    } else if (order.deliveryRiderId) {
-      notifyOrderEvent("rider", "return_started", {
+    if (order.deliveryRiderId) {
+      notifyOrderEvent("rider", "cash_collection_requested", {
         riderId: order.deliveryRiderId,
         orderId: order._id,
+        amountToCollect: order.finalBilling.totalPayable,
       });
     }
 
     return res.status(200).json({
       success: true,
-      message: allItemsAccepted
-        ? "Selection confirmed. Please hand over the cash to the rider."
-        : "Selection confirmed. Please hand over the cash to the rider. Rider will return the remaining items.",
+      message: "Selection confirmed. Please hand over the cash or scan delivery partner's UPI QR.",
       orderId: order._id,
+      order,
+      paymentStatus: "pending",
+      totalPayable: order.finalBilling.totalPayable,
       hasReturnItems: !allItemsAccepted,
-      stockWarnings: stockUpdateErrors.length > 0 ? stockUpdateErrors : undefined,
     });
 
   } catch (error) {

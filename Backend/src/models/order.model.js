@@ -123,6 +123,8 @@ const OrderSchema = new mongoose.Schema({
     discountValue: Number,
     discountApplied: Number,    // Actual ₹ deducted
     freeDelivery: { type: Boolean, default: false },
+    freeReturn: { type: Boolean, default: false },
+    freeWaiting: { type: Boolean, default: false },
   }],
   deliveryLocation: {
     name: String,

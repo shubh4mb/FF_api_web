@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import {
   Tag, Plus, Pencil, Trash2, ToggleLeft, ToggleRight,
   Zap, Gift, ShoppingCart, Layers, AlertCircle, CheckCircle, X, Clock,
-  LayoutGrid
+  LayoutGrid, Truck
 } from 'lucide-react';
 import { getOffers, createOffer, updateOffer, toggleOffer, deleteOffer } from '../../api/offers';
 import { getCategories } from '../../api/categories';
@@ -11,6 +11,7 @@ import { getCollections } from '../../api/collections';
 const ADMIN_OFFER_TYPES = [
   { value: 'FIRST_TIME_USER', label: 'First-Time User', icon: Gift, color: '#16A34A', bg: '#F0FDF4', description: 'Discount for first-time buyers' },
   { value: 'CART_VALUE', label: 'Cart Value', icon: ShoppingCart, color: '#EA580C', bg: '#FFF7ED', description: 'Discount when cart exceeds value' },
+  { value: 'FREE_DELIVERY', label: 'Free Delivery & Returns', icon: Truck, color: '#059669', bg: '#ECFDF5', description: 'Free delivery, returns & waiting time' },
   { value: 'CATEGORY', label: 'Category', icon: Layers, color: '#2563EB', bg: '#EFF6FF', description: 'Discount on specific categories' },
   { value: 'COLLECTION', label: 'Collection', icon: LayoutGrid, color: '#7C3AED', bg: '#F5F3FF', description: 'Discount on curated collections' },
   { value: 'FLASH_SALE', label: 'Flash Sale', icon: Zap, color: '#DC2626', bg: '#FEF2F2', description: 'Time-limited flash discount' },
@@ -243,6 +244,10 @@ function OfferRow({ offer, onToggle, onEdit, onDelete }) {
           )}
           {isExpired && <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-red-50 text-red-500">EXPIRED</span>}
           {offer.conditions?.firstTimeUserOnly && <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-green-50 text-green-600">1ST ORDER</span>}
+          {offer.freeDelivery && <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-600">FREE DELIVERY</span>}
+          {offer.freeReturn && <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-teal-50 text-teal-600">FREE RETURNS</span>}
+          {offer.freeWaiting && <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-cyan-50 text-cyan-600">FREE WAITING</span>}
+          {offer.autoApply && <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-600">AUTO-APPLIED</span>}
           {offer.benefitType === 'PRODUCT' && <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-blue-50 text-blue-600">PRODUCT BENEFIT</span>}
           {offer.applicableTo && offer.applicableTo !== 'both' && (
             <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${offer.applicableTo === 'try_and_buy' ? 'bg-green-50 text-green-700' : 'bg-purple-50 text-purple-700'}`}>
@@ -299,9 +304,12 @@ function OfferFormModal({ offer, submitting, categories, collections, onSubmit, 
     isPublic: offer?.isPublic !== undefined ? offer.isPublic : true,
     maxUsageTotal: offer?.maxUsageTotal || '',
     maxUsagePerUser: offer?.maxUsagePerUser || 1,
-    freeDelivery: offer?.freeDelivery || false,
+    freeDelivery: offer?.freeDelivery !== undefined ? offer.freeDelivery : (offer?.type === 'FREE_DELIVERY'),
+    freeReturn: offer?.freeReturn !== undefined ? offer.freeReturn : (offer?.type === 'FREE_DELIVERY'),
+    freeWaiting: offer?.freeWaiting !== undefined ? offer.freeWaiting : (offer?.type === 'FREE_DELIVERY'),
+    autoApply: offer?.autoApply !== undefined ? offer.autoApply : (offer?.type === 'FREE_DELIVERY'),
     priority: offer?.priority || 0,
-    benefitType: offer?.benefitType || (offer?.type === 'COLLECTION' ? 'PRODUCT' : 'CART'),
+    benefitType: offer?.benefitType || (offer?.type === 'FREE_DELIVERY' ? 'DELIVERY' : (offer?.type === 'COLLECTION' ? 'PRODUCT' : 'CART')),
     stackable: offer?.stackable !== undefined ? offer.stackable : true,
     isExclusive: offer?.isExclusive || false,
     applicableTo: offer?.applicableTo || 'both',
@@ -310,7 +318,16 @@ function OfferFormModal({ offer, submitting, categories, collections, onSubmit, 
   const update = (key, value) => {
     setForm((p) => {
         const newState = { ...p, [key]: value };
-        if (key === 'type' && (value === 'COLLECTION' || value === 'CATEGORY')) {
+        if (key === 'type' && value === 'FREE_DELIVERY') {
+            newState.benefitType = 'DELIVERY';
+            newState.freeDelivery = true;
+            newState.freeReturn = true;
+            newState.freeWaiting = true;
+            newState.autoApply = true;
+            newState.badgeText = newState.badgeText || 'FREE DELIVERY & RETURNS';
+            newState.discountType = 'flat';
+            newState.discountValue = 0;
+        } else if (key === 'type' && (value === 'COLLECTION' || value === 'CATEGORY')) {
             newState.benefitType = 'PRODUCT';
         } else if (key === 'type') {
             newState.benefitType = 'CART';
@@ -446,13 +463,39 @@ function OfferFormModal({ offer, submitting, categories, collections, onSubmit, 
                 )}
               </div>
               
-              <label className="flex items-start gap-3 p-4 bg-green-50 rounded-xl border border-green-200 cursor-pointer">
-                <input type="checkbox" checked={form.freeDelivery} onChange={(e) => update('freeDelivery', e.target.checked)} className="mt-1" />
-                <div>
-                  <div className="text-sm font-bold text-green-700">Include Free Delivery?</div>
-                  <div className="text-xs text-green-600 mt-1">Waive delivery charges when this offer applies.</div>
-                </div>
-              </label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <label className="flex items-start gap-3 p-3.5 bg-emerald-50/70 rounded-xl border border-emerald-200 cursor-pointer">
+                  <input type="checkbox" checked={form.freeDelivery} onChange={(e) => update('freeDelivery', e.target.checked)} className="mt-1 w-4 h-4 rounded text-emerald-600" />
+                  <div>
+                    <div className="text-xs font-bold text-emerald-800">🚚 Free Delivery</div>
+                    <div className="text-[11px] text-emerald-600 mt-0.5">Waive road delivery fee</div>
+                  </div>
+                </label>
+
+                <label className="flex items-start gap-3 p-3.5 bg-teal-50/70 rounded-xl border border-teal-200 cursor-pointer">
+                  <input type="checkbox" checked={form.freeReturn} onChange={(e) => update('freeReturn', e.target.checked)} className="mt-1 w-4 h-4 rounded text-teal-600" />
+                  <div>
+                    <div className="text-xs font-bold text-teal-800">🔄 Free Returns</div>
+                    <div className="text-[11px] text-teal-600 mt-0.5">Waive doorstep return handling</div>
+                  </div>
+                </label>
+
+                <label className="flex items-start gap-3 p-3.5 bg-cyan-50/70 rounded-xl border border-cyan-200 cursor-pointer">
+                  <input type="checkbox" checked={form.freeWaiting} onChange={(e) => update('freeWaiting', e.target.checked)} className="mt-1 w-4 h-4 rounded text-cyan-600" />
+                  <div>
+                    <div className="text-xs font-bold text-cyan-800">⏳ Free Waiting Time</div>
+                    <div className="text-[11px] text-cyan-600 mt-0.5">Waive trial overtime penalty</div>
+                  </div>
+                </label>
+
+                <label className="flex items-start gap-3 p-3.5 bg-indigo-50/70 rounded-xl border border-indigo-200 cursor-pointer">
+                  <input type="checkbox" checked={form.autoApply} onChange={(e) => update('autoApply', e.target.checked)} className="mt-1 w-4 h-4 rounded text-indigo-600" />
+                  <div>
+                    <div className="text-xs font-bold text-indigo-800">✨ Auto-Apply Offer</div>
+                    <div className="text-[11px] text-indigo-600 mt-0.5">Auto-apply for all eligible carts</div>
+                  </div>
+                </label>
+              </div>
             </div>
           </div>
 

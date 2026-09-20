@@ -102,6 +102,8 @@ const WarehouseOrderSchema = new mongoose.Schema(
         discountValue: Number,
         discountApplied: Number,
         freeDelivery: { type: Boolean, default: false },
+        freeReturn: { type: Boolean, default: false },
+        freeWaiting: { type: Boolean, default: false },
       },
     ],
 

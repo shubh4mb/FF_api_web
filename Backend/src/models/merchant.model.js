@@ -121,6 +121,16 @@ const merchantSchema = new mongoose.Schema(
     },
     createdAt: { type: Date, default: Date.now },
     isZoneLive: { type: Boolean, default: false },
+    // ── Fulfillment Type ──
+    // 'store' = Physical retail store (default, appears in Stores tab)
+    // 'warehouse' = Consignment / Warehouse-only brand (e.g. Calsioclub, hidden from Stores tab)
+    // 'hybrid' = Physical store + warehouse stock (appears in Stores tab)
+    fulfillmentType: {
+      type: String,
+      enum: ['store', 'warehouse', 'hybrid'],
+      default: 'store',
+      index: true,
+    },
     // ── Warehouse Operator Support ──
     // 'merchant' = standard shop owner (default)
     // 'warehouse' = FlashFits warehouse operator (created by admin)

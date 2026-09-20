@@ -145,7 +145,7 @@ export const productsDetails = async (req, res) => {
       .populate('warehouseId', 'name code supportsTryAndBuy supportsCourier operatingHours')
       .populate({ 
         path: 'merchantId', 
-        select: 'shopName logo isVerified isActive address isOnline isZoneLive', 
+        select: 'shopName logo isVerified isActive address isOnline isZoneLive fulfillmentType isWarehouse warehouseName', 
       })
       .populate('attributes.attributeId', 'name');
 
@@ -661,12 +661,13 @@ export const getProductsByMerchantId = async (req, res) => {
 
     console.log('[DEBUG getProductsByMerchantId] flatProducts matched:', flatProducts.length);
 
+    const isWarehouseBrand = merchant?.fulfillmentType === 'warehouse' || isWarehouse;
     const cards = flatToCardData(flatProducts, req).map(card => ({
       ...card,
       isMainVariant: true,
-      isWarehouseListing: isWarehouse || card.source === 'warehouse',
-      source: (isWarehouse || card.source === 'warehouse') ? 'warehouse' : 'shop',
-      isInstantBuyable: (isWarehouse || card.source === 'warehouse') ? true : ((
+      isWarehouseListing: isWarehouseBrand || isWarehouse || card.source === 'warehouse',
+      source: (isWarehouseBrand || isWarehouse || card.source === 'warehouse') ? 'warehouse' : 'shop',
+      isInstantBuyable: (isWarehouseBrand || isWarehouse || card.source === 'warehouse') ? true : ((
         req.nearbyMerchantIds?.some(id => id.toString() === merchantId.toString()) &&
         merchant?.isOnline &&
         merchant?.isZoneLive
@@ -793,7 +794,8 @@ export const getCourierProducts = async (req, res) => {
       ],
       isActive: true,
       isVerified: true,
-    }).select('_id shopName logo backgroundImage rating stats isOnline genderCategory address').lean();
+      fulfillmentType: { $ne: 'warehouse' },
+    }).select('_id shopName logo backgroundImage rating stats isOnline genderCategory address fulfillmentType').lean();
 
     const resolvedMerchants = await Promise.all(combinedMerchants.map(async (m) => {
       const ProductModel = ProductFlat;
@@ -808,7 +810,62 @@ export const getCourierProducts = async (req, res) => {
       };
     }));
 
-    let filteredCourierMerchants = resolvedMerchants;
+    // ── Include FlashFits Warehouse Hub as a Virtual Store Card ──
+    const warehouseStores = [];
+    try {
+      const Warehouse = (await import('../../models/warehouse.model.js')).default;
+      const activeWarehouses = await Warehouse.find({ isActive: true }).lean();
+      const totalWarehouseProducts = await ProductFlat.countDocuments({
+        $or: [{ source: 'warehouse' }, { warehouseId: { $exists: true, $ne: null } }],
+        isActive: true,
+        isDeleted: { $ne: true }
+      });
+
+      if (activeWarehouses.length > 0) {
+        for (const wh of activeWarehouses) {
+          const whCount = await ProductFlat.countDocuments({
+            $or: [{ warehouseId: wh._id }, { source: 'warehouse' }],
+            isActive: true,
+            isDeleted: { $ne: true }
+          });
+          warehouseStores.push({
+            _id: wh._id.toString(),
+            shopName: wh.name || 'FlashFits Warehouse Hub',
+            logo: { url: '' },
+            backgroundImage: { url: '' },
+            genderCategory: ['MEN', 'WOMEN', 'KIDS', 'Unisex'],
+            shipsWithinHours: 1,
+            isOnline: true,
+            isZoneLive: true,
+            isNearby: true,
+            isWarehouse: true,
+            rating: 4.9,
+            address: wh.address || { city: 'FlashFits Hub' },
+            stats: { totalProducts: whCount > 0 ? whCount : totalWarehouseProducts }
+          });
+        }
+      } else if (totalWarehouseProducts > 0) {
+        warehouseStores.push({
+          _id: 'ff-warehouse-hub',
+          shopName: 'FlashFits Warehouse Hub',
+          logo: { url: '' },
+          backgroundImage: { url: '' },
+          genderCategory: ['MEN', 'WOMEN', 'KIDS', 'Unisex'],
+          shipsWithinHours: 1,
+          isOnline: true,
+          isZoneLive: true,
+          isNearby: true,
+          isWarehouse: true,
+          rating: 4.9,
+          address: { city: 'FlashFits Hub' },
+          stats: { totalProducts: totalWarehouseProducts }
+        });
+      }
+    } catch (whErr) {
+      console.error('Error attaching warehouse store to courier explore:', whErr.message);
+    }
+
+    let filteredCourierMerchants = [...warehouseStores, ...resolvedMerchants];
     const lat = parseFloat(req.query.lat);
     const lng = parseFloat(req.query.lng);
 
@@ -821,12 +878,16 @@ export const getCourierProducts = async (req, res) => {
       return res.status(200).json({ products: [], totalCount: 0, merchants: [] });
     }
 
-    const merchantIds = filteredCourierMerchants.map(m => m._id);
+    const physicalMerchantIds = resolvedMerchants.map(m => m._id);
 
-    // 2. Build product filter
+    // 2. Build product filter (includes courier physical store products + warehouse products)
     const filter = {
       isActive: true,
-      merchantId: { $in: merchantIds },
+      $or: [
+        { merchantId: { $in: physicalMerchantIds } },
+        { source: 'warehouse' },
+        { warehouseId: { $exists: true, $ne: null } }
+      ]
     };
 
     filter.isDeleted = { $ne: true };

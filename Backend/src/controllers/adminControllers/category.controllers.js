@@ -1,4 +1,5 @@
 import Category from '../../models/category.model.js';
+import ProductFlat from '../../models/productFlat.model.js';
 import { storageService } from '../../services/storage.service.js';
 import { asyncHandler } from '../../utils/asyncHandler.js';
 import { ApiError } from '../../utils/ApiError.js';
@@ -218,7 +219,84 @@ export const updateCategory = asyncHandler(async (req, res) => {
 });
 
 export const getCategories = asyncHandler(async (req, res) => {
-  const categories = await Category.find({ isActive: true });
+  const { onlyWithProducts, includeProductInfo, gender } = req.query;
+
+  const categories = await Category.find({ isActive: true }).lean();
+
+  if (onlyWithProducts === 'true' || includeProductInfo === 'true') {
+    const productMatch = {
+      isActive: true,
+      isDeleted: { $ne: true },
+      isVerified: true,
+      subCategoryId: { $ne: null }
+    };
+
+    if (gender && gender.toUpperCase() !== 'ALL') {
+      productMatch.gender = gender.toUpperCase();
+    }
+
+    const activeSubCategories = await ProductFlat.aggregate([
+      { $match: productMatch },
+      { $unwind: '$gender' },
+      {
+        $group: {
+          _id: '$subCategoryId',
+          genders: { $addToSet: '$gender' },
+          count: { $sum: 1 }
+        }
+      }
+    ]);
+
+    const subCatMap = new Map();
+    activeSubCategories.forEach(item => {
+      if (item._id) {
+        subCatMap.set(item._id.toString(), {
+          genders: item.genders,
+          count: item.count
+        });
+      }
+    });
+
+    const enrichedCategories = categories.map(cat => {
+      const info = subCatMap.get(cat._id.toString());
+      return {
+        ...cat,
+        hasProducts: !!info,
+        productGenders: info ? info.genders : [],
+        productCount: info ? info.count : 0
+      };
+    });
+
+    if (onlyWithProducts === 'true') {
+      // Only keep level 1 (subcategories) if they have products
+      const filteredCategories = enrichedCategories.filter(cat => {
+        if (cat.level === 1) {
+          return cat.hasProducts;
+        }
+        return true;
+      });
+
+      // Only keep level 0 (main categories) if they have at least one active subcategory with products
+      const activeParentIds = new Set(
+        filteredCategories
+          .filter(c => c.level === 1)
+          .map(c => c.parentId?.toString())
+          .filter(Boolean)
+      );
+
+      const finalCategories = filteredCategories.filter(cat => {
+        if (cat.level === 0) {
+          return activeParentIds.has(cat._id.toString());
+        }
+        return true;
+      });
+
+      return res.status(200).json(new ApiResponse(200, { categories: finalCategories }, "Categories retrieved"));
+    }
+
+    return res.status(200).json(new ApiResponse(200, { categories: enrichedCategories }, "Categories retrieved"));
+  }
+
   return res.status(200).json(new ApiResponse(200, { categories }, "Categories retrieved"));
 });
 

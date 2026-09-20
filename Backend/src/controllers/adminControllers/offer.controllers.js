@@ -6,7 +6,7 @@ import Offer from '../../models/offer.model.js';
  *   FIRST_TIME_USER, CART_VALUE, CATEGORY, FLASH_SALE, COLLECTION
  */
 
-const ADMIN_OFFER_TYPES = ['FIRST_TIME_USER', 'CART_VALUE', 'CATEGORY', 'FLASH_SALE', 'COLLECTION'];
+const ADMIN_OFFER_TYPES = ['FIRST_TIME_USER', 'CART_VALUE', 'CATEGORY', 'FLASH_SALE', 'COLLECTION', 'FREE_DELIVERY'];
 
 // ── Create Offer ──
 export const createOffer = async (req, res) => {
@@ -17,7 +17,7 @@ export const createOffer = async (req, res) => {
       conditions, startDate, endDate, isFlashSale,
       couponCode, requiresCoupon,
       maxUsageTotal, maxUsagePerUser,
-      freeDelivery, priority,
+      freeDelivery, freeReturn, freeWaiting, autoApply, priority,
     } = req.body;
 
     if (!ADMIN_OFFER_TYPES.includes(type)) {
@@ -45,10 +45,12 @@ export const createOffer = async (req, res) => {
       }
     }
 
+    const isFreeDeliveryType = type === 'FREE_DELIVERY';
+
     const offer = await Offer.create({
       title,
       description: description || '',
-      badgeText: badgeText || '',
+      badgeText: badgeText || (isFreeDeliveryType ? 'FREE DELIVERY' : ''),
       type,
       scope: 'admin',
       createdBy: req.adminId,
@@ -70,13 +72,16 @@ export const createOffer = async (req, res) => {
       startDate: startDate || new Date(),
       endDate,
       isFlashSale: type === 'FLASH_SALE' ? true : (isFlashSale || false),
-      couponCode: couponCode || null,
+      couponCode: couponCode ? couponCode.toUpperCase() : null,
       requiresCoupon: requiresCoupon || false,
       maxUsageTotal: maxUsageTotal || null,
-      maxUsagePerUser: maxUsagePerUser || 1,
-      freeDelivery: freeDelivery || false,
+      maxUsagePerUser: maxUsagePerUser || null,
+      freeDelivery: isFreeDeliveryType || freeDelivery || false,
+      freeReturn: isFreeDeliveryType || freeReturn || freeDelivery || false,
+      freeWaiting: isFreeDeliveryType || freeWaiting || freeDelivery || false,
+      autoApply: autoApply || false,
       priority: priority || 0,
-      benefitType: req.body.benefitType || (type === 'COLLECTION' ? 'PRODUCT' : 'CART'),
+      benefitType: req.body.benefitType || (isFreeDeliveryType ? 'DELIVERY' : (type === 'COLLECTION' ? 'PRODUCT' : 'CART')),
       stackable: req.body.stackable !== undefined ? req.body.stackable : true,
       isExclusive: req.body.isExclusive || false,
       applicableTo: req.body.applicableTo || 'both',

@@ -5,7 +5,8 @@ export const getNearbyMerchants = async (req, res) => {
     const { gender, strict } = req.query;
     const isStrict = strict === 'true';
 
-    let filter = { isActive: true, isVerified: true };
+    // Exclude warehouse-only brands (e.g. Calsioclub) from physical stores list
+    let filter = { isActive: true, isVerified: true, fulfillmentType: { $ne: 'warehouse' } };
 
     if (isStrict) {
       // ── Instant Try (Home): Only online, nearby, and in-zone merchants ──
@@ -35,7 +36,7 @@ export const getNearbyMerchants = async (req, res) => {
     }
 
     const merchants = await Merchant.find(filter)
-      .select('shopName logo genderCategory shipsWithinHours isOnline zoneId isZoneLive address backgroundImage rating stats')
+      .select('shopName logo genderCategory shipsWithinHours isOnline zoneId isZoneLive address backgroundImage rating stats fulfillmentType')
       .lean();
 
     const ProductFlat = (await import("../../models/productFlat.model.js")).default;

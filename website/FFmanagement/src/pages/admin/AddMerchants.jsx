@@ -15,7 +15,8 @@ const AddMerchants = () => {
     password: "",
     logo: null,
     backgroundImage: null,
-    category: "All"
+    category: "All",
+    fulfillmentType: "store"
   });
 
   useEffect(() => {
@@ -82,7 +83,8 @@ const AddMerchants = () => {
           password: "",
           logo: null,
           backgroundImage: null,
-          category:"All"
+          category:"All",
+          fulfillmentType: "store"
         });
         setPreviewUrl(null);
         setCroppedImage(null);
@@ -157,6 +159,30 @@ const AddMerchants = () => {
   <option value="Women">Women</option>
   <option value="Kids">Kids</option>
 </select>
+
+        {/* Fulfillment Type */}
+        <div className="flex flex-col">
+          <label htmlFor="fulfillmentType" className="mb-1 text-sm font-medium text-gray-700">
+            Fulfillment Model
+          </label>
+          <select
+            id="fulfillmentType"
+            name="fulfillmentType"
+            value={form.fulfillmentType}
+            onChange={handleChange}
+            className="w-full p-2 border rounded"
+            required
+          >
+            <option value="store">Physical Store (Retail Shop / Walk-in)</option>
+            <option value="warehouse">Warehouse Brand (Consignment / Online Only - e.g. Calsioclub)</option>
+            <option value="hybrid">Hybrid (Physical Store + Warehouse Consignment)</option>
+          </select>
+          <p className="text-xs text-gray-500 mt-1">
+            {form.fulfillmentType === 'warehouse' 
+              ? '⚠️ Excluded from customer "Stores" tab. Fulfilled from FlashFits Warehouse Hub.' 
+              : 'Appears in customer "Stores" tab.'}
+          </p>
+        </div>
 
         {/* Logo Image */}
         <div className="flex flex-col">

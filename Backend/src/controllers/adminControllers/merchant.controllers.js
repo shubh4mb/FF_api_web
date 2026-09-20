@@ -1,3 +1,4 @@
+import mongoose from "mongoose";
 import Merchant from "../../models/merchant.model.js";
 import Zone from "../../models/zone.model.js";
 import { storageService } from "../../services/storage.service.js";
@@ -53,7 +54,7 @@ export const getMerchants = asyncHandler(async (req, res) => {
   const query = status ? { status } : {};
 
   const merchants = await Merchant.find(query)
-    .select('shopName phoneNumber email isActive status logo rating reviewCount address operatingHours genderCategory zoneName zoneId stats isOnline isVerified')
+    .select('shopName phoneNumber email isActive status logo rating reviewCount address operatingHours genderCategory zoneName zoneId stats isOnline isVerified fulfillmentType')
     .lean();
   return res.status(200).json(new ApiResponse(200, { merchants }, "Merchants retrieved successfully"));
 });
@@ -67,7 +68,7 @@ export const getMerchantById = asyncHandler(async (req, res) => {
       if (mongoose.Types.ObjectId.isValid(req.params.id)) {
         warehouse = await Warehouse.findById(req.params.id).lean();
       }
-      if (warehouse || req.params.id === 'ff-warehouse-hub' || req.params.id === 'warehouse') {
+      if (warehouse || req.params.id === 'ff-warehouse-hub' || req.params.id === 'warehouse' || req.params.id?.includes('warehouse')) {
         const ProductFlat = (await import("../../models/productFlat.model.js")).default;
         const count = await ProductFlat.countDocuments({ source: 'warehouse', isActive: true, isDeleted: { $ne: true } });
         const virtualMerchant = {
@@ -97,13 +98,52 @@ export const getMerchantById = asyncHandler(async (req, res) => {
     throw new ApiError(404, "Merchant not found");
   }
 
+  // For warehouse-only brands, resolve fulfillment location from the assigned warehouse hub
+  if (merchant.fulfillmentType === 'warehouse') {
+    merchant.isWarehouse = true;
+    try {
+      const Warehouse = (await import("../../models/warehouse.model.js")).default;
+      let wh = null;
+      if (merchant.assignedWarehouseIds && merchant.assignedWarehouseIds.length > 0) {
+        wh = await Warehouse.findById(merchant.assignedWarehouseIds[0]).lean();
+      }
+      if (!wh) {
+        wh = await Warehouse.findOne({ isActive: true }).lean();
+      }
+      if (wh) {
+        merchant.warehouseName = wh.name;
+        merchant.warehouseId = wh._id;
+        if (wh.address?.location?.coordinates) {
+          merchant.effectiveLocation = wh.address.location;
+        }
+      }
+    } catch (e) {
+      console.warn("Could not attach warehouse to warehouse merchant:", e.message);
+    }
+  }
+
+  // Ensure total product count is fresh
+  try {
+    const ProductFlat = (await import("../../models/productFlat.model.js")).default;
+    const totalCount = await ProductFlat.countDocuments({ 
+      merchantId: merchant._id, 
+      isActive: true, 
+      isDeleted: { $ne: true },
+      isVerified: true 
+    });
+    merchant.stats = { ...(merchant.stats || {}), totalProducts: totalCount };
+  } catch (e) {
+    // Ignore stat count error
+  }
+
   // Calculate distance if lat and lng are provided in request query
   const lat = parseFloat(req.query.lat);
   const lng = parseFloat(req.query.lng);
+  const targetLocation = merchant.effectiveLocation || merchant.address?.location;
 
-  if (!isNaN(lat) && !isNaN(lng) && merchant.address?.location?.coordinates) {
+  if (!isNaN(lat) && !isNaN(lng) && targetLocation?.coordinates) {
     const userCoords = [lng, lat]; // [longitude, latitude]
-    const merchantCoords = merchant.address.location.coordinates; // [longitude, latitude]
+    const merchantCoords = targetLocation.coordinates; // [longitude, latitude]
     
     // 1. Quick straight-line displacement check (Haversine)
     const displacementKm = haversineDistance(lat, lng, merchantCoords[1], merchantCoords[0]);
@@ -130,7 +170,7 @@ export const getMerchantById = asyncHandler(async (req, res) => {
 
     merchant.distanceKm = Number(roadDistanceKm.toFixed(2));
     merchant.durationMins = durationMins;
-    merchant.isNearby = isNearby && merchant.isOnline && merchant.isZoneLive;
+    merchant.isNearby = isNearby && (merchant.fulfillmentType === 'warehouse' ? true : (merchant.isOnline && merchant.isZoneLive));
   }
 
   return res.status(200).json(new ApiResponse(200, { merchant }, "Merchant retrieved successfully"));
