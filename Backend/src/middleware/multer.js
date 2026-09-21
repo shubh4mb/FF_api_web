@@ -3,12 +3,12 @@ import multer from 'multer';
 // File filter
 const fileFilter = (req, file, cb) => {
     // Accept images and PDFs
-    const allowedMimes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'application/pdf'];
+    const allowedMimes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp', 'application/pdf'];
     
     if (allowedMimes.includes(file.mimetype)) {
         cb(null, true);
     } else {
-        cb(new Error('Invalid file type. Only images (jpg, jpeg, png, gif) and PDF files are allowed.'), false);
+        cb(new Error('Invalid file type. Only images (jpg, jpeg, png, gif, webp) and PDF files are allowed.'), false);
     }
 };
 

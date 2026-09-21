@@ -9,6 +9,7 @@ import { findBestOffers } from '../../services/offerEngine.js';
 import Offer from "../../models/offer.model.js";
 import ProductFlat from '../../models/productFlat.model.js';
 import { generateColorVariantId } from '../../utils/variantAdapter.js';
+import Warehouse from '../../models/warehouse.model.js';
 
 export const addToCart = async (req, res) => {
   const userId = req.user.userId;
@@ -99,16 +100,18 @@ export const addToCart = async (req, res) => {
       }
     }
 
+    const effectiveVariantId = matchedDoc._id;
+
     if (!cart) {
       cart = new Cart({
         userId,
         items: [{
           productId,
-          variantId,
+          variantId: effectiveVariantId,
           size,
           quantity,
           stockQuantity: sizeObjStock,
-          merchantId,
+          merchantId: isWarehouseItem ? null : effectiveMerchantId,
           image: typeof image === 'string' ? { url: image } : image,
           source: isWarehouseItem ? 'warehouse' : 'shop',
           warehouseId: warehouseIdObj,
@@ -118,7 +121,7 @@ export const addToCart = async (req, res) => {
     } else {
       const existingItem = cart.items.find(item =>
         item.productId?.toString() === productId &&
-        item.variantId?.toString() === variantId &&
+        (item.variantId?.toString() === effectiveVariantId.toString() || item.variantId?.toString() === variantId) &&
         item.size === size &&
         (isWarehouseItem ? item.source === 'warehouse' : item.source !== 'warehouse')
       );
@@ -129,14 +132,15 @@ export const addToCart = async (req, res) => {
         }
         existingItem.quantity += quantity;
         existingItem.stockQuantity = sizeObjStock;
+        existingItem.variantId = effectiveVariantId;
       } else {
         cart.items.push({
           productId,
-          variantId,
+          variantId: effectiveVariantId,
           size,
           quantity,
           stockQuantity: sizeObjStock,
-          merchantId,
+          merchantId: isWarehouseItem ? null : effectiveMerchantId,
           image: typeof image === 'string' ? { url: image } : image,
           source: isWarehouseItem ? 'warehouse' : 'shop',
           warehouseId: warehouseIdObj,
@@ -229,7 +233,10 @@ export const getCart = async (req, res) => {
       if (!item.productId && !item.warehouseProductId) continue;
 
       if (item.source === 'warehouse') {
-        const whProduct = await ProductFlat.findOne({
+        const whProduct = (item.size ? await ProductFlat.findOne({
+          $or: [{ styleGroupId: item.warehouseProductId }, { _id: item.variantId }],
+          size: item.size
+        }).lean() : null) || await ProductFlat.findOne({
           $or: [{ styleGroupId: item.warehouseProductId }, { _id: item.variantId }]
         }).lean();
         if (whProduct) {
@@ -292,6 +299,11 @@ export const getCart = async (req, res) => {
       };
     }
 
+    let defaultWarehouse = null;
+    if (cart.items.some(i => i.source === 'warehouse')) {
+      defaultWarehouse = await Warehouse.findOne({ isActive: true }).lean();
+    }
+
     const merchantGroupMap = {};
     for (const item of cart.items) {
       const product = item.productId;
@@ -305,6 +317,7 @@ export const getCart = async (req, res) => {
           shopName: 'FF FlashMart',
           isOnline: true,
           logo: null,
+          address: defaultWarehouse?.address || null,
         };
       }
       
@@ -458,8 +471,12 @@ export const clearCart = async (req, res) => {
     if (!cart) return res.status(404).json({ success: false, message: 'Cart not found' });
 
     if (merchantId) {
-      // Clear only items for this specific merchant
-      cart.items = cart.items.filter(item => item.merchantId.toString() !== merchantId.toString());
+      // Clear only items for this specific merchant or flashmart
+      if (merchantId === 'flashmart') {
+        cart.items = cart.items.filter(item => item.source !== 'warehouse' && item.merchantId);
+      } else {
+        cart.items = cart.items.filter(item => !item.merchantId || item.merchantId.toString() !== merchantId.toString());
+      }
       // Also clear any selected offers that are only for these items (optional/future)
     } else {
       // Clear entire cart
@@ -498,7 +515,7 @@ export const updateCartQuantity = async (req, res) => {
     const item = cart.items.id(cartId);
     if (!item) return res.status(404).json({ success: false, message: 'Item not found in cart' });
 
-    const merchantId = item.merchantId.toString();
+    const merchantId = item.merchantId ? item.merchantId.toString() : 'flashmart';
     
     const productIds = cart.items.map(i => i.productId);
     
@@ -555,8 +572,13 @@ export const moveToCourier = async (req, res) => {
     if (!cart) return res.status(404).json({ success: false, message: "Cart not found" });
     let itemsToMove = [];
     if (merchantId) {
-      itemsToMove = cart.items.filter(item => item.merchantId.toString() === merchantId);
-      cart.items = cart.items.filter(item => item.merchantId.toString() !== merchantId);
+      if (merchantId === 'flashmart') {
+        itemsToMove = cart.items.filter(item => item.source === 'warehouse' || !item.merchantId);
+        cart.items = cart.items.filter(item => item.source !== 'warehouse' && item.merchantId);
+      } else {
+        itemsToMove = cart.items.filter(item => item.merchantId && item.merchantId.toString() === merchantId);
+        cart.items = cart.items.filter(item => !item.merchantId || item.merchantId.toString() !== merchantId);
+      }
     } else if (itemId) {
       const itemIndex = cart.items.findIndex(item => item._id.toString() === itemId);
       if (itemIndex > -1) { itemsToMove = [cart.items[itemIndex]]; cart.items.splice(itemIndex, 1); }

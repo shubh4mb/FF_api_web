@@ -59,12 +59,12 @@ const flatToCardData = (flatProducts, req) => {
 const calculateIsInstantBuyable = (productId, merchantId, nearbyMerchantIds, merchantStatus = {}) => {
   const nearbySet = new Set(nearbyMerchantIds?.map(id => id.toString()) || []);
   const isNearby = nearbySet.has(merchantId?.toString());
-  
+
   // If merchantStatus is provided (e.g. from populate), use it. 
   // Otherwise, if nearby, we assume it's true (since resolveNearbyMerchants already filters by status).
   const isOnline = merchantStatus.isOnline !== undefined ? merchantStatus.isOnline : true;
   const isZoneLive = merchantStatus.isZoneLive !== undefined ? merchantStatus.isZoneLive : true;
-  
+
   return isNearby && isOnline && isZoneLive;
 };
 
@@ -84,10 +84,10 @@ const buildNearbyTAndBFilter = async (req) => {
 
   const onlineMerchantIds = (req.nearbyMerchantIds && req.nearbyMerchantIds.length > 0)
     ? (await Merchant.find({
-        _id: { $in: req.nearbyMerchantIds },
-        isOnline: true,
-        isZoneLive: true
-      }).select('_id').lean()).map(m => m._id)
+      _id: { $in: req.nearbyMerchantIds },
+      isOnline: true,
+      isZoneLive: true
+    }).select('_id').lean()).map(m => m._id)
     : [];
 
   const nearbyWarehouseIds = req.nearbyWarehouseIds || [];
@@ -143,9 +143,9 @@ export const productsDetails = async (req, res) => {
       .populate('subCategoryId', 'name')
       .populate('subSubCategoryId', 'name')
       .populate('warehouseId', 'name code supportsTryAndBuy supportsCourier operatingHours')
-      .populate({ 
-        path: 'merchantId', 
-        select: 'shopName logo isVerified isActive address isOnline isZoneLive fulfillmentType isWarehouse warehouseName', 
+      .populate({
+        path: 'merchantId',
+        select: 'shopName logo isVerified isActive address isOnline isZoneLive fulfillmentType isWarehouse warehouseName',
       })
       .populate('attributes.attributeId', 'name');
 
@@ -219,6 +219,9 @@ export const productsDetails = async (req, res) => {
       matchingProductsCards = flatToCardData(matchingFlatProducts, req);
     }
 
+    const isStoreTBServiceable = !isWarehouse;
+    const isStoreOnline = flatProductDoc.merchantId?.isOnline !== false;
+
     const fulfillmentOptions = {
       flashmart: {
         available: isWarehouseAvailable,
@@ -228,8 +231,9 @@ export const productsDetails = async (req, res) => {
         warehouseName: whName,
       },
       directStore: {
-        available: !isWarehouse && isInstantBuyable && isNearby,
-        estimatedTime: "45-60 Mins",
+        available: isStoreTBServiceable,
+        isOnline: isStoreOnline,
+        estimatedTime: isStoreOnline ? "45-60 Mins" : "Store Offline",
         label: "Direct Store",
         shopName: flatProductDoc.merchantId?.shopName || "Partner Shop",
         merchantId: flatProductDoc.merchantId?._id || flatProductDoc.merchantId,
@@ -386,150 +390,156 @@ export const getFilteredProducts = async (req, res) => {
     const skip = (pageNum - 1) * limitNum;
 
 
-      const flatMatch = { isActive: true, isDeleted: { $ne: true }, isVerified: true };
+    const flatMatch = { isActive: true, isDeleted: { $ne: true }, isVerified: true };
 
-      // Delivery mode
-      if (deliveryMode === 'tryAndBuy') {
-        const nearbyCondition = await buildNearbyTAndBFilter(req);
-        if (nearbyCondition) {
-          flatMatch.$or = nearbyCondition.$or;
-        }
-      } else if (deliveryMode === 'courier') {
-        const courierMerchants = await Merchant.find({ enableCourierDelivery: true, isActive: true, isVerified: true }).select('_id').lean();
-        const courierIds = courierMerchants.map(m => m._id);
-        if (req.nearbyMerchantIds && req.nearbyMerchantIds.length > 0) {
-          const nearbySet = new Set(req.nearbyMerchantIds.map(id => id.toString()));
-          const courierOnlyIds = courierIds.filter(id => !nearbySet.has(id.toString()));
-          if (courierOnlyIds.length === 0) return res.json({ products: [], totalCount: 0, page: pageNum, totalPages: 0 });
-          flatMatch.merchantId = { $in: courierOnlyIds };
-        } else {
-          flatMatch.merchantId = { $in: courierIds };
-        }
+    // Delivery mode
+    if (deliveryMode === 'tryAndBuy') {
+      const nearbyCondition = await buildNearbyTAndBFilter(req);
+      if (nearbyCondition) {
+        flatMatch.$or = nearbyCondition.$or;
+      }
+    } else if (deliveryMode === 'courier') {
+      const courierMerchants = await Merchant.find({ enableCourierDelivery: true, isActive: true, isVerified: true }).select('_id').lean();
+      const courierIds = courierMerchants.map(m => m._id);
+      if (req.nearbyMerchantIds && req.nearbyMerchantIds.length > 0) {
+        const nearbySet = new Set(req.nearbyMerchantIds.map(id => id.toString()));
+        const courierOnlyIds = courierIds.filter(id => !nearbySet.has(id.toString()));
+        if (courierOnlyIds.length === 0) return res.json({ products: [], totalCount: 0, page: pageNum, totalPages: 0 });
+        flatMatch.merchantId = { $in: courierOnlyIds };
       } else {
-        if (req.nearbyMerchantIds || req.nearbyWarehouseIds) {
-          const courierMerchants = await Merchant.find({ enableCourierDelivery: true, isActive: true, isVerified: true }).select('_id').lean();
-          const nearbySet = new Set(req.nearbyMerchantIds?.map(id => id.toString()) || []);
-          const courierOnlyIds = courierMerchants.map(m => m._id).filter(id => !nearbySet.has(id.toString()));
-          const nearbyWarehouseIds = req.nearbyWarehouseIds || [];
-
-          flatMatch.$or = [
-            { merchantId: { $in: [...(req.nearbyMerchantIds || []), ...courierOnlyIds] }, source: { $ne: 'warehouse' } },
-            { warehouseId: { $in: nearbyWarehouseIds } },
-            { source: 'warehouse', warehouseId: { $in: nearbyWarehouseIds } }
-          ];
-        }
+        flatMatch.merchantId = { $in: courierIds };
       }
+    } else {
+      if (req.nearbyMerchantIds || req.nearbyWarehouseIds) {
+        const courierMerchants = await Merchant.find({ enableCourierDelivery: true, isActive: true, isVerified: true }).select('_id').lean();
+        const nearbySet = new Set(req.nearbyMerchantIds?.map(id => id.toString()) || []);
+        const courierOnlyIds = courierMerchants.map(m => m._id).filter(id => !nearbySet.has(id.toString()));
+        const nearbyWarehouseIds = req.nearbyWarehouseIds || [];
 
-      // Gender
-      if (gender) {
-        if (gender === 'UNISEX') flatMatch.gender = { $all: ['MEN', 'WOMEN'] };
-        else flatMatch.gender = gender;
-      }
-
-      // Store filter
-      if (selectedStores?.length > 0) {
-        const storeObjectIds = selectedStores.filter(id => mongoose.Types.ObjectId.isValid(id)).map(id => new mongoose.Types.ObjectId(id));
-        if (storeObjectIds.length > 0) {
-          if (flatMatch.merchantId) {
-            flatMatch.merchantId = { $in: flatMatch.merchantId.$in.filter(nearId => storeObjectIds.some(selId => selId.equals(nearId))) };
-            if (flatMatch.merchantId.$in.length === 0) return res.json({ products: [], totalCount: 0, page: pageNum, totalPages: 0 });
-          } else {
-            flatMatch.merchantId = { $in: storeObjectIds };
-          }
-        }
-      }
-
-      // Category filter
-      if (selectedCategoryIds.length > 0) {
-        const validCatIds = selectedCategoryIds.filter(id => mongoose.Types.ObjectId.isValid(id)).map(id => new mongoose.Types.ObjectId(id));
-        if (validCatIds.length > 0) flatMatch.$or = [{ categoryId: { $in: validCatIds } }, { subCategoryId: { $in: validCatIds } }];
-      }
-      if (subCategoryIds.length > 0) {
-        const validSubIds = subCategoryIds.filter(id => mongoose.Types.ObjectId.isValid(id)).map(id => new mongoose.Types.ObjectId(id));
-        if (validSubIds.length > 0) flatMatch.subCategoryId = { $in: validSubIds };
-      }
-
-      // Collection filter
-      if (collectionId) {
-        let colObjId = null;
-        if (mongoose.Types.ObjectId.isValid(collectionId)) {
-          colObjId = new mongoose.Types.ObjectId(collectionId);
-        } else {
-          const colDoc = await Collection.findOne({ slug: collectionId }).select('_id').lean();
-          if (colDoc) colObjId = colDoc._id;
-        }
-        if (colObjId) {
-          flatMatch.collectionIds = colObjId;
-        }
-      }
-
-      // Search
-      if (search.trim() !== '') {
-        const searchRegex = new RegExp(search.trim(), 'i');
         flatMatch.$or = [
-          ...(flatMatch.$or || []),
-          { name: searchRegex }, { tags: searchRegex }, { 'color.name': searchRegex },
-          { styleName: searchRegex }
+          { merchantId: { $in: [...(req.nearbyMerchantIds || []), ...courierOnlyIds] }, source: { $ne: 'warehouse' } },
+          { warehouseId: { $in: nearbyWarehouseIds } },
+          { source: 'warehouse', warehouseId: { $in: nearbyWarehouseIds } }
         ];
       }
+    }
 
-      // Price & color variant-level filters
-      if (priceRange.length === 2) { flatMatch.price = { $gte: priceRange[0], $lte: priceRange[1] }; }
-      if (selectedColors.length > 0) { flatMatch['color.name'] = { $in: selectedColors }; }
+    // Gender
+    if (gender) {
+      if (gender === 'UNISEX') flatMatch.gender = { $all: ['MEN', 'WOMEN'] };
+      else flatMatch.gender = gender;
+    }
 
-      // Aggregation: group by styleGroupId, pick first variant, paginate
-      const sortOptions = {
-        newest: { _id: -1 }, oldest: { _id: 1 }, priceLowToHigh: { price: 1 }, priceHighToLow: { price: -1 },
-        discount: { discount: -1 }, rating: { ratings: -1 }, trending: { numReviews: -1 }, relevance: { _id: -1 },
-        price_low: { price: 1 }, price_high: { price: -1 },
-      };
-      const sortKeys = Array.isArray(sortBy) ? sortBy : [sortBy];
-      let flatSort = {};
-      sortKeys.forEach(key => { if (sortOptions[key]) Object.assign(flatSort, sortOptions[key]); });
-      if (Object.keys(flatSort).length === 0) flatSort = { _id: -1 };
+    // Store filter
+    if (selectedStores?.length > 0) {
+      const storeObjectIds = selectedStores.filter(id => mongoose.Types.ObjectId.isValid(id)).map(id => new mongoose.Types.ObjectId(id));
+      if (storeObjectIds.length > 0) {
+        if (flatMatch.merchantId) {
+          flatMatch.merchantId = { $in: flatMatch.merchantId.$in.filter(nearId => storeObjectIds.some(selId => selId.equals(nearId))) };
+          if (flatMatch.merchantId.$in.length === 0) return res.json({ products: [], totalCount: 0, page: pageNum, totalPages: 0 });
+        } else {
+          flatMatch.merchantId = { $in: storeObjectIds };
+        }
+      }
+    }
 
-      const flatPipeline = [
-        { $match: flatMatch },
-        { $sort: { styleGroupId: 1, ...flatSort } },
-        { $group: {
+    // Category filter
+    if (selectedCategoryIds.length > 0) {
+      const validCatIds = selectedCategoryIds.filter(id => mongoose.Types.ObjectId.isValid(id)).map(id => new mongoose.Types.ObjectId(id));
+      if (validCatIds.length > 0) flatMatch.$or = [{ categoryId: { $in: validCatIds } }, { subCategoryId: { $in: validCatIds } }];
+    }
+    if (subCategoryIds.length > 0) {
+      const validSubIds = subCategoryIds.filter(id => mongoose.Types.ObjectId.isValid(id)).map(id => new mongoose.Types.ObjectId(id));
+      if (validSubIds.length > 0) flatMatch.subCategoryId = { $in: validSubIds };
+    }
+
+    // Collection filter
+    if (collectionId) {
+      let colObjId = null;
+      if (mongoose.Types.ObjectId.isValid(collectionId)) {
+        colObjId = new mongoose.Types.ObjectId(collectionId);
+      } else {
+        const colDoc = await Collection.findOne({ slug: collectionId }).select('_id').lean();
+        if (colDoc) colObjId = colDoc._id;
+      }
+      if (colObjId) {
+        flatMatch.collectionIds = colObjId;
+      }
+    }
+
+    // Search
+    if (search.trim() !== '') {
+      const searchRegex = new RegExp(search.trim(), 'i');
+      flatMatch.$or = [
+        ...(flatMatch.$or || []),
+        { name: searchRegex }, { tags: searchRegex }, { 'color.name': searchRegex },
+        { styleName: searchRegex }
+      ];
+    }
+
+    // Price & color variant-level filters
+    if (priceRange.length === 2) { flatMatch.price = { $gte: priceRange[0], $lte: priceRange[1] }; }
+    if (selectedColors.length > 0) { flatMatch['color.name'] = { $in: selectedColors }; }
+
+    // Aggregation: group by styleGroupId, pick first variant, paginate
+    const sortOptions = {
+      newest: { _id: -1 }, oldest: { _id: 1 }, priceLowToHigh: { price: 1 }, priceHighToLow: { price: -1 },
+      discount: { discount: -1 }, rating: { ratings: -1 }, trending: { numReviews: -1 }, relevance: { _id: -1 },
+      price_low: { price: 1 }, price_high: { price: -1 },
+    };
+    const sortKeys = Array.isArray(sortBy) ? sortBy : [sortBy];
+    let flatSort = {};
+    sortKeys.forEach(key => { if (sortOptions[key]) Object.assign(flatSort, sortOptions[key]); });
+    if (Object.keys(flatSort).length === 0) flatSort = { _id: -1 };
+
+    const flatPipeline = [
+      { $match: flatMatch },
+      { $sort: { styleGroupId: 1, ...flatSort } },
+      {
+        $group: {
           _id: '$styleGroupId',
           doc: { $first: '$$ROOT' },
-        }},
-        { $replaceRoot: { newRoot: '$doc' } },
-        { $sort: flatSort },
-        { $lookup: { from: 'merchants', localField: 'merchantId', foreignField: '_id', as: 'merchantDoc', pipeline: [{ $project: { shopName: 1, isOnline: 1, isZoneLive: 1 } }] } },
-        { $lookup: { from: 'brands', localField: 'brandId', foreignField: '_id', as: 'brandDoc', pipeline: [{ $project: { name: 1 } }] } },
-        { $facet: {
+        }
+      },
+      { $replaceRoot: { newRoot: '$doc' } },
+      { $sort: flatSort },
+      { $lookup: { from: 'merchants', localField: 'merchantId', foreignField: '_id', as: 'merchantDoc', pipeline: [{ $project: { shopName: 1, isOnline: 1, isZoneLive: 1 } }] } },
+      { $lookup: { from: 'brands', localField: 'brandId', foreignField: '_id', as: 'brandDoc', pipeline: [{ $project: { name: 1 } }] } },
+      {
+        $facet: {
           products: [
             { $skip: skip }, { $limit: limitNum },
-            { $project: {
-              _id: '$styleGroupId',
-              name: 1, merchantId: 1, brandId: 1, categoryId: 1, subCategoryId: 1, gender: 1,
-              ratings: 1, numReviews: 1, isTriable: 1,
-              variantId: { $toString: '$_id' },
-              price: 1, mrp: 1, discount: 1, images: 1, color: 1,
-              merchant: { $arrayElemAt: ['$merchantDoc.shopName', 0] },
-              merchantIsOnline: { $arrayElemAt: ['$merchantDoc.isOnline', 0] },
-              merchantIsZoneLive: { $arrayElemAt: ['$merchantDoc.isZoneLive', 0] },
-              brand: { $arrayElemAt: ['$brandDoc.name', 0] },
-            }},
+            {
+              $project: {
+                _id: '$styleGroupId',
+                name: 1, merchantId: 1, brandId: 1, categoryId: 1, subCategoryId: 1, gender: 1,
+                ratings: 1, numReviews: 1, isTriable: 1,
+                variantId: { $toString: '$_id' },
+                price: 1, mrp: 1, discount: 1, images: 1, color: 1,
+                merchant: { $arrayElemAt: ['$merchantDoc.shopName', 0] },
+                merchantIsOnline: { $arrayElemAt: ['$merchantDoc.isOnline', 0] },
+                merchantIsZoneLive: { $arrayElemAt: ['$merchantDoc.isZoneLive', 0] },
+                brand: { $arrayElemAt: ['$brandDoc.name', 0] },
+              }
+            },
           ],
           countResult: [{ $count: 'totalCount' }],
-        }},
-      ];
+        }
+      },
+    ];
 
-      const [result] = await ProductFlat.aggregate(flatPipeline).allowDiskUse(true);
-      const products = result?.products || [];
-      const totalCount = result?.countResult?.[0]?.totalCount || 0;
+    const [result] = await ProductFlat.aggregate(flatPipeline).allowDiskUse(true);
+    const products = result?.products || [];
+    const totalCount = result?.countResult?.[0]?.totalCount || 0;
 
-      const enrichedProducts = products.map(p => {
-        const isInstantBuyable = calculateIsInstantBuyable(p._id, p.merchantId, req.nearbyMerchantIds, {
-          isOnline: p.merchantIsOnline, isZoneLive: p.merchantIsZoneLive
-        });
-        return { ...p, isInstantBuyable, isNearby: req.nearbyMerchantIds?.some(id => id.toString() === p.merchantId?.toString()) || false, isOnline: p.merchantIsOnline || false };
+    const enrichedProducts = products.map(p => {
+      const isInstantBuyable = calculateIsInstantBuyable(p._id, p.merchantId, req.nearbyMerchantIds, {
+        isOnline: p.merchantIsOnline, isZoneLive: p.merchantIsZoneLive
       });
+      return { ...p, isInstantBuyable, isNearby: req.nearbyMerchantIds?.some(id => id.toString() === p.merchantId?.toString()) || false, isOnline: p.merchantIsOnline || false };
+    });
 
-      return res.json({ products: enrichedProducts, totalCount, page: pageNum, totalPages: Math.ceil(totalCount / limitNum) });
+    return res.json({ products: enrichedProducts, totalCount, page: pageNum, totalPages: Math.ceil(totalCount / limitNum) });
   } catch (err) {
     console.error('Error in getFilteredProducts:', err);
     res.status(500).json({ error: 'Server error' });
@@ -575,7 +585,7 @@ export const getSearchSuggestions = async (req, res) => {
         .project({ name: 1 })
         .limit(4)
         .toArray(),
-      
+
       // Merchant (Shop) matches
       Merchant.find({ shopName: regex, isActive: true, isVerified: true })
         .select('shopName address.city')
@@ -634,10 +644,10 @@ export const getProductsByMerchantId = async (req, res) => {
       }
     }
 
-    const queryFilter = { 
-      isActive: true, 
+    const queryFilter = {
+      isActive: true,
       isDeleted: { $ne: true },
-      isVerified: true 
+      isVerified: true
     };
     if (isWarehouse) {
       if (warehouse) {
@@ -733,7 +743,7 @@ export const getProductsBatch = async (req, res) => {
   try {
     const flatProducts = await ProductFlat.find({
       merchantId: { $in: merchantIds.map(id => new mongoose.Types.ObjectId(id)) },
-      isActive: true, 
+      isActive: true,
       isDeleted: { $ne: true },
       isVerified: true
     })
@@ -967,8 +977,8 @@ export const getCollectionProductsByMerchant = async (req, res) => {
       isDeleted: { $ne: true },
       isVerified: true,
     })
-    .populate('brandId', 'name')
-    .lean();
+      .populate('brandId', 'name')
+      .lean();
 
     const cards = flatToCardData(flatProducts, req).map(card => ({
       ...card,

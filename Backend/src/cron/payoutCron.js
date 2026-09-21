@@ -9,6 +9,7 @@ import cron from "node-cron";
 import AppConfig from "../models/appConfig.model.js";
 import { processWeeklyPayouts, processDailyIncentives } from "../helperFns/weeklyPayoutHelper.js";
 import { sweepStaleSessions } from "../helperFns/onlineSessionHelper.js";
+import { sweepAbandonedPendingOrders } from "../helperFns/orderPendingSweep.js";
 
 const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
@@ -60,5 +61,14 @@ export function initPayoutCron() {
         }
     });
 
-    console.log("[Cron] ✅ Payout, incentive, and session sweep crons initialized.");
+    // ── Sweep abandoned pending orders every 10 minutes to release reserved stock ──
+    cron.schedule("*/10 * * * *", async () => {
+        try {
+            await sweepAbandonedPendingOrders();
+        } catch (error) {
+            console.error("[Order Sweep Cron] ❌ Error:", error.message);
+        }
+    });
+
+    console.log("[Cron] ✅ Payout, incentive, session sweep, and order sweep crons initialized.");
 }

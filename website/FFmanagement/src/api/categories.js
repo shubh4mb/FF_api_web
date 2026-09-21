@@ -21,9 +21,14 @@ export const addCategory = async (formData) => {
   }
 };
 
-export const getCategories = async () => {
+export const getCategories = async (params = {}) => {
   try {
-    const response = await axiosInstance.get('/admin/getCategories');
+    const response = await axiosInstance.get('/admin/getCategories', {
+      params: {
+        includeInactive: true,
+        ...params
+      }
+    });
     return response.data;
   } catch (error) {
     console.log(error)

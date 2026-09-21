@@ -71,12 +71,12 @@ app.use(cors({
 }));
 
 app.use(express.json({ 
-  limit: "16kb",
+  limit: "10mb",
   verify: (req, res, buf) => {
     req.rawBody = buf.toString(); // Save raw string for webhook signature verification
   }
 }));
-app.use(express.urlencoded({ extended: true, limit: "16kb" }));
+app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 app.use(cookieParser());
 
 // ---- Attach io to req (SAFE) ----

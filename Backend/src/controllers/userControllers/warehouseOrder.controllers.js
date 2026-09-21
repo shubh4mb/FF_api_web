@@ -81,6 +81,15 @@ export const createWarehouseTBOrder = asyncHandler(async (req, res) => {
 
   // ── 4. Config + delivery charge ──
   const config = await AppConfig.getConfig();
+
+  // ── Validate Global Order Placement (Maintenance Mode) ──
+  if (config.isOrderPlacementEnabled === false) {
+    return res.status(403).json({
+      success: false,
+      isMaintenance: true,
+      message: config.maintenanceMessage || "Live ordering is currently paused for maintenance. Please check back soon!"
+    });
+  }
   const { roadDistanceKm, deliveryCharge, returnCharge, estimatedTime } =
     await calculateDeliveryCharge({
       userCoords,
@@ -103,8 +112,9 @@ export const createWarehouseTBOrder = asyncHandler(async (req, res) => {
   const orderItems = [];
 
   for (const cartItem of warehouseItems) {
-    const whProduct = await ProductFlat.findOne({
+    let whProduct = await ProductFlat.findOne({
       _id: cartItem.variantId,
+      size: cartItem.size,
       $or: [
         { source: 'warehouse' },
         { warehouseId: { $exists: true, $ne: null } }
@@ -112,7 +122,44 @@ export const createWarehouseTBOrder = asyncHandler(async (req, res) => {
       isActive: { $ne: false },
       isDeleted: { $ne: true },
     });
+
+    if (!whProduct) {
+      const targetStyleGroupId = cartItem.warehouseProductId || cartItem.productId;
+      const fallbackQuery = {
+        size: cartItem.size,
+        $or: [
+          { source: 'warehouse' },
+          { warehouseId: { $exists: true, $ne: null } }
+        ],
+        isActive: { $ne: false },
+        isDeleted: { $ne: true },
+      };
+      if (targetStyleGroupId) {
+        fallbackQuery.styleGroupId = targetStyleGroupId;
+      } else {
+        const baseWh = await ProductFlat.findById(cartItem.variantId).select('styleGroupId').lean();
+        if (baseWh?.styleGroupId) {
+          fallbackQuery.styleGroupId = baseWh.styleGroupId;
+        }
+      }
+      whProduct = await ProductFlat.findOne(fallbackQuery);
+    }
+
+    if (!whProduct) {
+      whProduct = await ProductFlat.findOne({
+        _id: cartItem.variantId,
+        $or: [
+          { source: 'warehouse' },
+          { warehouseId: { $exists: true, $ne: null } }
+        ],
+        isActive: { $ne: false },
+        isDeleted: { $ne: true },
+      });
+    }
+
     if (!whProduct) continue;
+
+    cartItem.variantId = whProduct._id;
 
     const available = whProduct.stock - (whProduct.reservedStock || 0);
     if (available < cartItem.quantity) {
@@ -308,8 +355,9 @@ export const createWarehouseCourierOrder = asyncHandler(async (req, res) => {
   const orderItems = [];
 
   for (const cartItem of warehouseItems) {
-    const whProduct = await ProductFlat.findOne({
+    let whProduct = await ProductFlat.findOne({
       _id: cartItem.variantId,
+      size: cartItem.size,
       $or: [
         { source: 'warehouse' },
         { warehouseId: { $exists: true, $ne: null } }
@@ -317,7 +365,44 @@ export const createWarehouseCourierOrder = asyncHandler(async (req, res) => {
       isActive: { $ne: false },
       isDeleted: { $ne: true },
     });
+
+    if (!whProduct) {
+      const targetStyleGroupId = cartItem.warehouseProductId || cartItem.productId;
+      const fallbackQuery = {
+        size: cartItem.size,
+        $or: [
+          { source: 'warehouse' },
+          { warehouseId: { $exists: true, $ne: null } }
+        ],
+        isActive: { $ne: false },
+        isDeleted: { $ne: true },
+      };
+      if (targetStyleGroupId) {
+        fallbackQuery.styleGroupId = targetStyleGroupId;
+      } else {
+        const baseWh = await ProductFlat.findById(cartItem.variantId).select('styleGroupId').lean();
+        if (baseWh?.styleGroupId) {
+          fallbackQuery.styleGroupId = baseWh.styleGroupId;
+        }
+      }
+      whProduct = await ProductFlat.findOne(fallbackQuery);
+    }
+
+    if (!whProduct) {
+      whProduct = await ProductFlat.findOne({
+        _id: cartItem.variantId,
+        $or: [
+          { source: 'warehouse' },
+          { warehouseId: { $exists: true, $ne: null } }
+        ],
+        isActive: { $ne: false },
+        isDeleted: { $ne: true },
+      });
+    }
+
     if (!whProduct) continue;
+
+    cartItem.variantId = whProduct._id;
 
     const available = whProduct.stock - (whProduct.reservedStock || 0);
     if (available < cartItem.quantity) {

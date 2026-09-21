@@ -188,23 +188,27 @@ const AddCategory = () => {
       }
 
       if (images.image.file) {
-        submissionData.append('image', images.image.file);
+        const ext = images.image.file.type === 'image/png' ? 'png' : 'jpg';
+        submissionData.append('image', images.image.file, `category_image.${ext}`);
       }
       if (images.logo.file) {
-        submissionData.append('logo', images.logo.file);
+        const ext = images.logo.file.type === 'image/png' ? 'png' : 'jpg';
+        submissionData.append('logo', images.logo.file, `category_logo.${ext}`);
       }
 
-      // Add gender-specific logos
-      formData.allowedGenders.forEach(gender => {
+      // Add gender-specific logos (check all 5 genders)
+      ['MEN', 'WOMEN', 'KIDS', 'BOYS', 'GIRLS'].forEach(gender => {
         const logo = images[`logo_${gender}`];
         if (logo && logo.file) {
-          submissionData.append(`logo_${gender}`, logo.file);
+          const ext = logo.file.type === 'image/png' ? 'png' : 'jpg';
+          submissionData.append(`logo_${gender}`, logo.file, `logo_${gender.toLowerCase()}.${ext}`);
         }
       });
 
-      titleBanners.forEach(b => {
+      titleBanners.forEach((b, idx) => {
         if (b.file) {
-          submissionData.append('title_banners', b.file);
+          const ext = b.file.type === 'image/png' ? 'png' : 'jpg';
+          submissionData.append('title_banners', b.file, `banner_${idx}.${ext}`);
         }
       });
 
@@ -340,29 +344,70 @@ const AddCategory = () => {
         </div>
 
         {/* Gender Specific Logos */}
-        {formData.allowedGenders.map(gender => (
-          <div key={gender} className="flex flex-col border p-4 rounded bg-gray-50">
-            <label className="mb-2 font-semibold capitalize">Upload logo for {gender}</label>
-            {images[`logo_${gender}`].preview ? (
-              <div className="relative inline-block w-48 mx-auto w-full">
-                <img src={images[`logo_${gender}`].preview} alt={`Logo ${gender}`} className="w-full h-32 object-contain rounded-lg border border-gray-300 bg-gray-50" />
-                <button
-                  type="button"
-                  onClick={() => removeImage(`logo_${gender}`)}
-                  className="absolute top-2 right-2 p-1 bg-red-600 text-white rounded-full hover:bg-red-700"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-            ) : (
-              <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50">
-                <Upload className="w-8 h-8 text-gray-400 mb-2" />
-                <span className="text-sm text-gray-500">Click to upload logo for {gender}</span>
-                <input type="file" accept="image/*" onChange={(e) => handleImageChange(e, `logo_${gender}`)} className="hidden" />
-              </label>
-            )}
+        <div className="border border-gray-200 rounded-xl p-4 bg-gray-50/70 space-y-3">
+          <div>
+            <label className="block text-sm font-semibold text-gray-800">
+              Gender-Specific Logos (Men, Women, Kids, Boys, Girls)
+            </label>
+            <p className="text-xs text-gray-500 mt-0.5">
+              Upload dedicated logos for Boys, Girls, Men, Women, or Kids. These appear in the customer app when browsing by gender.
+            </p>
           </div>
-        ))}
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 pt-1">
+            {['MEN', 'WOMEN', 'KIDS', 'BOYS', 'GIRLS'].map(gender => {
+              const isAllowed = formData.allowedGenders.includes(gender) || (formData.allowedGenders.includes('KIDS') && (gender === 'BOYS' || gender === 'GIRLS'));
+              const badgeColor = {
+                MEN: 'bg-blue-100 text-blue-800',
+                WOMEN: 'bg-purple-100 text-purple-800',
+                KIDS: 'bg-amber-100 text-amber-800',
+                BOYS: 'bg-sky-100 text-sky-800',
+                GIRLS: 'bg-pink-100 text-pink-800',
+              }[gender];
+
+              return (
+                <div key={gender} className="border border-gray-200 rounded-lg p-3 bg-white shadow-xs">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${badgeColor}`}>
+                      {gender}
+                    </span>
+                    {!isAllowed && (
+                      <span className="text-[10px] text-gray-400">Optional</span>
+                    )}
+                  </div>
+
+                  {images[`logo_${gender}`]?.preview ? (
+                    <div className="relative inline-block w-full">
+                      <img
+                        src={images[`logo_${gender}`].preview}
+                        alt={`Logo ${gender}`}
+                        className="w-full h-28 object-contain rounded-lg border border-gray-200 bg-gray-50"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => removeImage(`logo_${gender}`)}
+                        className="absolute top-1.5 right-1.5 p-1 bg-red-600 text-white rounded-full hover:bg-red-700 shadow-sm"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ) : (
+                    <label className="flex flex-col items-center justify-center w-full h-28 border-2 border-dashed border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50 transition-colors">
+                      <Upload className="w-6 h-6 text-gray-400 mb-1" />
+                      <span className="text-xs text-gray-500 font-medium">Upload {gender}</span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => handleImageChange(e, `logo_${gender}`)}
+                        className="hidden"
+                      />
+                    </label>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
 
         {/* Title Banners Upload (Array) */}
         <div className="border border-gray-200 rounded-lg p-4 bg-gray-50">

@@ -8,6 +8,7 @@ import { generateColorVariantId } from "../../utils/variantAdapter.js";
 import Merchant from '../../models/merchant.model.js';
 import { emitOrderUpdate } from "../../sockets/order.socket.js";
 import { notifyMerchant } from "../../sockets/merchant.socket.js";
+import { notifyWarehouse } from "../../sockets/warehouseOrder.socket.js";
 import Address from "../../models/address.model.js";
 import { getIO } from "../../config/socket.js";
 import { calculateDeliveryCharge } from "../../helperFns/deliveryChargeFns.js";
@@ -62,6 +63,7 @@ export const createRazorpayOrder = async (req, res) => {
           ) || siblings[0];
 
           item.productId = matched;
+          item.variantId = matched._id;
         } else {
           item.productId = null;
         }
@@ -115,6 +117,15 @@ export const createRazorpayOrder = async (req, res) => {
     // === FETCH APP CONFIG ===
     const AppConfig = (await import("../../models/appConfig.model.js")).default;
     const config = await AppConfig.getConfig();
+
+    // === VALIDATE GLOBAL ORDER PLACEMENT (MAINTENANCE MODE) ===
+    if (config.isOrderPlacementEnabled === false) {
+      return res.status(403).json({
+        success: false,
+        isMaintenance: true,
+        message: config.maintenanceMessage || "Live ordering is currently paused for maintenance. Please check back soon!"
+      });
+    }
 
     // === DELIVERY CHARGE USING HELPER ===
     let { roadDistanceKm, deliveryCharge, returnCharge, estimatedTime } = await calculateDeliveryCharge({
@@ -439,7 +450,13 @@ export const verifyPayment = async (req, res) => {
     /* =======================
        STEP 2: FETCH ORDER
     ======================== */
-    const order = await Order.findById(orderId).session(session);
+    let order = await Order.findById(orderId).session(session);
+    let isWarehouseOrder = false;
+
+    if (!order) {
+      order = await WarehouseOrder.findById(orderId).session(session);
+      if (order) isWarehouseOrder = true;
+    }
 
     if (!order || order.razorpayOrderId !== razorpay_order_id) {
       return res.status(404).json({
@@ -448,7 +465,7 @@ export const verifyPayment = async (req, res) => {
       });
     }
 
-    if (order.paymentStatus === "paid") {
+    if (order.paymentStatus === "paid" || order.paymentStatus === "delivery_fee_paid") {
       return res.status(200).json({
         success: true,
         message: "Payment already verified",
@@ -471,28 +488,28 @@ export const verifyPayment = async (req, res) => {
       status: "success",
       orderId: order._id,
       userId: order.userId,
-      merchantId: order.merchantId,
+      merchantId: order.merchantId || order.sourceMerchantId || order.warehouseId,
       details: {
         razorpay_order_id,
         razorpay_payment_id,
         orderStatus: order.orderStatus,
         paymentStatus: order.paymentStatus,
+        isWarehouseOrder,
       },
       req,
     });
 
     /* =======================
-       STEP 4: REMOVE ONLY THIS ORDER'S MERCHANT ITEMS FROM CART
+       STEP 4: REMOVE ONLY THIS ORDER'S MERCHANT / WAREHOUSE ITEMS FROM CART
     ======================== */
-    // Remove only items belonging to the merchant of this order
     const orderMerchantId = order.merchantId?.toString();
     const userCart = await Cart.findOne({ userId: order.userId }).session(session);
     if (userCart) {
       const itemIdsToRemove = userCart.items
-        .filter(i => (i.merchantId?.toString()) === orderMerchantId)
+        .filter(i => isWarehouseOrder ? (i.source === 'warehouse' || !i.merchantId) : (i.merchantId?.toString() === orderMerchantId))
         .map(i => i._id);
       if (itemIdsToRemove.length > 0) {
-        const remainingItems = userCart.items.filter(i => (i.merchantId?.toString()) !== orderMerchantId);
+        const remainingItems = userCart.items.filter(i => isWarehouseOrder ? (i.source !== 'warehouse' && i.merchantId) : (i.merchantId?.toString() !== orderMerchantId));
         if (remainingItems.length === 0) {
           await Cart.updateOne(
             { userId: order.userId },
@@ -516,11 +533,15 @@ export const verifyPayment = async (req, res) => {
     session.endSession();
 
     /* =======================
-       STEP 6: NOTIFY MERCHANT + CONFIRM PLACED
+       STEP 6: NOTIFY MERCHANT / WAREHOUSE + CONFIRM PLACED
     ======================== */
     try {
       const io = getIO();
-      notifyMerchant(io, order.merchantId, order.toObject());
+      if (isWarehouseOrder) {
+        notifyWarehouse(io, order.warehouseId, order.toObject ? order.toObject() : order);
+      } else {
+        notifyMerchant(io, order.merchantId, order.toObject ? order.toObject() : order);
+      }
     } catch (socketErr) {
       console.error("Socket notify error:", socketErr);
     }
@@ -533,7 +554,7 @@ export const verifyPayment = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      message: "Payment verified. Order placed — awaiting merchant acceptance.",
+      message: "Payment verified. Order placed — awaiting acceptance.",
       orderId: order._id,
     });
 
@@ -1229,7 +1250,7 @@ export const createFinalPaymentRazorpayOrder = async (req, res) => {
       const acceptedSubtotal = acceptedItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
       
       const merchantTotals = {};
-      const midStr = order.merchantId?._id ? order.merchantId._id.toString() : order.merchantId.toString();
+      const midStr = order.merchantId?._id ? order.merchantId._id.toString() : (order.merchantId?.toString() || order.sourceMerchantId?.toString() || order.warehouseId?.toString() || 'flashmart');
       merchantTotals[midStr] = acceptedSubtotal;
       
       const cartContext = {
@@ -1332,10 +1353,37 @@ export const createFinalPaymentRazorpayOrder = async (req, res) => {
       order.paymentStatus = "paid";
       order.orderStatus = acceptedItems.length > 0 ? "completed" : "return_in_progress";
       order.customerDeliveryStatus = "completed";
+      order.deliveryRiderStatus = acceptedItems.length > 0 ? "completed" : "returning";
       await order.save();
+
+      // Free rider if no returns
+      if (acceptedItems.length > 0 && order.deliveryRiderId) {
+        try {
+          await DeliveryRider.findByIdAndUpdate(order.deliveryRiderId, {
+            currentOrderId: null,
+            isBusy: false,
+            isAvailable: true,
+          });
+        } catch (e) {
+          console.error("Rider free cleanup error (non-fatal):", e);
+        }
+      }
 
       const io = getIO();
       emitOrderUpdate(io, orderId, order);
+
+      const cashCollectedPayload = {
+        orderId: String(orderId),
+        amountCollected: 0,
+        hasReturns: acceptedItems.length === 0,
+        paymentStatus: 'paid',
+        orderStatus: order.orderStatus,
+        customerDeliveryStatus: order.customerDeliveryStatus,
+      };
+      io.to(String(orderId)).emit('cashCollected', cashCollectedPayload);
+      if (order._id && String(order._id) !== String(orderId)) {
+        io.to(String(order._id)).emit('cashCollected', cashCollectedPayload);
+      }
 
       return res.status(200).json({
         success: true,
@@ -1487,7 +1535,7 @@ export const verifyFinalPayment = async (req, res) => {
       if (targetDoc) {
         const result = await ProductFlat.updateOne(
           { _id: targetDoc._id },
-          { $inc: { stock: -item.quantity } },
+          { $inc: { stock: -item.quantity, reservedStock: -item.quantity } },
           { session }
         );
         if (result.modifiedCount === 0) {
@@ -1652,7 +1700,7 @@ export const verifyFinalPaymentCod = async (req, res) => {
     if (order.appliedOffers && order.appliedOffers.length > 0) {
       const acceptedSubtotal = acceptedItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
       const merchantTotals = {};
-      const midStr = order.merchantId?._id ? order.merchantId._id.toString() : order.merchantId.toString();
+      const midStr = order.merchantId?._id ? order.merchantId._id.toString() : (order.merchantId?.toString() || order.sourceMerchantId?.toString() || order.warehouseId?.toString() || 'flashmart');
       merchantTotals[midStr] = acceptedSubtotal;
       
       const cartContext = {
@@ -1779,7 +1827,7 @@ export const verifyFinalPaymentCod = async (req, res) => {
         if (targetDoc) {
           const result = await ProductFlat.updateOne(
             { _id: targetDoc._id },
-            { $inc: { stock: -item.quantity } },
+            { $inc: { stock: -item.quantity, reservedStock: -item.quantity } },
             { session }
           );
           if (result.modifiedCount === 0) {
@@ -1819,6 +1867,16 @@ export const verifyFinalPaymentCod = async (req, res) => {
 
       const io = getIO();
       emitOrderUpdate(io, order._id.toString(), order);
+
+      const cashCollectedPayload = {
+        orderId: order._id.toString(),
+        amountCollected: 0,
+        hasReturns: !allItemsAccepted,
+        paymentStatus: 'paid',
+        orderStatus: order.orderStatus,
+        customerDeliveryStatus: order.customerDeliveryStatus,
+      };
+      io.to(order._id.toString()).emit('cashCollected', cashCollectedPayload);
 
       return res.status(200).json({
         success: true,

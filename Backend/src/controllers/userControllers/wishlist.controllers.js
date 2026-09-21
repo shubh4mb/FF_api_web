@@ -104,7 +104,8 @@ export const getMyWishlist = asyncHandler(async (req, res) => {
 
     if (siblings.length > 0) {
       const matched = siblings.find(
-        (v) => generateColorVariantId(styleGroupId, v.color.name) === item.variantId.toString()
+        (v) => (v._id?.toString() === item.variantId?.toString()) ||
+               (v.color?.name && generateColorVariantId(styleGroupId, v.color.name) === item.variantId.toString())
       ) || siblings[0];
 
       const nearbySet = new Set(req.nearbyMerchantIds?.map(id => id.toString()) || []);

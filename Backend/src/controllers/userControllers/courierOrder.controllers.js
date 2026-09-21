@@ -10,6 +10,7 @@ import razorpay from "../../config/RazorPay.js";
 import { findBestOffers, recordOfferUsage } from '../../services/offerEngine.js';
 import { v2 as cloudinary } from 'cloudinary';
 import { logAuditEvent } from "../../utils/auditLogger.js";
+import AppConfig from "../../models/appConfig.model.js";
 
 const COURIER_DELIVERY_CHARGE = 40;
 
@@ -26,6 +27,16 @@ export const initiateCourierOrder = async (req, res) => {
   }
 
   try {
+    // 0. Validate Global Order Placement (Maintenance Mode)
+    const config = await AppConfig.getConfig();
+    if (config.isOrderPlacementEnabled === false) {
+      return res.status(403).json({
+        success: false,
+        isMaintenance: true,
+        message: config.maintenanceMessage || "Live ordering is currently paused for maintenance. Please check back soon!"
+      });
+    }
+
     // 1. Validate Merchant
     const merchant = await Merchant.findById(merchantId);
     if (!merchant) {
@@ -56,9 +67,9 @@ export const initiateCourierOrder = async (req, res) => {
 
     if (merchantItems.length === 0) {
       const cartMerchantIds = cart.items.map(i => i.merchantId?.toString());
-      return res.status(400).json({ 
-        success: false, 
-        message: `No items from merchant ${merchantId} in courier cart. Cart has items from: ${cartMerchantIds.join(', ')}` 
+      return res.status(400).json({
+        success: false,
+        message: `No items from merchant ${merchantId} in courier cart. Cart has items from: ${cartMerchantIds.join(', ')}`
       });
     }
 
@@ -107,7 +118,7 @@ export const initiateCourierOrder = async (req, res) => {
 
         const price = variant.price;
         globalSubtotal += price * item.quantity;
-        
+
         const mIdStr = item.merchantId?.toString();
         if (mIdStr) {
           globalMerchantTotals[mIdStr] = (globalMerchantTotals[mIdStr] || 0) + price * item.quantity;
@@ -193,7 +204,7 @@ export const initiateCourierOrder = async (req, res) => {
       razorpayOrderId = `free_courier_${Date.now()}`;
       paymentStatus = 'paid';
     }
-    
+
     const courierOrder = new CourierOrder({
       userId,
       merchantId,
@@ -303,6 +314,16 @@ export const initiateCourierCheckout = async (req, res) => {
   }
 
   try {
+    // 0. Validate Global Order Placement (Maintenance Mode)
+    const config = await AppConfig.getConfig();
+    if (config.isOrderPlacementEnabled === false) {
+      return res.status(403).json({
+        success: false,
+        isMaintenance: true,
+        message: config.maintenanceMessage || "Live ordering is currently paused for maintenance. Please check back soon!"
+      });
+    }
+
     // 1. Fetch address
     const deliveryAddress = await Address.findOne({ _id: addressId, user: userId });
     if (!deliveryAddress) {
@@ -320,10 +341,12 @@ export const initiateCourierCheckout = async (req, res) => {
         const siblings = await ProductFlat.find({ styleGroupId, size: item.size, isDeleted: { $ne: true } }).lean();
         if (siblings.length > 0) {
           const matched = siblings.find(
-            (v) => generateColorVariantId(styleGroupId, v.color.name) === item.variantId.toString()
+            (v) => (v._id?.toString() === item.variantId?.toString()) ||
+              (v.color?.name && generateColorVariantId(styleGroupId, v.color.name) === item.variantId?.toString())
           ) || siblings[0];
 
           item.productId = matched;
+          item.variantId = matched._id;
         } else {
           item.productId = null;
         }
@@ -359,7 +382,7 @@ export const initiateCourierCheckout = async (req, res) => {
       const items = itemsByMerchant[merchantId];
       for (const item of items) {
         const product = item.productId;
-        
+
         let price = 0;
         let name = '';
         let pId = null;
@@ -682,7 +705,10 @@ export const verifyCourierOrderPayment = async (req, res) => {
         // === STEP 3: Deduct Stock ===
         for (const item of order.items) {
           const docs = await ProductFlat.find({ styleGroupId: item.productId, size: item.size });
-          const targetDoc = docs.find(d => generateColorVariantId(item.productId.toString(), d.color.name) === item.variantId.toString());
+          const targetDoc = docs.find(d =>
+            (d._id?.toString() === item.variantId?.toString()) ||
+            (d.color?.name && generateColorVariantId(item.productId.toString(), d.color.name) === item.variantId?.toString())
+          ) || docs[0];
           if (targetDoc) {
             await ProductFlat.updateOne(
               { _id: targetDoc._id },
@@ -700,7 +726,7 @@ export const verifyCourierOrderPayment = async (req, res) => {
     const cart = await CourierCart.findOne({ userId }).session(session);
     if (cart && merchantIdsToClear.length > 0) {
       cart.items = cart.items.filter(
-        item => !merchantIdsToClear.includes(item.merchantId.toString())
+        item => item.merchantId && !merchantIdsToClear.includes(item.merchantId.toString())
       );
       if (cart.items.length === 0) {
         cart.couponCode = null;
@@ -825,10 +851,10 @@ export const updateCourierOrderStatus = async (req, res) => {
     order.orderStatus = status;
     // Sync customer delivery status if applicable
     if (['shipped', 'delivered', 'cancelled'].includes(status)) {
-        order.customerDeliveryStatus = status;
+      order.customerDeliveryStatus = status;
     }
     if (status === 'delivered') {
-        order.deliveredAt = new Date();
+      order.deliveredAt = new Date();
     }
 
     await order.save();
@@ -991,7 +1017,7 @@ export const requestCourierOrderReturn = async (req, res) => {
     for (const reqItem of parsedItems) {
       const orderItem = order.items.find(
         oi => oi.productId.toString() === reqItem.productId.toString() &&
-              oi.variantId.toString() === reqItem.variantId.toString()
+          oi.variantId.toString() === reqItem.variantId.toString()
       );
       if (!orderItem) {
         return res.status(400).json({ success: false, message: `Item with product ${reqItem.productId} not found in this order` });

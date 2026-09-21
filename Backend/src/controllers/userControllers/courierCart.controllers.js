@@ -29,7 +29,7 @@ export const addToCourierCart = async (req, res) => {
       size: size,
       isDeleted: { $ne: true }
     });
-    const matchedDoc = matchingFlatVariants.find(v => 
+    const matchedDoc = matchingFlatVariants.find(v =>
       v._id.toString() === variantId ||
       generateColorVariantId(v.styleGroupId || productId, v.color?.name) === variantId
     ) || matchingFlatVariants[0];
@@ -43,15 +43,17 @@ export const addToCourierCart = async (req, res) => {
 
     let cart = await CourierCart.findOne({ userId });
 
+    const effectiveVariantId = matchedDoc._id;
+
     if (!cart) {
       cart = new CourierCart({
         userId,
-        items: [{ productId, variantId, size, quantity, stockQuantity: sizeObjStock, merchantId, image: typeof image === 'string' ? { url: image } : image }],
+        items: [{ productId, variantId: effectiveVariantId, size, quantity, stockQuantity: sizeObjStock, merchantId, image: typeof image === 'string' ? { url: image } : image }],
       });
     } else {
       const existingItem = cart.items.find(item =>
         item.productId.toString() === productId &&
-        item.variantId.toString() === variantId &&
+        (item.variantId.toString() === effectiveVariantId.toString() || item.variantId.toString() === variantId) &&
         item.size === size
       );
 
@@ -61,8 +63,9 @@ export const addToCourierCart = async (req, res) => {
         }
         existingItem.quantity += quantity;
         existingItem.stockQuantity = sizeObjStock;
+        existingItem.variantId = effectiveVariantId;
       } else {
-        cart.items.push({ productId, variantId, size, quantity, stockQuantity: sizeObjStock, merchantId, image: typeof image === 'string' ? { url: image } : image });
+        cart.items.push({ productId, variantId: effectiveVariantId, size, quantity, stockQuantity: sizeObjStock, merchantId, image: typeof image === 'string' ? { url: image } : image });
       }
       cart.updatedAt = new Date();
     }
@@ -98,44 +101,44 @@ export const getCourierCart = async (req, res) => {
     const cart = cartDoc.toObject();
 
     for (const item of cart.items) {
-        if (!item.productId) continue;
-        const styleGroupId = item.productId.toString();
-        const siblings = await ProductFlat.find({
-          $or: [
-            { styleGroupId },
-            ...(mongoose.Types.ObjectId.isValid(styleGroupId) ? [{ _id: styleGroupId }] : [])
-          ],
-          size: item.size,
-          isDeleted: { $ne: true }
-        })
-          .populate('categoryId')
-          .populate('subCategoryId')
-          .populate('brandId')
-          .lean();
-        if (siblings.length > 0) {
-          const matched = siblings.find(
-            (v) => v._id.toString() === item.variantId.toString() || generateColorVariantId(styleGroupId, v.color?.name) === item.variantId.toString()
-          ) || siblings[0];
+      if (!item.productId) continue;
+      const styleGroupId = item.productId.toString();
+      const siblings = await ProductFlat.find({
+        $or: [
+          { styleGroupId },
+          ...(mongoose.Types.ObjectId.isValid(styleGroupId) ? [{ _id: styleGroupId }] : [])
+        ],
+        size: item.size,
+        isDeleted: { $ne: true }
+      })
+        .populate('categoryId')
+        .populate('subCategoryId')
+        .populate('brandId')
+        .lean();
+      if (siblings.length > 0) {
+        const matched = siblings.find(
+          (v) => v._id.toString() === item.variantId.toString() || generateColorVariantId(styleGroupId, v.color?.name) === item.variantId.toString()
+        ) || siblings[0];
 
-          item.productId = {
-            ...matched,
-            _id: styleGroupId, // Re-map _id to styleGroupId so routing/details lookups work
-          };
-          item.price = matched.price || 0;
-          item.mrp = matched.mrp || 0;
-        } else {
-          item.productId = null;
-          item.price = 0;
-          item.mrp = 0;
-        }
+        item.productId = {
+          ...matched,
+          _id: styleGroupId, // Re-map _id to styleGroupId so routing/details lookups work
+        };
+        item.price = matched.price || 0;
+        item.mrp = matched.mrp || 0;
+      } else {
+        item.productId = null;
+        item.price = 0;
+        item.mrp = 0;
       }
+    }
 
     let subtotal = 0;
     let mrpTotal = 0;
 
     const itemsWithDetails = cart.items.map(item => {
       const product = item.productId;
-      
+
       const price = item.price || 0;
       const mrp = item.mrp || 0;
 
@@ -152,7 +155,7 @@ export const getCourierCart = async (req, res) => {
     const merchantTotals = {};
     itemsWithDetails.forEach(item => {
       const mKey = item.merchantId?._id?.toString() || item.merchantId?.toString();
-      if(mKey) merchantTotals[mKey] = (merchantTotals[mKey] || 0) + (item.price * item.quantity);
+      if (mKey) merchantTotals[mKey] = (merchantTotals[mKey] || 0) + (item.price * item.quantity);
     });
     const courierDeliveryCharge = 40;
 
@@ -285,26 +288,27 @@ export const getCourierCartCount = async (req, res) => {
     }
 
     const itemsWithVariant = [];
-      for (const item of cart.items) {
-        if (!item.productId) continue;
-        const styleGroupId = item.productId.toString();
-        const siblings = await ProductFlat.find({ styleGroupId, size: item.size, isDeleted: { $ne: true } }).lean();
-        const matched = siblings.find(
-          (v) => generateColorVariantId(styleGroupId, v.color.name) === item.variantId.toString()
-        ) || siblings[0];
+    for (const item of cart.items) {
+      if (!item.productId) continue;
+      const styleGroupId = item.productId.toString();
+      const siblings = await ProductFlat.find({ styleGroupId, size: item.size, isDeleted: { $ne: true } }).lean();
+      const matched = siblings.find(
+        (v) => (v._id?.toString() === item.variantId?.toString()) ||
+          (v.color?.name && generateColorVariantId(styleGroupId, v.color.name) === item.variantId?.toString())
+      ) || siblings[0];
 
-        itemsWithVariant.push({
-          ...item,
-          productId: styleGroupId,
-          price: matched?.price || null,
-          mrp: matched?.mrp || null,
-        });
-      }
-      return res.status(200).json({
-        success: true,
-        totalItems: itemsWithVariant.length,
-        items: itemsWithVariant,
+      itemsWithVariant.push({
+        ...item,
+        productId: styleGroupId,
+        price: matched?.price || null,
+        mrp: matched?.mrp || null,
       });
+    }
+    return res.status(200).json({
+      success: true,
+      totalItems: itemsWithVariant.length,
+      items: itemsWithVariant,
+    });
   } catch (err) {
     console.error("Get courier cart count error:", err.message);
     res.status(500).json({ message: "Server error" });
@@ -328,7 +332,7 @@ export const selectOfferCourier = async (req, res) => {
     // Clear coupon and enforce single selected offer
     cart.couponCode = null;
     cart.selectedOffers = [{ offerId, targetItemIds: targetItemIds || [] }];
-    
+
     await cart.save();
 
     res.status(200).json({ success: true, message: 'Offer selected', selectedOffers: cart.selectedOffers });

@@ -23,7 +23,17 @@ export const getAppConfig = async (req, res) => {
  */
 export const updateAppConfig = async (req, res) => {
     try {
-        const { deliveryPerKmRate, returnPerKmRate, waitingCharge, deliveryRadius, tryAndBuyRadius, merchantRegistrationFee } = req.body;
+        const {
+            deliveryPerKmRate,
+            returnPerKmRate,
+            waitingCharge,
+            deliveryRadius,
+            tryAndBuyRadius,
+            merchantRegistrationFee,
+            isOrderPlacementEnabled,
+            maintenanceTitle,
+            maintenanceMessage,
+        } = req.body;
 
         const config = await AppConfig.getConfig();
 
@@ -33,6 +43,10 @@ export const updateAppConfig = async (req, res) => {
         if (deliveryRadius !== undefined) config.deliveryRadius = deliveryRadius;
         if (tryAndBuyRadius !== undefined) config.tryAndBuyRadius = tryAndBuyRadius;
         if (merchantRegistrationFee !== undefined) config.merchantRegistrationFee = merchantRegistrationFee;
+
+        if (isOrderPlacementEnabled !== undefined) config.isOrderPlacementEnabled = !!isOrderPlacementEnabled;
+        if (maintenanceTitle !== undefined) config.maintenanceTitle = maintenanceTitle;
+        if (maintenanceMessage !== undefined) config.maintenanceMessage = maintenanceMessage;
 
         if (req.body.customerAppVersion) {
             config.customerAppVersion = {
@@ -73,19 +87,46 @@ export const getAppVersionPolicy = async (req, res) => {
 
         let versionPolicy;
         if (app === "delivery") {
-            versionPolicy = config.deliveryAppVersion;
+            versionPolicy = config.deliveryAppVersion?.toObject?.() || config.deliveryAppVersion || {};
         } else if (app === "merchant") {
-            versionPolicy = config.merchantAppVersion;
+            versionPolicy = config.merchantAppVersion?.toObject?.() || config.merchantAppVersion || {};
         } else {
-            versionPolicy = config.customerAppVersion;
+            versionPolicy = config.customerAppVersion?.toObject?.() || config.customerAppVersion || {};
         }
 
+        // Attach system operational status for fast client boot lookup
+        const payload = {
+            ...versionPolicy,
+            isOrderPlacementEnabled: config.isOrderPlacementEnabled ?? false,
+            maintenanceTitle: config.maintenanceTitle || "Maintenance in Progress",
+            maintenanceMessage: config.maintenanceMessage || "We are currently gearing up for launch! Live ordering is temporarily paused. Please check back soon.",
+        };
+
         return res.status(200).json(
-            new ApiResponse(200, versionPolicy, "App version policy fetched successfully")
+            new ApiResponse(200, payload, "App version policy fetched successfully")
         );
     } catch (error) {
         console.error("Get AppVersionPolicy Error:", error);
         return res.status(500).json({ message: "Failed to fetch app version policy" });
+    }
+};
+
+/**
+ * GET /api/user/system-status
+ * Public lightweight endpoint to fetch system operational status / maintenance mode.
+ */
+export const getSystemStatus = async (req, res) => {
+    try {
+        const config = await AppConfig.getConfig();
+        return res.status(200).json({
+            success: true,
+            isOrderPlacementEnabled: config.isOrderPlacementEnabled ?? false,
+            maintenanceTitle: config.maintenanceTitle || "Maintenance in Progress",
+            maintenanceMessage: config.maintenanceMessage || "We are currently gearing up for launch! Live ordering is temporarily paused. Please check back soon.",
+        });
+    } catch (error) {
+        console.error("Get SystemStatus Error:", error);
+        return res.status(500).json({ success: false, message: "Failed to fetch system status" });
     }
 };
 

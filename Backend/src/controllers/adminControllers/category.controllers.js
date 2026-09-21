@@ -90,7 +90,7 @@ export const addCategory = asyncHandler(async (req, res) => {
     allowedGenders: parsedAllowedGenders,
     ancestors,
     sortOrder,
-    isActive,
+    isActive: isActive !== undefined ? (isActive === 'true' || isActive === true) : true,
     isTriable: isTriable === 'true' || isTriable === true,
     ...(level == 1 && commissionPercentage !== undefined && { commissionPercentage }),
     ...(imageDetails && { image: imageDetails }),
@@ -166,6 +166,10 @@ export const updateCategory = asyncHandler(async (req, res) => {
   // Remove legacy gender field if present
   delete updateData.gender;
 
+  if (updateData.isActive !== undefined) {
+    updateData.isActive = updateData.isActive === 'true' || updateData.isActive === true;
+  }
+
   if (updateData.isTriable !== undefined) {
     updateData.isTriable = updateData.isTriable === 'true' || updateData.isTriable === true;
   }
@@ -219,9 +223,18 @@ export const updateCategory = asyncHandler(async (req, res) => {
 });
 
 export const getCategories = asyncHandler(async (req, res) => {
-  const { onlyWithProducts, includeProductInfo, gender } = req.query;
+  const { onlyWithProducts, includeProductInfo, gender, includeInactive, status } = req.query;
 
-  const categories = await Category.find({ isActive: true }).lean();
+  const categoryFilter = {};
+  if (status === 'active') {
+    categoryFilter.isActive = true;
+  } else if (status === 'inactive') {
+    categoryFilter.isActive = false;
+  } else if (includeInactive !== 'true') {
+    categoryFilter.isActive = true;
+  }
+
+  const categories = await Category.find(categoryFilter).lean();
 
   if (onlyWithProducts === 'true' || includeProductInfo === 'true') {
     const productMatch = {

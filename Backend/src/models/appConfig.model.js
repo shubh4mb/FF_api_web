@@ -64,6 +64,20 @@ const appConfigSchema = new mongoose.Schema(
             max: 100,
         },
 
+        // ── Order Placement / Maintenance Mode ──
+        isOrderPlacementEnabled: {
+            type: Boolean,
+            default: false, // Default to false pre-launch so orders can only be placed when admin toggles it ON
+        },
+        maintenanceTitle: {
+            type: String,
+            default: "Maintenance in Progress",
+        },
+        maintenanceMessage: {
+            type: String,
+            default: "We are currently gearing up for launch! Live ordering is temporarily paused. Please check back soon.",
+        },
+
         // ── Session Tracking ──
         heartbeatTimeoutMs: {
             type: Number,

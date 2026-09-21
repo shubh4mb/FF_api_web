@@ -578,6 +578,21 @@ export const verifyMerchantReturnOtp= async (req, res) => {
     await order.save();
     emitOrderUpdate(req.io, orderId, order);
 
+    // ✅ Release reserved inventory in ProductFlat for returned items
+    const returnedItems = (order.items || []).filter(item => item.tryStatus === 'returned');
+    for (const item of returnedItems) {
+      if (item.variantId) {
+        try {
+          await ProductFlat.updateOne(
+            { _id: item.variantId },
+            { $inc: { reservedStock: -(item.quantity || 1) } }
+          );
+        } catch (stockErr) {
+          console.error(`Error releasing reserved stock for return item ${item.variantId}:`, stockErr);
+        }
+      }
+    }
+
     // ✅ Free the rider in DB
     if (order.deliveryRiderId) {
       const deliveryRiderModel = (await import("../../models/deliveryRider.model.js")).default;
@@ -945,7 +960,7 @@ export const confirmCashCollection = async (req, res) => {
         if (targetDoc) {
           await ProductFlat.updateOne(
             { _id: targetDoc._id },
-            { $inc: { stock: -item.quantity } }
+            { $inc: { stock: -item.quantity, reservedStock: -item.quantity } }
           );
         }
       } catch (stockErr) {
