@@ -239,6 +239,35 @@ router.put("/profile/phone", authMiddleware, async (req, res) => {
   }
 });
 
+// ── Delete Account (Apple Guideline 5.1.1(v) Compliance) ──
+router.delete("/account", authMiddleware, async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    // Delete user from database
+    await User.findByIdAndDelete(userId);
+
+    // Clean up notifications if any
+    try {
+      await Notification.deleteMany({ userId });
+    } catch (cleanupErr) {
+      console.warn("Non-fatal: Error deleting user notifications:", cleanupErr);
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Account and associated data deleted successfully.",
+    });
+  } catch (err) {
+    console.error("Delete account error:", err);
+    return res.status(500).json({ message: "Failed to delete account" });
+  }
+});
+
 /**
  * @swagger
  * /api/user/products/newArrivals:
