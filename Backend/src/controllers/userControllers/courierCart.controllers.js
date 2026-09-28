@@ -36,10 +36,15 @@ export const addToCourierCart = async (req, res) => {
 
     if (!matchedDoc) return res.status(404).json({ message: "Product variant size not found" });
 
-    if (matchedDoc.stock < quantity) {
-      return res.status(400).json({ message: `Only ${matchedDoc.stock} items left in stock` });
+    const availableStock = Math.max(0, matchedDoc.stock - (matchedDoc.reservedStock || 0));
+    if (availableStock < quantity) {
+      return res.status(400).json({
+        message: availableStock > 0
+          ? `Only ${availableStock} items left in stock`
+          : "This item is currently out of stock"
+      });
     }
-    sizeObjStock = matchedDoc.stock;
+    sizeObjStock = availableStock;
 
     let cart = await CourierCart.findOne({ userId });
 
@@ -120,16 +125,21 @@ export const getCourierCart = async (req, res) => {
           (v) => v._id.toString() === item.variantId.toString() || generateColorVariantId(styleGroupId, v.color?.name) === item.variantId.toString()
         ) || siblings[0];
 
+        const available = Math.max(0, (matched.stock || 0) - (matched.reservedStock || 0));
         item.productId = {
           ...matched,
           _id: styleGroupId, // Re-map _id to styleGroupId so routing/details lookups work
         };
         item.price = matched.price || 0;
         item.mrp = matched.mrp || 0;
+        item.stockQuantity = available;
+        item.isOutOfStock = available <= 0 || available < item.quantity;
       } else {
         item.productId = null;
         item.price = 0;
         item.mrp = 0;
+        item.stockQuantity = 0;
+        item.isOutOfStock = true;
       }
     }
 
@@ -221,6 +231,29 @@ export const updateCourierCartQuantity = async (req, res) => {
 
     const item = cart.items.id(cartId);
     if (!item) return res.status(404).json({ success: false, message: "Item not found in cart" });
+
+    // Verify available stock
+    const variantDoc = await ProductFlat.findOne({
+      $or: [
+        ...(item.variantId ? [{ _id: item.variantId }] : []),
+        { styleGroupId: item.productId, size: item.size }
+      ],
+      size: item.size,
+      isDeleted: { $ne: true }
+    }).lean();
+
+    if (variantDoc) {
+      const available = Math.max(0, (variantDoc.stock || 0) - (variantDoc.reservedStock || 0));
+      if (quantity > available) {
+        return res.status(400).json({
+          success: false,
+          message: available > 0
+            ? `Only ${available} items left in stock`
+            : "This item is currently out of stock"
+        });
+      }
+      item.stockQuantity = available;
+    }
 
     item.quantity = quantity;
     await cart.save();

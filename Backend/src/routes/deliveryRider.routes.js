@@ -6,6 +6,7 @@ import { handleMulterError } from '../middleware/multer.js';
 import Notification from "../models/notification.model.js";
 import Order from "../models/order.model.js";
 import WarehouseOrder from "../models/warehouseOrder.model.js";
+import Transaction from "../models/transaction.model.js";
 import { getWalletDetails } from "../helperFns/walletHelper.js";
 import { v2 as cloudinary } from "cloudinary";
 import { emitOrderUpdate } from "../sockets/order.socket.js";
@@ -159,6 +160,7 @@ router.post(
           url: result.secure_url,
           public_id: result.public_id,
           itemId: req.body.itemId || null,
+          caption: req.body.caption || "general",
           uploadedAt: new Date(),
         };
 
@@ -335,27 +337,75 @@ router.get("/earnings/current-week", authMiddlewareRider, async (req, res) => {
 router.get("/earnings/history", authMiddlewareRider, async (req, res) => {
   try {
     const { page = 1, limit = 10 } = req.query;
+    const pageNum = parseInt(page) || 1;
+    const limitNum = parseInt(limit) || 10;
 
-    const payouts = await WeeklyPayout.find({
+    // 1. Fetch WeeklyPayout records
+    const weeklyPayouts = await WeeklyPayout.find({
       ownerType: "rider",
       ownerId: req.riderId,
       status: { $in: ["finalized", "paid", "failed"] },
     })
       .sort({ weekStart: -1 })
-      .skip((page - 1) * limit)
-      .limit(parseInt(limit))
       .lean();
 
-    const total = await WeeklyPayout.countDocuments({
+    // 2. Fetch manual payouts & adjustments from Transaction ledger
+    const manualTxns = await Transaction.find({
+      recipientType: "rider",
+      recipientId: req.riderId,
+      category: { $in: ["rider_payout", "damage_compensation", "adjustment"] },
+    })
+      .sort({ createdAt: -1 })
+      .lean();
+
+    // 3. Normalize and merge
+    const linkedWeeklyPayoutIds = new Set(
+      manualTxns
+        .filter(t => t.weeklyPayoutId)
+        .map(t => t.weeklyPayoutId.toString())
+    );
+
+    const normalizedTxns = manualTxns.map(t => ({
+      _id: t._id,
+      transactionId: t.transactionId,
       ownerType: "rider",
       ownerId: req.riderId,
-      status: { $in: ["finalized", "paid", "failed"] },
-    });
+      totalEarnings: t.amount,
+      finalAmount: t.amount,
+      netPayout: t.amount,
+      amount: t.amount,
+      status: t.status === "completed" ? "paid" : t.status,
+      type: t.category,
+      category: t.category,
+      referenceNumber: t.referenceNumber,
+      paymentMethod: t.paymentMethod,
+      notes: t.notes,
+      paidAt: t.createdAt,
+      createdAt: t.createdAt,
+      weekStart: t.createdAt,
+      weekEnd: t.createdAt,
+      isManual: t.source === "manual_admin",
+    }));
+
+    const remainingWeeklyPayouts = weeklyPayouts
+      .filter(wp => !linkedWeeklyPayoutIds.has(wp._id.toString()))
+      .map(wp => ({
+        ...wp,
+        amount: wp.finalAmount,
+      }));
+
+    const combinedPayouts = [...normalizedTxns, ...remainingWeeklyPayouts];
+    combinedPayouts.sort((a, b) => new Date(b.paidAt || b.createdAt || b.weekStart) - new Date(a.paidAt || a.createdAt || a.weekStart));
+
+    const total = combinedPayouts.length;
+    const paginatedPayouts = combinedPayouts.slice((pageNum - 1) * limitNum, pageNum * limitNum);
 
     return res.status(200).json({
       success: true,
-      payouts,
-      pagination: { page: parseInt(page), limit: parseInt(limit), total },
+      payouts: paginatedPayouts,
+      history: paginatedPayouts,
+      transactions: manualTxns,
+      pagination: { page: pageNum, limit: limitNum, total },
     });
   } catch (err) {
     console.error("Get earnings history error:", err);

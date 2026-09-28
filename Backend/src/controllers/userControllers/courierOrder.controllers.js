@@ -7,7 +7,7 @@ import { generateColorVariantId } from "../../utils/variantAdapter.js";
 import mongoose from "mongoose";
 import crypto from "crypto";
 import razorpay from "../../config/RazorPay.js";
-import { findBestOffers, recordOfferUsage } from '../../services/offerEngine.js';
+import { findBestOffers, recordOfferUsage, getApplicableAmount } from '../../services/offerEngine.js';
 import { v2 as cloudinary } from 'cloudinary';
 import { logAuditEvent } from "../../utils/auditLogger.js";
 import AppConfig from "../../models/appConfig.model.js";
@@ -73,28 +73,45 @@ export const initiateCourierOrder = async (req, res) => {
       });
     }
 
-    // 4. Calculate Billing
+    // 4. Calculate Billing & Validate Real-time Stock
     let totalAmount = 0;
     const orderItems = [];
 
     for (const item of merchantItems) {
-      const product = item.productId;
-      if (!product) continue;
+      const flatDoc = await ProductFlat.findOne({
+        $or: [
+          ...(item.variantId ? [{ _id: item.variantId }] : []),
+          { styleGroupId: item.productId, size: item.size }
+        ],
+        size: item.size,
+        isDeleted: { $ne: true }
+      }).lean();
 
-      const variant = product.variants.id(item.variantId);
-      if (!variant) continue;
+      if (!flatDoc) {
+        return res.status(400).json({ success: false, message: "An item in your cart is no longer available." });
+      }
 
-      const price = variant.price;
+      const availableStock = Math.max(0, (flatDoc.stock || 0) - (flatDoc.reservedStock || 0));
+      if (availableStock < item.quantity) {
+        return res.status(400).json({
+          success: false,
+          message: availableStock > 0
+            ? `Only ${availableStock} left in stock for "${flatDoc.name}" (${item.size}). Please adjust your cart.`
+            : `"${flatDoc.name}" (${item.size}) is currently out of stock. Please remove it to proceed.`
+        });
+      }
+
+      const price = flatDoc.price || 0;
       totalAmount += price * item.quantity;
 
       orderItems.push({
-        productId: item.productId._id,
-        variantId: item.variantId,
-        name: product.name,
+        productId: flatDoc.styleGroupId || flatDoc._id,
+        variantId: flatDoc._id,
+        name: flatDoc.name,
         quantity: item.quantity,
         price,
         size: item.size,
-        image: item.image?.url || item.image,
+        image: item.image?.url || item.image || flatDoc.images?.[0]?.url,
       });
     }
 
@@ -241,6 +258,20 @@ export const initiateCourierOrder = async (req, res) => {
     });
 
     await courierOrder.save();
+
+    // Reserve stock in ProductFlat for ordered courier items
+    for (const item of orderItems) {
+      if (item.variantId) {
+        try {
+          await ProductFlat.updateOne(
+            { _id: item.variantId },
+            { $inc: { reservedStock: item.quantity || 1 } }
+          );
+        } catch (stockErr) {
+          console.error(`Error reserving stock for courier variant ${item.variantId}:`, stockErr);
+        }
+      }
+    }
 
     await logAuditEvent({
       action: paymentStatus === 'paid' ? "COURIER_ORDER_PLACED" : "COURIER_PAYMENT_INITIATED",
@@ -437,6 +468,8 @@ export const initiateCourierCheckout = async (req, res) => {
     let grandTotalPayable = 0;
 
     const createdOrders = [];
+    // Track allocated discounts per offer to prevent rounding overshoots
+    const allocatedDiscountsByOffer = {};
 
     // Distribute charges & create orders
     for (let index = 0; index < merchantIds.length; index++) {
@@ -479,11 +512,29 @@ export const initiateCourierCheckout = async (req, res) => {
 
       if (bestOffers.appliedOffers && bestOffers.appliedOffers.length > 0) {
         for (const offer of bestOffers.appliedOffers) {
+          const offerKey = offer._id.toString();
+          if (!allocatedDiscountsByOffer[offerKey]) {
+            allocatedDiscountsByOffer[offerKey] = 0;
+          }
+
           let distributedDiscount = 0;
           if (offer.scope === 'merchant' && offer.merchantId?.toString() === merchantId) {
-            distributedDiscount = offer.discountAmount;
+            distributedDiscount = Math.min(offer.discountAmount, totalAmount);
           } else if (offer.scope === 'admin') {
-            distributedDiscount = Math.round((totalAmount / globalSubtotal) * offer.discountAmount);
+            // Check if this merchant has items eligible for the admin offer
+            const merchantApplicable = getApplicableAmount(offer, { items: orderItems, subtotal: totalAmount });
+            if (merchantApplicable > 0 && globalSubtotal > 0) {
+              const remainingOfferDiscount = Math.max(0, (offer.discountAmount || 0) - allocatedDiscountsByOffer[offerKey]);
+              const isLastMerchant = index === merchantIds.length - 1;
+
+              if (isLastMerchant) {
+                distributedDiscount = Math.min(remainingOfferDiscount, totalAmount);
+              } else {
+                const proportional = Math.round((merchantApplicable / globalSubtotal) * offer.discountAmount);
+                distributedDiscount = Math.min(proportional, remainingOfferDiscount, totalAmount);
+              }
+              allocatedDiscountsByOffer[offerKey] += distributedDiscount;
+            }
           }
 
           if (distributedDiscount > 0) {
@@ -500,13 +551,16 @@ export const initiateCourierCheckout = async (req, res) => {
         }
       }
 
+      // Ensure merchant offer discount cannot exceed merchant subtotal
+      offerDiscount = Math.min(offerDiscount, totalAmount);
+
       // First merchant order gets the tip and the delivery fee (if not free)
       const isFirst = index === 0;
       const merchantDeliveryCharge = offerFreeDelivery ? 0 : (isFirst ? 40 : 0);
       const merchantTip = isFirst ? Math.max(0, Number(deliveryTip) || 0) : 0;
       const serviceGST = 0;
 
-      const totalPayable = Math.round(totalAmount - offerDiscount + merchantDeliveryCharge + merchantTip);
+      const totalPayable = Math.max(0, Math.round(totalAmount - offerDiscount + merchantDeliveryCharge + merchantTip));
       grandTotalPayable += totalPayable;
 
       const courierOrder = new CourierOrder({

@@ -105,6 +105,10 @@ const merchantSchema = new mongoose.Schema(
       enum: ['incomplete', 'pending_verification', 'pending_payment', 'payment_pending_verification', 'active', 'rejected', 'suspended'],
       default: 'incomplete'
     },
+    blockedReason: { type: String, default: null },
+    blockedAt: { type: Date, default: null },
+    damageDisputeCount: { type: Number, default: 0 },
+    rejectedDisputeCount: { type: Number, default: 0 },
     isRegistrationFeePaid: { type: Boolean, default: false },
     razorpayOrderId: { type: String, default: null },
     operatingHours: {

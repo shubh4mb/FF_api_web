@@ -1,14 +1,17 @@
 import ReturnIssue from "../../models/returnIssue.model.js";
 import Order from "../../models/order.model.js";
+import User from "../../models/user.model.js";
+import DeliveryRider from "../../models/deliveryRider.model.js";
+import Merchant from "../../models/merchant.model.js";
 
 // Create a new return issue report
 export const createReturnIssue = async (req, res) => {
   try {
-    const { orderId, itemId, issueType, description } = req.body;
+    const { orderId, itemId, issueType, damageCategory, description } = req.body;
     const merchantId = req.merchantId;
 
-    if (!orderId || !issueType || !description) {
-      return res.status(400).json({ success: false, message: "Missing required fields" });
+    if (!orderId || !description) {
+      return res.status(400).json({ success: false, message: "Missing required fields (orderId, description)" });
     }
 
     // Verify order belongs to merchant
@@ -22,23 +25,56 @@ export const createReturnIssue = async (req, res) => {
       for (const file of req.files) {
         images.push({
           url: file.path,
-          public_id: file.filename, // Using filename as public_id since multer-storage-cloudinary usually sets it
+          public_id: file.filename,
         });
+      }
+    }
+
+    // Extract item details if itemId provided
+    let itemDetails = null;
+    if (itemId && order.items && order.items.length > 0) {
+      const matchedItem = order.items.find(
+        (i) => i._id?.toString() === itemId.toString() || i.productId?.toString() === itemId.toString()
+      );
+      if (matchedItem) {
+        itemDetails = {
+          name: matchedItem.name,
+          size: matchedItem.size,
+          price: matchedItem.price,
+          image: matchedItem.image,
+        };
       }
     }
 
     const newIssue = new ReturnIssue({
       orderId,
       merchantId,
-      deliveryRiderId: order.deliveryRiderId,
+      userId: order.userId || null,
+      deliveryRiderId: order.deliveryRiderId || null,
       itemId: itemId || null,
-      issueType,
+      itemDetails: itemDetails || undefined,
+      issueType: issueType || "damage",
+      damageCategory: damageCategory || "other",
       description,
       images,
       reportedBy: "merchant",
     });
 
     await newIssue.save();
+
+    // Link back to Order
+    order.hasReportedIssue = true;
+    order.returnIssueId = newIssue._id;
+    await order.save();
+
+    // Update dispute counters
+    await Merchant.findByIdAndUpdate(merchantId, { $inc: { damageDisputeCount: 1 } });
+    if (order.userId) {
+      await User.findByIdAndUpdate(order.userId, { $inc: { incidentCount: 1 } });
+    }
+    if (order.deliveryRiderId) {
+      await DeliveryRider.findByIdAndUpdate(order.deliveryRiderId, { $inc: { incidentCount: 1 } });
+    }
 
     return res.status(201).json({
       success: true,

@@ -89,6 +89,22 @@ export const createRazorpayOrder = async (req, res) => {
       return res.status(400).json({ message: "You can only checkout a maximum of 6 Try & Buy items per merchant." });
     }
 
+    // === VALIDATE REAL-TIME STOCK FOR ALL ORDER ITEMS ===
+    for (const item of merchantItems) {
+      if (!item.productId) {
+        return res.status(400).json({ message: "One or more items in your cart are no longer available." });
+      }
+      const availableStock = Math.max(0, (item.productId.stock || 0) - (item.productId.reservedStock || 0));
+      if (availableStock < item.quantity) {
+        const itemName = item.productId.name || "Item";
+        return res.status(400).json({
+          message: availableStock > 0
+            ? `Only ${availableStock} left in stock for "${itemName}" (${item.size}). Please adjust your cart.`
+            : `"${itemName}" (${item.size}) is currently out of stock. Please remove it from your cart to proceed.`
+        });
+      }
+    }
+
     // === VALIDATE ADDRESS ===
     const deliveryAddress = await Address.findOne({ _id: addressId, user: userId });
     if (!deliveryAddress) {
@@ -226,6 +242,8 @@ export const createRazorpayOrder = async (req, res) => {
           appliedOffers.push({
             offerId: offer._id,
             title: offer.title,
+            description: offer.description || '',
+            couponCode: offer.couponCode || null,
             scope: offer.scope,
             discountType: offer.discountType,
             discountValue: offer.discountValue,
@@ -233,6 +251,8 @@ export const createRazorpayOrder = async (req, res) => {
             freeDelivery: offer.freeDelivery || false,
             freeReturn: offer.freeReturn || offer.freeDelivery || false,
             freeWaiting: offer.freeWaiting || offer.freeDelivery || false,
+            conditions: offer.conditions || {},
+            merchantName: merchant.shopName || null,
           });
           offerDiscount += offer.discountAmount;
         }
@@ -952,11 +972,11 @@ export const getAllOrders = async (req, res) => {
     const userId = req.user.userId;
     const [orders, warehouseOrders] = await Promise.all([
       Order.find({ userId })
-        .select('orderStatus items totalAmount customerDeliveryStatus createdAt merchantDetails deliveryCharge finalBilling deliveryRiderStatus deliveryMode isCourier')
+        .select('orderStatus paymentStatus refundAmount refundDetails items totalAmount customerDeliveryStatus createdAt merchantDetails deliveryCharge finalBilling deliveryRiderStatus deliveryMode isCourier')
         .sort({ createdAt: -1 })
         .lean(),
       WarehouseOrder.find({ userId })
-        .select('orderStatus items totalAmount customerDeliveryStatus createdAt warehouseDetails deliveryCharge finalBilling deliveryRiderStatus fulfillmentType')
+        .select('orderStatus paymentStatus refundAmount refundDetails items totalAmount customerDeliveryStatus createdAt warehouseDetails deliveryCharge finalBilling deliveryRiderStatus fulfillmentType')
         .sort({ createdAt: -1 })
         .lean(),
     ]);
@@ -989,7 +1009,7 @@ export const initiateReturn = async (req, res) => {
 
     orderId = orderId.replace(/^["']|["']$/g, '').trim();
 
-    const { items } = req.body; // Expected payload: array of { itemId, tryStatus: "keep"|"return", returnReason }
+    const { items, couponCode } = req.body; // Expected payload: array of { itemId, tryStatus: "keep"|"return", returnReason }, optional couponCode
 
     if (!items || !Array.isArray(items) || items.length === 0) {
       await session.abortTransaction();
@@ -1042,9 +1062,134 @@ export const initiateReturn = async (req, res) => {
       }
     }
 
-    order.finalBilling.baseAmount = Math.round(baseAmount);
-    order.finalBilling.totalPayable = Math.round(baseAmount); // You can add fee/GST later if needed
-    // Optionally add tryAndBuyFee, GST, etc. here if applicable
+    // === If couponCode is provided in payload, attach/update it on order ===
+    if (couponCode !== undefined) {
+      if (couponCode && typeof couponCode === 'string' && couponCode.trim()) {
+        const normalizedCoupon = couponCode.trim().toUpperCase();
+        const couponOffer = await Offer.findOne({
+          couponCode: normalizedCoupon,
+          isActive: true,
+        }).session(session).lean();
+
+        if (couponOffer) {
+          if (!order.appliedOffers) order.appliedOffers = [];
+          order.appliedOffers = order.appliedOffers.filter(o => !o.couponCode);
+          order.appliedOffers.push({
+            offerId: couponOffer._id,
+            couponCode: couponOffer.couponCode,
+            title: couponOffer.title,
+            scope: couponOffer.scope || 'admin',
+            discountType: couponOffer.discountType,
+            discountValue: couponOffer.discountValue,
+            discountApplied: 0,
+            freeDelivery: Boolean(couponOffer.freeDelivery || couponOffer.type === 'FREE_DELIVERY'),
+            freeReturn: Boolean(couponOffer.freeReturn || couponOffer.freeDelivery || couponOffer.type === 'FREE_DELIVERY'),
+            freeWaiting: Boolean(couponOffer.freeWaiting || couponOffer.freeDelivery || couponOffer.type === 'FREE_DELIVERY'),
+          });
+          order.couponCode = couponOffer.couponCode;
+        }
+      } else if (couponCode === null || couponCode === '') {
+        if (order.appliedOffers) {
+          order.appliedOffers = order.appliedOffers.filter(o => !o.couponCode);
+        }
+        order.couponCode = null;
+      }
+    }
+
+    // === Recalculate billing with offers for kept items ===
+    let recalculatedDiscount = 0;
+    const acceptedItems = order.items.filter(
+      item => item.tryStatus === "accepted" || item.tryStatus === "keep" || item.tryStatus === "not-triable"
+    );
+    const acceptedSubtotal = Math.round(baseAmount);
+
+    if (order.appliedOffers && order.appliedOffers.length > 0) {
+      const merchantTotals = {};
+      const midStr = order.merchantId?._id ? order.merchantId._id.toString() : (order.merchantId?.toString() || order.sourceMerchantId?.toString() || order.warehouseId?.toString() || 'flashmart');
+      merchantTotals[midStr] = acceptedSubtotal;
+
+      const cartContext = {
+        items: acceptedItems,
+        subtotal: acceptedSubtotal,
+        merchantTotals,
+      };
+
+      for (let i = 0; i < order.appliedOffers.length; i++) {
+        const appliedOffer = order.appliedOffers[i];
+        try {
+          const offerDoc = await Offer.findById(appliedOffer.offerId).session(session).lean();
+          if (offerDoc) {
+            let isStillValid = true;
+            if (offerDoc.conditions?.minCartValue > 0 && acceptedSubtotal < offerDoc.conditions.minCartValue) {
+              isStillValid = false;
+            }
+            if (offerDoc.conditions?.minOrderValue > 0 && acceptedSubtotal < offerDoc.conditions.minOrderValue) {
+              isStillValid = false;
+            }
+
+            if (isStillValid) {
+              order.appliedOffers[i].freeDelivery = Boolean(offerDoc.freeDelivery || offerDoc.type === 'FREE_DELIVERY');
+              order.appliedOffers[i].freeReturn = Boolean(offerDoc.freeReturn || offerDoc.freeDelivery || offerDoc.type === 'FREE_DELIVERY');
+              order.appliedOffers[i].freeWaiting = Boolean(offerDoc.freeWaiting || offerDoc.freeDelivery || offerDoc.type === 'FREE_DELIVERY');
+
+              if (acceptedSubtotal > 0) {
+                const applicableAmount = getApplicableAmount(offerDoc, cartContext);
+                if (applicableAmount > 0) {
+                  let discount = calculateDiscount(offerDoc, applicableAmount);
+                  if (offerDoc.discountType === 'flat') {
+                    const initialSubtotal = order.totalAmount || 0;
+                    if (initialSubtotal > 0 && acceptedSubtotal < initialSubtotal) {
+                      const prorationRatio = Math.min(1, applicableAmount / initialSubtotal);
+                      discount = Math.min(discount, Math.round(offerDoc.discountValue * prorationRatio));
+                    }
+                  }
+                  recalculatedDiscount += discount;
+                  order.appliedOffers[i].discountApplied = discount;
+                } else {
+                  order.appliedOffers[i].discountApplied = 0;
+                }
+              } else {
+                order.appliedOffers[i].discountApplied = 0;
+              }
+            } else {
+              order.appliedOffers[i].discountApplied = 0;
+            }
+          }
+        } catch (e) {
+          console.error('Failed to recalculate offer in initiateReturn:', e);
+        }
+      }
+    }
+
+    recalculatedDiscount = Math.min(recalculatedDiscount, acceptedSubtotal);
+
+    const hasFreeDeliveryOffer = Boolean(order.appliedOffers?.some(o => o.freeDelivery));
+    const isInherentlyFreeDelivery = order.originalDeliveryCharge === 0;
+    const hasFreeDelivery = hasFreeDeliveryOffer || isInherentlyFreeDelivery;
+
+    const hasFreeReturnOffer = Boolean(hasFreeDeliveryOffer || order.appliedOffers?.some(o => o.freeReturn));
+    const isInherentlyFreeReturn = order.originalReturnCharge === 0;
+    const hasFreeReturn = hasFreeReturnOffer || isInherentlyFreeReturn;
+
+    const hasFreeWaiting = Boolean(hasFreeDeliveryOffer || order.appliedOffers?.some(o => o.freeWaiting));
+
+    const billing = calculateFinalBilling({
+      orderItems: order.items,
+      deliveryCharge: hasFreeDelivery ? 0 : (order.deliveryCharge || 0),
+      returnCharge: hasFreeReturn ? 0 : (order.returnCharge || 0),
+      deliveryTip: order.finalBilling?.deliveryTip || 0,
+      trialPhaseStart: order.trialPhaseStart,
+      trialPhaseEnd: order.trialPhaseEnd,
+      discountToApply: recalculatedDiscount,
+      freeWaiting: hasFreeWaiting,
+      freeDelivery: hasFreeDelivery,
+      freeReturn: hasFreeReturn,
+    });
+
+    order.finalBilling.baseAmount = billing.baseAmount;
+    order.finalBilling.discount = recalculatedDiscount + billing.returnChargeDeduction;
+    order.finalBilling.deliveryCharge = billing.deliveryCharge;
+    order.finalBilling.totalPayable = billing.totalPayable;
 
     // Determine final order status
     if (returnedItemsCount === order.items.length) {
@@ -1111,12 +1256,16 @@ export const getOrderById = async (req, res) => {
     let order = await Order.findById(cleanOrderId)
       .select('-deliveryTracking -razorpayPaymentId -razorpayOrderId')
       .populate('deliveryRiderId', 'name phone location')
+      .populate('merchantId', 'shopName name address phone')
+      .populate('appliedOffers.offerId')
       .lean();
 
     if (!order) {
       order = await WarehouseOrder.findById(cleanOrderId)
         .select('-deliveryTracking -razorpayPaymentId -razorpayOrderId')
         .populate('deliveryRiderId', 'name phone location')
+        .populate('warehouseId', 'name address phone')
+        .populate('appliedOffers.offerId')
         .lean();
 
       if (order) {
@@ -1128,6 +1277,32 @@ export const getOrderById = async (req, res) => {
     }
 
     if (!order) return res.status(404).json({ message: "Order not found" });
+
+    // Ensure merchantDetails has name populated
+    if (!order.merchantDetails?.name && order.merchantId) {
+      order.merchantDetails = {
+        name: order.merchantId.shopName || order.merchantId.name || 'Store',
+        phone: order.merchantId.phone,
+      };
+    }
+
+    // Attach merchantName to appliedOffers if scope is merchant
+    if (order.appliedOffers && Array.isArray(order.appliedOffers)) {
+      const storeName = order.merchantDetails?.name || 'Store';
+      order.appliedOffers = order.appliedOffers.map(ao => {
+        const fullOffer = ao.offerId && typeof ao.offerId === 'object' ? ao.offerId : {};
+        return {
+          ...ao,
+          merchantName: ao.merchantName || (ao.scope === 'merchant' ? storeName : 'FlashFits Platform'),
+          description: ao.description || fullOffer.description || '',
+          conditions: ao.conditions || fullOffer.conditions || {},
+          discountType: ao.discountType || fullOffer.discountType,
+          discountValue: ao.discountValue || fullOffer.discountValue,
+          maxDiscount: ao.maxDiscount || fullOffer.maxDiscount,
+          title: ao.title || fullOffer.title || 'Special Promotion',
+        };
+      });
+    }
 
     // Include deliveryRiderDetails if deliveryRiderId is populated
     if (order.deliveryRiderId && typeof order.deliveryRiderId === 'object') {
@@ -1245,10 +1420,9 @@ export const createFinalPaymentRazorpayOrder = async (req, res) => {
 
     // === NEW: Recalculate Offers based strictly on kept items ===
     let recalculatedDiscount = 0;
+    const acceptedSubtotal = acceptedItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
     
     if (order.appliedOffers && order.appliedOffers.length > 0) {
-      const acceptedSubtotal = acceptedItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-      
       const merchantTotals = {};
       const midStr = order.merchantId?._id ? order.merchantId._id.toString() : (order.merchantId?.toString() || order.sourceMerchantId?.toString() || order.warehouseId?.toString() || 'flashmart');
       merchantTotals[midStr] = acceptedSubtotal;
@@ -1266,7 +1440,7 @@ export const createFinalPaymentRazorpayOrder = async (req, res) => {
           if (offerDoc) {
             let isStillValid = true;
             
-            // Check thresholds
+            // Check thresholds against accepted items subtotal
             if (offerDoc.conditions?.minCartValue > 0 && acceptedSubtotal < offerDoc.conditions.minCartValue) {
               isStillValid = false;
             }
@@ -1275,17 +1449,38 @@ export const createFinalPaymentRazorpayOrder = async (req, res) => {
             }
 
             if (isStillValid) {
-              const applicableAmount = getApplicableAmount(offerDoc, cartContext);
-              if (applicableAmount > 0) {
-                const discount = calculateDiscount(offerDoc, applicableAmount);
-                recalculatedDiscount += discount;
-                order.appliedOffers[i].discountApplied = discount; // Update DB record
+              // Launch Mode: Free delivery, free return, and free waiting remain active when eligible,
+              // even if 0 items are accepted/kept.
+              order.appliedOffers[i].freeDelivery = Boolean(offerDoc.freeDelivery || offerDoc.type === 'FREE_DELIVERY');
+              order.appliedOffers[i].freeReturn = Boolean(offerDoc.freeReturn || offerDoc.freeDelivery || offerDoc.type === 'FREE_DELIVERY');
+              order.appliedOffers[i].freeWaiting = Boolean(offerDoc.freeWaiting || offerDoc.freeDelivery || offerDoc.type === 'FREE_DELIVERY');
+
+              if (acceptedSubtotal > 0) {
+                const applicableAmount = getApplicableAmount(offerDoc, cartContext);
+                if (applicableAmount > 0) {
+                  let discount = calculateDiscount(offerDoc, applicableAmount);
+                  // Anti-Exploit: Prorate flat discounts if customer returns part of the order
+                  if (offerDoc.discountType === 'flat') {
+                    const initialSubtotal = order.totalAmount || 0;
+                    if (initialSubtotal > 0 && acceptedSubtotal < initialSubtotal) {
+                      const prorationRatio = Math.min(1, applicableAmount / initialSubtotal);
+                      discount = Math.min(discount, Math.round(offerDoc.discountValue * prorationRatio));
+                    }
+                  }
+                  recalculatedDiscount += discount;
+                  order.appliedOffers[i].discountApplied = discount; // Update DB record
+                } else {
+                   order.appliedOffers[i].discountApplied = 0;
+                }
               } else {
-                 order.appliedOffers[i].discountApplied = 0;
+                order.appliedOffers[i].discountApplied = 0;
               }
             } else {
               // Threshold not met anymore -> lose offer completely
               order.appliedOffers[i].discountApplied = 0;
+              order.appliedOffers[i].freeDelivery = false;
+              order.appliedOffers[i].freeReturn = false;
+              order.appliedOffers[i].freeWaiting = false;
             }
           }
         } catch (e) {
@@ -1294,25 +1489,26 @@ export const createFinalPaymentRazorpayOrder = async (req, res) => {
       }
     }
 
+    // Ensure total recalculated discount never exceeds accepted items subtotal
+    recalculatedDiscount = Math.min(recalculatedDiscount, acceptedSubtotal);
+
     // === STEP 2: Use Helper Function for Billing Calculation ===
     const effectiveTrialEnd = order.trialPhaseEnd || new Date();
-    const hasFreeDelivery = Boolean(
-      order.appliedOffers?.some(o => o.freeDelivery) ||
-      order.deliveryCharge === 0 ||
-      order.originalDeliveryCharge === 0
-    );
-    const hasFreeReturn = Boolean(
-      hasFreeDelivery ||
-      order.appliedOffers?.some(o => o.freeReturn || o.freeDelivery) ||
-      order.returnCharge === 0 ||
-      order.originalReturnCharge === 0
-    );
-    const hasFreeWaiting = Boolean(
-      hasFreeDelivery ||
-      order.appliedOffers?.some(o => o.freeWaiting || o.freeDelivery)
-    );
-    const effectiveDeliveryCharge = hasFreeDelivery ? 0 : (order.deliveryCharge || 0);
-    const effectiveReturnCharge = hasFreeReturn ? 0 : (order.returnCharge || 0);
+    
+    // Free delivery/return applies if an active offer grants it,
+    // or if the order originally had 0 base delivery fee
+    const hasFreeDeliveryOffer = Boolean(order.appliedOffers?.some(o => o.freeDelivery));
+    const isInherentlyFreeDelivery = order.originalDeliveryCharge === 0;
+    const hasFreeDelivery = hasFreeDeliveryOffer || isInherentlyFreeDelivery;
+
+    const hasFreeReturnOffer = Boolean(hasFreeDeliveryOffer || order.appliedOffers?.some(o => o.freeReturn));
+    const isInherentlyFreeReturn = order.originalReturnCharge === 0;
+    const hasFreeReturn = hasFreeReturnOffer || isInherentlyFreeReturn;
+
+    const hasFreeWaiting = Boolean(hasFreeDeliveryOffer || order.appliedOffers?.some(o => o.freeWaiting));
+
+    const effectiveDeliveryCharge = hasFreeDelivery ? 0 : (order.originalDeliveryCharge ?? order.deliveryCharge ?? 60);
+    const effectiveReturnCharge = hasFreeReturn ? 0 : (order.originalReturnCharge ?? order.returnCharge ?? 40);
 
     const billing = calculateFinalBilling({
       orderItems: order.items,
@@ -1697,8 +1893,9 @@ export const verifyFinalPaymentCod = async (req, res) => {
 
     // === Recalculate Offers ===
     let recalculatedDiscount = 0;
+    const acceptedSubtotal = acceptedItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+
     if (order.appliedOffers && order.appliedOffers.length > 0) {
-      const acceptedSubtotal = acceptedItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
       const merchantTotals = {};
       const midStr = order.merchantId?._id ? order.merchantId._id.toString() : (order.merchantId?.toString() || order.sourceMerchantId?.toString() || order.warehouseId?.toString() || 'flashmart');
       merchantTotals[midStr] = acceptedSubtotal;
@@ -1715,6 +1912,7 @@ export const verifyFinalPaymentCod = async (req, res) => {
           const offerDoc = await Offer.findById(appliedOffer.offerId).lean();
           if (offerDoc) {
             let isStillValid = true;
+            // Check thresholds against accepted items subtotal
             if (offerDoc.conditions?.minCartValue > 0 && acceptedSubtotal < offerDoc.conditions.minCartValue) {
               isStillValid = false;
             }
@@ -1723,16 +1921,38 @@ export const verifyFinalPaymentCod = async (req, res) => {
             }
 
             if (isStillValid) {
-              const applicableAmount = getApplicableAmount(offerDoc, cartContext);
-              if (applicableAmount > 0) {
-                const discount = calculateDiscount(offerDoc, applicableAmount);
-                recalculatedDiscount += discount;
-                order.appliedOffers[i].discountApplied = discount;
+              // Launch Mode: Free delivery, free return, and free waiting remain active when eligible,
+              // even if 0 items are accepted/kept.
+              order.appliedOffers[i].freeDelivery = Boolean(offerDoc.freeDelivery || offerDoc.type === 'FREE_DELIVERY');
+              order.appliedOffers[i].freeReturn = Boolean(offerDoc.freeReturn || offerDoc.freeDelivery || offerDoc.type === 'FREE_DELIVERY');
+              order.appliedOffers[i].freeWaiting = Boolean(offerDoc.freeWaiting || offerDoc.freeDelivery || offerDoc.type === 'FREE_DELIVERY');
+
+              if (acceptedSubtotal > 0) {
+                const applicableAmount = getApplicableAmount(offerDoc, cartContext);
+                if (applicableAmount > 0) {
+                  let discount = calculateDiscount(offerDoc, applicableAmount);
+                  // Anti-Exploit: Prorate flat discounts if customer returns part of the order
+                  if (offerDoc.discountType === 'flat') {
+                    const initialSubtotal = order.totalAmount || 0;
+                    if (initialSubtotal > 0 && acceptedSubtotal < initialSubtotal) {
+                      const prorationRatio = Math.min(1, applicableAmount / initialSubtotal);
+                      discount = Math.min(discount, Math.round(offerDoc.discountValue * prorationRatio));
+                    }
+                  }
+                  recalculatedDiscount += discount;
+                  order.appliedOffers[i].discountApplied = discount;
+                } else {
+                  order.appliedOffers[i].discountApplied = 0;
+                }
               } else {
                 order.appliedOffers[i].discountApplied = 0;
               }
             } else {
+              // Threshold not met anymore -> lose offer completely
               order.appliedOffers[i].discountApplied = 0;
+              order.appliedOffers[i].freeDelivery = false;
+              order.appliedOffers[i].freeReturn = false;
+              order.appliedOffers[i].freeWaiting = false;
             }
           }
         } catch (e) {
@@ -1741,21 +1961,23 @@ export const verifyFinalPaymentCod = async (req, res) => {
       }
     }
 
-    const hasFreeDelivery = Boolean(
-      order.appliedOffers?.some(o => o.freeDelivery) ||
-      order.deliveryCharge === 0 ||
-      order.originalDeliveryCharge === 0
-    );
-    const hasFreeReturn = Boolean(
-      hasFreeDelivery ||
-      order.appliedOffers?.some(o => o.freeReturn || o.freeDelivery) ||
-      order.returnCharge === 0 ||
-      order.originalReturnCharge === 0
-    );
-    const hasFreeWaiting = Boolean(
-      hasFreeDelivery ||
-      order.appliedOffers?.some(o => o.freeWaiting || o.freeDelivery)
-    );
+    // Ensure total recalculated discount never exceeds accepted items subtotal
+    recalculatedDiscount = Math.min(recalculatedDiscount, acceptedSubtotal);
+
+    // Free delivery/return applies if an active offer grants it,
+    // or if the order originally had 0 base delivery fee
+    const hasFreeDeliveryOffer = Boolean(order.appliedOffers?.some(o => o.freeDelivery));
+    const isInherentlyFreeDelivery = order.originalDeliveryCharge === 0;
+    const hasFreeDelivery = hasFreeDeliveryOffer || isInherentlyFreeDelivery;
+
+    const hasFreeReturnOffer = Boolean(hasFreeDeliveryOffer || order.appliedOffers?.some(o => o.freeReturn));
+    const isInherentlyFreeReturn = order.originalReturnCharge === 0;
+    const hasFreeReturn = hasFreeReturnOffer || isInherentlyFreeReturn;
+
+    const hasFreeWaiting = Boolean(hasFreeDeliveryOffer || order.appliedOffers?.some(o => o.freeWaiting));
+
+    const effectiveDeliveryCharge = hasFreeDelivery ? 0 : (order.originalDeliveryCharge ?? order.deliveryCharge ?? 60);
+    const effectiveReturnCharge = hasFreeReturn ? 0 : (order.originalReturnCharge ?? order.returnCharge ?? 40);
 
     const billing = calculateFinalBilling({
       orderItems: order.items,

@@ -10,7 +10,7 @@ import {
   forgotPasswordSendOtp,
   resetPasswordWithOtp,
 } from '../controllers/auth.controllers.js';
-import { adminLogin, registerAdmin, refreshAdminToken } from '../controllers/adminAuth.controllers.js';
+import { adminLogin, registerAdmin, refreshAdminToken, adminLogout } from '../controllers/adminAuth.controllers.js';
 import { googleLogin } from '../controllers/googleAuth.controllers.js';
 import { appleLogin } from '../controllers/appleAuth.controllers.js';
 import { verifyAdmin } from '../middleware/adminAuth.middleware.js';
@@ -230,5 +230,6 @@ router.post('/admin/register', verifyAdmin, registerAdmin);
  *     tags: [Auth]
  */
 router.post('/admin/refresh', refreshAdminToken);
+router.post('/admin/logout', adminLogout);
 
 export default router;

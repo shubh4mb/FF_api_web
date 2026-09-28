@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+import axiosInstance from '../../utils/axios.config';
 import { toast } from 'react-hot-toast';
 import { Plus, Trash2, Edit2, MapPin } from 'lucide-react';
 
@@ -16,9 +16,6 @@ const Hubs = () => {
   const [name, setName] = useState('');
   const [pincodesInput, setPincodesInput] = useState('');
 
-  const adminToken = localStorage.getItem('adminToken');
-  const API_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
-
   useEffect(() => {
     fetchHubs();
   }, []);
@@ -26,10 +23,8 @@ const Hubs = () => {
   const fetchHubs = async () => {
     try {
       setLoading(true);
-      const { data } = await axios.get(`${API_URL}/admin/hub`, {
-        headers: { Authorization: `Bearer ${adminToken}` }
-      });
-      if (data.success) {
+      const data = await axiosInstance.get('/admin/hub');
+      if (data?.success) {
         setHubs(data.hubs);
       }
     } catch (error) {
@@ -87,19 +82,15 @@ const Hubs = () => {
       };
 
       if (isEditing) {
-        const { data } = await axios.patch(`${API_URL}/admin/hub/${currentHubId}`, payload, {
-          headers: { Authorization: `Bearer ${adminToken}` }
-        });
-        if (data.success) {
+        const data = await axiosInstance.patch(`/admin/hub/${currentHubId}`, payload);
+        if (data?.success) {
           toast.success('Hub updated successfully');
           setIsModalOpen(false);
           fetchHubs();
         }
       } else {
-        const { data } = await axios.post(`${API_URL}/admin/hub/add`, payload, {
-          headers: { Authorization: `Bearer ${adminToken}` }
-        });
-        if (data.success) {
+        const data = await axiosInstance.post('/admin/hub/add', payload);
+        if (data?.success) {
           toast.success('Hub created successfully');
           setIsModalOpen(false);
           fetchHubs();
@@ -113,10 +104,8 @@ const Hubs = () => {
   const handleDelete = async (id) => {
     if (!window.confirm('Are you sure you want to delete this Hub?')) return;
     try {
-      const { data } = await axios.delete(`${API_URL}/admin/hub/${id}`, {
-        headers: { Authorization: `Bearer ${adminToken}` }
-      });
-      if (data.success) {
+      const data = await axiosInstance.delete(`/admin/hub/${id}`);
+      if (data?.success) {
         toast.success('Hub deleted successfully');
         fetchHubs();
       }

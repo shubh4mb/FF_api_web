@@ -19,6 +19,8 @@ const supportTicketSchema = new mongoose.Schema(
         "try_buy_issue",
         "refund_issue",
         "wrong_product",
+        "damaged_product",
+        "misplaced_product",
         "size_exchange",
         "merchant_issue",
         "report_bug",
@@ -31,10 +33,26 @@ const supportTicketSchema = new mongoose.Schema(
       ref: "Order",
       default: null,
     },
+    itemId: {
+      type: mongoose.Schema.Types.ObjectId,
+      default: null,
+    },
+    itemDetails: {
+      name: { type: String },
+      size: { type: String },
+      image: { type: String },
+      price: { type: Number },
+    },
     message: {
       type: String,
       default: "",
     },
+    images: [
+      {
+        url: { type: String, required: true },
+        public_id: { type: String },
+      },
+    ],
     status: {
       type: String,
       enum: ["open", "in_progress", "resolved", "closed"],

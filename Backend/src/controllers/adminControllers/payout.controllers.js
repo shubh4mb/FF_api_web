@@ -5,8 +5,11 @@
  */
 
 import WeeklyPayout from "../../models/weeklyPayout.model.js";
+import Merchant from "../../models/merchant.model.js";
+import DeliveryRider from "../../models/deliveryRider.model.js";
 import { processWeeklyPayouts, getCurrentWeekBounds } from "../../helperFns/weeklyPayoutHelper.js";
 import { creditWallet, debitWallet } from "../../helperFns/walletHelper.js";
+import { recordTransaction } from "../../helperFns/transactionHelper.js";
 
 /**
  * GET /api/admin/payouts
@@ -140,9 +143,71 @@ export const markPayoutPaid = async (req, res) => {
         payout.paidAt = new Date();
         await payout.save();
 
+        // ── Auto-record in centralized Transaction ledger ──
+        try {
+            const { referenceNumber, paymentMethod, notes } = req.body;
+            let recipientDetails = {};
+
+            if (payout.ownerType === "merchant") {
+                const merchant = await Merchant.findById(payout.ownerId);
+                if (merchant) {
+                    recipientDetails = {
+                        name: merchant.ownerName || merchant.shopName,
+                        shopName: merchant.shopName,
+                        phone: merchant.phoneNumber,
+                        email: merchant.email,
+                        bankName: merchant.bankDetails?.bankName,
+                        accountNumber: merchant.bankDetails?.accountNumber,
+                        ifscCode: merchant.bankDetails?.ifscCode,
+                        upiId: merchant.bankDetails?.upiId,
+                    };
+                    merchant.earnings = merchant.earnings || { pendingBalance: 0, paidBalance: 0 };
+                    merchant.earnings.paidBalance = (merchant.earnings.paidBalance || 0) + payout.finalAmount;
+                    merchant.earnings.pendingBalance = Math.max(0, (merchant.earnings.pendingBalance || 0) - payout.finalAmount);
+                    merchant.earnings.lastPayoutDate = new Date();
+                    await merchant.save();
+                }
+            } else if (payout.ownerType === "rider") {
+                const rider = await DeliveryRider.findById(payout.ownerId);
+                if (rider) {
+                    recipientDetails = {
+                        name: rider.fullName,
+                        phone: rider.phone,
+                        email: rider.email,
+                        bankName: rider.bankDetails?.bankName,
+                        accountNumber: rider.bankDetails?.accountNumber,
+                        ifscCode: rider.bankDetails?.ifscCode,
+                        upiId: rider.upiId,
+                    };
+                }
+            }
+
+            await recordTransaction({
+                amount: payout.finalAmount,
+                type: "debit",
+                category: payout.ownerType === "merchant" ? "merchant_payout" : "rider_payout",
+                source: "manual_admin",
+                status: "completed",
+                paymentMethod: paymentMethod || "bank_transfer",
+                referenceNumber: referenceNumber || null,
+                recipientType: payout.ownerType,
+                recipientId: payout.ownerId,
+                recipientDetails,
+                weeklyPayoutId: payout._id,
+                notes: notes || `Weekly Payout marked paid by Admin for ${payout.ownerType} (${payout.weekStart ? new Date(payout.weekStart).toLocaleDateString() : ''})`,
+                performedBy: {
+                    adminId: req.admin?._id,
+                    name: req.admin?.name || "Admin",
+                    email: req.admin?.email || "",
+                },
+            });
+        } catch (txnError) {
+            console.warn("Could not auto-record Transaction for payout:", txnError.message);
+        }
+
         return res.status(200).json({
             success: true,
-            message: "Payout successfully marked as paid.",
+            message: "Payout successfully marked as paid and logged in ledger.",
             payout,
         });
     } catch (error) {

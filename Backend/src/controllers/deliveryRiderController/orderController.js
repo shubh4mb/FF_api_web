@@ -385,21 +385,16 @@ export const endTrialPhase = async (req, res) => {
     order.trialPhaseDuration = durationMinutes;
 
     // Overtime penalty: ₹2/min over 10 mins (waived if freeWaiting or freeDelivery offer applied)
-    const hasFreeDelivery = Boolean(
-      order.appliedOffers?.some(o => o.freeDelivery) ||
-      order.deliveryCharge === 0 ||
-      order.originalDeliveryCharge === 0
-    );
+    const hasFreeDeliveryOffer = Boolean(order.appliedOffers?.some(o => o.freeDelivery));
+    const isInherentlyFreeDelivery = order.originalDeliveryCharge === 0 && (!order.appliedOffers || !order.appliedOffers.some(o => o.freeDelivery !== undefined));
+    const hasFreeDelivery = hasFreeDeliveryOffer || isInherentlyFreeDelivery;
     const hasFreeReturn = Boolean(
       hasFreeDelivery ||
       order.appliedOffers?.some(o => o.freeReturn || o.freeDelivery) ||
       order.returnCharge === 0 ||
       order.originalReturnCharge === 0
     );
-    const hasFreeWaiting = Boolean(
-      hasFreeDelivery ||
-      order.appliedOffers?.some(o => o.freeWaiting || o.freeDelivery)
-    );
+    const hasFreeWaiting = Boolean(hasFreeDeliveryOffer || order.appliedOffers?.some(o => o.freeWaiting));
 
     let overtimePenalty = 0;
     if (!hasFreeWaiting && durationMinutes > 10) {

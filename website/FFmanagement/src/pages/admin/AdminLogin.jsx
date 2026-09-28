@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../../utils/axios.config';
 import { Building2, Mail, Lock, Loader2 } from 'lucide-react';
@@ -9,6 +9,13 @@ const AdminLogin = () => {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
     const navigate = useNavigate();
+
+    useEffect(() => {
+        const token = localStorage.getItem('adminToken');
+        if (token) {
+            navigate('/admin', { replace: true });
+        }
+    }, [navigate]);
 
     const handleLogin = async (e) => {
         e.preventDefault();
@@ -21,15 +28,26 @@ const AdminLogin = () => {
                 password,
             });
 
-            const { token, admin } = response.data;
+            const payload = response?.data || response;
+            const token = payload?.token;
+            const admin = payload?.admin;
+            const adminRefreshToken = payload?.adminRefreshToken || payload?.refreshToken;
 
-            // Store token and redirect
-            localStorage.setItem('adminToken', token);
-            localStorage.setItem('adminUser', JSON.stringify(admin));
+            // Store tokens and admin details
+            if (token) {
+                localStorage.setItem('adminToken', token);
+                api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+            }
+            if (adminRefreshToken) {
+                localStorage.setItem('adminRefreshToken', adminRefreshToken);
+            }
+            if (admin) {
+                localStorage.setItem('adminUser', JSON.stringify(admin));
+            }
 
             navigate('/admin');
         } catch (err) {
-            setError(err.response?.data?.message || 'Login failed. Please check your credentials.');
+            setError(err.response?.data?.message || err.message || 'Login failed. Please check your credentials.');
         } finally {
             setLoading(false);
         }

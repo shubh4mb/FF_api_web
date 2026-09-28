@@ -4,6 +4,10 @@ import Wishlist from '../../models/wishlist.model.js';
 import { ApiResponse } from '../../utils/ApiResponse.js';
 import { ApiError } from '../../utils/ApiError.js';
 import ProductFlat from "../../models/productFlat.model.js";
+import Brand from '../../models/brand.model.js';
+import Merchant from '../../models/merchant.model.js';
+import Category from '../../models/category.model.js';
+import Warehouse from '../../models/warehouse.model.js';
 import { generateColorVariantId } from "../../utils/variantAdapter.js";
 import mongoose from 'mongoose';
 
@@ -96,10 +100,13 @@ export const getMyWishlist = asyncHandler(async (req, res) => {
   for (const item of wishlist) {
     if (!item.productId) continue;
     const styleGroupId = item.productId.toString();
+    const nearbySet = new Set(req.nearbyMerchantIds?.map(id => id.toString()) || []);
+    const nearbyWhSet = new Set(req.nearbyWarehouseIds?.map(id => id.toString()) || []);
+
     const siblings = await ProductFlat.find({ styleGroupId, isDeleted: { $ne: true } })
       .populate('brandId', 'name logo')
       .populate('categoryId', 'name')
-      .populate('merchantId', 'isOnline isZoneLive')
+      .populate('merchantId', 'shopName isOnline isZoneLive fulfillmentType')
       .lean();
 
     if (siblings.length > 0) {
@@ -108,11 +115,19 @@ export const getMyWishlist = asyncHandler(async (req, res) => {
                (v.color?.name && generateColorVariantId(styleGroupId, v.color.name) === item.variantId.toString())
       ) || siblings[0];
 
-      const nearbySet = new Set(req.nearbyMerchantIds?.map(id => id.toString()) || []);
-      const isNearby = matched.merchantId ? nearbySet.has(matched.merchantId._id?.toString() || matched.merchantId.toString()) : false;
-      const isOnline = matched.merchantId?.isOnline !== undefined ? matched.merchantId.isOnline : true;
-      const isZoneLive = matched.merchantId?.isZoneLive !== undefined ? matched.merchantId.isZoneLive : true;
-      const isInstantBuyable = isNearby && isOnline && isZoneLive;
+      const merchantObj = (typeof matched.merchantId === 'object' && matched.merchantId !== null) ? matched.merchantId : null;
+      const merchantIdVal = merchantObj?._id || matched.merchantId;
+
+      const isWh = matched.source === 'warehouse' || !!matched.warehouseId || merchantObj?.fulfillmentType === 'warehouse';
+      const isWhNearby = matched.warehouseId ? nearbyWhSet.has(matched.warehouseId.toString()) : (isWh && nearbyWhSet.size > 0);
+
+      const isMerchantNearby = merchantIdVal ? nearbySet.has(merchantIdVal.toString()) : false;
+      const isNearby = isWh ? isWhNearby : isMerchantNearby;
+      const isOnline = isWh ? true : (merchantObj?.isOnline !== undefined ? merchantObj.isOnline : true);
+      const isZoneLive = isWh ? true : (merchantObj?.isZoneLive !== undefined ? merchantObj.isZoneLive : true);
+      const isInstantBuyable = isWh ? isWhNearby : (isNearby && isOnline && isZoneLive);
+
+      const totalStock = siblings.reduce((sum, s) => sum + Math.max(0, (s.stock || 0) - (s.reservedStock || 0)), 0);
 
       result.push({
         _id: item._id,
@@ -122,6 +137,12 @@ export const getMyWishlist = asyncHandler(async (req, res) => {
           variantId: item.variantId, // Explicitly pass variantId for mobile App heart icon checks
           isNearby,
           isInstantBuyable,
+          isWarehouseListing: isWh,
+          source: isWh ? 'warehouse' : (matched.source || 'shop'),
+          isOnline,
+          stock: totalStock,
+          totalStock,
+          inStock: totalStock > 0,
         },
         addedAt: item.createdAt,
       });

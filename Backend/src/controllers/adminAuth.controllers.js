@@ -46,10 +46,11 @@ export const adminLogin = asyncHandler(async (req, res) => {
 
     const loggedInAdmin = await Admin.findById(adminUser._id).select('-password');
 
+    const isProduction = process.env.NODE_ENV === 'production';
     res.cookie('adminRefreshToken', refreshToken, {
         httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'strict',
+        secure: isProduction,
+        sameSite: isProduction ? 'none' : 'lax',
         maxAge: 30 * 24 * 60 * 60 * 1000
     });
 
@@ -87,10 +88,11 @@ export const refreshAdminToken = asyncHandler(async (req, res) => {
             { expiresIn: '30d' }
         );
 
+        const isProduction = process.env.NODE_ENV === 'production';
         res.cookie('adminRefreshToken', newRefreshToken, {
             httpOnly: true,
-            secure: process.env.NODE_ENV === 'production',
-            sameSite: 'strict',
+            secure: isProduction,
+            sameSite: isProduction ? 'none' : 'lax',
             maxAge: 30 * 24 * 60 * 60 * 1000
         });
 
@@ -100,6 +102,21 @@ export const refreshAdminToken = asyncHandler(async (req, res) => {
     } catch (error) {
         throw new ApiError(401, "Invalid or expired admin refresh token");
     }
+});
+
+// @desc    Admin logout
+// @route   POST /api/auth/admin/logout
+// @access  Public
+export const adminLogout = asyncHandler(async (req, res) => {
+    const isProduction = process.env.NODE_ENV === 'production';
+    res.clearCookie('adminRefreshToken', {
+        httpOnly: true,
+        secure: isProduction,
+        sameSite: isProduction ? 'none' : 'lax'
+    });
+    return res.status(200).json(
+        new ApiResponse(200, null, "Admin logged out successfully")
+    );
 });
 
 // @desc    Admin registration

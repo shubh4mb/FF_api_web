@@ -89,6 +89,31 @@ const userSchema = new mongoose.Schema({
     type: Number,
     default: 0,
   },
+
+  // Account suspension & device/IP enforcement
+  isBlocked: {
+    type: Boolean,
+    default: false,
+  },
+  blockedReason: {
+    type: String,
+    default: null,
+  },
+  blockedAt: {
+    type: Date,
+    default: null,
+  },
+  blockedBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Admin',
+    default: null,
+  },
+  blockedIps: [{ type: String }],
+  deviceIds: [{ type: String }],
+  incidentCount: {
+    type: Number,
+    default: 0,
+  },
 }, { timestamps: true });
 
 // Pre-save hook to generate a unique referral code for new users

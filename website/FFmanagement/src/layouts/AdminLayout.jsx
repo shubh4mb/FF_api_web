@@ -2,16 +2,22 @@ import React, { useState } from 'react';
 import { Outlet, useNavigate } from 'react-router-dom';
 import Sidebar from '../components/admin/Sidebar';
 import { LogOut, Menu } from 'lucide-react';
+import api, { clearAdminAuthSession } from '../utils/axios.config';
 
 const AdminLayout = () => {
   const navigate = useNavigate();
   const adminUser = JSON.parse(localStorage.getItem('adminUser') || '{}');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
-  const handleLogout = () => {
-    localStorage.removeItem('adminToken');
-    localStorage.removeItem('adminUser');
-    navigate('/admin/login');
+  const handleLogout = async () => {
+    try {
+      await api.post('/auth/admin/logout');
+    } catch (e) {
+      // Ignore errors on logout
+    } finally {
+      clearAdminAuthSession();
+      navigate('/admin/login');
+    }
   };
 
   return (

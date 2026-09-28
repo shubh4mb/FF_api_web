@@ -4,7 +4,7 @@ import { addBaseProduct, addVariant, getBaseProducts, getVariants, updateVariant
 import { deleteVariant, addBrand, getBrands, getBaseProductById, getProductsByMerchantId, uploadProductImage, deleteImage, deleteProduct, updatePrice, editProduct, editVariant, updateVariantSizeStock, updateMultipleVariantSizes, getAllBrands, bulkUploadProducts, updateMatchingProducts } from '../controllers/merchantController/product.controllers.js';
 
 import { addMerchant } from '../controllers/merchantController/merchant.controller.js';
-import { loginMerchant, registerMerchant, updateMerchantShopDetails, updateMerchantBankDetails, updateMerchantKYC, updateMerchantOperatingHours, activateMerchant, registerPhone, sendEmailOtp, verifyEmailOtp, getMerchantByEmail, toggleMerchantOnlineStatus, refreshMerchantToken, logoutMerchant, addPushToken, forgotPasswordMerchant, resetPasswordMerchant } from '../controllers/merchantController/authControllers.js';
+import { loginMerchant, registerMerchant, updateMerchantShopDetails, updateMerchantBranding, updateMerchantBankDetails, updateMerchantKYC, updateMerchantOperatingHours, activateMerchant, registerPhone, sendEmailOtp, verifyEmailOtp, getMerchantByEmail, toggleMerchantOnlineStatus, refreshMerchantToken, logoutMerchant, addPushToken, forgotPasswordMerchant, resetPasswordMerchant } from '../controllers/merchantController/authControllers.js';
 import { getAllOrder, saveProductDetails, requestOrderCancellation, getMyWarehouseSales } from '../controllers/merchantController/order.controllers.js';
 import { authMiddlewareMerchant, authMiddlewareMerchantOptional } from '../middleware/jwtAuth.js';
 import { getWalletDetails } from '../helperFns/walletHelper.js';
@@ -14,6 +14,7 @@ import { getMerchantAnalytics } from '../controllers/merchantController/analytic
 import { getMerchantCourierOrders, updateCourierOrderStatus, updateCourierOrderReturnStatus } from '../controllers/userControllers/courierOrder.controllers.js';
 import { getAllCollections } from '../controllers/adminControllers/collection.controllers.js';
 import WeeklyPayout from '../models/weeklyPayout.model.js';
+import Transaction from '../models/transaction.model.js';
 import { getCurrentWeekBounds } from '../helperFns/weeklyPayoutHelper.js';
 import Notification from '../models/notification.model.js';
 
@@ -104,6 +105,7 @@ router.get('/getMerchant', authMiddlewareMerchant, getMerchantById)
 // router.get('/:ema:merchantIdil',getMerchantByEmail)
 
 router.put("/:merchantId/shop-details", authMiddlewareMerchant, upload.fields([{ name: 'logo', maxCount: 1 }, { name: 'backgroundImage', maxCount: 1 }]), handleMulterError, updateMerchantShopDetails);
+router.put("/:merchantId/branding", authMiddlewareMerchant, upload.fields([{ name: 'logo', maxCount: 1 }, { name: 'backgroundImage', maxCount: 1 }]), handleMulterError, updateMerchantBranding);
 router.put("/:merchantId/bank-details", authMiddlewareMerchant, updateMerchantBankDetails);
 router.put("/:merchantId/kyc", authMiddlewareMerchant, upload.fields([
     { name: 'panImage', maxCount: 1 },
@@ -323,27 +325,75 @@ router.get("/earnings/current-week", authMiddlewareMerchant, async (req, res) =>
 router.get("/earnings/history", authMiddlewareMerchant, async (req, res) => {
     try {
         const { page = 1, limit = 10 } = req.query;
+        const pageNum = parseInt(page) || 1;
+        const limitNum = parseInt(limit) || 10;
 
-        const payouts = await WeeklyPayout.find({
+        // 1. Fetch WeeklyPayout records
+        const weeklyPayouts = await WeeklyPayout.find({
             ownerType: "merchant",
             ownerId: req.merchantId,
-            status: { $in: ["paid", "failed"] },
+            status: { $in: ["paid", "failed", "finalized"] },
         })
             .sort({ weekStart: -1 })
-            .skip((page - 1) * limit)
-            .limit(parseInt(limit))
             .lean();
 
-        const total = await WeeklyPayout.countDocuments({
+        // 2. Fetch manual payouts, ad-hoc disbursements, and compensations from Transaction ledger
+        const manualTxns = await Transaction.find({
+            recipientType: "merchant",
+            recipientId: req.merchantId,
+            category: { $in: ["merchant_payout", "damage_compensation", "adjustment"] },
+        })
+            .sort({ createdAt: -1 })
+            .lean();
+
+        // 3. Normalize and merge
+        const linkedWeeklyPayoutIds = new Set(
+            manualTxns
+                .filter(t => t.weeklyPayoutId)
+                .map(t => t.weeklyPayoutId.toString())
+        );
+
+        const normalizedTxns = manualTxns.map(t => ({
+            _id: t._id,
+            transactionId: t.transactionId,
             ownerType: "merchant",
             ownerId: req.merchantId,
-            status: { $in: ["paid", "failed"] },
-        });
+            totalEarnings: t.amount,
+            finalAmount: t.amount,
+            netPayout: t.amount,
+            amount: t.amount,
+            status: t.status === "completed" ? "paid" : t.status,
+            type: t.category,
+            category: t.category,
+            referenceNumber: t.referenceNumber,
+            paymentMethod: t.paymentMethod,
+            notes: t.notes,
+            paidAt: t.createdAt,
+            createdAt: t.createdAt,
+            weekStart: t.createdAt,
+            weekEnd: t.createdAt,
+            isManual: t.source === "manual_admin",
+        }));
+
+        const remainingWeeklyPayouts = weeklyPayouts
+            .filter(wp => !linkedWeeklyPayoutIds.has(wp._id.toString()))
+            .map(wp => ({
+                ...wp,
+                amount: wp.finalAmount,
+            }));
+
+        const combinedPayouts = [...normalizedTxns, ...remainingWeeklyPayouts];
+        combinedPayouts.sort((a, b) => new Date(b.paidAt || b.createdAt || b.weekStart) - new Date(a.paidAt || a.createdAt || a.weekStart));
+
+        const total = combinedPayouts.length;
+        const paginatedPayouts = combinedPayouts.slice((pageNum - 1) * limitNum, pageNum * limitNum);
 
         return res.status(200).json({
             success: true,
-            payouts,
-            pagination: { page: parseInt(page), limit: parseInt(limit), total },
+            payouts: paginatedPayouts,
+            history: paginatedPayouts,
+            transactions: manualTxns,
+            pagination: { page: pageNum, limit: limitNum, total },
         });
     } catch (err) {
         console.error("Get merchant earnings history error:", err);

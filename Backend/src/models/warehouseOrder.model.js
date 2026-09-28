@@ -135,6 +135,18 @@ const WarehouseOrderSchema = new mongoose.Schema(
       enum: ['pending', 'delivery_fee_paid', 'paid', 'failed', 'refunded'],
       default: 'pending',
     },
+    refundAmount: {
+      type: Number,
+      default: 0,
+    },
+    refundDetails: {
+      amount: { type: Number, default: 0 },
+      method: { type: String, default: null },
+      referenceNumber: { type: String, default: null },
+      refundedAt: { type: Date, default: null },
+      reason: { type: String, default: null },
+      transactionId: { type: mongoose.Schema.Types.ObjectId, ref: 'Transaction', default: null }
+    },
     paymentMethod: {
       type: String,
       enum: ['online', 'cod'],

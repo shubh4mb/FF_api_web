@@ -149,8 +149,52 @@ export async function debitWallet({ ownerType, ownerId, amount, description, ord
  */
 export async function getWalletDetails(ownerType, ownerId) {
     const wallet = await getOrCreateWallet(ownerType, ownerId);
+
+    let ledgerTransactions = [];
+    try {
+        const Transaction = (await import("../models/transaction.model.js")).default;
+        const query = {};
+        if (ownerType === 'admin') {
+            // Admin sees all platform transactions
+        } else {
+            query.recipientType = ownerType === 'user' ? 'user' : (ownerType === 'merchant' ? 'merchant' : 'rider');
+            query.recipientId = ownerId;
+        }
+
+        const txns = await Transaction.find(query)
+            .sort({ createdAt: -1 })
+            .limit(20)
+            .lean();
+
+        ledgerTransactions = txns.map(t => ({
+            _id: t._id,
+            transactionId: t.transactionId,
+            type: t.type,
+            amount: t.amount,
+            description: t.notes || `${t.category.replace(/_/g, ' ')} (${t.paymentMethod.toUpperCase()})`,
+            category: t.category,
+            source: t.source,
+            status: t.status,
+            paymentMethod: t.paymentMethod,
+            referenceNumber: t.referenceNumber,
+            orderId: t.orderId,
+            createdAt: t.createdAt,
+        }));
+    } catch (e) {
+        console.warn("Could not fetch ledger transactions in getWalletDetails:", e.message);
+    }
+
+    const combined = [...ledgerTransactions];
+    const seenIds = new Set(ledgerTransactions.map(t => t.transactionId || String(t._id)));
+    for (const t of (wallet.transactions || [])) {
+        if (!seenIds.has(String(t._id))) {
+            combined.push(t);
+        }
+    }
+    combined.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
     return {
         balance: wallet.balance,
-        transactions: wallet.transactions.slice(-20).reverse(),
+        transactions: combined.slice(0, 30),
     };
 }

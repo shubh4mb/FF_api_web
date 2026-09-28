@@ -93,7 +93,7 @@ export const verifyOTP = async (req, res) => {
       const token = jwt.sign(
         { id: deliveryRider._id, phone: deliveryRider.phone },
         process.env.JWT_SECRET,
-        { expiresIn: "15m" }
+        { expiresIn: "7d" }
       );
       const refreshToken = jwt.sign(
         { id: deliveryRider._id },
@@ -107,7 +107,7 @@ export const verifyOTP = async (req, res) => {
     const token = jwt.sign(
       { id: deliveryRider._id, phone: deliveryRider.phone },
       process.env.JWT_SECRET,
-      { expiresIn: "15m" }
+      { expiresIn: "7d" }
     );
     const refreshToken = jwt.sign(
       { id: deliveryRider._id },
@@ -352,7 +352,7 @@ export const refreshRiderToken = async (req, res) => {
     const token = jwt.sign(
       { id: rider._id, phone: rider.phone },
       process.env.JWT_SECRET,
-      { expiresIn: "15m" }
+      { expiresIn: "7d" }
     );
     const newRefreshToken = jwt.sign(
       { id: rider._id },

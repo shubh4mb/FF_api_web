@@ -77,6 +77,18 @@ const CourierOrderSchema = new mongoose.Schema({
     enum: ['pending', 'paid', 'failed', 'refunded'],
     default: 'pending'
   },
+  refundAmount: {
+    type: Number,
+    default: 0
+  },
+  refundDetails: {
+    amount: { type: Number, default: 0 },
+    method: { type: String, default: null },
+    referenceNumber: { type: String, default: null },
+    refundedAt: { type: Date, default: null },
+    reason: { type: String, default: null },
+    transactionId: { type: mongoose.Schema.Types.ObjectId, ref: 'Transaction', default: null }
+  },
   returnRequest: {
     status: {
       type: String,

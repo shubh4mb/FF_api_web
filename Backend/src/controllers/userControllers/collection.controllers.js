@@ -52,6 +52,7 @@ const buildCollectionProductQuery = (coll, onlineNearbyIds, { gender, subCuratio
     isActive: true,
     isVerified: true,
     isDeleted: { $ne: true },
+    stock: { $gt: 0 },
     $or: orClauses,
   };
 

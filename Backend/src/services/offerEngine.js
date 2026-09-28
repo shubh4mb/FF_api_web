@@ -62,6 +62,20 @@ export const isItemApplicable = (item, offer) => {
   const { productIds, categoryIds, subCategoryIds, collectionId, genders } = offer.conditions;
   const product = item.productId;
 
+  // 1. Merchant Scope Enforcement:
+  // For merchant-scoped offers, ensure item belongs to this merchant.
+  // Supports regular store items and warehouse stock owned by merchant.
+  if (offer.scope === 'merchant' && offer.merchantId) {
+    const offerMid = offer.merchantId.toString();
+    const itemMid = item.merchantId?._id?.toString() || 
+                    item.merchantId?.toString() || 
+                    product?.merchantId?._id?.toString() || 
+                    product?.merchantId?.toString();
+    if (itemMid !== offerMid) {
+      return false;
+    }
+  }
+
   // If no specific item conditions, it applies to all items in current scope (merchant/cart)
   const hasItemRestrictions = 
     (productIds && productIds.length > 0) || 
@@ -72,29 +86,40 @@ export const isItemApplicable = (item, offer) => {
 
   if (!hasItemRestrictions) return true;
 
-  // Match Product ID
+  // Match Product ID (supports ObjectId, styleGroupId, variantId, warehouseProductId, productCode)
   if (productIds && productIds.length > 0) {
-    const pid = product?._id?.toString() || product?.toString();
-    if (productIds.map(id => id.toString()).includes(pid)) return true;
+    const offerPids = productIds.map(id => (id?._id || id)?.toString());
+    const validItemIds = [
+      product?._id?.toString(),
+      product?.styleGroupId,
+      product?.productCode,
+      item.productId?._id?.toString(),
+      item.productId?.toString(),
+      item.variantId?.toString(),
+      item.warehouseProductId?.toString(),
+    ].filter(Boolean);
+
+    const matchesProduct = validItemIds.some(vid => offerPids.includes(vid));
+    if (matchesProduct) return true;
   }
 
   // Match Collection
   if (collectionId) {
-    const collIdStr = collectionId.toString();
-    if (product?.collectionIds?.some(id => id.toString() === collIdStr)) return true;
+    const collIdStr = (collectionId?._id || collectionId).toString();
+    if (product?.collectionIds?.some(id => (id?._id || id)?.toString() === collIdStr)) return true;
   }
 
   // Match Category / Sub-Category
   if (categoryIds && categoryIds.length > 0) {
-    const catIds = categoryIds.map(id => id.toString());
-    const itemCatId = product?.categoryId?.toString();
-    const itemSubCatId = product?.subCategoryId?.toString();
+    const catIds = categoryIds.map(id => (id?._id || id)?.toString());
+    const itemCatId = (product?.categoryId?._id || product?.categoryId)?.toString();
+    const itemSubCatId = (product?.subCategoryId?._id || product?.subCategoryId)?.toString();
     if (catIds.includes(itemCatId) || catIds.includes(itemSubCatId)) return true;
   }
 
   if (subCategoryIds && subCategoryIds.length > 0) {
-    const subCatIds = subCategoryIds.map(id => id.toString());
-    const itemSubCatId = product?.subCategoryId?.toString();
+    const subCatIds = subCategoryIds.map(id => (id?._id || id)?.toString());
+    const itemSubCatId = (product?.subCategoryId?._id || product?.subCategoryId)?.toString();
     if (subCatIds.includes(itemSubCatId)) return true;
   }
 
@@ -201,7 +226,10 @@ export const getApplicableAmount = (offer, cartContext) => {
           // Double check merchant scope if it's a merchant offer
           if (offer.scope === 'merchant' && offer.merchantId) {
             const mid = offer.merchantId.toString();
-            const itemMid = item.merchantId?._id?.toString() || item.merchantId?.toString();
+            const itemMid = item.merchantId?._id?.toString() || 
+                            item.merchantId?.toString() || 
+                            item.productId?.merchantId?._id?.toString() || 
+                            item.productId?.merchantId?.toString();
             if (itemMid !== mid) return sum;
           }
           return sum + (item.price || 0) * (item.quantity || 1);
@@ -215,7 +243,10 @@ export const getApplicableAmount = (offer, cartContext) => {
   if (offer.scope === 'merchant' && offer.merchantId) {
     const mid = offer.merchantId.toString();
     return cartContext.items?.reduce((sum, item) => {
-      const itemMid = item.merchantId?._id?.toString() || item.merchantId?.toString();
+      const itemMid = item.merchantId?._id?.toString() || 
+                      item.merchantId?.toString() || 
+                      item.productId?.merchantId?._id?.toString() || 
+                      item.productId?.merchantId?.toString();
       if (itemMid === mid) {
         return sum + (item.price || 0) * (item.quantity || 1);
       }
@@ -232,11 +263,13 @@ export const getApplicableAmount = (offer, cartContext) => {
 // ────────────────────────────────────────
 export const findBestOffers = async (userId, cartContext, couponCode = null, selectedOffers = [], orderType = null) => {
   const now = new Date();
+  const normalizedCouponCode = couponCode ? couponCode.trim().toUpperCase() : null;
+
   const log = (msg) => {
     console.log(`[OFFER_DEBUG] ${msg}`);
   };
   
-  log(`--- NEW REQUEST: findBestOffers userId: ${userId}, couponCode: ${couponCode}, orderType: ${orderType}`);
+  log(`--- NEW REQUEST: findBestOffers userId: ${userId}, couponCode: ${normalizedCouponCode}, orderType: ${orderType}`);
   log(`Cart Context: ${JSON.stringify(cartContext)}`);
 
   const query = {
@@ -259,7 +292,8 @@ export const findBestOffers = async (userId, cartContext, couponCode = null, sel
       }
     }
 
-    if (offer.requiresCoupon && offer.couponCode !== couponCode) {
+    const offerCode = offer.couponCode ? offer.couponCode.trim().toUpperCase() : null;
+    if (offer.requiresCoupon && offerCode !== normalizedCouponCode) {
       continue;
     }
 
@@ -298,9 +332,11 @@ export const findBestOffers = async (userId, cartContext, couponCode = null, sel
       freeWaiting: allowFreeWaiting,
       discountAmount: discount,
       totalValue,
+      stackable: offer.stackable !== undefined ? offer.stackable : true,
+      isExclusive: Boolean(offer.isExclusive),
     };
 
-    if (couponCode && offer.couponCode === couponCode) {
+    if (normalizedCouponCode && offerCode === normalizedCouponCode) {
       explicitCoupon = processedOffer;
     }
 
@@ -323,36 +359,117 @@ export const findBestOffers = async (userId, cartContext, couponCode = null, sel
         winningOffers.push(offer);
       }
     }
+    // If any selected offer is exclusive, only that exclusive offer wins
+    const exclusiveSelected = winningOffers.find(o => o.isExclusive);
+    if (exclusiveSelected) {
+      winningOffers = [exclusiveSelected];
+    } else {
+      // If any selected offer is non-stackable, keep only the highest value discount offer
+      const hasNonStackable = winningOffers.some(o => o.stackable === false);
+      if (hasNonStackable) {
+        const bestDiscount = [...winningOffers]
+          .filter(o => o.discountAmount > 0)
+          .sort((a, b) => (b.discountAmount || 0) - (a.discountAmount || 0))[0];
+        const bestDelivery = winningOffers.find(o => o.freeDelivery || o.benefitType === 'DELIVERY');
+        winningOffers = [bestDiscount, bestDelivery].filter(Boolean);
+      }
+    }
   } else {
     // Auto-qualifying offers (do not require coupon entry OR marked as autoApply)
     const autoQualifyingOffers = validOffers.filter(o => o.autoApply || !o.requiresCoupon);
 
-    // Stacking: separate logistics/delivery offers from discount offers so they stack seamlessly
+    // Stacking: separate logistics/delivery offers from discount offers
     const deliveryOffers = autoQualifyingOffers.filter(o => o.benefitType === 'DELIVERY' || o.freeDelivery || o.type === 'FREE_DELIVERY');
     const discountOffers = autoQualifyingOffers.filter(o => o.benefitType !== 'DELIVERY' && !o.freeDelivery && o.type !== 'FREE_DELIVERY');
 
-    if (discountOffers.length > 0) {
-      const sortedDiscounts = [...discountOffers].sort((a, b) => (b.totalValue || b.discountAmount || 0) - (a.totalValue || a.discountAmount || 0));
-      winningOffers.push(sortedDiscounts[0]);
-    }
+    if (explicitCoupon) {
+      // 1. Explicit Coupon Was Provided
+      if (explicitCoupon.isExclusive) {
+        // Exclusive coupon cannot stack with ANY other offer (no discounts, no free delivery)
+        winningOffers = [explicitCoupon];
+      } else {
+        winningOffers.push(explicitCoupon);
 
-    if (deliveryOffers.length > 0) {
-      const sortedDelivery = [...deliveryOffers].sort((a, b) => (b.totalValue || 0) - (a.totalValue || 0));
-      if (!winningOffers.find(o => o._id.toString() === sortedDelivery[0]._id.toString())) {
+        // Can we stack an auto-qualifying discount?
+        if (explicitCoupon.stackable !== false && discountOffers.length > 0) {
+          // Stacking policy: 1 best admin discount + 1 best merchant discount can stack
+          // Only add an auto discount from the DIFFERENT scope if it is stackable and not exclusive
+          const otherScopeDiscounts = discountOffers.filter(
+            o => o.scope !== explicitCoupon.scope && o.stackable !== false && !o.isExclusive
+          );
+          if (otherScopeDiscounts.length > 0) {
+            const sortedOther = [...otherScopeDiscounts].sort(
+              (a, b) => (b.totalValue || b.discountAmount || 0) - (a.totalValue || a.discountAmount || 0)
+            );
+            winningOffers.push(sortedOther[0]);
+          }
+        }
+
+        // Can we stack a delivery offer?
+        if (deliveryOffers.length > 0) {
+          const stackableDelivery = deliveryOffers.filter(o => o.stackable !== false && !o.isExclusive);
+          if (stackableDelivery.length > 0) {
+            const sortedDelivery = [...stackableDelivery].sort((a, b) => (b.totalValue || 0) - (a.totalValue || 0));
+            if (!winningOffers.find(o => o._id.toString() === sortedDelivery[0]._id.toString())) {
+              winningOffers.push(sortedDelivery[0]);
+            }
+          }
+        }
+      }
+    } else {
+      // 2. No Explicit Coupon Provided - Auto-apply Best Qualifying Offers
+      if (discountOffers.length > 0) {
+        const sortedDiscounts = [...discountOffers].sort(
+          (a, b) => (b.totalValue || b.discountAmount || 0) - (a.totalValue || a.discountAmount || 0)
+        );
+        const topDiscount = sortedDiscounts[0];
+
+        if (topDiscount.isExclusive) {
+          // Exclusive offer: blocks all other discounts and delivery benefits
+          winningOffers = [topDiscount];
+        } else {
+          winningOffers.push(topDiscount);
+
+          // If top discount is stackable, check if we can stack with the other scope
+          if (topDiscount.stackable !== false) {
+            const otherScopeDiscounts = discountOffers.filter(
+              o => o.scope !== topDiscount.scope && o.stackable !== false && !o.isExclusive
+            );
+            if (otherScopeDiscounts.length > 0) {
+              const sortedOther = [...otherScopeDiscounts].sort(
+                (a, b) => (b.totalValue || b.discountAmount || 0) - (a.totalValue || a.discountAmount || 0)
+              );
+              winningOffers.push(sortedOther[0]);
+            }
+          }
+
+          // Add delivery offer if top discount is not exclusive and delivery offer is stackable
+          if (deliveryOffers.length > 0) {
+            const stackableDelivery = deliveryOffers.filter(o => o.stackable !== false && !o.isExclusive);
+            if (stackableDelivery.length > 0) {
+              const sortedDelivery = [...stackableDelivery].sort((a, b) => (b.totalValue || 0) - (a.totalValue || 0));
+              if (!winningOffers.find(o => o._id.toString() === sortedDelivery[0]._id.toString())) {
+                winningOffers.push(sortedDelivery[0]);
+              }
+            }
+          }
+        }
+      } else if (deliveryOffers.length > 0) {
+        // Only delivery offers eligible
+        const sortedDelivery = [...deliveryOffers].sort((a, b) => (b.totalValue || 0) - (a.totalValue || 0));
         winningOffers.push(sortedDelivery[0]);
       }
     }
   }
 
-  // Always apply explicit coupon if user entered or selected a valid coupon code
-  if (explicitCoupon && !winningOffers.find(o => o._id.toString() === explicitCoupon._id.toString())) {
-    winningOffers.push(explicitCoupon);
-  }
+  // Anti-Exploit: Cap total discount to cart subtotal (prevent negative payable / free order exploit)
+  const rawDiscount = winningOffers.reduce((sum, o) => sum + (o.discountAmount || 0), 0);
+  const totalDiscount = Math.min(rawDiscount, cartContext.subtotal || 0);
 
   const finalResult = {
     appliedOffers: winningOffers,
     availableOffers: availableOffers,
-    totalDiscount: winningOffers.reduce((sum, o) => sum + (o.discountAmount || 0), 0),
+    totalDiscount,
     freeDelivery: winningOffers.some(o => o.freeDelivery),
     freeReturn: winningOffers.some(o => o.freeReturn || o.freeDelivery),
     freeWaiting: winningOffers.some(o => o.freeWaiting || o.freeDelivery),
@@ -407,10 +524,15 @@ export const getAvailableOffersForUser = async (userId, cartContext = null, orde
 // Validate a specific coupon code
 // ────────────────────────────────────────
 export const validateCouponCode = async (couponCode, userId, cartContext, orderType = null) => {
+  const cleanCode = couponCode ? couponCode.trim().toUpperCase() : null;
+  if (!cleanCode) {
+    return { valid: false, reason: 'Coupon code is required' };
+  }
+
   const now = new Date();
 
   const offer = await Offer.findOne({
-    couponCode: couponCode.toUpperCase(),
+    couponCode: cleanCode,
     isActive: true,
     startDate: { $lte: now },
     endDate: { $gt: now },

@@ -23,15 +23,31 @@ const flatToCardData = (flatProducts, req) => {
 
   const nearbyWhSet = new Set(req.nearbyWarehouseIds?.map(id => id.toString()) || []);
 
-  return Object.values(groups).map(siblings => {
+  const cards = [];
+  for (const siblings of Object.values(groups)) {
     const first = siblings[0]; // representative doc (first color/size)
-    const isWh = first.source === 'warehouse' || !!first.warehouseId;
-    const isWhNearby = first.warehouseId ? nearbyWhSet.has(first.warehouseId.toString()) : false;
+    const merchantObj = (typeof first.merchantId === 'object' && first.merchantId !== null) ? first.merchantId : null;
+    const merchantIdVal = merchantObj?._id || first.merchantId;
 
-    return {
+    const isWh = first.source === 'warehouse' || !!first.warehouseId || merchantObj?.fulfillmentType === 'warehouse';
+    const isWhNearby = first.warehouseId ? nearbyWhSet.has(first.warehouseId.toString()) : (isWh && nearbyWhSet.size > 0);
+
+    // Check available stock across all variants in this product group
+    const totalStock = siblings.reduce((sum, s) => sum + Math.max(0, (s.stock || 0) - (s.reservedStock || 0)), 0);
+
+    // In product listings, filter out products with 0 total stock
+    if (totalStock <= 0) {
+      continue;
+    }
+
+    const isStoreOnline = isWh ? true : (merchantObj?.isOnline !== undefined ? merchantObj.isOnline : true);
+    const isInstantBuyable = isWh ? isWhNearby : calculateIsInstantBuyable(first.styleGroupId, merchantIdVal, req.nearbyMerchantIds, merchantObj || {});
+    const isNearby = isWh ? isWhNearby : isInstantBuyable;
+
+    cards.push({
       _id: first.styleGroupId,
       name: first.name,
-      merchantId: first.merchantId?._id || first.merchantId,
+      merchantId: merchantIdVal,
       warehouseId: first.warehouseId,
       brandId: first.brandId,
       categoryId: first.categoryId,
@@ -46,11 +62,18 @@ const flatToCardData = (flatProducts, req) => {
       images: first.images,
       color: first.color,
       isTriable: first.isTriable !== false,
-      isInstantBuyable: isWh ? isWhNearby : calculateIsInstantBuyable(first.styleGroupId, first.merchantId?._id || first.merchantId, req.nearbyMerchantIds),
+      isInstantBuyable,
+      isNearby,
       isWarehouseListing: isWh,
       source: isWh ? 'warehouse' : 'shop',
-    };
-  });
+      isOnline: isStoreOnline,
+      stock: totalStock,
+      totalStock,
+      inStock: totalStock > 0,
+    });
+  }
+
+  return cards;
 };
 
 /**
@@ -109,6 +132,7 @@ export const newArrivals = async (req, res) => {
       isActive: true,
       isDeleted: { $ne: true },
       isVerified: true,
+      stock: { $gt: 0 },
       createdAt: { $gte: new Date(new Date().setDate(new Date().getDate() - 90)) },
     };
 
@@ -122,7 +146,10 @@ export const newArrivals = async (req, res) => {
       flatFilter.gender = { $in: [genderUpper, 'UNISEX'] };
     }
 
-    const flatProducts = await ProductFlat.find(flatFilter).sort({ createdAt: -1 }).lean();
+    const flatProducts = await ProductFlat.find(flatFilter)
+      .populate('merchantId', 'shopName isOnline isZoneLive')
+      .sort({ createdAt: -1 })
+      .lean();
     return res.status(200).json(flatToCardData(flatProducts, req));
   } catch (error) {
     console.error('Error in newArrivals:', error.message);
@@ -182,6 +209,7 @@ export const productsDetails = async (req, res) => {
       const doc = s.toObject ? s.toObject() : s;
       return {
         ...doc,
+        stock: Math.max(0, (doc.stock || 0) - (doc.reservedStock || 0)),
         colorVariantId: generateColorVariantId(flatProductDoc.styleGroupId, doc.color?.name || 'Default')
       };
     });
@@ -190,9 +218,12 @@ export const productsDetails = async (req, res) => {
     let whId = flatProductDoc.warehouseId?._id || flatProductDoc.warehouseId || null;
     let whName = flatProductDoc.warehouseId?.name || "FlashFits Hub";
 
+    let isStoreTBServiceable = !isWarehouse;
+
     if (!isWarehouse) {
       const whTwin = await ProductFlat.findOne({
         $or: [
+          { linkedMerchantProductId: flatProductDoc.styleGroupId },
           ...(flatProductDoc.sourceProductId ? [{ styleGroupId: flatProductDoc.sourceProductId }] : []),
           { sourceProductId: flatProductDoc.styleGroupId },
           { name: flatProductDoc.name, source: 'warehouse' }
@@ -207,6 +238,15 @@ export const productsDetails = async (req, res) => {
         whId = whTwin.warehouseId?._id || whTwin.warehouseId || null;
         whName = whTwin.warehouseId?.name || "FlashFits Hub";
       }
+    } else if (isWarehouse && flatProductDoc.linkedMerchantProductId) {
+      const storeTwin = await ProductFlat.findOne({
+        styleGroupId: flatProductDoc.linkedMerchantProductId,
+        isActive: true,
+        isDeleted: { $ne: true }
+      }).lean();
+      if (storeTwin && isNearby) {
+        isStoreTBServiceable = true;
+      }
     }
 
     let matchingProductsCards = [];
@@ -219,7 +259,6 @@ export const productsDetails = async (req, res) => {
       matchingProductsCards = flatToCardData(matchingFlatProducts, req);
     }
 
-    const isStoreTBServiceable = !isWarehouse;
     const isStoreOnline = flatProductDoc.merchantId?.isOnline !== false;
 
     const fulfillmentOptions = {
@@ -282,7 +321,7 @@ export const trendingProducts = async (req, res) => {
   try {
     const { gender } = req.query;
 
-    const flatFilter = { isActive: true, isDeleted: { $ne: true }, isVerified: true };
+    const flatFilter = { isActive: true, isDeleted: { $ne: true }, isVerified: true, stock: { $gt: 0 } };
     const nearbyCondition = await buildNearbyTAndBFilter(req);
     if (nearbyCondition) {
       flatFilter.$or = nearbyCondition.$or;
@@ -293,7 +332,9 @@ export const trendingProducts = async (req, res) => {
     }
 
     const flatProducts = await ProductFlat.find(flatFilter)
-      .sort({ numReviews: -1, ratings: -1 }).lean();
+      .populate('merchantId', 'shopName isOnline isZoneLive')
+      .sort({ numReviews: -1, ratings: -1 })
+      .lean();
     const cards = flatToCardData(flatProducts, req).slice(0, 15);
     return res.status(200).json(cards);
   } catch (error) {
@@ -302,59 +343,270 @@ export const trendingProducts = async (req, res) => {
   }
 };
 
-// ── Recommended Products (You May Like) ──
+// ── Recommended Products (Smart Wishlist & User Profile Driven) ──
 export const recommendedProducts = async (req, res) => {
   try {
-    const { gender } = req.query;
+    const { gender, limit = 16, productIds, wishlistProductIds } = req.query;
     const userId = req.user?.userId;
+    const maxResults = Math.min(Math.max(parseInt(limit) || 16, 4), 50);
 
-    let subCategoryIds = [];
-    let excludedProductIds = [];
+    const anchorIds = new Set();
+    const excludedStyleGroupIds = new Set();
 
-    if (userId) {
-      // 1. Get recent Cart items
-      const cart = await Cart.findOne({ userId }).lean();
-      if (cart && cart.items) {
-        excludedProductIds.push(...cart.items.map(i => i.productId));
-      }
-
-      // 2. Get recent Wishlist items
-      const wishlist = await Wishlist.find({ userId }).select('productId').lean();
-      if (wishlist.length > 0) {
-        excludedProductIds.push(...wishlist.map(w => w.productId));
-      }
-    }
-
-    if (excludedProductIds.length > 0) {
-      const userFlatProducts = await ProductFlat.find({ styleGroupId: { $in: excludedProductIds.map(id => id.toString()) } })
-        .select('subCategoryId').lean();
-      userFlatProducts.forEach(p => {
-        if (p.subCategoryId) subCategoryIds.push(p.subCategoryId.toString());
+    // 1. Explicit product / wishlist IDs passed from client (e.g. wishlist screen)
+    const rawIds = productIds || wishlistProductIds;
+    if (rawIds) {
+      const idList = Array.isArray(rawIds) ? rawIds : String(rawIds).split(',');
+      idList.forEach(id => {
+        const clean = String(id).trim();
+        if (clean) {
+          anchorIds.add(clean);
+          excludedStyleGroupIds.add(clean);
+        }
       });
-      subCategoryIds = [...new Set(subCategoryIds)];
     }
 
-    const flatFilter = { isActive: true, isDeleted: { $ne: true }, isVerified: true };
+    // 2. Fetch Wishlist & Cart from DB if authenticated
+    if (userId) {
+      const [wishlistDocs, cartDoc] = await Promise.all([
+        Wishlist.find({ userId }).select('productId').lean(),
+        Cart.findOne({ userId }).select('items.productId').lean()
+      ]);
+
+      if (wishlistDocs && wishlistDocs.length > 0) {
+        wishlistDocs.forEach(w => {
+          if (w.productId) {
+            const str = w.productId.toString();
+            anchorIds.add(str);
+            excludedStyleGroupIds.add(str);
+          }
+        });
+      }
+
+      if (cartDoc && Array.isArray(cartDoc.items)) {
+        cartDoc.items.forEach(item => {
+          if (item.productId) {
+            const str = item.productId.toString();
+            anchorIds.add(str);
+            excludedStyleGroupIds.add(str);
+          }
+        });
+      }
+    }
+
+    const anchorIdList = Array.from(anchorIds);
+    let uniqueAnchors = [];
+
+    if (anchorIdList.length > 0) {
+      // Find anchor product details
+      const anchorDocs = await ProductFlat.find({
+        styleGroupId: { $in: anchorIdList },
+        isDeleted: { $ne: true }
+      })
+      .select('styleGroupId name categoryId subCategoryId subSubCategoryId gender matchingProducts brandId price ratings')
+      .lean();
+
+      const seen = new Set();
+      for (const doc of anchorDocs) {
+        if (!seen.has(doc.styleGroupId)) {
+          seen.add(doc.styleGroupId);
+          uniqueAnchors.push(doc);
+        }
+      }
+    }
+
+    // Base active filter
+    const baseFilter = {
+      isActive: true,
+      isDeleted: { $ne: true },
+      isVerified: true,
+      stock: { $gt: 0 }
+    };
     const nearbyCondition = await buildNearbyTAndBFilter(req);
     if (nearbyCondition) {
-      flatFilter.$or = nearbyCondition.$or;
-    }
-    if (gender && gender !== 'All') {
-      const genderUpper = gender.toUpperCase();
-      flatFilter.gender = { $in: [genderUpper, 'UNISEX'] };
-    }
-    if (excludedProductIds.length > 0) flatFilter.styleGroupId = { $nin: excludedProductIds.map(id => id.toString()) };
-    if (subCategoryIds.length > 0) flatFilter.subCategoryId = { $in: subCategoryIds };
-
-    let flatProducts = await ProductFlat.find(flatFilter).limit(100).lean();
-    let cards = flatToCardData(flatProducts, req).slice(0, 15);
-
-    if (cards.length < 5) {
-      delete flatFilter.subCategoryId;
-      flatProducts = await ProductFlat.find(flatFilter).sort({ createdAt: -1 }).limit(100).lean();
-      cards = flatToCardData(flatProducts, req).slice(0, 15);
+      baseFilter.$or = nearbyCondition.$or;
     }
 
+    const excludedList = Array.from(excludedStyleGroupIds);
+    const collectedCandidates = [];
+    const collectedStyleGroupIds = new Set(excludedList);
+
+    // If we have anchor products from wishlist / cart:
+    if (uniqueAnchors.length > 0) {
+      // Build distinct interest profiles (subcategory + gender pairs)
+      // e.g., Men's Shirt -> { subCategoryId, genders: ['MEN', 'UNISEX'] }
+      // Women's Dress -> { subCategoryId, genders: ['WOMEN', 'UNISEX'] }
+      const profiles = [];
+      const profileKeySet = new Set();
+
+      for (const anchor of uniqueAnchors) {
+        if (!anchor.subCategoryId) continue;
+        const rawGenders = Array.isArray(anchor.gender) && anchor.gender.length > 0
+          ? anchor.gender.map(g => g.toUpperCase())
+          : ['MEN', 'WOMEN', 'UNISEX'];
+        
+        const genderKey = rawGenders.slice().sort().join(',');
+        const key = `${anchor.subCategoryId.toString()}::${genderKey}`;
+
+        if (!profileKeySet.has(key)) {
+          profileKeySet.add(key);
+          profiles.push({
+            subCategoryId: anchor.subCategoryId,
+            categoryId: anchor.categoryId,
+            genders: Array.from(new Set([...rawGenders, 'UNISEX'])),
+            matchingProducts: Array.isArray(anchor.matchingProducts) ? anchor.matchingProducts : [],
+          });
+        }
+      }
+
+      // ── TIER 1: Exact Subcategory + Matching Gender ──
+      // "if there is a mens shirt, show another mens shirt"
+      if (profiles.length > 0) {
+        const tier1Queries = profiles.map(async (prof) => {
+          return ProductFlat.find({
+            ...baseFilter,
+            styleGroupId: { $nin: excludedList },
+            subCategoryId: prof.subCategoryId,
+            gender: { $in: prof.genders }
+          })
+          .sort({ ratings: -1, numReviews: -1, createdAt: -1 })
+          .limit(8)
+          .lean();
+        });
+
+        const tier1Results = await Promise.all(tier1Queries);
+
+        // Fair round-robin interleaving so recommendations balance across all wishlist items
+        const maxLen = Math.max(...tier1Results.map(r => r.length), 0);
+        for (let i = 0; i < maxLen; i++) {
+          for (let pIdx = 0; pIdx < tier1Results.length; pIdx++) {
+            const list = tier1Results[pIdx];
+            if (i < list.length) {
+              const item = list[i];
+              if (!collectedStyleGroupIds.has(item.styleGroupId)) {
+                collectedStyleGroupIds.add(item.styleGroupId);
+                collectedCandidates.push(item);
+              }
+            }
+          }
+        }
+      }
+
+      // ── TIER 2: Curated Matching Products (Outfits & Pairings) ──
+      if (collectedCandidates.length < maxResults) {
+        const matchingIdsToFetch = [];
+        for (const prof of profiles) {
+          for (const mId of prof.matchingProducts) {
+            if (mId && !collectedStyleGroupIds.has(mId)) {
+              matchingIdsToFetch.push(mId);
+            }
+          }
+        }
+
+        if (matchingIdsToFetch.length > 0) {
+          const matchingDocs = await ProductFlat.find({
+            ...baseFilter,
+            styleGroupId: { $in: matchingIdsToFetch, $nin: excludedList }
+          }).limit(10).lean();
+
+          for (const item of matchingDocs) {
+            if (!collectedStyleGroupIds.has(item.styleGroupId)) {
+              collectedStyleGroupIds.add(item.styleGroupId);
+              collectedCandidates.push(item);
+            }
+          }
+        }
+      }
+
+      // ── TIER 3: Broader Category + Gender Affinity ──
+      // (e.g. other Men's apparel for a Men's shirt, or other Women's apparel for Women's dress)
+      if (collectedCandidates.length < maxResults) {
+        const categoryQueries = profiles
+          .filter(p => p.categoryId)
+          .map(p => ({
+            categoryId: p.categoryId,
+            gender: { $in: p.genders }
+          }));
+
+        if (categoryQueries.length > 0) {
+          const broaderDocs = await ProductFlat.find({
+            ...baseFilter,
+            styleGroupId: { $nin: Array.from(collectedStyleGroupIds) },
+            $or: categoryQueries
+          })
+          .sort({ ratings: -1, numReviews: -1, createdAt: -1 })
+          .limit(maxResults * 2)
+          .lean();
+
+          for (const item of broaderDocs) {
+            if (!collectedStyleGroupIds.has(item.styleGroupId)) {
+              collectedStyleGroupIds.add(item.styleGroupId);
+              collectedCandidates.push(item);
+              if (collectedCandidates.length >= maxResults * 1.5) break;
+            }
+          }
+        }
+      }
+    }
+
+    // ── TIER 4: Discovery / Gender-Free Fallback ──
+    // When wishlist is empty, or when recommendations pool is still low (< 6)
+    if (collectedCandidates.length < 6) {
+      const discoveryFilter = {
+        isActive: true,
+        isDeleted: { $ne: true },
+        isVerified: true,
+        stock: { $gt: 0 },
+        styleGroupId: { $nin: Array.from(collectedStyleGroupIds) }
+      };
+
+      if (nearbyCondition) {
+        discoveryFilter.$or = nearbyCondition.$or;
+      }
+
+      // If user has zero wishlist items AND caller explicitly passed a gender query, respect it as soft hint
+      if (uniqueAnchors.length === 0 && gender && gender !== 'All') {
+        discoveryFilter.gender = { $in: [gender.toUpperCase(), 'UNISEX'] };
+      }
+      // Otherwise: completely gender-neutral discovery! (No gender restriction)
+
+      let discoveryDocs = await ProductFlat.find(discoveryFilter)
+        .populate('merchantId', 'shopName isOnline isZoneLive')
+        .sort({ ratings: -1, numReviews: -1, createdAt: -1 })
+        .limit(maxResults * 2)
+        .lean();
+
+      // If strict nearbyCondition resulted in fewer than 4 items, relax nearbyCondition to courier
+      if (discoveryDocs.length < 4 && nearbyCondition) {
+        const relaxedFilter = {
+          isActive: true,
+          isDeleted: { $ne: true },
+          isVerified: true,
+          stock: { $gt: 0 },
+          styleGroupId: { $nin: Array.from(collectedStyleGroupIds) }
+        };
+        if (uniqueAnchors.length === 0 && gender && gender !== 'All') {
+          relaxedFilter.gender = { $in: [gender.toUpperCase(), 'UNISEX'] };
+        }
+        const relaxedDocs = await ProductFlat.find(relaxedFilter)
+          .populate('merchantId', 'shopName isOnline isZoneLive')
+          .sort({ ratings: -1, numReviews: -1 })
+          .limit(maxResults * 2)
+          .lean();
+        discoveryDocs = [...discoveryDocs, ...relaxedDocs];
+      }
+
+      for (const item of discoveryDocs) {
+        if (!collectedStyleGroupIds.has(item.styleGroupId)) {
+          collectedStyleGroupIds.add(item.styleGroupId);
+          collectedCandidates.push(item);
+          if (collectedCandidates.length >= maxResults * 1.5) break;
+        }
+      }
+    }
+
+    // Transform into standard ProductCard objects
+    const cards = flatToCardData(collectedCandidates, req).slice(0, maxResults);
     return res.status(200).json(cards);
   } catch (error) {
     console.error('Error in recommendedProducts:', error.message);
@@ -390,13 +642,15 @@ export const getFilteredProducts = async (req, res) => {
     const skip = (pageNum - 1) * limitNum;
 
 
-    const flatMatch = { isActive: true, isDeleted: { $ne: true }, isVerified: true };
+    const andConditions = [
+      { isActive: true, isDeleted: { $ne: true }, isVerified: true, stock: { $gt: 0 } }
+    ];
 
-    // Delivery mode
+    // Delivery mode / Location scoping
     if (deliveryMode === 'tryAndBuy') {
       const nearbyCondition = await buildNearbyTAndBFilter(req);
       if (nearbyCondition) {
-        flatMatch.$or = nearbyCondition.$or;
+        andConditions.push(nearbyCondition);
       }
     } else if (deliveryMode === 'courier') {
       const courierMerchants = await Merchant.find({ enableCourierDelivery: true, isActive: true, isVerified: true }).select('_id').lean();
@@ -405,9 +659,9 @@ export const getFilteredProducts = async (req, res) => {
         const nearbySet = new Set(req.nearbyMerchantIds.map(id => id.toString()));
         const courierOnlyIds = courierIds.filter(id => !nearbySet.has(id.toString()));
         if (courierOnlyIds.length === 0) return res.json({ products: [], totalCount: 0, page: pageNum, totalPages: 0 });
-        flatMatch.merchantId = { $in: courierOnlyIds };
+        andConditions.push({ merchantId: { $in: courierOnlyIds } });
       } else {
-        flatMatch.merchantId = { $in: courierIds };
+        andConditions.push({ merchantId: { $in: courierIds } });
       }
     } else {
       if (req.nearbyMerchantIds || req.nearbyWarehouseIds) {
@@ -416,41 +670,42 @@ export const getFilteredProducts = async (req, res) => {
         const courierOnlyIds = courierMerchants.map(m => m._id).filter(id => !nearbySet.has(id.toString()));
         const nearbyWarehouseIds = req.nearbyWarehouseIds || [];
 
-        flatMatch.$or = [
-          { merchantId: { $in: [...(req.nearbyMerchantIds || []), ...courierOnlyIds] }, source: { $ne: 'warehouse' } },
-          { warehouseId: { $in: nearbyWarehouseIds } },
-          { source: 'warehouse', warehouseId: { $in: nearbyWarehouseIds } }
-        ];
+        andConditions.push({
+          $or: [
+            { merchantId: { $in: [...(req.nearbyMerchantIds || []), ...courierOnlyIds] }, source: { $ne: 'warehouse' } },
+            { warehouseId: { $in: nearbyWarehouseIds } },
+            { source: 'warehouse', warehouseId: { $in: nearbyWarehouseIds } }
+          ]
+        });
       }
     }
 
     // Gender
     if (gender) {
-      if (gender === 'UNISEX') flatMatch.gender = { $all: ['MEN', 'WOMEN'] };
-      else flatMatch.gender = gender;
+      if (gender === 'UNISEX') andConditions.push({ gender: { $all: ['MEN', 'WOMEN'] } });
+      else andConditions.push({ gender });
     }
 
     // Store filter
     if (selectedStores?.length > 0) {
       const storeObjectIds = selectedStores.filter(id => mongoose.Types.ObjectId.isValid(id)).map(id => new mongoose.Types.ObjectId(id));
       if (storeObjectIds.length > 0) {
-        if (flatMatch.merchantId) {
-          flatMatch.merchantId = { $in: flatMatch.merchantId.$in.filter(nearId => storeObjectIds.some(selId => selId.equals(nearId))) };
-          if (flatMatch.merchantId.$in.length === 0) return res.json({ products: [], totalCount: 0, page: pageNum, totalPages: 0 });
-        } else {
-          flatMatch.merchantId = { $in: storeObjectIds };
-        }
+        andConditions.push({ merchantId: { $in: storeObjectIds } });
       }
     }
 
     // Category filter
     if (selectedCategoryIds.length > 0) {
       const validCatIds = selectedCategoryIds.filter(id => mongoose.Types.ObjectId.isValid(id)).map(id => new mongoose.Types.ObjectId(id));
-      if (validCatIds.length > 0) flatMatch.$or = [{ categoryId: { $in: validCatIds } }, { subCategoryId: { $in: validCatIds } }];
+      if (validCatIds.length > 0) {
+        andConditions.push({
+          $or: [{ categoryId: { $in: validCatIds } }, { subCategoryId: { $in: validCatIds } }]
+        });
+      }
     }
     if (subCategoryIds.length > 0) {
       const validSubIds = subCategoryIds.filter(id => mongoose.Types.ObjectId.isValid(id)).map(id => new mongoose.Types.ObjectId(id));
-      if (validSubIds.length > 0) flatMatch.subCategoryId = { $in: validSubIds };
+      if (validSubIds.length > 0) andConditions.push({ subCategoryId: { $in: validSubIds } });
     }
 
     // Collection filter
@@ -463,23 +718,67 @@ export const getFilteredProducts = async (req, res) => {
         if (colDoc) colObjId = colDoc._id;
       }
       if (colObjId) {
-        flatMatch.collectionIds = colObjId;
+        andConditions.push({ collectionIds: colObjId });
       }
     }
 
-    // Search
-    if (search.trim() !== '') {
-      const searchRegex = new RegExp(search.trim(), 'i');
-      flatMatch.$or = [
-        ...(flatMatch.$or || []),
-        { name: searchRegex }, { tags: searchRegex }, { 'color.name': searchRegex },
+    // Search - isolate search condition and enrich with Category & Brand resolution
+    let sanitizedSearch = '';
+    const hasSearch = typeof search === 'string' && search.trim() !== '';
+    if (hasSearch) {
+      sanitizedSearch = search.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const searchRegex = new RegExp(sanitizedSearch, 'i');
+
+      // Resolve matching categories and brands in parallel
+      const [matchedCategories, matchedBrands] = await Promise.all([
+        mongoose.connection.db.collection('categories').find({ name: searchRegex }).project({ _id: 1 }).toArray(),
+        mongoose.connection.db.collection('brands').find({ name: searchRegex }).project({ _id: 1 }).toArray(),
+      ]);
+
+      const matchedCatIds = matchedCategories.map(c => c._id);
+      const matchedBrandIds = matchedBrands.map(b => b._id);
+
+      const searchOrConditions = [
+        { name: searchRegex },
+        { tags: searchRegex },
+        { 'color.name': searchRegex },
         { styleName: searchRegex }
       ];
+
+      if (matchedCatIds.length > 0) {
+        searchOrConditions.push({ categoryId: { $in: matchedCatIds } });
+        searchOrConditions.push({ subCategoryId: { $in: matchedCatIds } });
+      }
+      if (matchedBrandIds.length > 0) {
+        searchOrConditions.push({ brandId: { $in: matchedBrandIds } });
+      }
+
+      // Multi-word keyword matching (e.g. "baggy jeans")
+      const words = search.trim().split(/\s+/).filter(w => w.length > 1);
+      if (words.length > 1) {
+        searchOrConditions.push({
+          $and: words.map(w => {
+            const wRegex = new RegExp(w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+            return {
+              $or: [
+                { name: wRegex },
+                { tags: wRegex },
+                { 'color.name': wRegex },
+                { styleName: wRegex }
+              ]
+            };
+          })
+        });
+      }
+
+      andConditions.push({ $or: searchOrConditions });
     }
 
     // Price & color variant-level filters
-    if (priceRange.length === 2) { flatMatch.price = { $gte: priceRange[0], $lte: priceRange[1] }; }
-    if (selectedColors.length > 0) { flatMatch['color.name'] = { $in: selectedColors }; }
+    if (priceRange.length === 2) { andConditions.push({ price: { $gte: priceRange[0], $lte: priceRange[1] } }); }
+    if (selectedColors.length > 0) { andConditions.push({ 'color.name': { $in: selectedColors } }); }
+
+    const flatMatch = andConditions.length > 1 ? { $and: andConditions } : andConditions[0];
 
     // Aggregation: group by styleGroupId, pick first variant, paginate
     const sortOptions = {
@@ -492,17 +791,53 @@ export const getFilteredProducts = async (req, res) => {
     sortKeys.forEach(key => { if (sortOptions[key]) Object.assign(flatSort, sortOptions[key]); });
     if (Object.keys(flatSort).length === 0) flatSort = { _id: -1 };
 
+    const isRelevanceSort = (sortBy === 'relevance' || !sortBy) && hasSearch;
+
     const flatPipeline = [
       { $match: flatMatch },
-      { $sort: { styleGroupId: 1, ...flatSort } },
+      // Step: Deduplicate Warehouse and Merchant Store twins (canonicalId)
+      {
+        $addFields: {
+          canonicalId: { $ifNull: ['$linkedMerchantProductId', '$styleGroupId'] },
+          isWarehouseDoc: {
+            $cond: [
+              { $or: [{ $eq: ['$source', 'warehouse'] }, { $ne: [{ $ifNull: ['$warehouseId', null] }, null] }] },
+              1,
+              0
+            ]
+          }
+        }
+      },
+      {
+        $sort: {
+          isWarehouseDoc: -1, // Prefer Warehouse listing first
+          styleGroupId: 1,
+          ...flatSort
+        }
+      },
       {
         $group: {
-          _id: '$styleGroupId',
+          _id: '$canonicalId',
           doc: { $first: '$$ROOT' },
         }
       },
       { $replaceRoot: { newRoot: '$doc' } },
-      { $sort: flatSort },
+      ...(isRelevanceSort ? [
+        {
+          $addFields: {
+            __relevanceScore: {
+              $cond: [
+                { $regexMatch: { input: '$name', regex: sanitizedSearch, options: 'i' } },
+                2,
+                1
+              ]
+            }
+          }
+        },
+        { $sort: { __relevanceScore: -1, ...flatSort } }
+      ] : [
+        { $sort: flatSort }
+      ]),
       { $lookup: { from: 'merchants', localField: 'merchantId', foreignField: '_id', as: 'merchantDoc', pipeline: [{ $project: { shopName: 1, isOnline: 1, isZoneLive: 1 } }] } },
       { $lookup: { from: 'brands', localField: 'brandId', foreignField: '_id', as: 'brandDoc', pipeline: [{ $project: { name: 1 } }] } },
       {
@@ -516,6 +851,7 @@ export const getFilteredProducts = async (req, res) => {
                 ratings: 1, numReviews: 1, isTriable: 1,
                 variantId: { $toString: '$_id' },
                 price: 1, mrp: 1, discount: 1, images: 1, color: 1,
+                source: 1, warehouseId: 1,
                 merchant: { $arrayElemAt: ['$merchantDoc.shopName', 0] },
                 merchantIsOnline: { $arrayElemAt: ['$merchantDoc.isOnline', 0] },
                 merchantIsZoneLive: { $arrayElemAt: ['$merchantDoc.isZoneLive', 0] },
@@ -532,11 +868,29 @@ export const getFilteredProducts = async (req, res) => {
     const products = result?.products || [];
     const totalCount = result?.countResult?.[0]?.totalCount || 0;
 
+    const nearbyWhSet = new Set(req.nearbyWarehouseIds?.map(id => id.toString()) || []);
     const enrichedProducts = products.map(p => {
-      const isInstantBuyable = calculateIsInstantBuyable(p._id, p.merchantId, req.nearbyMerchantIds, {
-        isOnline: p.merchantIsOnline, isZoneLive: p.merchantIsZoneLive
-      });
-      return { ...p, isInstantBuyable, isNearby: req.nearbyMerchantIds?.some(id => id.toString() === p.merchantId?.toString()) || false, isOnline: p.merchantIsOnline || false };
+      const isWh = p.source === 'warehouse' || !!p.warehouseId;
+      const isWhNearby = p.warehouseId ? nearbyWhSet.has(p.warehouseId.toString()) : false;
+      const isInstantBuyable = isWh
+        ? isWhNearby
+        : calculateIsInstantBuyable(p._id, p.merchantId, req.nearbyMerchantIds, {
+            isOnline: p.merchantIsOnline, isZoneLive: p.merchantIsZoneLive
+          });
+      const isNearby = isWh
+        ? isWhNearby
+        : (req.nearbyMerchantIds?.some(id => id.toString() === p.merchantId?.toString()) || false);
+      const isOnline = deliveryMode === 'tryAndBuy'
+        ? (p.merchantIsOnline !== undefined ? p.merchantIsOnline : true)
+        : true;
+
+      return {
+        ...p,
+        isWarehouseListing: isWh,
+        isInstantBuyable,
+        isNearby,
+        isOnline
+      };
     });
 
     return res.json({ products: enrichedProducts, totalCount, page: pageNum, totalPages: Math.ceil(totalCount / limitNum) });
@@ -647,7 +1001,8 @@ export const getProductsByMerchantId = async (req, res) => {
     const queryFilter = {
       isActive: true,
       isDeleted: { $ne: true },
-      isVerified: true
+      isVerified: true,
+      stock: { $gt: 0 }
     };
     if (isWarehouse) {
       if (warehouse) {
@@ -666,6 +1021,7 @@ export const getProductsByMerchantId = async (req, res) => {
         { path: 'brandId', select: 'name' },
         { path: 'categoryId', select: 'name' },
         { path: 'subCategoryId', select: 'name' },
+        { path: 'merchantId', select: 'shopName isOnline isZoneLive' }
       ])
       .lean();
 
@@ -677,6 +1033,7 @@ export const getProductsByMerchantId = async (req, res) => {
       isMainVariant: true,
       isWarehouseListing: isWarehouseBrand || isWarehouse || card.source === 'warehouse',
       source: (isWarehouseBrand || isWarehouse || card.source === 'warehouse') ? 'warehouse' : 'shop',
+      isOnline: isWarehouseBrand || isWarehouse ? true : (merchant?.isOnline !== false),
       isInstantBuyable: (isWarehouseBrand || isWarehouse || card.source === 'warehouse') ? true : ((
         req.nearbyMerchantIds?.some(id => id.toString() === merchantId.toString()) &&
         merchant?.isOnline &&
@@ -703,14 +1060,17 @@ export const getYouMayLikeProducts = async (req, res) => {
     const merchId = mongoose.Types.ObjectId.isValid(merchantId) ? new mongoose.Types.ObjectId(merchantId) : null;
     const excludeObjId = mongoose.Types.ObjectId.isValid(excludeId) ? new mongoose.Types.ObjectId(excludeId) : null;
 
-    const flatFilter = { subCategoryId: subCatId, isActive: true, isDeleted: { $ne: true }, isVerified: true };
+    const flatFilter = { subCategoryId: subCatId, isActive: true, isDeleted: { $ne: true }, isVerified: true, stock: { $gt: 0 } };
     if (excludeObjId) flatFilter.styleGroupId = { $ne: excludeObjId.toString() };
     if (req.nearbyMerchantIds) {
       if (merchId) flatFilter.merchantId = { $in: [...req.nearbyMerchantIds, merchId] };
       else flatFilter.merchantId = { $in: req.nearbyMerchantIds };
     }
 
-    const flatProducts = await ProductFlat.find(flatFilter).limit(parseInt(limit) * 5).lean();
+    const flatProducts = await ProductFlat.find(flatFilter)
+      .populate('merchantId', 'shopName isOnline isZoneLive')
+      .limit(parseInt(limit) * 5)
+      .lean();
     const cards = flatToCardData(flatProducts, req).slice(0, parseInt(limit));
     return res.status(200).json(cards);
   } catch (error) {
@@ -905,7 +1265,7 @@ export const getCourierProducts = async (req, res) => {
 
     const skip = (parseInt(page) - 1) * parseInt(limit);
     const flatProducts = await ProductFlat.find(filter)
-      .populate('merchantId', 'shopName isOnline')
+      .populate('merchantId', 'shopName isOnline isZoneLive fulfillmentType')
       .sort({ createdAt: -1 })
       .lean();
 
@@ -913,10 +1273,23 @@ export const getCourierProducts = async (req, res) => {
     const totalCount = cards.length;
     const paginatedCards = cards.slice(skip, skip + parseInt(limit));
 
+    const nearbyWhSet = new Set(req.nearbyWarehouseIds?.map(id => id.toString()) || []);
+    const nearbyMerchantSet = new Set(req.nearbyMerchantIds?.map(id => id.toString()) || []);
+
     const enriched = paginatedCards.map(p => {
-      const merchantIdStr = p.merchantId?.toString();
-      const isNearby = req.nearbyMerchantIds?.some(id => id.toString() === merchantIdStr) || false;
-      return { ...p, isNearby, isOnline: true };
+      const isWh = p.isWarehouseListing || p.source === 'warehouse' || !!p.warehouseId;
+      const isWhNearby = p.warehouseId ? nearbyWhSet.has(p.warehouseId.toString()) : (isWh && nearbyWhSet.size > 0);
+      const isMerchantNearby = p.merchantId ? nearbyMerchantSet.has(p.merchantId.toString()) : false;
+      const isNearby = isWh ? isWhNearby : (p.isNearby !== undefined ? p.isNearby : isMerchantNearby);
+      const isInstantBuyable = isWh ? isWhNearby : (p.isInstantBuyable !== undefined ? p.isInstantBuyable : isMerchantNearby);
+      return {
+        ...p,
+        isNearby,
+        isInstantBuyable,
+        isWarehouseListing: isWh,
+        source: isWh ? 'warehouse' : (p.source || 'shop'),
+        isOnline: true
+      };
     });
 
     return res.status(200).json({

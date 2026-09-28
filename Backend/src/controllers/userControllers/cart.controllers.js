@@ -49,10 +49,15 @@ export const addToCart = async (req, res) => {
       warehouseIdObj = matchedDoc.warehouseId;
     }
 
-    if (matchedDoc.stock < quantity) {
-      return res.status(400).json({ message: `Only ${matchedDoc.stock} items left in stock` });
+    const availableStock = Math.max(0, matchedDoc.stock - (matchedDoc.reservedStock || 0));
+    if (availableStock < quantity) {
+      return res.status(400).json({
+        message: availableStock > 0
+          ? `Only ${availableStock} items left in stock`
+          : "This item is currently out of stock"
+      });
     }
-    sizeObjStock = matchedDoc.stock;
+    sizeObjStock = availableStock;
     targetCatName = matchedDoc.categoryId?.name?.toLowerCase() || '';
 
     let cart = await Cart.findOne({ userId });
@@ -240,12 +245,18 @@ export const getCart = async (req, res) => {
           $or: [{ styleGroupId: item.warehouseProductId }, { _id: item.variantId }]
         }).lean();
         if (whProduct) {
+          const available = Math.max(0, (whProduct.stock || 0) - (whProduct.reservedStock || 0));
           item.productId = whProduct;
           item.price = whProduct.price || 0;
           item.mrp = whProduct.mrp || 0;
+          item.stockQuantity = available;
+          item.isOutOfStock = available <= 0 || available < item.quantity;
+          item.merchantId = whProduct.merchantId;
         } else {
           item.price = 0;
           item.mrp = 0;
+          item.stockQuantity = 0;
+          item.isOutOfStock = true;
         }
         continue;
       }
@@ -268,16 +279,21 @@ export const getCart = async (req, res) => {
           (v) => v._id.toString() === item.variantId.toString() || generateColorVariantId(styleGroupId, v.color?.name) === item.variantId.toString()
         ) || siblings[0];
 
+        const available = Math.max(0, (matched.stock || 0) - (matched.reservedStock || 0));
         item.productId = {
           ...matched,
           _id: styleGroupId,
         };
         item.price = matched.price || 0;
         item.mrp = matched.mrp || 0;
+        item.stockQuantity = available;
+        item.isOutOfStock = available <= 0 || available < item.quantity;
       } else {
         item.productId = null;
         item.price = 0;
         item.mrp = 0;
+        item.stockQuantity = 0;
+        item.isOutOfStock = true;
       }
     }
 
@@ -422,10 +438,10 @@ export const getCart = async (req, res) => {
           mTotals.totalReturnCharge = (mAppliedOffers.freeReturn || mAppliedOffers.freeDelivery) ? 0 : mReturnCharge;
           mTotals.serviceGST = 0;
           mTotals.totalUpfrontPayable = 0;
-          mTotals.finalTotal = Math.round(mSubtotal - (mAppliedOffers.totalDiscount || 0) + mTotals.totalDeliveryCharge + mTotals.totalReturnCharge + tip);
+          mTotals.finalTotal = Math.max(0, Math.round(mSubtotal - (mAppliedOffers.totalDiscount || 0) + mTotals.totalDeliveryCharge + mTotals.totalReturnCharge + tip));
         } else {
           mTotals.totalUpfrontPayable = 0;
-          mTotals.finalTotal = Math.round(mSubtotal - (mAppliedOffers.totalDiscount || 0) + mDeliveryCharge + mReturnCharge + tip + mServiceGST);
+          mTotals.finalTotal = Math.max(0, Math.round(mSubtotal - (mAppliedOffers.totalDiscount || 0) + mDeliveryCharge + mReturnCharge + tip + mServiceGST));
         }
         mTotals.discount = Math.round((mMrpTotal - mSubtotal) + (mAppliedOffers.totalDiscount || 0));
         mTotals.rawDeliveryCharge = mDeliveryCharge;
@@ -553,6 +569,29 @@ export const updateCartQuantity = async (req, res) => {
     if (currentMerchantQtyExcludingThisItem + (quantity * targetMult) > 6) {
       const sourceLabel = isWarehouseItem ? 'FlashMart' : 'Try & Buy';
       return res.status(400).json({ success: false, message: `You can only have up to 6 ${sourceLabel} item slots per merchant (Footwear items count as 2 slots).` });
+    }
+
+    // Verify available stock
+    const variantDoc = await ProductFlat.findOne({
+      $or: [
+        ...(item.variantId ? [{ _id: item.variantId }] : []),
+        { styleGroupId: item.productId, size: item.size }
+      ],
+      size: item.size,
+      isDeleted: { $ne: true }
+    }).lean();
+
+    if (variantDoc) {
+      const available = Math.max(0, (variantDoc.stock || 0) - (variantDoc.reservedStock || 0));
+      if (quantity > available) {
+        return res.status(400).json({ 
+          success: false, 
+          message: available > 0 
+            ? `Only ${available} items left in stock` 
+            : 'This item is currently out of stock' 
+        });
+      }
+      item.stockQuantity = available;
     }
 
     item.quantity = quantity;

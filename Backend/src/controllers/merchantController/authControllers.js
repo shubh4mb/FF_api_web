@@ -820,3 +820,72 @@ export const resetPasswordMerchant = async (req, res) => {
     return res.status(500).json({ success: false, message: "Failed to reset password", error: err.message });
   }
 };
+
+export const updateMerchantBranding = async (req, res) => {
+  try {
+    const { merchantId } = req.params;
+
+    if (req.merchantId && req.merchantId.toString() !== merchantId.toString()) {
+      return res.status(403).json({ success: false, message: "Unauthorized to update this merchant's branding" });
+    }
+
+    const merchant = await Merchant.findById(merchantId);
+    if (!merchant) {
+      return res.status(404).json({ success: false, message: "Merchant not found" });
+    }
+
+    let updated = false;
+
+    if (req.files && req.files['logo'] && req.files['logo'].length > 0) {
+      if (merchant.logo?.public_id) {
+        try {
+          await storageService.deleteFile(merchant.logo.public_id);
+        } catch (e) {
+          console.warn("Could not delete old logo:", e.message);
+        }
+      }
+      const logo = await storageService.uploadSingle(req.files['logo'], "merchant_logos");
+      if (logo) {
+        merchant.logo = logo;
+        updated = true;
+      }
+    }
+
+    if (req.files && req.files['backgroundImage'] && req.files['backgroundImage'].length > 0) {
+      if (merchant.backgroundImage?.public_id) {
+        try {
+          await storageService.deleteFile(merchant.backgroundImage.public_id);
+        } catch (e) {
+          console.warn("Could not delete old background:", e.message);
+        }
+      }
+      const backgroundImage = await storageService.uploadSingle(req.files['backgroundImage'], "merchant_backgrounds");
+      if (backgroundImage) {
+        merchant.backgroundImage = backgroundImage;
+        updated = true;
+      }
+    }
+
+    if (!updated) {
+      return res.status(400).json({ success: false, message: "No logo or background image provided" });
+    }
+
+    await merchant.save();
+
+    return res.status(200).json({
+      success: true,
+      message: "Branding images updated successfully",
+      merchant,
+      logo: merchant.logo,
+      backgroundImage: merchant.backgroundImage
+    });
+  } catch (error) {
+    console.error("Error updating merchant branding:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to update branding images",
+      error: error.message
+    });
+  }
+};
+

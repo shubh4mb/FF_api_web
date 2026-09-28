@@ -91,6 +91,7 @@ router.post(
                     url: result.secure_url,
                     public_id: result.public_id,
                     itemId: req.body.itemId || null,
+                    caption: req.body.caption || "general",
                     uploadedAt: new Date(),
                 };
 

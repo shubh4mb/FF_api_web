@@ -201,6 +201,57 @@ export const settleOrder = async (order, providedSession = null) => {
             });
         }
 
+        // ── Auto-record Inflow in Unified Transaction Ledger ──
+        try {
+            const { recordTransaction } = await import("./transactionHelper.js");
+            const paymentAmount = order.finalBilling?.totalPayable ?? order.totalAmount ?? 0;
+            if (paymentAmount > 0) {
+                await recordTransaction({
+                    amount: paymentAmount,
+                    type: "credit",
+                    category: "customer_payment",
+                    source: order.paymentMethod === "cod" ? "system_cod" : "system_razorpay",
+                    status: "completed",
+                    paymentMethod: order.paymentMethod === "cod" ? "cash" : "razorpay",
+                    referenceNumber: order.razorpayPaymentId || null,
+                    recipientType: "user",
+                    recipientId: order.userId,
+                    recipientDetails: {
+                        name: order.deliveryLocation?.name || "",
+                        phone: order.deliveryLocation?.phone || "",
+                    },
+                    orderId: order._id,
+                    notes: `Customer payment settled for order #${order._id.toString().slice(-6).toUpperCase()}`,
+                }, session);
+            }
+
+            if (order.deliveryFeeRecovery?.required && 
+                ['paid_online', 'paid_via_qr', 'paid_cash'].includes(order.deliveryFeeRecovery?.status) && 
+                order.deliveryFeeRecovery?.amount > 0) {
+                const recoverySource = order.deliveryFeeRecovery.status === 'paid_via_qr' ? 'system_qr' : (order.deliveryFeeRecovery.status === 'paid_cash' ? 'system_cod' : 'system_razorpay');
+                const recoveryMethod = order.deliveryFeeRecovery.status === 'paid_via_qr' ? 'upi' : (order.deliveryFeeRecovery.status === 'paid_cash' ? 'cash' : 'razorpay');
+                await recordTransaction({
+                    amount: order.deliveryFeeRecovery.amount,
+                    type: "credit",
+                    category: "delivery_fee_recovery",
+                    source: recoverySource,
+                    status: "completed",
+                    paymentMethod: recoveryMethod,
+                    referenceNumber: order.deliveryFeeRecovery.razorpayPaymentId || null,
+                    recipientType: "user",
+                    recipientId: order.userId,
+                    recipientDetails: {
+                        name: order.deliveryLocation?.name || "",
+                        phone: order.deliveryLocation?.phone || "",
+                    },
+                    orderId: order._id,
+                    notes: `Delivery fee recovery collected (${order.deliveryFeeRecovery.status}) for order #${order._id.toString().slice(-6).toUpperCase()}`,
+                }, session);
+            }
+        } catch (ledgerErr) {
+            console.warn("Could not log order payment to transaction ledger:", ledgerErr.message);
+        }
+
         // Mark as settled
         order.settlementStatus = "settled";
         

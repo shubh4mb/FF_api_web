@@ -21,6 +21,12 @@ import { checkDeliveryAvailability } from '../controllers/adminControllers/zone.
 import { resolveNearbyMerchants } from '../middleware/nearbyMerchants.middleware.js';
 import Notification from "../models/notification.model.js";
 import User from "../models/user.model.js";
+import Order from "../models/order.model.js";
+import CourierOrder from "../models/courierOrder.model.js";
+import Address from "../models/address.model.js";
+import Cart from "../models/cart.model.js";
+import CourierCart from "../models/courierCart.model.js";
+import Wishlist from "../models/wishlist.model.js";
 import { getWalletDetails } from "../helperFns/walletHelper.js";
 
 import userBannerRoutes from './userBanner.routes.js';
@@ -239,32 +245,84 @@ router.put("/profile/phone", authMiddleware, async (req, res) => {
   }
 });
 
-// ── Delete Account (Apple Guideline 5.1.1(v) Compliance) ──
+// ── Delete Account (Apple Guideline 5.1.1(v) & DPDP Act 2023 Compliance) ──
 router.delete("/account", authMiddleware, async (req, res) => {
   try {
-    const userId = req.user.userId;
+    const userId = req.user.userId || req.user.id;
     const user = await User.findById(userId);
     if (!user) {
-      return res.status(404).json({ message: "User not found" });
+      return res.status(404).json({ success: false, message: "User not found" });
     }
 
-    // Delete user from database
+    // 1. Safety Guard: Check for active Try & Buy orders
+    const activeTryBuyOrders = await Order.countDocuments({
+      user: userId,
+      orderStatus: {
+        $in: [
+          'pending',
+          'placed',
+          'accepted',
+          'packed',
+          'in_transit',
+          'try_phase',
+          'selection_made',
+          'return_in_progress',
+        ],
+      },
+    });
+    if (activeTryBuyOrders > 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Cannot delete account while you have an active order or doorstep trial in progress. Please complete or cancel your order first.",
+      });
+    }
+
+    // 2. Safety Guard: Check for active Courier orders
+    const activeCourierOrders = await CourierOrder.countDocuments({
+      user: userId,
+      orderStatus: { $in: ['placed', 'confirmed', 'packed', 'shipped'] },
+    });
+    if (activeCourierOrders > 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Cannot delete account while you have an active courier delivery in transit. Please wait for delivery completion.",
+      });
+    }
+
+    // 3. Fraud / Liability Guard: Outstanding penalties or administrative suspension
+    if (user.deliveryFeePenalties > 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Cannot delete account with outstanding trial delivery fees. Please settle your pending balance or contact support.",
+      });
+    }
+
+    if (user.isBlocked) {
+      return res.status(403).json({
+        success: false,
+        message: "Your account is currently restricted. Please contact support to resolve account status.",
+      });
+    }
+
+    // 4. Privacy Compliance (Right to Erasure): Erase all personal identifiable data
+    await Promise.allSettled([
+      Address.deleteMany({ user: userId }),
+      Cart.deleteMany({ user: userId }),
+      CourierCart.deleteMany({ user: userId }),
+      Wishlist.deleteMany({ user: userId }),
+      Notification.deleteMany({ userId }),
+    ]);
+
+    // 5. Delete User document from database
     await User.findByIdAndDelete(userId);
-
-    // Clean up notifications if any
-    try {
-      await Notification.deleteMany({ userId });
-    } catch (cleanupErr) {
-      console.warn("Non-fatal: Error deleting user notifications:", cleanupErr);
-    }
 
     return res.status(200).json({
       success: true,
-      message: "Account and associated data deleted successfully.",
+      message: "Account and personal data erased successfully.",
     });
   } catch (err) {
     console.error("Delete account error:", err);
-    return res.status(500).json({ message: "Failed to delete account" });
+    return res.status(500).json({ success: false, message: "Failed to delete account. Please try again later." });
   }
 });
 
@@ -328,7 +386,7 @@ router.get('/products/courier', resolveNearbyMerchants, getCourierProducts);
  *       200:
  *         description: List of recommended products
  */
-router.get('/products/recommended', authMiddleware, resolveNearbyMerchants, recommendedProducts); // requires auth for cart/wishlist
+router.get('/products/recommended', authMiddlewareOptional, resolveNearbyMerchants, recommendedProducts); // works for both authenticated & guest users
 router.get('/products/search-suggestions', getSearchSuggestions);
 router.post('/products/filtered', resolveNearbyMerchants, getFilteredProducts)
 router.get('/products/getYouMayLikeProducts', resolveNearbyMerchants, getYouMayLikeProducts);
@@ -548,14 +606,36 @@ router.post('/courier-cart/offers/deselect', authMiddleware, deselectOfferCourie
 
 // ── Support Tickets ──
 import SupportTicket from '../models/supportTicket.model.js';
+import { uploadToCloudinary } from '../config/cloudinary.config.js';
 
-router.post('/support/ticket', authMiddleware, async (req, res) => {
+router.post('/support/ticket', authMiddleware, upload.array('images', 5), handleMulterError, async (req, res) => {
   try {
     const userId = req.user.userId;
-    const { category, orderId, message, phone } = req.body;
+    const { category, orderId, message, phone, itemId, itemDetails } = req.body;
 
     if (!category) {
       return res.status(400).json({ message: "category is required" });
+    }
+
+    let parsedItemDetails = null;
+    if (itemDetails) {
+      try {
+        parsedItemDetails = typeof itemDetails === 'string' ? JSON.parse(itemDetails) : itemDetails;
+      } catch (e) {
+        console.warn('Could not parse itemDetails JSON:', e.message);
+      }
+    }
+
+    let images = [];
+    if (req.files && req.files.length > 0) {
+      const uploadPromises = req.files.map(file =>
+        uploadToCloudinary(file.buffer, {
+          folder: `flashfits/support-tickets/${orderId || 'general'}`,
+          resource_type: "image",
+        })
+      );
+      const results = await Promise.all(uploadPromises);
+      images = results.map(r => ({ url: r.secure_url, public_id: r.public_id }));
     }
 
     const ticket = await SupportTicket.create({
@@ -563,13 +643,16 @@ router.post('/support/ticket', authMiddleware, async (req, res) => {
       phone: phone || "N/A",
       category,
       orderId: orderId || null,
+      itemId: itemId || null,
+      itemDetails: parsedItemDetails || null,
       message: message || "",
+      images,
     });
 
     return res.status(201).json({ success: true, ticket });
   } catch (err) {
     console.error("Create support ticket error:", err);
-    return res.status(500).json({ message: "Failed to create support ticket" });
+    return res.status(500).json({ message: "Failed to create support ticket", error: err.message });
   }
 });
 

@@ -30,6 +30,12 @@ import { getPayouts, triggerPayout, getPayoutById, getPendingPayouts, markPayout
 import { getCancellationRequests, adminCancelOrder, getUnresponsiveRiderReports, resolveUnresponsiveRider } from '../controllers/adminControllers/order.controllers.js';
 import { getAuditLogs } from '../controllers/adminControllers/auditLog.controllers.js';
 import { sendBroadcastNotification } from '../controllers/adminControllers/notification.controllers.js';
+import {
+  createManualTransaction,
+  getAllTransactions,
+  getRecipients,
+  getTransactionById,
+} from '../controllers/adminControllers/transaction.controllers.js';
 
 const router = express.Router();
 
@@ -149,6 +155,12 @@ router.get('/payouts/:id', verifyAdmin, getPayoutById);
 router.post('/payouts/:id/mark-paid', verifyAdmin, markPayoutPaid);
 router.post('/payouts/trigger', verifyAdmin, triggerPayout);
 
+// ── Financial Transactions & Ledger ──
+router.get('/transactions', verifyAdmin, getAllTransactions);
+router.get('/transactions/recipients', verifyAdmin, getRecipients);
+router.get('/transactions/:id', verifyAdmin, getTransactionById);
+router.post('/transactions/manual', verifyAdmin, upload.single('receipt'), handleMulterError, createManualTransaction);
+
 // ── Support Tickets ──
 import SupportTicket from '../models/supportTicket.model.js';
 
@@ -239,9 +251,33 @@ router.use('/leads', verifyAdmin, leadRoutes);
 router.get('/audit-logs', verifyAdmin, getAuditLogs);
 
 // ── Return Issues ──
-import { getAllReturnIssues, updateReturnIssueStatus } from '../controllers/adminControllers/returnIssue.controllers.js';
+import {
+  getAllReturnIssues,
+  getReturnIssueInvestigationDetails,
+  updateReturnIssueStatus,
+  refundMerchantForIssue,
+} from '../controllers/adminControllers/returnIssue.controllers.js';
 router.get('/return-issues', verifyAdmin, getAllReturnIssues);
+router.get('/return-issues/:id/details', verifyAdmin, getReturnIssueInvestigationDetails);
 router.patch('/return-issues/:id', verifyAdmin, updateReturnIssueStatus);
+router.post('/return-issues/:id/refund-merchant', verifyAdmin, upload.single('receipt'), handleMulterError, refundMerchantForIssue);
+
+// ── Moderation & Enforcement (User/IP/Device, Rider, Merchant) ──
+import {
+  blockUser,
+  unblockUser,
+  suspendRider,
+  unsuspendRider,
+  suspendMerchant,
+  unsuspendMerchant,
+} from '../controllers/adminControllers/moderation.controllers.js';
+
+router.post('/moderation/block-user', verifyAdmin, blockUser);
+router.post('/moderation/unblock-user', verifyAdmin, unblockUser);
+router.post('/moderation/suspend-rider', verifyAdmin, suspendRider);
+router.post('/moderation/unsuspend-rider', verifyAdmin, unsuspendRider);
+router.post('/moderation/suspend-merchant', verifyAdmin, suspendMerchant);
+router.post('/moderation/unsuspend-merchant', verifyAdmin, unsuspendMerchant);
 
 // ── Notifications ──
 router.post('/notifications/broadcast', verifyAdmin, sendBroadcastNotification);

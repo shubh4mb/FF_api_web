@@ -58,7 +58,7 @@ export const convertToLegacyFormat = (activeProduct, siblingProducts = []) => {
     colorGroups[colorName].sizesMap[p.size] = {
       _id: p._id.toString(), // The flat size combination's document _id is the sizeId
       size: p.size,
-      stock: p.stock || 0
+      stock: Math.max(0, (p.stock || 0) - (p.reservedStock || 0))
     };
   });
 

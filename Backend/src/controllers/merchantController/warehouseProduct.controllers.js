@@ -2,6 +2,7 @@ import ProductFlat from '../../models/productFlat.model.js';
 import Warehouse from '../../models/warehouse.model.js';
 import Merchant from '../../models/merchant.model.js';
 import Brand from '../../models/brand.model.js';
+import Category from '../../models/category.model.js';
 import { storageService } from '../../services/storage.service.js';
 import { asyncHandler } from '../../utils/asyncHandler.js';
 import { ApiError } from '../../utils/ApiError.js';
@@ -42,35 +43,66 @@ export const getMyWarehouseProducts = asyncHandler(async (req, res) => {
 
   const skip = (Number(page) - 1) * Number(limit);
 
-  const pipeline = [
-    { $match: filter },
-    { $sort: { createdAt: -1 } },
-    {
-      $group: {
-        _id: '$styleGroupId',
-        doc: { $first: '$$ROOT' }
-      }
-    },
-    { $replaceRoot: { newRoot: '$doc' } },
-    { $sort: { createdAt: -1 } },
-    { $skip: skip },
-    { $limit: Number(limit) },
-  ];
+  const flatProducts = await ProductFlat.find(filter)
+    .populate('merchantId', 'shopName phoneNumber email')
+    .populate('brandId', 'name')
+    .populate('categoryId', 'name')
+    .populate('subCategoryId', 'name')
+    .sort({ createdAt: -1 });
 
-  const products = await ProductFlat.aggregate(pipeline);
-  await ProductFlat.populate(products, [
-    { path: 'merchantId', select: 'shopName phoneNumber' },
-    { path: 'brandId', select: 'name' },
-    { path: 'categoryId', select: 'name' },
-    { path: 'subCategoryId', select: 'name' }
-  ]);
+  const groups = {};
+  flatProducts.forEach(p => {
+    const colorName = p.color?.name || 'Default';
+    const key = `${p.styleGroupId || p._id}_${colorName}`;
+    if (!groups[key]) {
+      groups[key] = {
+        _id: p.styleGroupId || p._id.toString(),
+        id: p.styleGroupId || p._id.toString(),
+        styleGroupId: p.styleGroupId || p._id.toString(),
+        name: p.name,
+        description: p.description,
+        styleName: p.styleName || "",
+        productCode: p.productCode,
+        merchantId: p.merchantId,
+        brandId: p.brandId,
+        categoryId: p.categoryId,
+        subCategoryId: p.subCategoryId,
+        gender: p.gender,
+        isTriable: p.isTriable,
+        commissionRate: p.commissionRate,
+        isActive: p.isActive,
+        isVerified: p.isVerified,
+        createdAt: p.createdAt,
+        updatedAt: p.updatedAt,
+        sizes: [],
+        variants: [{
+          _id: p._id.toString(),
+          color: p.color,
+          mrp: p.mrp,
+          price: p.price,
+          discount: p.discount,
+          images: p.images,
+          sizes: []
+        }]
+      };
+    }
+    const sizeItem = {
+      _id: p._id.toString(),
+      size: p.size,
+      stock: p.stock,
+      productCode: p.productCode
+    };
+    groups[key].sizes.push(sizeItem);
+    groups[key].variants[0].sizes.push(sizeItem);
+  });
 
-  const uniqueStyleGroups = await ProductFlat.distinct('styleGroupId', filter);
-  const total = uniqueStyleGroups.length;
+  const allGrouped = Object.values(groups);
+  const total = allGrouped.length;
+  const paginated = allGrouped.slice(skip, skip + Number(limit));
 
   return res
     .status(200)
-    .json(new ApiResponse(200, { products, total, page: Number(page), limit: Number(limit) }, 'Warehouse products retrieved'));
+    .json(new ApiResponse(200, { products: paginated, total, page: Number(page), limit: Number(limit) }, 'Warehouse products retrieved'));
 });
 
 /**
@@ -325,31 +357,52 @@ export const deleteMyWarehouseProduct = asyncHandler(async (req, res) => {
 export const getMyConsignedWarehouseStock = asyncHandler(async (req, res) => {
   const merchantId = req.merchantId;
   
-  const pipeline = [
-    { $match: { merchantId: new mongoose.Types.ObjectId(merchantId), source: 'warehouse', isDeleted: { $ne: true } } },
-    { $sort: { createdAt: -1 } },
-    {
-      $group: {
-        _id: '$styleGroupId',
-        doc: { $first: '$$ROOT' }
-      }
-    },
-    { $replaceRoot: { newRoot: '$doc' } },
-    { $sort: { createdAt: -1 } }
-  ];
+  const rawProducts = await ProductFlat.find({
+    merchantId: new mongoose.Types.ObjectId(merchantId),
+    source: 'warehouse',
+    isDeleted: { $ne: true }
+  })
+    .populate('warehouseId', 'name address code')
+    .populate('categoryId', 'name')
+    .populate('brandId', 'name')
+    .sort({ createdAt: -1 });
 
-  const products = await ProductFlat.aggregate(pipeline);
-  await ProductFlat.populate(products, [
-    { path: 'warehouseId', select: 'name address code' },
-    { path: 'categoryId', select: 'name' },
-    { path: 'brandId', select: 'name' }
-  ]);
+  const groups = {};
+  rawProducts.forEach(p => {
+    const colorName = p.color?.name || 'Default';
+    const key = `${p.styleGroupId || p._id}_${colorName}`;
+    if (!groups[key]) {
+      groups[key] = {
+        _id: p.styleGroupId || p._id.toString(),
+        name: p.name,
+        description: p.description,
+        warehouseId: p.warehouseId,
+        categoryId: p.categoryId,
+        brandId: p.brandId,
+        commissionRate: p.commissionRate,
+        createdAt: p.createdAt,
+        variants: [{
+          _id: p._id.toString(),
+          color: p.color,
+          mrp: p.mrp,
+          price: p.price,
+          discount: p.discount,
+          images: p.images,
+          sizes: []
+        }]
+      };
+    }
+    groups[key].variants[0].sizes.push({
+      size: p.size,
+      stock: p.stock
+    });
+  });
 
   const merchant = await Merchant.findById(merchantId).select('warehouseStatus');
 
   return res.status(200).json(new ApiResponse(200, {
     warehouseStatus: merchant?.warehouseStatus || 'none',
-    products
+    products: Object.values(groups)
   }, 'Consigned warehouse stock retrieved successfully'));
 });
 

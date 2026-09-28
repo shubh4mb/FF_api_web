@@ -256,11 +256,17 @@ export const updateSize = async (req, res) => {
     const safeStock = isNaN(Number(stock)) ? 0 : Number(stock);
 
     let updatedFlatDoc;
+    const merchant = await Merchant.findById(req.merchantId);
+    const isWarehouse = merchant && merchant.accountType === 'warehouse' && merchant.warehouseId;
+    const ownerCondition = isWarehouse
+      ? { warehouseId: merchant.warehouseId, source: 'warehouse' }
+      : { merchantId: req.merchantId };
+
     if (sizeId) {
       const isObjId = mongoose.Types.ObjectId.isValid(sizeId);
       const query = isObjId
-        ? { _id: sizeId, merchantId: req.merchantId }
-        : { styleGroupId: productId, size: sizeId, merchantId: req.merchantId };
+        ? { _id: sizeId, ...ownerCondition }
+        : { styleGroupId: productId, size: sizeId, ...ownerCondition };
 
       updatedFlatDoc = await ProductFlat.findOneAndUpdate(
         query,
@@ -268,7 +274,7 @@ export const updateSize = async (req, res) => {
         { new: true }
       );
     } else {
-      const allFlatVariants = await ProductFlat.find({ styleGroupId: productId, merchantId: req.merchantId });
+      const allFlatVariants = await ProductFlat.find({ styleGroupId: productId, ...ownerCondition });
       const targetColorVariants = allFlatVariants.filter(
         v => generateColorVariantId(productId, v.color.name) === variantId
       );
@@ -770,24 +776,52 @@ export const getProductsByMerchantId = async (req, res) => {
         .populate("merchantId", "shopName email brandName")
         .sort({ createdAt: -1 });
 
-      const transformed = products.map(p => ({
-        id: p._id.toString(),
-        styleGroupId: p.styleGroupId || p._id.toString(),
-        name: p.name,
-        productCode: p.productCode,
-        styleName: p.styleName || "",
-        attributes: cleanAttributesHelper(p.attributes),
-        features: p.features instanceof Map ? Object.fromEntries(p.features) : (p.features || {}),
-        merchant: { id: p.merchantId?._id?.toString(), shopName: p.merchantId?.shopName || "", email: p.merchantId?.email || "" },
-        brand: p.brandId?.name || "", category: p.categoryId?.name || "", subCategory: p.subCategoryId?.name || "",
-        brandId: p.brandId?._id?.toString() || null, categoryId: p.categoryId?._id?.toString() || null, subCategoryId: p.subCategoryId?._id?.toString() || null,
-        gender: p.gender, description: p.description, tags: p.tags, isTriable: p.isTriable,
-        ratings: p.ratings, numReviews: p.numReviews, isActive: p.isActive,
-        color: p.color, mrp: p.mrp, price: p.price, discount: p.discount, images: p.images,
-        createdAt: p.createdAt, updatedAt: p.updatedAt,
-        sizes: [{ _id: p._id.toString(), size: p.size, stock: p.stock, productCode: p.productCode }]
-      }));
-      return res.status(200).json(transformed);
+      const groups = {};
+      products.forEach(p => {
+        const colorName = p.color?.name || 'Default';
+        const key = `${p.styleGroupId || p._id}_${colorName}`;
+        if (!groups[key]) {
+          groups[key] = {
+            id: p.styleGroupId || p._id.toString(),
+            _id: p.styleGroupId || p._id.toString(),
+            styleGroupId: p.styleGroupId || p._id.toString(),
+            name: p.name,
+            productCode: p.productCode,
+            styleName: p.styleName || "",
+            source: 'warehouse',
+            warehouseId: p.warehouseId,
+            attributes: cleanAttributesHelper(p.attributes),
+            features: p.features instanceof Map ? Object.fromEntries(p.features) : (p.features || {}),
+            merchant: { id: p.merchantId?._id?.toString(), shopName: p.merchantId?.shopName || "", email: p.merchantId?.email || "" },
+            brand: p.brandId?.name || "", category: p.categoryId?.name || "", subCategory: p.subCategoryId?.name || "",
+            brandId: p.brandId?._id?.toString() || null, categoryId: p.categoryId?._id?.toString() || null, subCategoryId: p.subCategoryId?._id?.toString() || null,
+            gender: p.gender, description: p.description, tags: p.tags, isTriable: p.isTriable,
+            ratings: p.ratings, numReviews: p.numReviews, isActive: p.isActive,
+            color: p.color, mrp: p.mrp, price: p.price, discount: p.discount, images: p.images,
+            createdAt: p.createdAt, updatedAt: p.updatedAt,
+            sizes: [],
+            variants: [{
+              _id: p._id.toString(),
+              color: p.color,
+              mrp: p.mrp,
+              price: p.price,
+              discount: p.discount,
+              images: p.images,
+              sizes: []
+            }]
+          };
+        }
+        const szItem = {
+          _id: p._id.toString(),
+          size: p.size,
+          stock: p.stock,
+          productCode: p.productCode
+        };
+        groups[key].sizes.push(szItem);
+        groups[key].variants[0].sizes.push(szItem);
+      });
+
+      return res.status(200).json(Object.values(groups));
     }
 
     const flatProducts = await ProductFlat.find({
@@ -935,14 +969,23 @@ export const deleteImage = async (req, res) => {
 export const deleteProduct = async (req, res) => {
   try {
     const { productId } = req.params;
+    const merchant = await Merchant.findById(req.merchantId);
+    const isWarehouse = merchant && merchant.accountType === 'warehouse' && merchant.warehouseId;
+    const ownerCondition = isWarehouse
+      ? { warehouseId: merchant.warehouseId, source: 'warehouse' }
+      : { merchantId: req.merchantId };
 
-    const deleted = await ProductFlat.findOneAndUpdate(
-      { _id: productId, merchantId: req.merchantId },
-      { isDeleted: true },
-      { new: true }
+    const isObjId = mongoose.Types.ObjectId.isValid(productId);
+    const query = isObjId
+      ? { _id: productId, ...ownerCondition }
+      : { styleGroupId: productId, ...ownerCondition };
+
+    const deleted = await ProductFlat.updateMany(
+      query,
+      { $set: { isDeleted: true } }
     );
 
-    if (!deleted) {
+    if (!deleted || deleted.matchedCount === 0) {
       return res.status(404).json({
         success: false,
         message: "Product not found",
@@ -952,7 +995,6 @@ export const deleteProduct = async (req, res) => {
     return res.json({
       success: true,
       message: "Product deleted successfully",
-      product: deleted,
     });
   } catch (err) {
     console.error("Error deleting product:", err);

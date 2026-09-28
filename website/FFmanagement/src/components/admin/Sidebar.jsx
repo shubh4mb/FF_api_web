@@ -23,6 +23,7 @@ function Sidebar({ isOpen, onClose }) {
     { to: '/admin/collections', label: 'Collections', roles: ['superadmin'] },
     { to: '/admin/incentives', label: 'Incentives', roles: ['superadmin'] },
     { to: '/admin/payouts', label: 'Payouts', roles: ['superadmin'] },
+    { to: '/admin/transactions', label: 'Transactions', roles: ['superadmin'] },
     { to: '/admin/support', label: 'Support', roles: ['superadmin'] },
     { to: '/admin/return-issues', label: 'Return Issues', roles: ['superadmin'] },
     { to: '/admin/settings', label: 'Settings', roles: ['superadmin'] },

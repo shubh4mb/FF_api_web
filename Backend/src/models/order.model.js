@@ -103,6 +103,18 @@ const OrderSchema = new mongoose.Schema({
     enum: ['pending', 'delivery_fee_paid', 'paid', 'failed', 'refunded'],
     default: 'pending'
   },
+  refundAmount: {
+    type: Number,
+    default: 0
+  },
+  refundDetails: {
+    amount: { type: Number, default: 0 },
+    method: { type: String, default: null },
+    referenceNumber: { type: String, default: null },
+    refundedAt: { type: Date, default: null },
+    reason: { type: String, default: null },
+    transactionId: { type: mongoose.Schema.Types.ObjectId, ref: 'Transaction', default: null }
+  },
   finalBilling: {
     baseAmount: { type: Number, default: 0 },     // Sum of accepted items
     tryAndBuyFee: { type: Number, default: 0 },   // Optional fixed or % fee
@@ -117,14 +129,20 @@ const OrderSchema = new mongoose.Schema({
   appliedOffers: [{
     offerId: { type: mongoose.Schema.Types.ObjectId, ref: 'Offer' },
     title: String,
+    description: String,
     couponCode: String,
     scope: { type: String, enum: ['admin', 'merchant'] },
     discountType: { type: String, enum: ['flat', 'percentage'] },
     discountValue: Number,
-    discountApplied: Number,    // Actual ₹ deducted
+    discountApplied: { type: Number, default: 0 },    // Actual ₹ deducted
     freeDelivery: { type: Boolean, default: false },
     freeReturn: { type: Boolean, default: false },
     freeWaiting: { type: Boolean, default: false },
+    conditions: {
+      minCartValue: { type: Number, default: 0 },
+      minOrderValue: { type: Number, default: 0 },
+    },
+    merchantName: { type: String, default: null },
   }],
   deliveryLocation: {
     name: String,
@@ -180,9 +198,16 @@ const OrderSchema = new mongoose.Schema({
       url: { type: String },
       public_id: { type: String },
       itemId: { type: mongoose.Schema.Types.ObjectId },
+      caption: {
+        type: String,
+        enum: ['front', 'back', 'tag', 'defect', 'general'],
+        default: 'general'
+      },
       uploadedAt: { type: Date, default: Date.now },
     }
   ],
+  hasReportedIssue: { type: Boolean, default: false },
+  returnIssueId: { type: mongoose.Schema.Types.ObjectId, ref: 'ReturnIssue', default: null },
   packingPhotos: [
     {
       url: { type: String },

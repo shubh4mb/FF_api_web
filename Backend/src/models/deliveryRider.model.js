@@ -108,8 +108,20 @@ const DeliveryRiderSchema = new mongoose.Schema({
   },
   status: {
     type: String,
-    enum: ["active", "inactive", "suspended", "busy"],
+    enum: ["active", "inactive", "suspended", "busy", "blocked"],
     default: "inactive",
+  },
+  blockedReason: {
+    type: String,
+    default: null,
+  },
+  blockedAt: {
+    type: Date,
+    default: null,
+  },
+  incidentCount: {
+    type: Number,
+    default: 0,
   },
   isVerified: {
     type: Boolean,

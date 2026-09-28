@@ -1,13 +1,7 @@
 import axios from 'axios';
 import toast from 'react-hot-toast';
-let API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api/';
 
-// Only use VITE_API_URL if we are not running on localhost (e.g. in production)
-if (typeof window !== 'undefined' && window.location.hostname !== 'localhost') {
-  if (import.meta.env.VITE_API_URL) {
-    API_URL = import.meta.env.VITE_API_URL;
-  }
-}
+let API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api/';
 
 // 1. Decode any URL encoded characters (e.g., %22 -> ")
 try {
@@ -17,7 +11,7 @@ try {
 // 2. Clean up ALL combinations of leading/trailing quotes and spaces
 if (API_URL) {
   API_URL = API_URL.replace(/^['"\s]+|['"\s]+$/g, '');
-  
+
   // 3. Fallback: If it still starts with literal '%22' characters, strip them
   if (API_URL.startsWith('%22')) {
     API_URL = API_URL.substring(3);
@@ -25,7 +19,7 @@ if (API_URL) {
   if (API_URL.endsWith('%22')) {
     API_URL = API_URL.substring(0, API_URL.length - 3);
   }
-  
+
   // 4. Ensure the base URL ends with /api/
   if (!API_URL.endsWith('/api/')) {
     if (API_URL.endsWith('/')) {
@@ -45,15 +39,13 @@ const axiosInstance = axios.create({
 });
 axiosInstance.defaults.headers.common['ngrok-skip-browser-warning'] = 'true';
 
-// Add a request interceptor to attach JWT token to admin requests
+// Add a request interceptor to attach JWT token to all outgoing requests
 axiosInstance.interceptors.request.use(
   (config) => {
-    // Check if the request is going to an admin endpoint
-    if (config.url && config.url.includes('/admin')) {
-      const token = localStorage.getItem('adminToken');
-      if (token) {
-        config.headers['Authorization'] = `Bearer ${token}`;
-      }
+    const token = localStorage.getItem('adminToken');
+    if (token) {
+      config.headers = config.headers || {};
+      config.headers['Authorization'] = `Bearer ${token}`;
     }
     return config;
   },
@@ -66,7 +58,7 @@ let isRefreshing = false;
 let failedQueue = [];
 
 const processQueue = (error, token = null) => {
-  failedQueue.forEach(prom => {
+  failedQueue.forEach((prom) => {
     if (error) {
       prom.reject(error);
     } else {
@@ -76,79 +68,132 @@ const processQueue = (error, token = null) => {
   failedQueue = [];
 };
 
-// Add a response interceptor for global error handling
+export const clearAdminAuthSession = () => {
+  localStorage.removeItem('adminToken');
+  localStorage.removeItem('adminRefreshToken');
+  localStorage.removeItem('adminUser');
+  delete axiosInstance.defaults.headers.common['Authorization'];
+};
+
+// Global response interceptor
 axiosInstance.interceptors.response.use(
   (response) => {
-    // If our backend returns ApiResponse (success: true), we just pass data
+    // If backend returns ApiResponse (success: true), unwrap to response.data
     return response.data;
   },
   async (error) => {
     const originalRequest = error.config;
 
-    if (error.response && error.response.status === 401 && !originalRequest._retry) {
+    if (!originalRequest) {
+      return Promise.reject(error);
+    }
+
+    const url = originalRequest.url || '';
+    const isAuthEndpoint =
+      url.includes('auth/admin/login') ||
+      url.includes('auth/admin/refresh') ||
+      url.includes('auth/admin/register');
+
+    // Handle 401 Unauthorized for non-auth endpoints
+    if (error.response?.status === 401 && !originalRequest._retry && !isAuthEndpoint) {
       if (isRefreshing) {
-        return new Promise(function(resolve, reject) {
+        return new Promise((resolve, reject) => {
           failedQueue.push({ resolve, reject });
-        }).then(token => {
-          originalRequest.headers.Authorization = 'Bearer ' + token;
-          return axiosInstance(originalRequest);
-        }).catch(err => Promise.reject(err));
+        })
+          .then((token) => {
+            originalRequest._retry = true;
+            originalRequest.headers = originalRequest.headers || {};
+            originalRequest.headers['Authorization'] = `Bearer ${token}`;
+            return axiosInstance(originalRequest);
+          })
+          .catch((err) => Promise.reject(err));
       }
 
       originalRequest._retry = true;
       isRefreshing = true;
 
       try {
-        const res = await axios.post(`${API_URL}auth/admin/refresh`, {}, { withCredentials: true });
-        
-        const token = res.data?.token || res.data?.data?.token;
+        const storedRefreshToken = localStorage.getItem('adminRefreshToken');
 
-        if (token) {
-          localStorage.setItem('adminToken', token);
-          axiosInstance.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-          originalRequest.headers.Authorization = `Bearer ${token}`;
-          
-          processQueue(null, token);
+        // Use standalone axios instance to prevent recursive interceptor calls
+        const refreshResponse = await axios.post(
+          `${API_URL}auth/admin/refresh`,
+          {
+            adminRefreshToken: storedRefreshToken,
+            refreshToken: storedRefreshToken,
+          },
+          {
+            withCredentials: true,
+            headers: {
+              'ngrok-skip-browser-warning': 'true',
+            },
+          }
+        );
+
+        const payload = refreshResponse.data?.data || refreshResponse.data;
+        const newAccessToken = payload?.token;
+        const newRefreshToken = payload?.adminRefreshToken || payload?.refreshToken;
+
+        if (newAccessToken) {
+          localStorage.setItem('adminToken', newAccessToken);
+          if (newRefreshToken) {
+            localStorage.setItem('adminRefreshToken', newRefreshToken);
+          }
+
+          axiosInstance.defaults.headers.common['Authorization'] = `Bearer ${newAccessToken}`;
+          originalRequest.headers = originalRequest.headers || {};
+          originalRequest.headers['Authorization'] = `Bearer ${newAccessToken}`;
+
+          processQueue(null, newAccessToken);
           isRefreshing = false;
-          
+
           return axiosInstance(originalRequest);
         } else {
-          throw new Error('Refresh token invalid');
+          throw new Error('No access token returned from refresh');
         }
-      } catch (err) {
-        processQueue(err, null);
+      } catch (refreshErr) {
+        processQueue(refreshErr, null);
         isRefreshing = false;
-        
-        localStorage.removeItem('adminToken');
-        toast.error('Session expired. Please log in again.');
-        // Optionally redirect: window.location.href = '/login';
-        return Promise.reject(error);
+
+        clearAdminAuthSession();
+
+        if (typeof window !== 'undefined' && !window.location.pathname.includes('/admin/login')) {
+          toast.error('Session expired. Please log in again.');
+          window.location.href = '/admin/login';
+        }
+
+        return Promise.reject(refreshErr);
       }
     }
 
-    // Default error handling for others
-    if (error.response && error.response.data) {
-      const { message, errors } = error.response.data;
+    // If 401 occurred on an already retried request
+    if (error.response?.status === 401 && originalRequest._retry && !isAuthEndpoint) {
+      clearAdminAuthSession();
 
-      const errorMessage = errors && errors.length > 0
-        ? errors.join(', ')
-        : message || 'An unexpected error occurred';
+      if (typeof window !== 'undefined' && !window.location.pathname.includes('/admin/login')) {
+        toast.error('Session expired. Please log in again.');
+        window.location.href = '/admin/login';
+      }
+      return Promise.reject(error);
+    }
 
-      toast.error(errorMessage);
-    } else {
-      toast.error(error.message || 'Network Error');
+    // Default error handling for non-401 errors
+    if (error.response?.status !== 401) {
+      if (error.response?.data) {
+        const { message, errors } = error.response.data;
+        const errorMessage =
+          errors && errors.length > 0
+            ? errors.join(', ')
+            : message || 'An unexpected error occurred';
+        toast.error(errorMessage);
+      } else if (error.message && error.message !== 'canceled') {
+        toast.error(error.message || 'Network Error');
+      }
     }
 
     return Promise.reject(error);
   }
 );
 
-axiosInstance.interceptors.response.use((response) => {
-  // Only unwrap if it looks like an ApiResponse
-  if (response.data?.success !== undefined && response.data?.data !== undefined) {
-    response.data = response.data.data;
-  }
-  return response;
-});
-
+export { API_URL };
 export default axiosInstance;

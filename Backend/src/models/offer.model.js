@@ -119,7 +119,7 @@ const offerSchema = new mongoose.Schema({
     minCartValue: { type: Number, default: 0 },           // Cart Value Offers
     categoryIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Category' }],  // Category-Based
     subCategoryIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Category' }],
-    productIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Product' }],    // Product-specific
+    productIds: [{ type: mongoose.Schema.Types.Mixed }],    // Product-specific (supports ObjectId or styleGroupId string)
     collectionId: { type: mongoose.Schema.Types.ObjectId, ref: 'Collection' }, // Collection-specific
     genders: [{ type: String, enum: ['MEN', 'WOMEN', 'KIDS', 'BOYS', 'GIRLS'] }],              // Gender targeting
     firstTimeUserOnly: { type: Boolean, default: false },  // First-Time User

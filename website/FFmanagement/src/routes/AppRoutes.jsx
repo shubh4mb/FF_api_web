@@ -44,6 +44,7 @@ import ReturnIssues from '../pages/admin/ReturnIssues';
 import WarehouseManagement from '../pages/admin/WarehouseManagement';
 import WarehouseProducts from '../pages/admin/WarehouseProducts';
 import WarehouseOrders from '../pages/admin/WarehouseOrders';
+import Transactions from '../pages/admin/Transactions';
 
 
 
@@ -85,6 +86,7 @@ const AppRoutes = () => {
             <Route path="collections" element={<CollectionManagement />} />
             <Route path="incentives" element={<IncentiveManagement />} />
             <Route path="payouts" element={<PayoutManagement />} />
+            <Route path="transactions" element={<Transactions />} />
             <Route path="support" element={<SupportTickets />} />
             <Route path="zip-covers" element={<ZipCoverRequests />} />
             <Route path="order-cancellations" element={<OrderCancellations />} />
