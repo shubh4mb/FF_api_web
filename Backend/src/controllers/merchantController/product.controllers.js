@@ -5,8 +5,8 @@ import Brand from "../../models/brand.model.js";
 import Merchant from "../../models/merchant.model.js";
 import { storageService } from '../../services/storage.service.js';
 import ProductFlat from '../../models/productFlat.model.js';
-import { convertToLegacyFormat, generateColorVariantId } from '../../utils/variantAdapter.js';
 import crypto from 'crypto';
+import { analyzeProductImage } from '../../services/geminiProductAnalyzer.js';
 
 const makeFlatPayload = (siblings, extraData = {}) => {
   if (!siblings || !siblings.length) return null;
@@ -1652,11 +1652,168 @@ export const createProductFull = async (req, res) => {
     return res.status(201).json({ 
       success: true, 
       message: "Product created with variants successfully", 
-      productId: baseProductCode 
+      productId: baseProductCode,
+      ...(req.aiMetadata ? { aiMetadata: req.aiMetadata } : {})
     });
   } catch (err) {
     console.error("Create product full error:", err);
     res.status(500).json({ success: false, message: "Server error" });
+  }
+};
+
+/**
+ * AI-assisted product creation controller.
+ * Analyzes the uploaded product image using Gemini, extracts and validates product metadata,
+ * merges it with merchant-controlled fields (price, stock, SKU, sizes),
+ * and delegates creation to existing createProductFull logic.
+ */
+export const createProductAi = async (req, res) => {
+  try {
+    // 1. Identify the image file or base64 input
+    const files = req.files || [];
+    let imageFile = null;
+
+    if (Array.isArray(files) && files.length > 0) {
+      imageFile = files.find(f => ['image', 'productImage', 'aiImage', 'file'].includes(f.fieldname)) || files[0];
+    }
+
+    let imageInput = null;
+    let mimeType = 'image/jpeg';
+
+    if (imageFile && imageFile.buffer) {
+      imageInput = imageFile.buffer;
+      mimeType = imageFile.mimetype || 'image/jpeg';
+    } else if (req.body.image && typeof req.body.image === 'string') {
+      imageInput = req.body.image;
+    }
+
+    if (!imageInput) {
+      return res.status(400).json({
+        success: false,
+        message: "A product image is required for AI analysis. Upload an image file (e.g. 'image') or provide a base64 string in 'image'."
+      });
+    }
+
+    // 2. Run Gemini AI image analysis
+    let aiMetadata;
+    try {
+      aiMetadata = await analyzeProductImage(imageInput, mimeType);
+    } catch (aiErr) {
+      console.error("AI product image analysis error:", aiErr);
+      return res.status(422).json({
+        success: false,
+        message: `AI product analysis failed: ${aiErr.message}`
+      });
+    }
+
+    // 3. Verify category and subcategory against active database records
+    if (!aiMetadata.categoryId || !aiMetadata.subCategoryId) {
+      return res.status(400).json({
+        success: false,
+        message: "AI could not determine a valid category and subcategory from the image."
+      });
+    }
+
+    const [dbCategory, dbSubCategory] = await Promise.all([
+      Category.findOne({ _id: aiMetadata.categoryId, isActive: true }).lean(),
+      Category.findOne({ _id: aiMetadata.subCategoryId, isActive: true, parentId: aiMetadata.categoryId }).lean(),
+    ]);
+
+    if (!dbCategory) {
+      return res.status(400).json({
+        success: false,
+        message: `Invalid or inactive category identified by AI: "${aiMetadata.category}"`
+      });
+    }
+
+    if (!dbSubCategory) {
+      return res.status(400).json({
+        success: false,
+        message: `Invalid or inactive subcategory identified by AI: "${aiMetadata.subCategory}" under "${dbCategory.name}"`
+      });
+    }
+
+    // 4. Parse incoming merchant data safely
+    const safeParse = (value) => {
+      if (!value) return value;
+      if (typeof value === "string") {
+        try { return JSON.parse(value); } catch { return value; }
+      }
+      return value;
+    };
+
+    let incomingVariants = safeParse(req.body.variants);
+
+    // Support flat fields if full variants array was not sent
+    if (!incomingVariants || !Array.isArray(incomingVariants) || incomingVariants.length === 0) {
+      const flatSizes = safeParse(req.body.sizes);
+      const flatPrice = req.body.price;
+
+      if (!flatSizes || !Array.isArray(flatSizes) || flatSizes.length === 0 || flatPrice === undefined) {
+        return res.status(400).json({
+          success: false,
+          message: "Missing required merchant data. You must provide selling 'price' and at least one size in 'sizes' (or a 'variants' array)."
+        });
+      }
+
+      incomingVariants = [{
+        price: flatPrice,
+        mrp: req.body.mrp,
+        discount: req.body.discount,
+        productSku: req.body.productSku,
+        sizes: flatSizes,
+        color: safeParse(req.body.color),
+        imageFields: req.body.imageFields ? safeParse(req.body.imageFields) : [],
+      }];
+    }
+
+    // 5. Merge AI metadata without overwriting merchant-controlled fields
+    // AI controls catalog fields: name, styleName, description, gender, categoryId, subCategoryId, tags, isTriable, attributes
+    req.body.name = req.body.name ? String(req.body.name).trim() : aiMetadata.name;
+    req.body.styleName = req.body.styleName ? String(req.body.styleName).trim() : aiMetadata.styleName;
+    req.body.description = req.body.description ? String(req.body.description).trim() : aiMetadata.description;
+    req.body.gender = req.body.gender ? safeParse(req.body.gender) : aiMetadata.gender;
+    req.body.categoryId = String(aiMetadata.categoryId);
+    req.body.subCategoryId = String(aiMetadata.subCategoryId);
+    req.body.tags = req.body.tags ? safeParse(req.body.tags) : aiMetadata.tags;
+    req.body.isTriable = req.body.isTriable !== undefined ? req.body.isTriable : aiMetadata.isTriable;
+    req.body.attributes = req.body.attributes ? safeParse(req.body.attributes) : aiMetadata.attributes;
+
+    // Attach AI color and analyzed image to variants
+    const targetImageFieldname = imageFile ? imageFile.fieldname : null;
+
+    req.body.variants = incomingVariants.map((v) => {
+      const variantCopy = { ...v };
+
+      // Apply AI color if merchant didn't provide a custom color name
+      if (!variantCopy.color || !variantCopy.color.name || variantCopy.color.name === 'Standard') {
+        variantCopy.color = aiMetadata.color;
+      }
+
+      // Ensure the uploaded image gets linked and saved to Cloudinary
+      if (targetImageFieldname) {
+        if (!variantCopy.imageFields || !Array.isArray(variantCopy.imageFields) || variantCopy.imageFields.length === 0) {
+          variantCopy.imageFields = [targetImageFieldname];
+        } else if (!variantCopy.imageFields.includes(targetImageFieldname)) {
+          variantCopy.imageFields.push(targetImageFieldname);
+        }
+      }
+
+      return variantCopy;
+    });
+
+    // Attach aiMetadata for the response
+    req.aiMetadata = aiMetadata;
+
+    // 6. Forward directly into the existing createProductFull logic
+    return await createProductFull(req, res);
+
+  } catch (err) {
+    console.error("AI Create Product Error:", err);
+    return res.status(500).json({
+      success: false,
+      message: "Server error during AI product creation: " + err.message
+    });
   }
 };
 

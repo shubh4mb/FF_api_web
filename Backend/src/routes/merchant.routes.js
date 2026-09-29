@@ -1,6 +1,6 @@
 import express from 'express'
 import upload, { handleMulterError } from '../middleware/multer.js'
-import { addBaseProduct, addVariant, getBaseProducts, getVariants, updateVariant, updateSize, deleteVariantSizes, updateSizeCount, createProductFull, searchBaseProducts } from '../controllers/merchantController/product.controllers.js';
+import { addBaseProduct, addVariant, getBaseProducts, getVariants, updateVariant, updateSize, deleteVariantSizes, updateSizeCount, createProductFull, createProductAi, searchBaseProducts } from '../controllers/merchantController/product.controllers.js';
 import { deleteVariant, addBrand, getBrands, getBaseProductById, getProductsByMerchantId, uploadProductImage, deleteImage, deleteProduct, updatePrice, editProduct, editVariant, updateVariantSizeStock, updateMultipleVariantSizes, getAllBrands, bulkUploadProducts, updateMatchingProducts } from '../controllers/merchantController/product.controllers.js';
 
 import { addMerchant } from '../controllers/merchantController/merchant.controller.js';
@@ -215,6 +215,8 @@ router.patch('/editProduct/:id', authMiddlewareMerchant, editProduct)
 router.patch('/updateVariantSizeStock/:productId/:variantId/:sizeName', authMiddlewareMerchant, updateVariantSizeStock)
 router.patch('/updateMultipleVariantSizes/:productId/:variantId', authMiddlewareMerchant, updateMultipleVariantSizes)
 router.post('/createProductFull', authMiddlewareMerchant, upload.any(), handleMulterError, createProductFull);
+router.post('/createProductAi', authMiddlewareMerchant, upload.any(), handleMulterError, createProductAi);
+router.post('/products/ai-create', authMiddlewareMerchant, upload.any(), handleMulterError, createProductAi);
 router.get('/searchBaseProducts', authMiddlewareMerchant, searchBaseProducts);
 router.put('/updateMatchingProducts/:productId', authMiddlewareMerchant, updateMatchingProducts);
 

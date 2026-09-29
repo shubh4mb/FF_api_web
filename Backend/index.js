@@ -27,6 +27,10 @@ connectDB();
 import { initPayoutCron } from './src/cron/payoutCron.js';
 initPayoutCron();
 
+// Initialize Telegram Catalog Bot
+import { initTelegramBot } from './src/services/telegramBot.service.js';
+initTelegramBot();
+
 // Create HTTP server
 const server = createServer(app);
 
