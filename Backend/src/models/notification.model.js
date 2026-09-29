@@ -30,6 +30,7 @@ const notificationSchema = new mongoose.Schema(
                 "order_placed",
                 "order_accepted",
                 "rider_arriving",       // covers both "rider assigned" + "arriving soon"
+                "rider_reached_location",
                 "delivery_complete",
                 "payment_confirmed",
                 "delivery_fee_collected",

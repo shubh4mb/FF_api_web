@@ -126,6 +126,42 @@ const redis = {
     }
   },
 
+  // GEOPOS – returns coordinates for one or more members [{ longitude, latitude }, ...]
+  geoPos: async (key, ...members) => {
+    const flatMembers = members.flat();
+    if (isUpstash) {
+      try {
+        const raw = await client.geopos(key, ...flatMembers);
+        if (!Array.isArray(raw)) return [];
+        return raw.map((item) => {
+          if (!item) return null;
+          if (Array.isArray(item)) {
+            return { longitude: item[0], latitude: item[1] };
+          }
+          return {
+            longitude: item.longitude ?? item.lng,
+            latitude: item.latitude ?? item.lat,
+          };
+        });
+      } catch (err) {
+        console.error(`Upstash geoPos error for key ${key}:`, err);
+        return [];
+      }
+    } else {
+      try {
+        const raw = await client.geoPos(key, flatMembers.length === 1 ? flatMembers[0] : flatMembers);
+        if (!Array.isArray(raw)) return [];
+        return raw.map((item) => {
+          if (!item) return null;
+          return { longitude: item.longitude, latitude: item.latitude };
+        });
+      } catch (err) {
+        console.error(`node-redis geoPos error for key ${key}:`, err);
+        return [];
+      }
+    }
+  },
+
   // GEOSEARCH – unchanged (POST JSON works for GEORADIUS)
   geoSearch: async (key, lng, lat, radiusKm, count = 10) => {
     if (isUpstash) {

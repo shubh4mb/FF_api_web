@@ -31,16 +31,22 @@ export async function enqueueOrder(orderData) {
       coordinates: [customerLng, customerLat]
     } : null;
 
-    // Save to pending_orders
-    const orderDoc = new PendingOrder({
-      orderId,
-      merchantId,
-      zoneName:zoneId,
-      pickupLoc,
-      customerLoc
-    });
-    
-    await orderDoc.save();
+    // Save to pending_orders (idempotent upsert to avoid duplicate key error)
+    const orderDoc = await PendingOrder.findOneAndUpdate(
+      { orderId },
+      {
+        $setOnInsert: {
+          orderId,
+          merchantId,
+          zoneName: zoneId,
+          pickupLoc,
+          customerLoc,
+          acceptTimestamp: new Date(),
+          status: 'queued',
+        },
+      },
+      { upsert: true, new: true }
+    );
 
     console.log(`✅ Enqueued ${orderId} in zone ${zoneId} (pickup: ${pickupLat}, ${pickupLng})`);
 
