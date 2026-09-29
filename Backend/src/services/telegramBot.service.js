@@ -215,13 +215,11 @@ export async function initTelegramBot() {
       );
     });
 
-    // --- Photo Message Handler ---
-    bot.on('photo', async (ctx) => {
+    // Helper for processing one or multiple product photos
+    const processProductUpload = async (ctx, photos, caption) => {
       const chatId = ctx.chat.id;
       const isGroup = ctx.chat.type === 'group' || ctx.chat.type === 'supergroup';
       let session = userMerchantSessions.get(chatId);
-
-      const caption = ctx.message.caption;
 
       // In group chats, ignore photos without captions so we don't spam regular conversations
       if (!caption) {
@@ -263,44 +261,47 @@ export async function initTelegramBot() {
           '⚠️ Please select an active merchant for this chat first!\nUse /switch or pick below:',
           {
             reply_to_message_id: ctx.message.message_id,
-            ...(keyboard || {})
+            ...(keyboard || {}),
           }
         );
       }
 
-      // Send status message to user
-      const progressMsg = await ctx.reply(
-        `⏳ Processing dress for *${session.shopName}*...\n` +
+      const photoCountText = photos.length > 1 ? ` (${photos.length} photos)` : '';
+      await ctx.reply(
+        `⏳ Processing dress${photoCountText} for *${session.shopName}*...\n` +
           `• SKU: \`${parsed.sku}\`\n` +
           `• Price: ₹${parsed.price}\n` +
           `• Sizes: ${parsed.sizes.map((s) => `${s.size} (qty: ${s.stock})`).join(', ')}\n\n` +
           `Analyzing image with Gemini AI...`,
-        { parse_mode: 'Markdown' }
+        {
+          parse_mode: 'Markdown',
+          reply_parameters: { message_id: ctx.message.message_id },
+        }
       );
 
       try {
-        // 1. Download highest-resolution photo from Telegram
-        const photos = ctx.message.photo;
-        const bestPhoto = photos[photos.length - 1];
-        const fileLink = await ctx.telegram.getFileLink(bestPhoto.file_id);
-
-        const response = await fetch(fileLink.href);
-        if (!response.ok) {
-          throw new Error(`Failed to download image from Telegram: ${response.statusText}`);
-        }
-        const imageBuffer = Buffer.from(await response.arrayBuffer());
+        // 1. Download all photos in parallel
+        const files = await Promise.all(
+          photos.map(async (photo, idx) => {
+            const fileLink = await ctx.telegram.getFileLink(photo.file_id);
+            const response = await fetch(fileLink.href);
+            if (!response.ok) {
+              throw new Error(`Failed to download image #${idx + 1} from Telegram`);
+            }
+            const buffer = Buffer.from(await response.arrayBuffer());
+            return {
+              fieldname: `image_${idx}`,
+              buffer,
+              mimetype: 'image/jpeg',
+              originalname: `telegram_${parsed.sku}_${idx}.jpg`,
+            };
+          })
+        );
 
         // 2. Build simulated req and res for createProductAi
         const req = {
           merchantId: session.merchantId,
-          files: [
-            {
-              fieldname: 'image',
-              buffer: imageBuffer,
-              mimetype: 'image/jpeg',
-              originalname: `telegram_${parsed.sku}.jpg`,
-            },
-          ],
+          files,
           body: {
             price: String(parsed.price),
             mrp: String(parsed.mrp || parsed.price),
@@ -338,6 +339,7 @@ export async function initTelegramBot() {
             `🎨 *Color:* ${escapeMarkdown(ai.color?.name || 'Standard')} \\(${escapeMarkdown(ai.color?.hex || '#000000')}\\)\n` +
             `💰 *Price:* ₹${parsed.price}\n` +
             `📦 *Product Code:* \`${escapeMarkdown(responsePayload.productId || parsed.sku)}\`\n` +
+            `📸 *Images:* ${photos.length} uploaded to Cloudinary\n` +
             `📏 *Inventory:*\n${sizeListText}\n` +
             `🚚 *Try & Buy:* ${ai.isTriable ? '✅ Yes' : '❌ No'}\n` +
             `🔒 *Status:* Inactive \\(Pending Admin Approval\\)\n\n` +
@@ -345,20 +347,66 @@ export async function initTelegramBot() {
             `📸 _Send the next photo when ready\\!_`;
 
           await ctx.replyWithMarkdownV2(successCard, {
-            reply_parameters: { message_id: ctx.message.message_id }
+            reply_parameters: { message_id: ctx.message.message_id },
           });
         } else {
           const errMsg = responsePayload?.message || 'Unknown error occurred during product creation.';
           await ctx.reply(`❌ Could not create product:\n${errMsg}`, {
-            reply_parameters: { message_id: ctx.message.message_id }
+            reply_parameters: { message_id: ctx.message.message_id },
           });
         }
       } catch (err) {
         console.error('[TelegramBot] Error processing photo:', err);
         await ctx.reply(`❌ Error processing photo: ${err.message}`, {
-          reply_parameters: { message_id: ctx.message.message_id }
+          reply_parameters: { message_id: ctx.message.message_id },
         });
       }
+    };
+
+    // Buffer for Telegram media groups (albums)
+    const mediaGroupBuffers = new Map();
+
+    // --- Photo Message Handler ---
+    bot.on('photo', async (ctx) => {
+      const mediaGroupId = ctx.message.media_group_id;
+
+      // Handle Telegram photo albums (multiple images of same product)
+      if (mediaGroupId) {
+        let group = mediaGroupBuffers.get(mediaGroupId);
+        if (!group) {
+          group = {
+            photos: [],
+            caption: null,
+            primaryCtx: ctx,
+            timer: null,
+          };
+          mediaGroupBuffers.set(mediaGroupId, group);
+        }
+
+        const photos = ctx.message.photo;
+        const bestPhoto = photos[photos.length - 1];
+        group.photos.push(bestPhoto);
+
+        if (ctx.message.caption) {
+          group.caption = ctx.message.caption;
+          group.primaryCtx = ctx;
+        }
+
+        // Wait 600ms debounce for all photos in the album to arrive
+        if (group.timer) clearTimeout(group.timer);
+
+        group.timer = setTimeout(async () => {
+          mediaGroupBuffers.delete(mediaGroupId);
+          await processProductUpload(group.primaryCtx, group.photos, group.caption);
+        }, 600);
+
+        return;
+      }
+
+      // Single photo
+      const photos = ctx.message.photo;
+      const bestPhoto = photos[photos.length - 1];
+      await processProductUpload(ctx, [bestPhoto], ctx.message.caption);
     });
 
     // Helper for escaping Telegram MarkdownV2 special characters

@@ -1779,9 +1779,7 @@ export const createProductAi = async (req, res) => {
     req.body.isTriable = req.body.isTriable !== undefined ? req.body.isTriable : aiMetadata.isTriable;
     req.body.attributes = req.body.attributes ? safeParse(req.body.attributes) : aiMetadata.attributes;
 
-    // Attach AI color and analyzed image to variants
-    const targetImageFieldname = imageFile ? imageFile.fieldname : null;
-
+    // Attach AI color and all uploaded images to variants
     req.body.variants = incomingVariants.map((v) => {
       const variantCopy = { ...v };
 
@@ -1790,12 +1788,13 @@ export const createProductAi = async (req, res) => {
         variantCopy.color = aiMetadata.color;
       }
 
-      // Ensure the uploaded image gets linked and saved to Cloudinary
-      if (targetImageFieldname) {
+      // Ensure all uploaded images get linked and saved to Cloudinary
+      if (files.length > 0) {
+        const allFieldnames = files.map(f => f.fieldname);
         if (!variantCopy.imageFields || !Array.isArray(variantCopy.imageFields) || variantCopy.imageFields.length === 0) {
-          variantCopy.imageFields = [targetImageFieldname];
-        } else if (!variantCopy.imageFields.includes(targetImageFieldname)) {
-          variantCopy.imageFields.push(targetImageFieldname);
+          variantCopy.imageFields = allFieldnames;
+        } else {
+          variantCopy.imageFields = Array.from(new Set([...variantCopy.imageFields, ...allFieldnames]));
         }
       }
 

@@ -161,23 +161,48 @@ function resolveAndValidateProduct(product, categoryOptions) {
   };
 }
 
-export async function analyzeProductImage(imageInput, mimeType = "image/jpeg") {
+function normalizeSingleImage(img, fallbackMime = "image/jpeg") {
+  if (!img) return null;
+  let base64 = "";
+  let mimeType = fallbackMime;
+
+  if (Buffer.isBuffer(img)) {
+    base64 = img.toString("base64");
+  } else if (typeof img === "object" && img !== null) {
+    if (img.buffer && Buffer.isBuffer(img.buffer)) {
+      base64 = img.buffer.toString("base64");
+      mimeType = img.mimetype || img.mimeType || fallbackMime;
+    } else if (img.data) {
+      base64 = String(img.data);
+      mimeType = img.mimeType || img.mimetype || fallbackMime;
+    }
+  } else if (typeof img === "string") {
+    const dataUriMatch = img.match(/^data:([^;]+);base64,(.+)$/);
+    if (dataUriMatch) {
+      mimeType = dataUriMatch[1];
+      base64 = dataUriMatch[2];
+    } else {
+      base64 = img;
+    }
+  }
+
+  if (!base64) return null;
+  return { base64, mimeType };
+}
+
+export async function analyzeProductImage(imageInput, defaultMimeType = "image/jpeg") {
   if (!imageInput) {
     throw new Error("Image data is required");
   }
 
-  // Normalize Buffer, raw base64, or Data URI input
-  let cleanBase64 = imageInput;
-  let resolvedMimeType = mimeType;
+  // Normalize single image or array of images
+  const rawImages = Array.isArray(imageInput) ? imageInput : [imageInput];
+  const imageList = rawImages
+    .map((img) => normalizeSingleImage(img, defaultMimeType))
+    .filter(Boolean);
 
-  if (Buffer.isBuffer(imageInput)) {
-    cleanBase64 = imageInput.toString("base64");
-  } else if (typeof imageInput === "string") {
-    const dataUriMatch = imageInput.match(/^data:([^;]+);base64,(.+)$/);
-    if (dataUriMatch) {
-      resolvedMimeType = dataUriMatch[1];
-      cleanBase64 = dataUriMatch[2];
-    }
+  if (imageList.length === 0) {
+    throw new Error("No valid image data could be extracted for analysis");
   }
 
   const categoryOptions = await getCategoryOptions();
@@ -200,14 +225,21 @@ export async function analyzeProductImage(imageInput, mimeType = "image/jpeg") {
     .map(([parent, subs]) => `- ${parent}: ${subs.join(", ")}`)
     .join("\n");
 
+  const imageCountDesc =
+    imageList.length > 1
+      ? `${imageList.length} product images showing different angles/details of the same fashion item`
+      : "product image";
+
   const prompt = `
 You are a fashion product catalog AI for FlashFits.
-Analyze the supplied product image and return ONLY valid JSON.
+Analyze the supplied ${imageCountDesc} and return ONLY valid JSON.
+
+Synthesize all visible angles (front view, back view, fabric details, cuts, trims) to produce an accurate catalog listing.
 
 Identify:
 - product name
 - style name
-- product description
+- product description (incorporate back/neckline/sleeve/fabric design details visible across angles)
 - gender
 - category
 - subcategory
@@ -232,15 +264,17 @@ DO NOT generate:
 
   const ai = getAiClient();
 
+  const imageParts = imageList.map((img) => ({
+    inlineData: {
+      mimeType: img.mimeType,
+      data: img.base64,
+    },
+  }));
+
   const response = await ai.models.generateContent({
     model: "gemini-3.5-flash-lite",
     contents: [
-      {
-        inlineData: {
-          mimeType: resolvedMimeType,
-          data: cleanBase64,
-        },
-      },
+      ...imageParts,
       {
         text: prompt,
       },
