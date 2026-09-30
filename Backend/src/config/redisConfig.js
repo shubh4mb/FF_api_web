@@ -24,7 +24,30 @@ let isUpstash = false;  // For logging only
 let upstashUrl;  // For REST fallback
 let upstashToken;  // For auth
 
-if (process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN) {
+const preferLocal = process.env.USE_LOCAL_REDIS === 'true' || (!process.env.UPSTASH_REDIS_REST_URL && process.env.REDIS_URL);
+
+if (preferLocal && process.env.REDIS_URL) {
+  let redisUrl = process.env.REDIS_URL;
+
+  // On Windows local development, automatically route to WSL Redis IP if needed
+  if (process.platform === 'win32' && (redisUrl.includes('127.0.0.1') || redisUrl.includes('localhost'))) {
+    try {
+      const { execSync } = await import('child_process');
+      const wslIp = execSync('wsl hostname -I', { timeout: 2000 }).toString().trim().split(' ')[0];
+      if (wslIp && wslIp.startsWith('172.')) {
+        redisUrl = `redis://${wslIp}:6379`;
+      }
+    } catch {
+      // Fallback to original URL
+    }
+  }
+
+  client = createClient({ url: redisUrl });
+  client.on("error", err => console.error("Redis Error:", err.message));
+  client.connect()
+    .then(() => console.log(`🚀 Native Redis Connected: ${redisUrl}`))
+    .catch(err => console.error("❌ Native Redis Connect failed:", err.message));
+} else if (process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN) {
   client = new Redis({
     url: process.env.UPSTASH_REDIS_REST_URL,
     token: process.env.UPSTASH_REDIS_REST_TOKEN,
@@ -32,12 +55,7 @@ if (process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN) 
   isUpstash = true;
   upstashUrl = process.env.UPSTASH_REDIS_REST_URL;
   upstashToken = process.env.UPSTASH_REDIS_REST_TOKEN;
-  console.log("Upstash Redis (REST)");
-} else if (process.env.REDIS_URL) {
-  client = createClient({ url: process.env.REDIS_URL });
-  client.on("error", err => console.error("Redis Error:", err));
-  client.connect().catch(err => console.error("Connect failed:", err));
-  console.log("node-redis (ElastiCache)");
+  console.log("☁️ Upstash Redis (REST)");
 } else {
   throw new Error("Set UPSTASH_... or REDIS_URL");
 }
@@ -49,10 +67,10 @@ const redis = {
   del: (key) => client.del(key),
   setEx: (key, sec, val) => client.set(key, val, { EX: sec }),
 
-  // HSET – typed method with object
+  // HSET – typed method with object (handles node-redis v5 and Upstash)
   hSet: async (key, data) => {
     try {
-      return await client.hset(key, data);
+      return await (client.hSet ? client.hSet(key, data) : client.hset(key, data));
     } catch (err) {
       console.error(`${isUpstash ? 'Upstash' : 'node-redis'} hSet error for key ${key}:`, err);
       return 0;
@@ -102,7 +120,7 @@ const redis = {
     } else {
       // node-redis: typed HGETALL (returns object)
       try {
-        return await client.hgetall(key);
+        return await (client.hGetAll ? client.hGetAll(key) : client.hgetall(key));
       } catch (err) {
         console.error(`node-redis hGetAll error for key ${key}:`, err);
         return {};
@@ -113,12 +131,9 @@ const redis = {
   // GEOADD – unified object format for single member
   geoAdd: async (key, lng, lat, member) => {
     try {
-      const result = await client.geoadd(key, {
-        member,
-        longitude: lng,
-        latitude: lat
-      });
-      // console.log(`${isUpstash ? 'Upstash' : 'node-redis'} geoAdd success for key ${key}, member ${member}`);
+      const result = await (client.geoAdd
+        ? client.geoAdd(key, { member, longitude: lng, latitude: lat })
+        : client.geoadd(key, { member, longitude: lng, latitude: lat }));
       return result;
     } catch (err) {
       console.error(`${isUpstash ? 'Upstash' : 'node-redis'} geoAdd error for key ${key} at (${lat}, ${lng}):`, err);
@@ -214,7 +229,9 @@ const redis = {
       }
     } else {
       try {
-        const raw = await client.georadius(key, lng, lat, radiusKm, 'km', 'WITHDIST', 'ASC', 'COUNT', count);
+        const raw = client.sendCommand
+          ? await client.sendCommand(['GEORADIUS', key, lng.toString(), lat.toString(), radiusKm.toString(), 'km', 'WITHDIST', 'ASC', 'COUNT', count.toString()])
+          : await client.georadius(key, lng, lat, radiusKm, 'km', 'WITHDIST', 'ASC', 'COUNT', count);
         const result = [];
         if (Array.isArray(raw) && raw.length > 0) {
           for (const item of raw) {
@@ -235,18 +252,12 @@ const redis = {
     }
   },
 
-  // Pub/Sub – Upstash fallback to in-memory
+  // Pub/Sub – in-memory event bus prevents locking main Redis client into subscriber mode
   publish: async (ch, msg) => {
-    if (typeof client.publish === "function") {
-      return client.publish(ch, msg);
-    }
     inMemoryPubSub.emit(ch, msg);
     return true;
   },
   subscribe: (ch, fn) => {
-    if (typeof client.subscribe === "function") {
-      return client.subscribe(ch, fn);
-    }
     inMemoryPubSub.on(ch, fn);
   },
 

@@ -16,8 +16,6 @@ import mongoose from 'mongoose';
 // @access  Private
 export const addToWishlist = asyncHandler(async (req, res) => {
   const { productId, variantId } = req.body;
-  console.log(req.body);
-
   const userId = req.user.userId;
 
   if (!productId || !variantId) {
@@ -33,8 +31,8 @@ export const addToWishlist = asyncHandler(async (req, res) => {
     isDeleted: { $ne: true }
   });
   const matchedDocs = matchingFlatVariants.filter(v => 
-    v._id.toString() === variantId || 
-    generateColorVariantId(v.styleGroupId || productId, v.color?.name) === variantId
+    v._id.toString() === variantId.toString() || 
+    generateColorVariantId(v.styleGroupId || productId, v.color?.name) === variantId.toString()
   );
   if (!matchedDocs.length && matchingFlatVariants.length > 0) {
     // Fallback to first matching document if color variant ID didn't match strictly
@@ -44,16 +42,27 @@ export const addToWishlist = asyncHandler(async (req, res) => {
     throw new ApiError(404, 'Product or variant not found');
   }
   const baseDoc = matchedDocs[0];
+  const canonicalProductId = baseDoc.styleGroupId ? baseDoc.styleGroupId.toString() : productId.toString();
+  const canonicalVariantId = generateColorVariantId(canonicalProductId, baseDoc.color?.name || 'Default');
   
-  const exists = await Wishlist.findOne({ userId, variantId });
+  // Check if this product or variant is already in the user's wishlist
+  const exists = await Wishlist.findOne({
+    userId,
+    $or: [
+      { productId: canonicalProductId },
+      { variantId: canonicalVariantId },
+      { variantId: variantId.toString() },
+      ...(mongoose.Types.ObjectId.isValid(baseDoc._id) ? [{ variantId: baseDoc._id }] : [])
+    ]
+  });
   if (exists) {
-    throw new ApiError(400, 'This variant is already in your wishlist');
+    return res.status(200).json(new ApiResponse(200, exists, 'Product is already in wishlist'));
   }
 
   const wishlistItem = await Wishlist.create({
     userId,
-    productId,
-    variantId,
+    productId: canonicalProductId,
+    variantId: canonicalVariantId,
     variantSnapshot: {
       color: baseDoc.color,
       size: baseDoc.size,
@@ -72,16 +81,38 @@ export const addToWishlist = asyncHandler(async (req, res) => {
 // @route   DELETE /api/wishlist/:productId
 // @access  Private
 export const removeFromWishlist = asyncHandler(async (req, res) => {
-  const { wishlistItemId } = req.params; // ← now we use the wishlist document _id
+  const { wishlistItemId } = req.params; // may be document _id, productId, or variantId
   const userId = req.user.userId;
 
-  const deleted = await Wishlist.findOneAndDelete({
-    _id: wishlistItemId,
-    userId, // security: make sure user can only delete their own items
-  });
+  let deleted = null;
+  if (mongoose.Types.ObjectId.isValid(wishlistItemId)) {
+    deleted = await Wishlist.findOneAndDelete({
+      _id: wishlistItemId,
+      userId,
+    });
+  }
+
+  // If not deleted by _id, try finding and deleting by productId or variantId
+  if (!deleted) {
+    deleted = await Wishlist.findOneAndDelete({
+      userId,
+      $or: [
+        { productId: wishlistItemId },
+        { variantId: wishlistItemId }
+      ]
+    });
+  }
 
   if (!deleted) {
     throw new ApiError(404, 'Wishlist item not found or does not belong to you');
+  }
+
+  // Clean up any other duplicates of this product for this user
+  if (deleted.productId) {
+    await Wishlist.deleteMany({
+      userId,
+      productId: deleted.productId
+    });
   }
 
   res.json(new ApiResponse(200, null, 'Item removed from wishlist'));
@@ -92,14 +123,21 @@ export const removeFromWishlist = asyncHandler(async (req, res) => {
 // @access  Private
 export const getMyWishlist = asyncHandler(async (req, res) => {
   const userId = req.user.userId;
-  console.log(userId, 'userId');
 
   const wishlist = await Wishlist.find({ userId }).sort({ createdAt: -1 }).lean();
   const result = [];
+  const seenProductIds = new Set();
 
   for (const item of wishlist) {
     if (!item.productId) continue;
     const styleGroupId = item.productId.toString();
+
+    // Deduplicate by styleGroupId so duplicate cards never show in wishlist
+    if (seenProductIds.has(styleGroupId)) {
+      continue;
+    }
+    seenProductIds.add(styleGroupId);
+
     const nearbySet = new Set(req.nearbyMerchantIds?.map(id => id.toString()) || []);
     const nearbyWhSet = new Set(req.nearbyWarehouseIds?.map(id => id.toString()) || []);
 
@@ -111,8 +149,8 @@ export const getMyWishlist = asyncHandler(async (req, res) => {
 
     if (siblings.length > 0) {
       const matched = siblings.find(
-        (v) => (v._id?.toString() === item.variantId?.toString()) ||
-               (v.color?.name && generateColorVariantId(styleGroupId, v.color.name) === item.variantId.toString())
+        (v) => (item.variantId && v._id?.toString() === item.variantId?.toString()) ||
+               (v.color?.name && generateColorVariantId(styleGroupId, v.color.name) === item.variantId?.toString())
       ) || siblings[0];
 
       const merchantObj = (typeof matched.merchantId === 'object' && matched.merchantId !== null) ? matched.merchantId : null;
@@ -129,12 +167,14 @@ export const getMyWishlist = asyncHandler(async (req, res) => {
 
       const totalStock = siblings.reduce((sum, s) => sum + Math.max(0, (s.stock || 0) - (s.reservedStock || 0)), 0);
 
+      const canonicalVariantId = generateColorVariantId(styleGroupId, matched.color?.name || 'Default');
+
       result.push({
         _id: item._id,
         product: {
           ...matched,
           _id: styleGroupId, // Re-map _id to styleGroupId so Customer App routes & context check matches correctly
-          variantId: item.variantId, // Explicitly pass variantId for mobile App heart icon checks
+          variantId: canonicalVariantId, // Explicitly pass canonical variantId for mobile App heart icon checks
           isNearby,
           isInstantBuyable,
           isWarehouseListing: isWh,
@@ -165,11 +205,20 @@ export const getMyWishlistIds = asyncHandler(async (req, res) => {
     .select('_id productId variantId')
     .sort({ createdAt: -1 });
 
-  const result = wishlist.map(item => ({
-    _id: item._id,
-    productId: item.productId,
-    variantId: item.variantId,
-  }));
+  const result = [];
+  const seenProductIds = new Set();
+
+  for (const item of wishlist) {
+    const pId = item.productId?.toString();
+    if (!pId || seenProductIds.has(pId)) continue;
+    seenProductIds.add(pId);
+
+    result.push({
+      _id: item._id,
+      productId: pId,
+      variantId: item.variantId?.toString(),
+    });
+  }
 
   res.json(new ApiResponse(200, {
     count: result.length,

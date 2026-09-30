@@ -28,6 +28,7 @@ export const getBaseProducts = asyncHandler(async (req, res) => {
     .populate('categoryId', 'name')
     .populate('subCategoryId', 'name')
     .populate('merchantId', 'shopName email')
+    .populate('attributes.attributeId', 'name slug inputType values')
     .sort({ createdAt: -1 });
 
   const products = groupFlatToLegacy(flatProducts);
@@ -36,6 +37,11 @@ export const getBaseProducts = asyncHandler(async (req, res) => {
 
 export const getVariants = asyncHandler(async (req, res) => {
   const flatProducts = await ProductFlat.find({ isDeleted: { $ne: true } })
+    .populate('brandId', 'name')
+    .populate('categoryId', 'name')
+    .populate('subCategoryId', 'name')
+    .populate('merchantId', 'shopName email')
+    .populate('attributes.attributeId', 'name slug inputType values')
     .sort({ createdAt: -1 });
   const products = groupFlatToLegacy(flatProducts);
   return res.status(200).json(new ApiResponse(200, products, "Variants retrieved successfully"));
@@ -48,7 +54,8 @@ export const getBaseProductById = asyncHandler(async (req, res) => {
     .populate('brandId', 'name')
     .populate('categoryId', 'name')
     .populate('subCategoryId', 'name')
-    .populate('merchantId', 'shopName email');
+    .populate('merchantId', 'shopName email')
+    .populate('attributes.attributeId', 'name slug inputType values');
 
   if (!flatProducts.length) {
     // Maybe the productId is the _id of a single flat doc
@@ -56,13 +63,15 @@ export const getBaseProductById = asyncHandler(async (req, res) => {
       .populate('brandId', 'name')
       .populate('categoryId', 'name')
       .populate('subCategoryId', 'name')
-      .populate('merchantId', 'shopName email');
+      .populate('merchantId', 'shopName email')
+      .populate('attributes.attributeId', 'name slug inputType values');
     if (singleDoc) {
       flatProducts = await ProductFlat.find({ styleGroupId: singleDoc.styleGroupId, isDeleted: { $ne: true } })
         .populate('brandId', 'name')
         .populate('categoryId', 'name')
         .populate('subCategoryId', 'name')
-        .populate('merchantId', 'shopName email');
+        .populate('merchantId', 'shopName email')
+        .populate('attributes.attributeId', 'name slug inputType values');
     }
   }
 

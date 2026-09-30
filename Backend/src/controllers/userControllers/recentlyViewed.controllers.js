@@ -19,18 +19,31 @@ export const addToRecentlyViewed = asyncHandler(async (req, res) => {
     throw new ApiError(400, 'productId and variantId are required');
   }
 
-  const product = await ProductFlat.findOne({
-    $or: [{ styleGroupId: productId }, { _id: productId }],
+  const matchingVariants = await ProductFlat.find({
+    $or: [
+      { styleGroupId: productId },
+      ...(mongoose.Types.ObjectId.isValid(productId) ? [{ _id: productId }] : []),
+      ...(mongoose.Types.ObjectId.isValid(variantId) ? [{ _id: variantId }] : []),
+    ],
     isDeleted: { $ne: true }
   });
-  if (!product) {
+
+  if (!matchingVariants.length) {
     throw new ApiError(404, 'Product not found');
   }
 
-  // Upsert the recently viewed record
+  const matched = matchingVariants.find(
+    v => (variantId && v._id.toString() === variantId.toString()) ||
+         generateColorVariantId(v.styleGroupId || productId, v.color?.name) === variantId.toString()
+  ) || matchingVariants[0];
+
+  const canonicalProductId = matched.styleGroupId ? matched.styleGroupId.toString() : productId.toString();
+  const canonicalVariantId = generateColorVariantId(canonicalProductId, matched.color?.name || 'Default');
+
+  // Upsert the recently viewed record with canonical productId and canonicalVariantId
   await RecentlyViewed.findOneAndUpdate(
-    { userId, productId },
-    { variantId, updatedAt: new Date() },
+    { userId, productId: canonicalProductId },
+    { variantId: canonicalVariantId, updatedAt: new Date() },
     { upsert: true, new: true }
   );
 
@@ -73,7 +86,8 @@ export const getMyRecentlyViewed = asyncHandler(async (req, res) => {
 
     if (siblings.length > 0) {
       const matched = siblings.find(
-        (v) => generateColorVariantId(styleGroupId, v.color?.name) === item.variantId.toString()
+        (v) => (item.variantId && v._id.toString() === item.variantId.toString()) ||
+               (v.color?.name && generateColorVariantId(styleGroupId, v.color.name) === item.variantId.toString())
       ) || siblings[0];
 
       const merchantObj = (typeof matched.merchantId === 'object' && matched.merchantId !== null) ? matched.merchantId : null;
@@ -89,6 +103,8 @@ export const getMyRecentlyViewed = asyncHandler(async (req, res) => {
       const isInstantBuyable = isWh ? isWhNearby : (isNearby && isOnline && isZoneLive);
 
       const totalStock = siblings.reduce((sum, s) => sum + Math.max(0, (s.stock || 0) - (s.reservedStock || 0)), 0);
+
+      const canonicalVariantId = generateColorVariantId(styleGroupId, matched.color?.name || 'Default');
 
       products.push({
         _id: styleGroupId, // Re-map _id to styleGroupId so routing/details lookups work
@@ -106,7 +122,7 @@ export const getMyRecentlyViewed = asyncHandler(async (req, res) => {
         ratings: matched.ratings || 0,
         numReviews: matched.numReviews || 0,
         isTriable: matched.isTriable !== false,
-        variantId: item.variantId,
+        variantId: canonicalVariantId,
         isNearby,
         isInstantBuyable,
         isWarehouseListing: isWh,

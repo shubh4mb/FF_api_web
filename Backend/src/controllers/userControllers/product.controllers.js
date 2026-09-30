@@ -1050,7 +1050,7 @@ export const getProductsByMerchantId = async (req, res) => {
 
 export const getYouMayLikeProducts = async (req, res) => {
   try {
-    const { subCategoryId, merchantId, excludeId, limit = 10 } = req.query;
+    const { subCategoryId, merchantId, excludeId, limit = 10, gender } = req.query;
 
     if (!subCategoryId || !mongoose.Types.ObjectId.isValid(subCategoryId)) {
       return res.status(400).json({ message: '❌ Invalid or missing subCategoryId' });
@@ -1067,12 +1067,25 @@ export const getYouMayLikeProducts = async (req, res) => {
       else flatFilter.merchantId = { $in: req.nearbyMerchantIds };
     }
 
+    if (gender && gender !== 'All') {
+      const gList = (Array.isArray(gender) ? gender : [gender]).map(g => String(g).toUpperCase());
+      flatFilter.gender = { $in: Array.from(new Set([...gList, 'UNISEX'])) };
+    }
+
     const flatProducts = await ProductFlat.find(flatFilter)
       .populate('merchantId', 'shopName isOnline isZoneLive')
       .limit(parseInt(limit) * 5)
       .lean();
-    const cards = flatToCardData(flatProducts, req).slice(0, parseInt(limit));
-    return res.status(200).json(cards);
+    let cards = flatToCardData(flatProducts, req);
+    if (gender && gender !== 'All') {
+      const gList = (Array.isArray(gender) ? gender : [gender]).map(g => String(g).toUpperCase());
+      cards = cards.filter(card => {
+        if (!card.gender || (Array.isArray(card.gender) && card.gender.length === 0)) return true;
+        const cGenders = (Array.isArray(card.gender) ? card.gender : [card.gender]).map(g => String(g).toUpperCase());
+        return cGenders.some(g => gList.includes(g) || g === 'UNISEX');
+      });
+    }
+    return res.status(200).json(cards.slice(0, parseInt(limit)));
   } catch (error) {
     console.error('Error in getYouMayLikeProducts:', error.message);
     res.status(500).json({ message: '❌ ' + error.message });
@@ -1308,14 +1321,26 @@ export const getCourierProducts = async (req, res) => {
 export const getRelatedProducts = async (req, res) => {
   try {
     const { id } = req.params;
-    const { limit = 10 } = req.query;
+    const { limit = 10, gender } = req.query;
 
     // Find source product from flat schema
-    let sourceFlat = await ProductFlat.findOne({ styleGroupId: id }).select('subCategoryId categoryId merchantId').lean();
-    if (!sourceFlat) sourceFlat = await ProductFlat.findById(id).select('subCategoryId categoryId merchantId styleGroupId').lean();
+    let sourceFlat = await ProductFlat.findOne({ styleGroupId: id }).select('subCategoryId categoryId merchantId gender styleGroupId').lean();
+    if (!sourceFlat) sourceFlat = await ProductFlat.findById(id).select('subCategoryId categoryId merchantId gender styleGroupId').lean();
     if (!sourceFlat) {
       return res.status(404).json({ message: 'Source product not found' });
     }
+
+    // Determine target genders (from query param or source product)
+    let rawGenders = [];
+    if (gender && gender !== 'All') {
+      rawGenders = (Array.isArray(gender) ? gender : [gender]).map(g => String(g).toUpperCase());
+    } else if (Array.isArray(sourceFlat.gender) && sourceFlat.gender.length > 0) {
+      rawGenders = sourceFlat.gender.map(g => String(g).toUpperCase());
+    } else if (typeof sourceFlat.gender === 'string' && sourceFlat.gender) {
+      rawGenders = [sourceFlat.gender.toUpperCase()];
+    }
+
+    const allowedGenders = rawGenders.length > 0 ? Array.from(new Set([...rawGenders, 'UNISEX'])) : [];
 
     const flatFilter = {
       subCategoryId: sourceFlat.subCategoryId,
@@ -1325,9 +1350,49 @@ export const getRelatedProducts = async (req, res) => {
       styleGroupId: { $ne: sourceFlat.styleGroupId || id },
     };
 
-    const flatProducts = await ProductFlat.find(flatFilter).limit(parseInt(limit) * 5).lean();
-    const cards = flatToCardData(flatProducts, req).slice(0, parseInt(limit));
-    return res.status(200).json(cards);
+    if (allowedGenders.length > 0) {
+      flatFilter.gender = { $in: allowedGenders };
+    }
+
+    const maxLimit = parseInt(limit) || 10;
+    let flatProducts = await ProductFlat.find(flatFilter)
+      .populate('merchantId', 'shopName isOnline isZoneLive fulfillmentType')
+      .limit(maxLimit * 5)
+      .lean();
+
+    // If not enough products from same subcategory, backfill with same category and same gender
+    if (flatProducts.length < maxLimit * 2 && sourceFlat.categoryId) {
+      const existingStyleGroupIds = new Set(flatProducts.map(p => p.styleGroupId));
+      existingStyleGroupIds.add(sourceFlat.styleGroupId || id);
+
+      const backfillFilter = {
+        categoryId: sourceFlat.categoryId,
+        styleGroupId: { $nin: Array.from(existingStyleGroupIds) },
+        isActive: true,
+        isDeleted: { $ne: true },
+        isVerified: true,
+      };
+      if (allowedGenders.length > 0) {
+        backfillFilter.gender = { $in: allowedGenders };
+      }
+
+      const backfill = await ProductFlat.find(backfillFilter)
+        .populate('merchantId', 'shopName isOnline isZoneLive fulfillmentType')
+        .limit(maxLimit * 5)
+        .lean();
+      flatProducts = flatProducts.concat(backfill);
+    }
+
+    let cards = flatToCardData(flatProducts, req);
+    if (rawGenders.length > 0) {
+      cards = cards.filter(card => {
+        if (!card.gender || (Array.isArray(card.gender) && card.gender.length === 0)) return true;
+        const cGenders = (Array.isArray(card.gender) ? card.gender : [card.gender]).map(g => String(g).toUpperCase());
+        return cGenders.some(g => rawGenders.includes(g) || g === 'UNISEX');
+      });
+    }
+
+    return res.status(200).json(cards.slice(0, maxLimit));
   } catch (error) {
     console.error('Error in getRelatedProducts:', error.message);
     res.status(500).json({ message: '❌ ' + error.message });

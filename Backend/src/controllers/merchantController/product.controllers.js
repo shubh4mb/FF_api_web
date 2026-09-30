@@ -674,7 +674,8 @@ export const getBaseProductById = async (req, res) => {
         .populate('brandId', 'name')
         .populate('categoryId', 'name')
         .populate('subCategoryId', 'name')
-        .populate('merchantId', 'name');
+        .populate('merchantId', 'name shopName email')
+        .populate('attributes.attributeId', 'name slug inputType values');
     }
 
     // 2. If not found by _id, try finding ProductFlat by styleGroupId
@@ -683,7 +684,18 @@ export const getBaseProductById = async (req, res) => {
         .populate('brandId', 'name')
         .populate('categoryId', 'name')
         .populate('subCategoryId', 'name')
-        .populate('merchantId', 'name');
+        .populate('merchantId', 'name shopName email')
+        .populate('attributes.attributeId', 'name slug inputType values');
+    }
+
+    // 3. Fallback without isDeleted or by productCode
+    if (!doc) {
+      doc = await ProductFlat.findOne({ productCode: productId })
+        .populate('brandId', 'name')
+        .populate('categoryId', 'name')
+        .populate('subCategoryId', 'name')
+        .populate('merchantId', 'name shopName email')
+        .populate('attributes.attributeId', 'name slug inputType values');
     }
 
     if (!doc) {
@@ -697,14 +709,53 @@ export const getBaseProductById = async (req, res) => {
     }).populate('brandId', 'name')
       .populate('categoryId', 'name')
       .populate('subCategoryId', 'name')
-      .populate('merchantId', 'name');
+      .populate('merchantId', 'name shopName email')
+      .populate('attributes.attributeId', 'name slug inputType values');
+
+    const allVariantsDocs = await ProductFlat.find({
+      styleGroupId: doc.styleGroupId,
+      isDeleted: { $ne: true }
+    }).populate('brandId', 'name')
+      .populate('categoryId', 'name')
+      .populate('subCategoryId', 'name')
+      .populate('merchantId', 'name shopName email');
+
+    const colorGroups = {};
+    allVariantsDocs.forEach(s => {
+      const cName = s.color?.name || "Default";
+      if (!colorGroups[cName]) {
+        colorGroups[cName] = {
+          _id: s._id.toString(),
+          color: s.color || { name: "Default", hex: "" },
+          mrp: s.mrp,
+          price: s.price,
+          discount: s.discount,
+          images: s.images || [],
+          sizes: []
+        };
+      }
+      colorGroups[cName].sizes.push({
+        _id: s._id.toString(),
+        size: s.size,
+        merchantSizeCode: s.merchantSizeCode,
+        stock: s.stock,
+        productCode: s.productCode
+      });
+    });
 
     const productDetails = {
       _id: doc._id.toString(),
       styleGroupId: doc.styleGroupId,
+      productCode: doc.productCode,
       name: doc.name,
       brand: typeof doc.brandId === 'object' && doc.brandId ? doc.brandId.name : (doc.brand || doc.soldBy || ""),
       brandId: typeof doc.brandId === 'object' && doc.brandId ? doc.brandId._id?.toString() : (doc.brandId || ""),
+      merchant: typeof doc.merchantId === 'object' && doc.merchantId ? {
+        id: doc.merchantId._id?.toString(),
+        name: doc.merchantId.name || "",
+        shopName: doc.merchantId.shopName || "",
+        email: doc.merchantId.email || ""
+      } : null,
       soldBy: doc.soldBy || "",
       styleName: doc.styleName || "",
       category: typeof doc.categoryId === 'object' && doc.categoryId ? doc.categoryId.name : (doc.category || ""),
@@ -721,18 +772,27 @@ export const getBaseProductById = async (req, res) => {
       price: doc.price,
       discount: doc.discount,
       images: doc.images,
-      attributes: (doc.attributes || []).map(a => ({
-        attributeId: a.attributeId?._id?.toString() || a.attributeId?.toString() || "",
-        value: a.value
-      })),
+      attributes: (doc.attributes || []).map(a => {
+        const attrObj = a.attributeId && typeof a.attributeId === 'object' ? a.attributeId : null;
+        return {
+          attributeId: attrObj?._id?.toString() || a.attributeId?.toString() || "",
+          name: attrObj?.name || "",
+          slug: attrObj?.slug || "",
+          inputType: attrObj?.inputType || "text",
+          value: a.value
+        };
+      }),
       features: doc.features instanceof Map ? Object.fromEntries(doc.features) : (doc.features || {}),
+      matchingProducts: doc.matchingProducts || [],
       collectionIds: (doc.collectionIds || []).map(c => c?._id?.toString() || c?.toString() || ""),
       sizes: siblings.map(s => ({
         _id: s._id.toString(),
         size: s.size,
         merchantSizeCode: s.merchantSizeCode,
-        stock: s.stock
-      }))
+        stock: s.stock,
+        productCode: s.productCode
+      })),
+      variants: Object.values(colorGroups)
     };
 
     return res.status(200).json({
@@ -749,11 +809,20 @@ const cleanAttributesHelper = (attrs) => {
   if (!Array.isArray(attrs)) return [];
   return attrs.map(a => {
     let rawId = a.attributeId || a.attribute;
+    let name = '';
+    let slug = '';
+    let inputType = '';
     if (rawId && typeof rawId === 'object') {
+      name = rawId.name || '';
+      slug = rawId.slug || '';
+      inputType = rawId.inputType || '';
       rawId = rawId._id || rawId.id;
     }
     return {
       attributeId: rawId ? rawId.toString() : '',
+      name,
+      slug,
+      inputType,
       value: a.value
     };
   }).filter(a => a.attributeId);
@@ -774,6 +843,7 @@ export const getProductsByMerchantId = async (req, res) => {
         .populate("categoryId", "name")
         .populate("subCategoryId", "name")
         .populate("merchantId", "shopName email brandName")
+        .populate("attributes.attributeId", "name slug inputType values")
         .sort({ createdAt: -1 });
 
       const groups = {};
@@ -832,6 +902,7 @@ export const getProductsByMerchantId = async (req, res) => {
       .populate("categoryId", "name")
       .populate("subCategoryId", "name")
       .populate("merchantId", "shopName email brandName")
+      .populate("attributes.attributeId", "name slug inputType values")
       .sort({ createdAt: -1 });
 
     if (!flatProducts || flatProducts.length === 0) {
@@ -867,6 +938,7 @@ export const getProductsByMerchantId = async (req, res) => {
       if (!groups[key]) {
         groups[key] = {
           id: p.styleGroupId || p._id.toString(),
+          _id: p.styleGroupId || p._id.toString(),
           styleGroupId: p.styleGroupId || p._id.toString(),
           name: p.name,
           productCode: p.productCode,
@@ -901,15 +973,26 @@ export const getProductsByMerchantId = async (req, res) => {
           images: p.images,
           createdAt: p.createdAt,
           updatedAt: p.updatedAt,
-          sizes: []
+          sizes: [],
+          variants: [{
+            _id: p._id.toString(),
+            color: p.color,
+            mrp: p.mrp,
+            price: p.price,
+            discount: p.discount,
+            images: p.images,
+            sizes: []
+          }]
         };
       }
-      groups[key].sizes.push({
+      const szItem = {
         _id: p._id.toString(),
         size: p.size,
         stock: p.stock,
         productCode: p.productCode
-      });
+      };
+      groups[key].sizes.push(szItem);
+      groups[key].variants[0].sizes.push(szItem);
     });
 
     const transformed = Object.values(groups);
@@ -1040,8 +1123,8 @@ export const editProduct = async (req, res) => {
   try {
     const { id } = req.params;
     const updateData = req.body;
-    console.log(req.body);
-    console.log(id);
+    console.log("editProduct id:", id);
+    console.log("editProduct updateData keys:", Object.keys(updateData));
 
     const restrictedFields = ['_id', 'createdAt', 'updatedAt', 'variants', 'soldBy'];
     restrictedFields.forEach((field) => delete updateData[field]);
@@ -1053,7 +1136,20 @@ export const editProduct = async (req, res) => {
       }
     }
 
-    const doc = await ProductFlat.findById(id);
+    // Locate product document by ObjectId, styleGroupId, or productCode
+    let doc = null;
+    if (mongoose.Types.ObjectId.isValid(id)) {
+      doc = await ProductFlat.findById(id);
+    }
+    if (!doc) {
+      doc = await ProductFlat.findOne({ styleGroupId: id, isDeleted: { $ne: true } });
+    }
+    if (!doc) {
+      doc = await ProductFlat.findOne({ styleGroupId: id });
+    }
+    if (!doc) {
+      doc = await ProductFlat.findOne({ productCode: id });
+    }
     if (!doc) {
       return res.status(404).json({ success: false, message: 'Product not found' });
     }
@@ -1062,66 +1158,83 @@ export const editProduct = async (req, res) => {
       return res.status(403).json({ success: false, message: 'Products stored in central warehouses cannot be edited directly by merchants.' });
     }
 
-    const { sizes, ...sharedFields } = updateData;
-
-    // Find all existing sizes for this color group
-    const existingDocs = await ProductFlat.find({ 
-      styleGroupId: doc.styleGroupId, 
-      "color.name": doc.color.name,
-      isDeleted: { $ne: true }
-    });
-
-    // 1. Delete sizes that are not in the incoming list
-    const incomingIds = (sizes || []).map(s => s._id).filter(Boolean);
-    for (const existing of existingDocs) {
-      if (!incomingIds.includes(existing._id.toString())) {
-        await ProductFlat.updateOne({ _id: existing._id }, { isDeleted: true });
-      }
+    // Sanitize attributes if provided
+    if (updateData.attributes && Array.isArray(updateData.attributes)) {
+      updateData.attributes = updateData.attributes
+        .filter(a => a && (a.attributeId || a.attribute))
+        .map(a => {
+          let rawId = a.attributeId || a.attribute;
+          if (rawId && typeof rawId === 'object') {
+            rawId = rawId._id || rawId.id;
+          }
+          const idStr = rawId ? rawId.toString() : '';
+          return {
+            attributeId: mongoose.Types.ObjectId.isValid(idStr) ? new mongoose.Types.ObjectId(idStr) : idStr,
+            value: a.value
+          };
+        })
+        .filter(a => a.attributeId);
     }
 
-    // 2. Add or update sizes
+    const { sizes, ...sharedFields } = updateData;
+
+    const targetColorName = updateData.color?.name || doc.color?.name || 'Default';
+    const colorQuery = doc.color?.name ? { "color.name": doc.color.name } : {};
+
+    // 1. Manage sizes ONLY if sizes array is explicitly provided
     if (sizes && Array.isArray(sizes)) {
+      const existingDocs = await ProductFlat.find({ 
+        styleGroupId: doc.styleGroupId, 
+        ...colorQuery,
+        isDeleted: { $ne: true }
+      });
+
+      const incomingIds = sizes.map(s => s._id).filter(Boolean).map(String);
+      for (const existing of existingDocs) {
+        if (!incomingIds.includes(existing._id.toString())) {
+          await ProductFlat.updateOne({ _id: existing._id }, { isDeleted: true });
+        }
+      }
+
       for (const sizeObj of sizes) {
-        const cleanSize = sizeObj.size.replace(/\s+/g, '').toUpperCase();
+        const cleanSize = (sizeObj.size || '').replace(/\s+/g, '').toUpperCase();
         
         if (sizeObj._id) {
           const setFields = { 
             ...sharedFields,
             size: sizeObj.size,
-            stock: Number(sizeObj.stock)
+            stock: Number(sizeObj.stock) || 0
           };
           if (sizeObj.merchantSizeCode !== undefined) {
              setFields.merchantSizeCode = sizeObj.merchantSizeCode;
           }
-          // Update existing size doc
           await ProductFlat.updateOne(
             { _id: sizeObj._id },
             { $set: setFields }
           );
         } else {
-          // Create new size doc
           const base = doc.toObject();
           delete base._id;
           delete base.__v;
           delete base.createdAt;
           delete base.updatedAt;
 
-          const parentProductCode = base.productCode.split('-')[0] || base.productCode;
-          const cleanColor = base.color.name.replace(/\s+/g, '').toUpperCase();
+          const parentProductCode = base.productCode?.split('-')[0] || base.productCode || 'PRD';
+          const cleanColor = (base.color?.name || 'DEFAULT').replace(/\s+/g, '').toUpperCase();
 
           let productCode;
           if (sizeObj.merchantSizeCode) {
-             const merchantPrefix = base.productCode.split('-').slice(0, 2).join('-');
+             const merchantPrefix = base.productCode?.split('-').slice(0, 2).join('-') || 'PRD';
              productCode = `${merchantPrefix}-${sizeObj.merchantSizeCode.toUpperCase().replace(/\s+/g, '')}-${cleanSize}`;
           } else {
-             productCode = `${parentProductCode}-${cleanColor}-${cleanSize}`;
+             productCode = `${parentProductCode}-${cleanColor}-${cleanSize}-${Date.now().toString(36).toUpperCase()}`;
           }
 
           const newSizeDoc = new ProductFlat({
             ...base,
             ...sharedFields,
             size: sizeObj.size,
-            stock: Number(sizeObj.stock),
+            stock: Number(sizeObj.stock) || 0,
             merchantSizeCode: sizeObj.merchantSizeCode,
             productCode: productCode
           });
@@ -1130,14 +1243,42 @@ export const editProduct = async (req, res) => {
       }
     }
 
-    // Update all remaining matching color docs for safety (e.g. if sizes array was empty/unmodified but shared fields changed)
-    await ProductFlat.updateMany(
-      { styleGroupId: doc.styleGroupId, "color.name": doc.color.name },
-      { $set: sharedFields }
-    );
+    // 2. Separate style-level and variant-level updates
+    const styleFieldKeys = [
+      'name', 'styleName', 'description', 'brandId', 'categoryId',
+      'subCategoryId', 'subSubCategoryId', 'gender', 'soldBy',
+      'matchingProducts', 'features', 'attributes', 'tags',
+      'collectionIds', 'isTriable', 'isActive'
+    ];
+
+    const styleLevelFields = {};
+    const variantLevelFields = {};
+
+    Object.keys(sharedFields).forEach(key => {
+      if (styleFieldKeys.includes(key)) {
+        styleLevelFields[key] = sharedFields[key];
+      } else {
+        variantLevelFields[key] = sharedFields[key];
+      }
+    });
+
+    if (Object.keys(styleLevelFields).length > 0) {
+      await ProductFlat.updateMany(
+        { styleGroupId: doc.styleGroupId, isDeleted: { $ne: true } },
+        { $set: styleLevelFields }
+      );
+    }
+
+    if (Object.keys(variantLevelFields).length > 0) {
+      await ProductFlat.updateMany(
+        { styleGroupId: doc.styleGroupId, ...colorQuery, isDeleted: { $ne: true } },
+        { $set: variantLevelFields }
+      );
+    }
 
     // Return one of the updated documents as sample
-    const updatedSample = await ProductFlat.findById(id) || await ProductFlat.findOne({ styleGroupId: doc.styleGroupId, "color.name": doc.color.name });
+    const updatedSample = await ProductFlat.findOne({ styleGroupId: doc.styleGroupId, isDeleted: { $ne: true } }) 
+      || await ProductFlat.findById(doc._id);
 
     return res.status(200).json({
       success: true,

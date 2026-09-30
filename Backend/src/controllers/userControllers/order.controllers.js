@@ -280,6 +280,8 @@ export const createRazorpayOrder = async (req, res) => {
     const paymentStatus = "delivery_fee_paid";
     const orderStatus = "placed";
 
+    const activeCouponCode = req.body.couponCode || cart.couponCode || appliedOffers.find(o => o.couponCode)?.couponCode || null;
+
     // === SAVE ORDER IN DB ===
     const pendingOrder = new Order({
       userId,
@@ -301,6 +303,7 @@ export const createRazorpayOrder = async (req, res) => {
       deliveryDistance: roadDistanceKm,
       returnCharge,
       estimatedTime,
+      couponCode: activeCouponCode,
       appliedOffers,
       deliveryLocation: {
         name: deliveryAddress.name,
@@ -1009,7 +1012,7 @@ export const initiateReturn = async (req, res) => {
 
     orderId = orderId.replace(/^["']|["']$/g, '').trim();
 
-    const { items, couponCode } = req.body; // Expected payload: array of { itemId, tryStatus: "keep"|"return", returnReason }, optional couponCode
+    const { items, couponCode, removeCoupon } = req.body; // Expected payload: array of { itemId, tryStatus: "keep"|"return", returnReason }, optional couponCode
 
     if (!items || !Array.isArray(items) || items.length === 0) {
       await session.abortTransaction();
@@ -1063,36 +1066,34 @@ export const initiateReturn = async (req, res) => {
     }
 
     // === If couponCode is provided in payload, attach/update it on order ===
-    if (couponCode !== undefined) {
-      if (couponCode && typeof couponCode === 'string' && couponCode.trim()) {
-        const normalizedCoupon = couponCode.trim().toUpperCase();
-        const couponOffer = await Offer.findOne({
-          couponCode: normalizedCoupon,
-          isActive: true,
-        }).session(session).lean();
+    if (removeCoupon === true) {
+      if (order.appliedOffers) {
+        order.appliedOffers = order.appliedOffers.filter(o => !o.couponCode || o.autoApply || o.requiresCoupon === false);
+      }
+      order.couponCode = null;
+    } else if (couponCode && typeof couponCode === 'string' && couponCode.trim()) {
+      const normalizedCoupon = couponCode.trim().toUpperCase();
+      const couponOffer = await Offer.findOne({
+        couponCode: normalizedCoupon,
+        isActive: true,
+      }).session(session).lean();
 
-        if (couponOffer) {
-          if (!order.appliedOffers) order.appliedOffers = [];
-          order.appliedOffers = order.appliedOffers.filter(o => !o.couponCode);
-          order.appliedOffers.push({
-            offerId: couponOffer._id,
-            couponCode: couponOffer.couponCode,
-            title: couponOffer.title,
-            scope: couponOffer.scope || 'admin',
-            discountType: couponOffer.discountType,
-            discountValue: couponOffer.discountValue,
-            discountApplied: 0,
-            freeDelivery: Boolean(couponOffer.freeDelivery || couponOffer.type === 'FREE_DELIVERY'),
-            freeReturn: Boolean(couponOffer.freeReturn || couponOffer.freeDelivery || couponOffer.type === 'FREE_DELIVERY'),
-            freeWaiting: Boolean(couponOffer.freeWaiting || couponOffer.freeDelivery || couponOffer.type === 'FREE_DELIVERY'),
-          });
-          order.couponCode = couponOffer.couponCode;
-        }
-      } else if (couponCode === null || couponCode === '') {
-        if (order.appliedOffers) {
-          order.appliedOffers = order.appliedOffers.filter(o => !o.couponCode);
-        }
-        order.couponCode = null;
+      if (couponOffer) {
+        if (!order.appliedOffers) order.appliedOffers = [];
+        order.appliedOffers = order.appliedOffers.filter(o => !o.couponCode);
+        order.appliedOffers.push({
+          offerId: couponOffer._id,
+          couponCode: couponOffer.couponCode,
+          title: couponOffer.title,
+          scope: couponOffer.scope || 'admin',
+          discountType: couponOffer.discountType,
+          discountValue: couponOffer.discountValue,
+          discountApplied: 0,
+          freeDelivery: Boolean(couponOffer.freeDelivery || couponOffer.type === 'FREE_DELIVERY'),
+          freeReturn: Boolean(couponOffer.freeReturn || couponOffer.freeDelivery || couponOffer.type === 'FREE_DELIVERY'),
+          freeWaiting: Boolean(couponOffer.freeWaiting || couponOffer.freeDelivery || couponOffer.type === 'FREE_DELIVERY'),
+        });
+        order.couponCode = couponOffer.couponCode;
       }
     }
 
@@ -1163,20 +1164,20 @@ export const initiateReturn = async (req, res) => {
 
     recalculatedDiscount = Math.min(recalculatedDiscount, acceptedSubtotal);
 
-    const hasFreeDeliveryOffer = Boolean(order.appliedOffers?.some(o => o.freeDelivery));
-    const isInherentlyFreeDelivery = order.originalDeliveryCharge === 0;
+    const hasFreeDeliveryOffer = Boolean(order.appliedOffers?.some(o => o.freeDelivery || o.type === 'FREE_DELIVERY'));
+    const isInherentlyFreeDelivery = order.deliveryCharge === 0 || order.originalDeliveryCharge === 0;
     const hasFreeDelivery = hasFreeDeliveryOffer || isInherentlyFreeDelivery;
 
-    const hasFreeReturnOffer = Boolean(hasFreeDeliveryOffer || order.appliedOffers?.some(o => o.freeReturn));
-    const isInherentlyFreeReturn = order.originalReturnCharge === 0;
+    const hasFreeReturnOffer = Boolean(hasFreeDeliveryOffer || order.appliedOffers?.some(o => o.freeReturn || o.freeDelivery || o.type === 'FREE_DELIVERY'));
+    const isInherentlyFreeReturn = order.returnCharge === 0 || order.originalReturnCharge === 0;
     const hasFreeReturn = hasFreeReturnOffer || isInherentlyFreeReturn;
 
-    const hasFreeWaiting = Boolean(hasFreeDeliveryOffer || order.appliedOffers?.some(o => o.freeWaiting));
+    const hasFreeWaiting = Boolean(hasFreeDeliveryOffer || order.appliedOffers?.some(o => o.freeWaiting || o.freeDelivery || o.type === 'FREE_DELIVERY'));
 
     const billing = calculateFinalBilling({
       orderItems: order.items,
-      deliveryCharge: hasFreeDelivery ? 0 : (order.deliveryCharge || 0),
-      returnCharge: hasFreeReturn ? 0 : (order.returnCharge || 0),
+      deliveryCharge: hasFreeDelivery ? 0 : (order.originalDeliveryCharge ?? order.deliveryCharge ?? 60),
+      returnCharge: hasFreeReturn ? 0 : (order.originalReturnCharge ?? order.returnCharge ?? 40),
       deliveryTip: order.finalBilling?.deliveryTip || 0,
       trialPhaseStart: order.trialPhaseStart,
       trialPhaseEnd: order.trialPhaseEnd,
@@ -1324,7 +1325,7 @@ export const createFinalPaymentRazorpayOrder = async (req, res) => {
   try {
     const { orderId } = req.params;
     const userId = req.user.userId;
-    const { items, couponCode } = req.body;
+    const { items, couponCode, removeCoupon } = req.body;
     console.log(req.body);
 
     if (!items || !Array.isArray(items) || items.length === 0) {
@@ -1387,34 +1388,34 @@ export const createFinalPaymentRazorpayOrder = async (req, res) => {
     }
 
     // === If a couponCode is submitted in final payment request, attach it to order ===
-    if (couponCode !== undefined) {
-      if (couponCode && typeof couponCode === 'string' && couponCode.trim()) {
-        const normalizedCoupon = couponCode.trim().toUpperCase();
-        const couponOffer = await Offer.findOne({
-          couponCode: normalizedCoupon,
-          isActive: true,
-        }).lean();
+    if (removeCoupon === true) {
+      if (order.appliedOffers) {
+        order.appliedOffers = order.appliedOffers.filter(o => !o.couponCode || o.autoApply || o.requiresCoupon === false);
+      }
+      order.couponCode = null;
+    } else if (couponCode && typeof couponCode === 'string' && couponCode.trim()) {
+      const normalizedCoupon = couponCode.trim().toUpperCase();
+      const couponOffer = await Offer.findOne({
+        couponCode: normalizedCoupon,
+        isActive: true,
+      }).lean();
 
-        if (couponOffer) {
-          if (!order.appliedOffers) order.appliedOffers = [];
-          order.appliedOffers = order.appliedOffers.filter(o => !o.couponCode);
-          order.appliedOffers.push({
-            offerId: couponOffer._id,
-            couponCode: couponOffer.couponCode,
-            title: couponOffer.title,
-            scope: couponOffer.scope || 'admin',
-            discountType: couponOffer.discountType,
-            discountValue: couponOffer.discountValue,
-            discountApplied: 0,
-            freeDelivery: couponOffer.freeDelivery || false,
-          });
-          order.couponCode = couponOffer.couponCode;
-        }
-      } else if (couponCode === null || couponCode === '') {
-        if (order.appliedOffers) {
-          order.appliedOffers = order.appliedOffers.filter(o => !o.couponCode);
-        }
-        order.couponCode = null;
+      if (couponOffer) {
+        if (!order.appliedOffers) order.appliedOffers = [];
+        order.appliedOffers = order.appliedOffers.filter(o => !o.couponCode);
+        order.appliedOffers.push({
+          offerId: couponOffer._id,
+          couponCode: couponOffer.couponCode,
+          title: couponOffer.title,
+          scope: couponOffer.scope || 'admin',
+          discountType: couponOffer.discountType,
+          discountValue: couponOffer.discountValue,
+          discountApplied: 0,
+          freeDelivery: Boolean(couponOffer.freeDelivery || couponOffer.type === 'FREE_DELIVERY'),
+          freeReturn: Boolean(couponOffer.freeReturn || couponOffer.freeDelivery || couponOffer.type === 'FREE_DELIVERY'),
+          freeWaiting: Boolean(couponOffer.freeWaiting || couponOffer.freeDelivery || couponOffer.type === 'FREE_DELIVERY'),
+        });
+        order.couponCode = couponOffer.couponCode;
       }
     }
 
@@ -1497,15 +1498,15 @@ export const createFinalPaymentRazorpayOrder = async (req, res) => {
     
     // Free delivery/return applies if an active offer grants it,
     // or if the order originally had 0 base delivery fee
-    const hasFreeDeliveryOffer = Boolean(order.appliedOffers?.some(o => o.freeDelivery));
-    const isInherentlyFreeDelivery = order.originalDeliveryCharge === 0;
+    const hasFreeDeliveryOffer = Boolean(order.appliedOffers?.some(o => o.freeDelivery || o.type === 'FREE_DELIVERY'));
+    const isInherentlyFreeDelivery = order.deliveryCharge === 0 || order.originalDeliveryCharge === 0;
     const hasFreeDelivery = hasFreeDeliveryOffer || isInherentlyFreeDelivery;
 
-    const hasFreeReturnOffer = Boolean(hasFreeDeliveryOffer || order.appliedOffers?.some(o => o.freeReturn));
-    const isInherentlyFreeReturn = order.originalReturnCharge === 0;
+    const hasFreeReturnOffer = Boolean(hasFreeDeliveryOffer || order.appliedOffers?.some(o => o.freeReturn || o.freeDelivery || o.type === 'FREE_DELIVERY'));
+    const isInherentlyFreeReturn = order.returnCharge === 0 || order.originalReturnCharge === 0;
     const hasFreeReturn = hasFreeReturnOffer || isInherentlyFreeReturn;
 
-    const hasFreeWaiting = Boolean(hasFreeDeliveryOffer || order.appliedOffers?.some(o => o.freeWaiting));
+    const hasFreeWaiting = Boolean(hasFreeDeliveryOffer || order.appliedOffers?.some(o => o.freeWaiting || o.freeDelivery || o.type === 'FREE_DELIVERY'));
 
     const effectiveDeliveryCharge = hasFreeDelivery ? 0 : (order.originalDeliveryCharge ?? order.deliveryCharge ?? 60);
     const effectiveReturnCharge = hasFreeReturn ? 0 : (order.originalReturnCharge ?? order.returnCharge ?? 40);
@@ -1966,12 +1967,12 @@ export const verifyFinalPaymentCod = async (req, res) => {
 
     // Free delivery/return applies if an active offer grants it,
     // or if the order originally had 0 base delivery fee
-    const hasFreeDeliveryOffer = Boolean(order.appliedOffers?.some(o => o.freeDelivery));
-    const isInherentlyFreeDelivery = order.originalDeliveryCharge === 0;
+    const hasFreeDeliveryOffer = Boolean(order.appliedOffers?.some(o => o.freeDelivery || o.type === 'FREE_DELIVERY'));
+    const isInherentlyFreeDelivery = order.deliveryCharge === 0 || order.originalDeliveryCharge === 0;
     const hasFreeDelivery = hasFreeDeliveryOffer || isInherentlyFreeDelivery;
 
-    const hasFreeReturnOffer = Boolean(hasFreeDeliveryOffer || order.appliedOffers?.some(o => o.freeReturn));
-    const isInherentlyFreeReturn = order.originalReturnCharge === 0;
+    const hasFreeReturnOffer = Boolean(hasFreeDeliveryOffer || order.appliedOffers?.some(o => o.freeReturn || o.freeDelivery || o.type === 'FREE_DELIVERY'));
+    const isInherentlyFreeReturn = order.returnCharge === 0 || order.originalReturnCharge === 0;
     const hasFreeReturn = hasFreeReturnOffer || isInherentlyFreeReturn;
 
     const hasFreeWaiting = Boolean(hasFreeDeliveryOffer || order.appliedOffers?.some(o => o.freeWaiting));
@@ -1981,8 +1982,8 @@ export const verifyFinalPaymentCod = async (req, res) => {
 
     const billing = calculateFinalBilling({
       orderItems: order.items,
-      deliveryCharge: hasFreeDelivery ? 0 : (order.deliveryCharge || 0),
-      returnCharge: hasFreeReturn ? 0 : (order.returnCharge || 0),
+      deliveryCharge: effectiveDeliveryCharge,
+      returnCharge: effectiveReturnCharge,
       deliveryTip: order.finalBilling?.deliveryTip || 0,
       trialPhaseStart: order.trialPhaseStart,
       trialPhaseEnd: order.trialPhaseEnd,

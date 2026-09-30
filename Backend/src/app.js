@@ -6,6 +6,7 @@ import rateLimit from 'express-rate-limit';
 import cookieParser from 'cookie-parser';
 import { errorHandler } from './middleware/error.middleware.js';
 
+import mongoose from 'mongoose';
 import authRoutes from './routes/auth.routes.js';
 import userRoutes from './routes/user.routes.js';
 import adminRoutes from './routes/admin.routes.js';
@@ -92,6 +93,54 @@ app.use((req, res, next) => {
 // ---- Health check (Render) ----
 app.get('/ping', (req, res) => {
   res.send('pong');
+});
+
+// ---- Database Pool & System Health (Monitoring / Load Testing) ----
+app.get('/api/system/health', (req, res) => {
+  try {
+    const client = mongoose.connection.getClient();
+    const topology = client?.topology;
+    let totalConn = 'N/A';
+    let availableConn = 'N/A';
+
+    // Extract connection pool metrics from MongoDB driver topology if available
+    if (topology?.s?.servers) {
+      for (const server of topology.s.servers.values()) {
+        if (server.pool) {
+          totalConn = server.pool.totalConnectionCount ?? totalConn;
+          availableConn = server.pool.availableConnectionCount ?? availableConn;
+        }
+      }
+    } else if (topology?.s?.pool) {
+      totalConn = topology.s.pool.totalConnectionCount ?? 'N/A';
+      availableConn = topology.s.pool.availableConnectionCount ?? 'N/A';
+    }
+
+    const mem = process.memoryUsage();
+    res.json({
+      status: 'ok',
+      timestamp: new Date().toISOString(),
+      uptimeSeconds: Math.floor(process.uptime()),
+      db: {
+        readyState: mongoose.connection.readyState, // 1 = connected
+        host: mongoose.connection.host,
+        name: mongoose.connection.name,
+        pool: {
+          totalConnections: totalConn,
+          availableConnections: availableConn,
+          activeCheckedOut: typeof totalConn === 'number' && typeof availableConn === 'number' ? totalConn - availableConn : 'N/A'
+        }
+      },
+      mockPaymentsEnabled: process.env.MOCK_PAYMENTS === 'true',
+      memory: {
+        rssMB: Math.round(mem.rss / 1024 / 1024),
+        heapUsedMB: Math.round(mem.heapUsed / 1024 / 1024),
+        heapTotalMB: Math.round(mem.heapTotal / 1024 / 1024)
+      }
+    });
+  } catch (err) {
+    res.status(500).json({ status: 'error', message: err.message });
+  }
 });
 
 // ---- Swagger API Docs ----

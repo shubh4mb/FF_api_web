@@ -94,7 +94,16 @@ export const convertToLegacyFormat = (activeProduct, siblingProducts = []) => {
     description: activeProduct.description,
     matchingProducts: activeProduct.matchingProducts || [],
     features: activeProduct.features || {},
-    attributes: activeProduct.attributes || [],
+    attributes: (activeProduct.attributes || []).map(a => {
+      const attrObj = a.attributeId && typeof a.attributeId === 'object' ? a.attributeId : null;
+      return {
+        attributeId: attrObj?._id?.toString() || a.attributeId?.toString() || '',
+        name: attrObj?.name || '',
+        slug: attrObj?.slug || '',
+        inputType: attrObj?.inputType || 'text',
+        value: a.value
+      };
+    }),
     tags: activeProduct.tags || [],
     collectionIds: activeProduct.collectionIds || [],
     isTriable: activeProduct.isTriable !== false,

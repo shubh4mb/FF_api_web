@@ -385,12 +385,12 @@ export const endTrialPhase = async (req, res) => {
     order.trialPhaseDuration = durationMinutes;
 
     // Overtime penalty: ₹2/min over 10 mins (waived if freeWaiting or freeDelivery offer applied)
-    const hasFreeDeliveryOffer = Boolean(order.appliedOffers?.some(o => o.freeDelivery));
-    const isInherentlyFreeDelivery = order.originalDeliveryCharge === 0 && (!order.appliedOffers || !order.appliedOffers.some(o => o.freeDelivery !== undefined));
+    const hasFreeDeliveryOffer = Boolean(order.appliedOffers?.some(o => o.freeDelivery || o.type === 'FREE_DELIVERY'));
+    const isInherentlyFreeDelivery = (order.deliveryCharge === 0 || order.originalDeliveryCharge === 0) && (!order.appliedOffers || !order.appliedOffers.some(o => o.freeDelivery !== undefined));
     const hasFreeDelivery = hasFreeDeliveryOffer || isInherentlyFreeDelivery;
     const hasFreeReturn = Boolean(
       hasFreeDelivery ||
-      order.appliedOffers?.some(o => o.freeReturn || o.freeDelivery) ||
+      order.appliedOffers?.some(o => o.freeReturn || o.freeDelivery || o.type === 'FREE_DELIVERY') ||
       order.returnCharge === 0 ||
       order.originalReturnCharge === 0
     );
@@ -405,8 +405,8 @@ export const endTrialPhase = async (req, res) => {
     // Recalculate billing with overtime penalty
     const billing = calculateFinalBilling({
       orderItems: order.items,
-      deliveryCharge: hasFreeDelivery ? 0 : (order.deliveryCharge || 0),
-      returnCharge: hasFreeReturn ? 0 : (order.returnCharge || 0),
+      deliveryCharge: hasFreeDelivery ? 0 : (order.originalDeliveryCharge ?? order.deliveryCharge ?? 60),
+      returnCharge: hasFreeReturn ? 0 : (order.originalReturnCharge ?? order.returnCharge ?? 40),
       deliveryTip: order.finalBilling?.deliveryTip || 0,
       trialPhaseStart: order.trialPhaseStart,
       trialPhaseEnd: order.trialPhaseEnd,

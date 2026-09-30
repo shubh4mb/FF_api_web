@@ -4,7 +4,11 @@
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
-    "dev": "nodemon index.js"
+    "dev": "nodemon index.js",
+    "test:stress": "node load-tests/node-stress-runner.js",
+    "test:k6": "k6 run load-tests/flashfits-load-test.js",
+    "test:k6:dashboard": "k6 run --out web-dashboard load-tests/flashfits-load-test.js",
+    "test:redis": "node scripts/test_redis_full_suite.js"
   },
   "type": "module",
   "keywords": [],
