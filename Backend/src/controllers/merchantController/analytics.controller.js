@@ -25,7 +25,32 @@ export const getMerchantAnalytics = async (req, res) => {
                         $sum: { 
                             $cond: [
                                 { $in: ["$orderStatus", ["delivered", "completed"]] },
-                                { $cond: [{ $gt: ["$finalBilling.baseAmount", 0] }, "$finalBilling.baseAmount", "$totalAmount"] },
+                                { 
+                                    $cond: [
+                                        { 
+                                            $and: [
+                                                { $ne: ["$finalBilling.baseAmount", null] }, 
+                                                { $gte: ["$finalBilling.baseAmount", 0] }
+                                            ] 
+                                        }, 
+                                        "$finalBilling.baseAmount", 
+                                        {
+                                            $sum: {
+                                                $map: {
+                                                    input: {
+                                                        $filter: {
+                                                            input: { $ifNull: ["$items", []] },
+                                                            as: "item",
+                                                            cond: { $in: ["$$item.tryStatus", ["accepted", "not-triable", "keep"]] }
+                                                        }
+                                                    },
+                                                    as: "keptItem",
+                                                    in: { $multiply: ["$$keptItem.price", { $ifNull: ["$$keptItem.quantity", 1] }] }
+                                                }
+                                            }
+                                        }
+                                    ] 
+                                },
                                 0
                             ] 
                         } 
@@ -54,7 +79,7 @@ export const getMerchantAnalytics = async (req, res) => {
                                                 0
                                             ] 
                                         }
-                                    ]
+                                    ] 
                                 }, 
                                 1, 
                                 0
@@ -75,7 +100,32 @@ export const getMerchantAnalytics = async (req, res) => {
                         $sum: { 
                             $cond: [
                                 { $in: ["$orderStatus", ["delivered", "completed"]] },
-                                { $cond: [{ $gt: ["$finalBilling.baseAmount", 0] }, "$finalBilling.baseAmount", "$totalAmount"] },
+                                { 
+                                    $cond: [
+                                        { 
+                                            $and: [
+                                                { $ne: ["$finalBilling.baseAmount", null] }, 
+                                                { $gte: ["$finalBilling.baseAmount", 0] }
+                                            ] 
+                                        }, 
+                                        "$finalBilling.baseAmount", 
+                                        {
+                                            $sum: {
+                                                $map: {
+                                                    input: {
+                                                        $filter: {
+                                                            input: { $ifNull: ["$items", []] },
+                                                            as: "item",
+                                                            cond: { $in: ["$$item.tryStatus", ["accepted", "not-triable", "keep"]] }
+                                                        }
+                                                    },
+                                                    as: "keptItem",
+                                                    in: { $multiply: ["$$keptItem.price", { $ifNull: ["$$keptItem.quantity", 1] }] }
+                                                }
+                                            }
+                                        }
+                                    ] 
+                                },
                                 0
                             ] 
                         } 
@@ -102,7 +152,7 @@ export const getMerchantAnalytics = async (req, res) => {
                                                 0
                                             ] 
                                         }
-                                    ]
+                                    ] 
                                 }, 
                                 1, 
                                 0
@@ -118,7 +168,7 @@ export const getMerchantAnalytics = async (req, res) => {
         const topProducts = await Order.aggregate([
             { $match: { ...matchStage, orderStatus: { $in: ["delivered", "completed"] } } },
             { $unwind: "$items" },
-            { $match: { "items.tryStatus": { $in: ["accepted", "not-triable"] } } },
+            { $match: { "items.tryStatus": { $in: ["accepted", "not-triable", "keep"] } } },
             {
                 $group: {
                     _id: "$items.productId",

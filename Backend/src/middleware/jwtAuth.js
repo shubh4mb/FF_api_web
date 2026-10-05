@@ -79,8 +79,8 @@ export const authMiddlewareMerchant = async (req, res, next) => {
     try {
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
-      const merchant = await Merchant.findById(decoded.id).select('status isActive blockedReason');
-      if (merchant && (merchant.status === 'suspended' || merchant.isActive === false)) {
+      const merchant = await Merchant.findById(decoded.id).select('status blockedReason');
+      if (merchant && merchant.status === 'suspended') {
         return res.status(403).json({
           success: false,
           isSuspended: true,

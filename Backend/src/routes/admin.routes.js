@@ -163,6 +163,7 @@ router.post('/transactions/manual', verifyAdmin, upload.single('receipt'), handl
 
 // ── Support Tickets ──
 import SupportTicket from '../models/supportTicket.model.js';
+import { sendPushNotifications } from '../helperFns/notificationHelper.js';
 
 router.get('/support/tickets', verifyAdmin, async (req, res) => {
   try {
@@ -175,8 +176,8 @@ router.get('/support/tickets', verifyAdmin, async (req, res) => {
         .sort({ createdAt: -1 })
         .skip((page - 1) * limit)
         .limit(parseInt(limit))
-        .populate("userId", "name phone")
-        .populate("orderId", "orderStatus totalAmount")
+        .populate("userId", "name phone email")
+        .populate("orderId", "orderStatus totalAmount createdAt paymentMethod deliveryAddress")
         .lean(),
       SupportTicket.countDocuments(filter),
     ]);
@@ -197,18 +198,79 @@ router.get('/support/tickets', verifyAdmin, async (req, res) => {
   }
 });
 
+router.get('/support/tickets/:id', verifyAdmin, async (req, res) => {
+  try {
+    const ticket = await SupportTicket.findById(req.params.id)
+      .populate("userId", "name phone email createdAt")
+      .populate("orderId", "orderStatus totalAmount createdAt paymentMethod deliveryAddress items")
+      .lean();
+    if (!ticket) return res.status(404).json({ message: "Ticket not found" });
+    return res.status(200).json({ success: true, ticket });
+  } catch (err) {
+    console.error("Admin get single ticket error:", err);
+    return res.status(500).json({ message: "Failed to fetch ticket details" });
+  }
+});
+
 router.patch('/support/tickets/:id', verifyAdmin, async (req, res) => {
   try {
-    const { status } = req.body;
-    if (!["open", "in_progress", "resolved", "closed"].includes(status)) {
-      return res.status(400).json({ message: "Invalid status" });
+    const { status, resolutionNotes, adminAction } = req.body;
+    
+    const updateData = {};
+    if (status) {
+      if (!["open", "in_progress", "resolved", "closed"].includes(status)) {
+        return res.status(400).json({ message: "Invalid status" });
+      }
+      updateData.status = status;
+      if (status === "resolved" || status === "closed") {
+        updateData.resolvedAt = new Date();
+      }
     }
+    if (resolutionNotes !== undefined) {
+      updateData.resolutionNotes = resolutionNotes;
+    }
+    if (adminAction !== undefined) {
+      updateData.adminAction = adminAction;
+    }
+
     const ticket = await SupportTicket.findByIdAndUpdate(
       req.params.id,
-      { status },
+      updateData,
       { new: true }
-    );
+    )
+      .populate("userId", "name phone email")
+      .populate("orderId", "orderStatus totalAmount createdAt paymentMethod deliveryAddress");
+
     if (!ticket) return res.status(404).json({ message: "Ticket not found" });
+
+    // Send push notification to user when status or resolution is updated
+    if (ticket.userId) {
+      const userDocId = ticket.userId._id || ticket.userId;
+      const formattedCategory = (ticket.category || "issue").replace(/_/g, " ");
+      let title = "Support Ticket Update";
+      let body = `Your ticket regarding ${formattedCategory} has been updated.`;
+
+      if (status === "resolved") {
+        title = "Support Issue Resolved";
+        body = resolutionNotes
+          ? `Your ticket is resolved: "${resolutionNotes.slice(0, 80)}${resolutionNotes.length > 80 ? '...' : ''}"`
+          : `Your support issue regarding ${formattedCategory} has been marked as resolved.`;
+      } else if (status === "in_progress") {
+        title = "Support Ticket In Progress";
+        body = `Our support team is actively reviewing your issue regarding ${formattedCategory}.`;
+      } else if (resolutionNotes) {
+        body = `Support update: "${resolutionNotes.slice(0, 80)}${resolutionNotes.length > 80 ? '...' : ''}"`;
+      }
+
+      sendPushNotifications(
+        userDocId,
+        null,
+        title,
+        body,
+        { type: "support_ticket", ticketId: String(ticket._id), status: ticket.status }
+      ).catch((err) => console.error("Admin ticket resolution push notification error:", err));
+    }
+
     return res.status(200).json({ success: true, ticket });
   } catch (err) {
     console.error("Admin update ticket error:", err);

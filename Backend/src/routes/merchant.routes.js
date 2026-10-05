@@ -291,11 +291,9 @@ router.get("/earnings/current-week", authMiddlewareMerchant, async (req, res) =>
         if (payout && payout.orders && payout.orders.length > 0) {
             payout.orders.forEach(order => {
                 if (order.settledAt) {
-                    // Convert UTC to IST by adding 5.5 hours, assuming week bounds are based on IST.
-                    // Or simply use the UTC date since the week bounds and logic in weeklyPayoutHelper
-                    // ensures the orders belong to this week.
-                    const date = new Date(order.settledAt);
-                    const dayIndex = date.getDay(); // 0 is Sun, 1 is Mon...
+                    // Convert UTC to IST by adding 5.5 hours to align with IST week bounds
+                    const istDate = new Date(new Date(order.settledAt).getTime() + 5.5 * 60 * 60 * 1000);
+                    const dayIndex = istDate.getUTCDay(); // 0 is Sun, 1 is Mon...
                     const mappedIndex = dayIndex === 0 ? 6 : dayIndex - 1;
                     const val = order.type === 'credit' ? order.amount : -order.amount;
                     dailyBreakdown[mappedIndex].amount += val;

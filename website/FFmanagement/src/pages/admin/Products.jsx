@@ -3,9 +3,10 @@ import { getBaseProducts, toggleProductStatus, toggleProductVerification } from 
 import { getMerchants } from '@/api/merchants'
 import { getZones } from '@/api/zone'
 import ReusableAdminTable from '@/components/admin/Table'
+import ProductDetailsModal from '@/components/admin/ProductDetailsModal'
 import useTableFeatures from '@/hooks/useTableFeatures'
 import { useNavigate } from 'react-router-dom'
-import { Package } from 'lucide-react'
+import { Package, Eye } from 'lucide-react'
 
 const Products = () => {
   const navigate = useNavigate();
@@ -13,6 +14,8 @@ const Products = () => {
   const [loading, setLoading] = useState(true);
   const [merchantsList, setMerchantsList] = useState([]);
   const [zonesList, setZonesList] = useState([]);
+  const [selectedProduct, setSelectedProduct] = useState(null);
+  const [viewModalOpen, setViewModalOpen] = useState(false);
 
   // --- Filter definitions ---
   const filterDefs = [
@@ -93,14 +96,21 @@ const Products = () => {
       render: (_, row) => {
         const imageUrl = row.variants?.[0]?.images?.[0]?.url || "https://placehold.co/100x100?text=No+Image";
         return (
-          <div className="flex items-center gap-3">
+          <div 
+            className="flex items-center gap-3 cursor-pointer group/item"
+            onClick={() => {
+              setSelectedProduct(row);
+              setViewModalOpen(true);
+            }}
+            title="Click to view full details"
+          >
             <img
               src={imageUrl}
               alt="product"
-              className="w-10 h-10 rounded-lg object-cover border border-slate-200 shrink-0"
+              className="w-10 h-10 rounded-lg object-cover border border-slate-200 shrink-0 group-hover/item:border-sky-400 transition-colors"
             />
             <div className="flex flex-col overflow-hidden min-w-0">
-              <span className="font-semibold text-slate-800 truncate text-sm" title={row.name}>
+              <span className="font-semibold text-slate-800 truncate text-sm group-hover/item:text-sky-600 transition-colors" title={row.name}>
                 {row.name}
               </span>
               <span className="text-xs text-slate-400 truncate">
@@ -179,6 +189,13 @@ const Products = () => {
 
   // --- Actions ---
   const productActions = [
+    {
+      label: "View Details",
+      onClick: (row) => {
+        setSelectedProduct(row);
+        setViewModalOpen(true);
+      },
+    },
     {
       label: "Edit",
       onClick: (row) => console.log("Edit", row),
@@ -302,6 +319,28 @@ const Products = () => {
         columnToggle={{
           hiddenColumns,
           onToggle: onToggleColumn,
+        }}
+      />
+
+      {/* Product Details Modal */}
+      <ProductDetailsModal
+        isOpen={viewModalOpen}
+        onClose={() => {
+          setViewModalOpen(false);
+          setSelectedProduct(null);
+        }}
+        product={selectedProduct}
+        onToggleStatus={async (id) => {
+          await toggleProductStatus(id);
+          setProducts((prev) =>
+            prev.map((p) => (p._id === id ? { ...p, isActive: !p.isActive } : p))
+          );
+        }}
+        onToggleVerification={async (id) => {
+          await toggleProductVerification(id);
+          setProducts((prev) =>
+            prev.map((p) => (p._id === id ? { ...p, isVerified: !p.isVerified } : p))
+          );
         }}
       />
     </div>

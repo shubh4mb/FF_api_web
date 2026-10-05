@@ -231,18 +231,38 @@ export const orderRequestForMerchant = async (req, res) => {
 export const getAllOrder = async (req, res) => {
   try {
     const merchant = await Merchant.findById(req.merchantId).select('accountType warehouseId');
+    
+    const enrichOrderWithPurchasedAmount = (order) => {
+      const isDecisionMade = ['completed', 'delivered', 'return_in_progress', 'selection_made'].includes(order.orderStatus);
+      const acceptedItems = (order.items || []).filter(
+        item => item.tryStatus === 'accepted' || item.tryStatus === 'keep' || item.tryStatus === 'not-triable'
+      );
+      const acceptedTotal = acceptedItems.reduce((sum, item) => sum + (item.price * (item.quantity || 1)), 0);
+
+      if (isDecisionMade) {
+        order.actualPurchasedAmount = (order.finalBilling?.baseAmount !== undefined && order.finalBilling?.baseAmount !== null)
+          ? order.finalBilling.baseAmount
+          : acceptedTotal;
+      } else {
+        order.actualPurchasedAmount = order.totalAmount || acceptedTotal;
+      }
+      return order;
+    };
+
     if (merchant?.accountType === 'warehouse' && merchant.warehouseId) {
-      const orders = await WarehouseOrder.find({ warehouseId: merchant.warehouseId, orderStatus: { $ne: 'pending' } })
-        .select('orderStatus items totalAmount deliveryRiderStatus createdAt updatedAt deliveryRiderId deliveryRiderDetails deliveryLocation userId otp cancellationRequest cancellationRequestReason riderUnresponsiveReport fulfillmentType settlementStatus')
+      const rawOrders = await WarehouseOrder.find({ warehouseId: merchant.warehouseId, orderStatus: { $ne: 'pending' } })
+        .select('orderStatus items totalAmount finalBilling deliveryRiderStatus createdAt updatedAt deliveryRiderId deliveryRiderDetails deliveryLocation userId otp cancellationRequest cancellationRequestReason riderUnresponsiveReport fulfillmentType settlementStatus')
         .sort({ createdAt: -1 })
         .lean();
+      const orders = rawOrders.map(enrichOrderWithPurchasedAmount);
       return res.status(200).json({ orders });
     }
 
-    const orders = await Order.find({ merchantId: req.merchantId, orderStatus: { $ne: 'pending' } })
-      .select('orderStatus items totalAmount deliveryRiderStatus createdAt updatedAt deliveryRiderId deliveryRiderDetails deliveryLocation userId otp cancellationRequest cancellationRequestReason riderUnresponsiveReport')
+    const rawOrders = await Order.find({ merchantId: req.merchantId, orderStatus: { $ne: 'pending' } })
+      .select('orderStatus items totalAmount finalBilling deliveryRiderStatus createdAt updatedAt deliveryRiderId deliveryRiderDetails deliveryLocation userId otp cancellationRequest cancellationRequestReason riderUnresponsiveReport')
       .sort({ createdAt: -1 })
       .lean();
+    const orders = rawOrders.map(enrichOrderWithPurchasedAmount);
     return res.status(200).json({ orders });
   } catch (error) {
     return res.status(500).json({ message: "Error fetching orders" });
@@ -531,7 +551,35 @@ export const getMyWarehouseSales = async (req, res) => {
       {
         $group: {
           _id: null,
-          totalSales: { $sum: '$totalAmount' },
+          totalSales: {
+            $sum: {
+              $cond: [
+                { $in: ["$orderStatus", ["delivered", "completed"]] },
+                {
+                  $cond: [
+                    { $and: [{ $ne: ["$finalBilling.baseAmount", null] }, { $gte: ["$finalBilling.baseAmount", 0] }] },
+                    "$finalBilling.baseAmount",
+                    {
+                      $sum: {
+                        $map: {
+                          input: {
+                            $filter: {
+                              input: { $ifNull: ["$items", []] },
+                              as: "item",
+                              cond: { $in: ["$$item.tryStatus", ["accepted", "not-triable", "keep"]] }
+                            }
+                          },
+                          as: "it",
+                          in: { $multiply: ["$$it.price", { $ifNull: ["$$it.quantity", 1] }] }
+                        }
+                      }
+                    }
+                  ]
+                },
+                "$totalAmount"
+              ]
+            }
+          },
           totalPayout: { $sum: '$merchantPayout' },
           totalOrders: { $sum: 1 },
           pendingSettlements: {

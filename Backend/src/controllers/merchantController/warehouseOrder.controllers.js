@@ -294,7 +294,34 @@ export const getWarehouseOperatorStats = async (req, res) => {
 
     const revenueAgg = await WarehouseOrder.aggregate([
       { $match: { warehouseId: merchant.warehouseId, orderStatus: { $in: ['completed', 'delivered', 'selection_made'] } } },
-      { $group: { _id: null, total: { $sum: '$totalAmount' } } },
+      {
+        $group: {
+          _id: null,
+          total: {
+            $sum: {
+              $cond: [
+                { $and: [{ $ne: ["$finalBilling.baseAmount", null] }, { $gte: ["$finalBilling.baseAmount", 0] }] },
+                "$finalBilling.baseAmount",
+                {
+                  $sum: {
+                    $map: {
+                      input: {
+                        $filter: {
+                          input: { $ifNull: ["$items", []] },
+                          as: "item",
+                          cond: { $in: ["$$item.tryStatus", ["accepted", "not-triable", "keep"]] }
+                        }
+                      },
+                      as: "it",
+                      in: { $multiply: ["$$it.price", { $ifNull: ["$$it.quantity", 1] }] }
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        }
+      },
     ]);
 
     return res.status(200).json({

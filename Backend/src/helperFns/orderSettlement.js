@@ -34,22 +34,27 @@ export const settleOrder = async (order, providedSession = null) => {
 
         // 1. Calculate item splits (Revenue & Commission)
         const acceptedItems = order.items.filter(
-            item => item.tryStatus === "accepted" || item.tryStatus === "not-triable"
+            item => item.tryStatus === "accepted" || item.tryStatus === "keep" || item.tryStatus === "not-triable"
         );
 
         for (const item of acceptedItems) {
             let product = await ProductFlat.findById(item.productId).select("categoryId subCategoryId").session(session);
-            if (!product) continue;
 
             let commissionPercentage = 0;
-            if (product.subCategoryId) {
+            if (product?.subCategoryId) {
                 const category = await Category.findById(product.subCategoryId).select("commissionPercentage").session(session);
                 if (category && category.commissionPercentage) {
                     commissionPercentage = category.commissionPercentage;
                 }
             }
+            if (commissionPercentage === 0 && product?.categoryId) {
+                const category = await Category.findById(product.categoryId).select("commissionPercentage").session(session);
+                if (category && category.commissionPercentage) {
+                    commissionPercentage = category.commissionPercentage;
+                }
+            }
 
-            const itemTotal = item.price * item.quantity;
+            const itemTotal = item.price * (item.quantity || 1);
             const commissionAmount = (itemTotal * commissionPercentage) / 100;
             const merchantAmount = itemTotal - commissionAmount;
 
@@ -65,6 +70,8 @@ export const settleOrder = async (order, providedSession = null) => {
                 merchantDiscount += (offer.discountApplied || 0);
             }
         }
+        // Cap merchant discount to total items payout (merchant cannot owe discount on 0 items sold)
+        merchantDiscount = Math.min(merchantDiscount, totalMerchantPayout);
 
         // 3. Handle Rider Payout & Free Delivery Costing
         const hasReturns = order.items.some(i => i.tryStatus === "returned");
@@ -99,7 +106,10 @@ export const settleOrder = async (order, providedSession = null) => {
             
             if (freeDeliveryOffer && !deliveryFeeRecovered) {
                 if (freeDeliveryOffer.scope === "merchant") {
-                    merchantDiscount += riderPayout;
+                    // Merchant only covers the delivery fee (and return fee if explicitly free return), NOT rider tip or overtime waiting charge
+                    const merchantDeliveryDiscount = (freeDeliveryOffer.freeReturn ? (deliveryFee + returnFee) : deliveryFee);
+                    merchantDiscount += merchantDeliveryDiscount;
+                    merchantDiscount = Math.min(merchantDiscount, totalMerchantPayout);
                 } else if (freeDeliveryOffer.scope === "admin") {
                     adminDiscount += riderPayout;
                 }
@@ -114,7 +124,7 @@ export const settleOrder = async (order, providedSession = null) => {
         }
 
         // 4. Final Payout Calculations
-        const finalMerchantPayout = totalMerchantPayout - merchantDiscount;
+        const finalMerchantPayout = Math.max(0, totalMerchantPayout - merchantDiscount);
         const finalAdminPayout = totalCommission - adminDiscount;
 
         // 5. Execute Transactions
@@ -128,10 +138,18 @@ export const settleOrder = async (order, providedSession = null) => {
                 amount: Math.abs(finalMerchantPayout),
                 type: finalMerchantPayout > 0 ? "credit" : "debit",
                 description: finalMerchantPayout > 0
-                    ? `Payout for order ${order._id}`
+                    ? `Payout for order ${order._id} (${acceptedItems.length} item${acceptedItems.length === 1 ? '' : 's'} purchased)`
                     : `Discount cost for order ${order._id}`,
                 session,
             });
+
+            // Update merchant's pending earnings balance
+            const Merchant = (await import("../models/merchant.model.js")).default;
+            await Merchant.findByIdAndUpdate(
+                order.merchantId,
+                { $inc: { 'earnings.pendingBalance': finalMerchantPayout } },
+                { session }
+            );
         }
 
         // ── Admin: instant credit/debit (platform revenue) ──

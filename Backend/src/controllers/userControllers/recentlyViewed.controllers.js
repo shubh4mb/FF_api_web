@@ -1,3 +1,4 @@
+import mongoose from 'mongoose';
 import asyncHandler from 'express-async-handler';
 import RecentlyViewed from '../../models/recentlyViewed.model.js';
 import { ApiResponse } from '../../utils/ApiResponse.js';

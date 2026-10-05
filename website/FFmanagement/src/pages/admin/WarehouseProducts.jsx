@@ -15,6 +15,7 @@ import {
 } from '@/api/warehouse';
 import { toast } from 'react-hot-toast';
 import { Plus, Trash2, CheckCircle, XCircle, ShoppingBag, Eye, Edit, Layers, Image as ImageIcon, Box } from 'lucide-react';
+import ProductDetailsModal from '@/components/admin/ProductDetailsModal';
 
 const WarehouseProducts = () => {
   const [warehouses, setWarehouses] = useState([]);
@@ -30,6 +31,8 @@ const WarehouseProducts = () => {
   const [isVariantModalOpen, setIsVariantModalOpen] = useState(false);
   const [isStockModalOpen, setIsStockModalOpen] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState(null);
+  const [isViewModalOpen, setIsViewModalOpen] = useState(false);
+  const [viewingProduct, setViewingProduct] = useState(null);
 
   // Form State - Add Product
   const [productForm, setProductForm] = useState({
@@ -311,6 +314,16 @@ const WarehouseProducts = () => {
                       )}
                     </td>
                     <td className="p-4 text-right space-x-2">
+                      <button
+                        onClick={() => {
+                          setViewingProduct(prod);
+                          setIsViewModalOpen(true);
+                        }}
+                        className="text-xs text-sky-600 hover:bg-sky-50 p-1.5 rounded-lg border border-sky-100 transition-all"
+                        title="View Product Details"
+                      >
+                        <Eye size={16} />
+                      </button>
                       <button
                         onClick={() => {
                           setSelectedProduct(prod);
@@ -625,6 +638,15 @@ const WarehouseProducts = () => {
           </div>
         </div>
       )}
+      {/* Product Details Modal */}
+      <ProductDetailsModal
+        isOpen={isViewModalOpen}
+        onClose={() => {
+          setIsViewModalOpen(false);
+          setViewingProduct(null);
+        }}
+        product={viewingProduct}
+      />
     </div>
   );
 };

@@ -3,6 +3,7 @@ import Collection from '../../models/collection.model.js';
 import ProductFlat from '../../models/productFlat.model.js';
 import Merchant from '../../models/merchant.model.js';
 import Offer from '../../models/offer.model.js';
+import Category from '../../models/category.model.js';
 import { asyncHandler } from '../../utils/asyncHandler.js';
 import { ApiResponse } from '../../utils/ApiResponse.js';
 import { ApiError } from '../../utils/ApiError.js';
@@ -124,23 +125,36 @@ export const getCollectionsForHome = asyncHandler(async (req, res) => {
     return res.status(200).json(new ApiResponse(200, [], "No collections found"));
   }
 
-  // 2. Resolve Online Merchants within range
-  let onlineNearbyIds = [];
-  if (nearbyIds && nearbyIds.length > 0) {
-    const onlineMerchants = await Merchant.find({
-      _id: { $in: nearbyIds },
-      isOnline: true,
+  // 2. Resolve Online Merchants: if scope=explore, use courier merchants; else check nearby for local Try & Buy
+  let eligibleMerchantIds = [];
+  if (req.query.scope === 'explore') {
+    const courierMerchants = await Merchant.find({
+      enableCourierDelivery: true,
       isActive: true,
       isVerified: true
     }).select('_id').lean();
-    onlineNearbyIds = onlineMerchants.map(m => m._id);
+    eligibleMerchantIds = courierMerchants.map(m => m._id);
   } else {
-    return res.status(200).json(new ApiResponse(200, [], "No available merchants nearby"));
+    if (nearbyIds && nearbyIds.length > 0) {
+      const onlineMerchants = await Merchant.find({
+        _id: { $in: nearbyIds },
+        isOnline: true,
+        isActive: true,
+        isVerified: true
+      }).select('_id').lean();
+      eligibleMerchantIds = onlineMerchants.map(m => m._id);
+    } else {
+      return res.status(200).json(new ApiResponse(200, [], "No available merchants nearby"));
+    }
+  }
+
+  if (eligibleMerchantIds.length === 0) {
+    return res.status(200).json(new ApiResponse(200, [], "No available merchants"));
   }
 
   // 3. For each collection, find eligible products
   const result = await Promise.all(collections.map(async (coll) => {
-    const flatFilter = buildCollectionProductQuery(coll, onlineNearbyIds, { gender });
+    const flatFilter = buildCollectionProductQuery(coll, eligibleMerchantIds, { gender });
 
     const flatProducts = await ProductFlat.find(flatFilter)
       .populate('merchantId', 'isOnline isZoneLive storeName')
@@ -251,8 +265,8 @@ export const getCollectionDetails = asyncHandler(async (req, res) => {
     }
   }
 
-  // 2. Resolve Online Merchants within range
-  let onlineNearbyIds = [];
+  // 2. Resolve Online Merchants within range OR courier merchants
+  let eligibleMerchantIds = [];
   if (nearbyIds.length > 0) {
     const onlineMerchants = await Merchant.find({
       _id: { $in: nearbyIds },
@@ -260,10 +274,20 @@ export const getCollectionDetails = asyncHandler(async (req, res) => {
       isActive: true,
       isVerified: true
     }).select('_id').lean();
-    onlineNearbyIds = onlineMerchants.map(m => m._id);
+    eligibleMerchantIds = onlineMerchants.map(m => m._id);
   }
 
-  if (onlineNearbyIds.length === 0) {
+  // Include active courier merchants so dedicated campaign pages show products
+  const courierMerchants = await Merchant.find({
+    enableCourierDelivery: true,
+    isActive: true,
+    isVerified: true
+  }).select('_id').lean();
+  const courierIds = courierMerchants.map(m => m._id);
+  const idSet = new Set([...eligibleMerchantIds.map(id => id.toString()), ...courierIds.map(id => id.toString())]);
+  eligibleMerchantIds = Array.from(idSet).map(id => new mongoose.Types.ObjectId(id));
+
+  if (eligibleMerchantIds.length === 0) {
     return res.status(200).json(new ApiResponse(200, {
       collection: {
         _id: collection._id,
@@ -288,7 +312,7 @@ export const getCollectionDetails = asyncHandler(async (req, res) => {
   }
 
   // 3. Build product query
-  const query = buildCollectionProductQuery(collection, onlineNearbyIds, {
+  const query = buildCollectionProductQuery(collection, eligibleMerchantIds, {
     gender,
     subCurationId,
     search,

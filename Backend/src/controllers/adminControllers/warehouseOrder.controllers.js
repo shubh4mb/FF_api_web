@@ -13,6 +13,7 @@ import { inferZone } from '../../utils/zoneInfer.js';
 import { creditWallet } from '../../helperFns/walletHelper.js';
 import { notifyOrderEvent } from '../../helperFns/notificationHelper.js';
 import { cancelAndCleanupOrder } from '../../helperFns/orderCancellationHelper.js';
+import { getCurrentWeekBounds } from '../../helperFns/weeklyPayoutHelper.js';
 import mongoose from 'mongoose';
 
 /**
@@ -296,17 +297,20 @@ export const settleWarehouseOrder = asyncHandler(async (req, res) => {
       throw new ApiError(400, 'Order must be completed/delivered before settlement');
     }
 
-    const commissionAmount = order.commissionAmount || 0;
-    const merchantPayoutAmount = order.merchantPayout || (order.totalAmount - commissionAmount);
+    const acceptedItems = (order.items || []).filter(
+      item => item.tryStatus === 'accepted' || item.tryStatus === 'keep' || item.tryStatus === 'not-triable'
+    );
+    const actualSales = (order.finalBilling?.baseAmount !== undefined && order.finalBilling?.baseAmount !== null)
+      ? order.finalBilling.baseAmount
+      : acceptedItems.reduce((sum, item) => sum + (item.price * (item.quantity || 1)), 0);
+
+    const commissionRate = order.commissionRate || 0;
+    const commissionAmount = (actualSales * commissionRate) / 100;
+    const merchantPayoutAmount = Math.max(0, actualSales - commissionAmount);
 
     // ── Record in merchant's WeeklyPayout ──
     const now = new Date();
-    const weekStart = new Date(now);
-    weekStart.setDate(now.getDate() - now.getDay()); // Sunday
-    weekStart.setHours(0, 0, 0, 0);
-    const weekEnd = new Date(weekStart);
-    weekEnd.setDate(weekStart.getDate() + 6);
-    weekEnd.setHours(23, 59, 59, 999);
+    const { weekStart, weekEnd } = getCurrentWeekBounds(now);
 
     await WeeklyPayout.findOneAndUpdate(
       {
@@ -316,13 +320,13 @@ export const settleWarehouseOrder = asyncHandler(async (req, res) => {
       },
       {
         $setOnInsert: { ownerType: 'merchant', ownerId: order.sourceMerchantId, weekStart, weekEnd },
-        $inc: { totalEarnings: merchantPayoutAmount, netPayout: merchantPayoutAmount },
+        $inc: { totalEarnings: merchantPayoutAmount, netPayout: merchantPayoutAmount, completedOrders: 1 },
         $push: {
           orders: {
             orderId: order._id,
             amount: merchantPayoutAmount,
             type: 'credit',
-            description: `Warehouse sale (${order.warehouseDetails?.name || 'warehouse'}) — commission ${order.commissionRate}% deducted`,
+            description: `Warehouse sale (${order.warehouseDetails?.name || 'warehouse'}) — commission ${commissionRate}% deducted (₹${actualSales} purchased)`,
             settledAt: now,
           },
         },

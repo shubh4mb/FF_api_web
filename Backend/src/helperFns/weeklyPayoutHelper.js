@@ -114,6 +114,9 @@ export async function addToWeeklyPayout({
     if (type === "credit") {
         incFields.totalEarnings = amount;
         incFields.netPayout = amount;
+        if (ownerType === "merchant") {
+            incFields.completedOrders = 1;
+        }
     } else {
         incFields.totalDeductions = amount;
         incFields.netPayout = -amount;

@@ -58,6 +58,28 @@ const supportTicketSchema = new mongoose.Schema(
       enum: ["open", "in_progress", "resolved", "closed"],
       default: "open",
     },
+    resolutionNotes: {
+      type: String,
+      default: "",
+    },
+    adminAction: {
+      type: String,
+      enum: [
+        "none",
+        "refund_issued",
+        "replacement_offered",
+        "explained_policy",
+        "rider_cautioned",
+        "merchant_contacted",
+        "rejected",
+        "other",
+      ],
+      default: "none",
+    },
+    resolvedAt: {
+      type: Date,
+      default: null,
+    },
   },
   { timestamps: true }
 );
