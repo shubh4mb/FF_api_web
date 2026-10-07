@@ -1051,7 +1051,7 @@ export const initiateReturn = async (req, res) => {
     for (const payloadItem of items) {
       const orderItem = order.items.id(payloadItem.itemId);
 
-      if (!orderItem) continue;
+      if (!orderItem || orderItem.status === 'out_of_stock') continue;
 
       if (payloadItem.tryStatus === "keep" || payloadItem.tryStatus === "accepted") {
         orderItem.tryStatus = "accepted"; // User decided to keep
@@ -1100,7 +1100,7 @@ export const initiateReturn = async (req, res) => {
     // === Recalculate billing with offers for kept items ===
     let recalculatedDiscount = 0;
     const acceptedItems = order.items.filter(
-      item => item.tryStatus === "accepted" || item.tryStatus === "keep" || item.tryStatus === "not-triable"
+      item => item.status !== 'out_of_stock' && (item.tryStatus === "accepted" || item.tryStatus === "keep" || item.tryStatus === "not-triable")
     );
     const acceptedSubtotal = Math.round(baseAmount);
 
@@ -1356,7 +1356,7 @@ export const createFinalPaymentRazorpayOrder = async (req, res) => {
     for (const payloadItem of items) {
       const orderItem = order.items.id(payloadItem.itemId);
 
-      if (!orderItem) continue;
+      if (!orderItem || orderItem.status === 'out_of_stock') continue;
 
       if (payloadItem.tryStatus === "keep" || payloadItem.tryStatus === "accepted") {
         orderItem.tryStatus = "accepted";
@@ -1369,7 +1369,7 @@ export const createFinalPaymentRazorpayOrder = async (req, res) => {
 
     // If user chooses to keep nothing
     const acceptedItems = order.items.filter(
-      item => item.tryStatus === "accepted" || item.tryStatus === "keep" || item.tryStatus === "not-triable"
+      item => item.status !== 'out_of_stock' && (item.tryStatus === "accepted" || item.tryStatus === "keep" || item.tryStatus === "not-triable")
     );
 
     if (acceptedItems.length === 0) {
@@ -1701,9 +1701,9 @@ export const verifyFinalPayment = async (req, res) => {
     order.razorpayPaymentId = razorpay_payment_id;
     order.paymentStatus = "paid";
 
-    const returnedItems = order.items.filter(item => item.tryStatus === 'returned');
+    const returnedItems = order.items.filter(item => item.status !== 'out_of_stock' && item.tryStatus === 'returned');
     const acceptedItems = order.items.filter(item =>
-      item.tryStatus === 'accepted' || item.tryStatus === 'not-triable'
+      item.status !== 'out_of_stock' && (item.tryStatus === 'accepted' || item.tryStatus === 'not-triable')
     );
     const allItemsAccepted = returnedItems.length === 0;
 
@@ -1873,7 +1873,7 @@ export const verifyFinalPaymentCod = async (req, res) => {
     // === STEP 1: Update item tryStatus ===
     for (const payloadItem of items) {
       const orderItem = order.items.id(payloadItem.itemId);
-      if (!orderItem) continue;
+      if (!orderItem || orderItem.status === 'out_of_stock') continue;
 
       if (payloadItem.tryStatus === "keep" || payloadItem.tryStatus === "accepted") {
         orderItem.tryStatus = "accepted";
@@ -1885,7 +1885,7 @@ export const verifyFinalPaymentCod = async (req, res) => {
     }
 
     const acceptedItems = order.items.filter(
-      item => item.tryStatus === "accepted" || item.tryStatus === "not-triable"
+      item => item.status !== 'out_of_stock' && (item.tryStatus === "accepted" || item.tryStatus === "not-triable")
     );
 
     if (!order.trialPhaseEnd) {
@@ -2019,7 +2019,7 @@ export const verifyFinalPaymentCod = async (req, res) => {
     order.finalBilling.totalPayable = billing.totalPayable;
     order.overtimePenalty = billing.overtimePenalty;
 
-    const returnedItems = order.items.filter(item => item.tryStatus === 'returned');
+    const returnedItems = order.items.filter(item => item.status !== 'out_of_stock' && item.tryStatus === 'returned');
     const allItemsAccepted = returnedItems.length === 0;
 
     // If total payable is 0 (fully free / discounted), complete immediately
@@ -2187,8 +2187,21 @@ export const cancelOrder = async (req, res) => {
       return res.status(403).json({ message: "Forbidden: You do not own this order" });
     }
 
+    // Customer cancellation rules:
+    // 1. Always allowed when orderStatus === 'placed'
+    // 2. Allowed in 'accepted' or 'packed' if merchant marked an item out-of-stock (before rider pickup)
+    const isPartialFulfillment = Boolean(order.hasUnavailableItems || order.customerCancellationAllowed);
+    const canCancelPrePickup = ['placed', 'accepted', 'packed'].includes(order.orderStatus) && order.deliveryRiderStatus !== 'picked_up';
+
     if (order.orderStatus !== "placed") {
-      return res.status(400).json({ message: `Cannot cancel order in ${order.orderStatus} state` });
+      if (!isPartialFulfillment) {
+        return res.status(400).json({ message: `Cannot cancel order in ${order.orderStatus} state` });
+      }
+      if (!canCancelPrePickup || order.orderStatus === 'in_transit') {
+        return res.status(400).json({
+          message: "Order has already been picked up by rider and is on the way. You can return any unwanted items during your doorstep trial."
+        });
+      }
     }
 
     const result = await cancelAndCleanupOrder({

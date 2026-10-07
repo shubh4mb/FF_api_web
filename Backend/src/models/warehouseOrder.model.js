@@ -61,10 +61,17 @@ const WarehouseOrderSchema = new mongoose.Schema(
         // T&B fields
         tryStatus: {
           type: String,
-          enum: ['pending', 'accepted', 'returned', 'not-triable'],
+          enum: ['pending', 'accepted', 'returned', 'not-triable', 'out_of_stock'],
           default: 'pending',
         },
         returnReason: { type: String, default: null },
+        status: {
+          type: String,
+          enum: ['available', 'out_of_stock', 'cancelled'],
+          default: 'available',
+        },
+        outOfStockReason: { type: String, default: null },
+        outOfStockAt: { type: Date, default: null },
       },
     ],
 
@@ -267,6 +274,20 @@ const WarehouseOrderSchema = new mongoose.Schema(
       reportedBy: { type: String, enum: ['merchant', 'rider', 'admin'] },
       status: { type: String, enum: ['pending', 'resolved', 'dismissed'], default: 'pending' },
       reportedAt: { type: Date, default: Date.now },
+    },
+
+    // ── Partial Fulfillment / Out-of-stock items ──
+    hasUnavailableItems: {
+      type: Boolean,
+      default: false,
+    },
+    customerCancellationAllowed: {
+      type: Boolean,
+      default: false,
+    },
+    unavailableItemsCount: {
+      type: Number,
+      default: 0,
     },
   },
   { timestamps: true }

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 // import { useNavigate } from "react-router-dom";
 import { getCategories, addCategory } from "../../api/categories"; // ✅ Adjust path as needed
 import CropperModal from "../../components/CropperModal";
-import { X, Upload, Loader2 } from "lucide-react";
+import { X, Upload, Loader2, Sparkles } from "lucide-react";
 
 const AddCategory = () => {
   // const navigate = useNavigate();
@@ -18,6 +18,10 @@ const AddCategory = () => {
     isTriable: false,
     sortOrder: 0,
     commissionPercentage: 0,
+    description: "",
+    promptFront: "",
+    promptBack: "",
+    promptCloseUp: "",
   });
 
   const [images, setImages] = useState({
@@ -170,6 +174,10 @@ const AddCategory = () => {
 
       submissionData.append('name', formData.name);
       submissionData.append('slug', formData.slug);
+      submissionData.append('description', formData.description || '');
+      submissionData.append('promptFront', formData.promptFront || '');
+      submissionData.append('promptBack', formData.promptBack || '');
+      submissionData.append('promptCloseUp', formData.promptCloseUp || '');
       
       // Send allowedGenders as JSON array
       submissionData.append('allowedGenders', JSON.stringify(formData.allowedGenders));
@@ -279,6 +287,92 @@ const AddCategory = () => {
         {/* Name and Slug */}
         <input type="text" name="name" placeholder="Category Name" value={formData.name} onChange={handleChange} className="border p-2 rounded w-full" required />
         <input type="text" name="slug" placeholder="Slug" value={formData.slug} onChange={handleChange} className="border p-2 rounded w-full" required />
+
+        {/* Category Generation Prompts (Front, Back, Close-Up) */}
+        <div className="border border-purple-200/80 bg-purple-50/30 p-5 rounded-2xl space-y-4">
+          <div className="flex items-center gap-2">
+            <div className="h-8 w-8 rounded-xl bg-purple-100 flex items-center justify-center text-purple-700">
+              <Sparkles className="w-4 h-4" />
+            </div>
+            <div>
+              <h3 className="text-sm font-bold text-purple-950">Category Generation Prompts</h3>
+              <p className="text-xs text-gray-500">
+                Configure angle-specific prompts for front, back, and close-up views to reuse when creating products of this category.
+              </p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {/* Front View Prompt */}
+            <div className="flex flex-col space-y-1.5 bg-white p-3.5 rounded-xl border border-purple-100 shadow-xs">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-bold text-blue-900 flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-blue-500"></span>
+                  Front View Prompt
+                </label>
+                {formData.promptFront && (
+                  <span className="text-[10px] font-mono text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded">
+                    {formData.promptFront.length} chars
+                  </span>
+                )}
+              </div>
+              <textarea
+                name="promptFront"
+                rows={4}
+                placeholder="Front angle styling rules, collar/neckline details, graphic/chest print specifications..."
+                value={formData.promptFront}
+                onChange={handleChange}
+                className="border border-gray-200 p-2.5 rounded-lg w-full text-xs text-gray-800 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-blue-400 transition"
+              />
+            </div>
+
+            {/* Back View Prompt */}
+            <div className="flex flex-col space-y-1.5 bg-white p-3.5 rounded-xl border border-purple-100 shadow-xs">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-bold text-purple-900 flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-purple-500"></span>
+                  Back View Prompt
+                </label>
+                {formData.promptBack && (
+                  <span className="text-[10px] font-mono text-purple-600 bg-purple-50 px-1.5 py-0.5 rounded">
+                    {formData.promptBack.length} chars
+                  </span>
+                )}
+              </div>
+              <textarea
+                name="promptBack"
+                rows={4}
+                placeholder="Back angle styling rules, yoke, back print/embroidery, shoulder drop, hemline..."
+                value={formData.promptBack}
+                onChange={handleChange}
+                className="border border-gray-200 p-2.5 rounded-lg w-full text-xs text-gray-800 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-400 focus:border-purple-400 transition"
+              />
+            </div>
+
+            {/* Close-Up View Prompt */}
+            <div className="flex flex-col space-y-1.5 bg-white p-3.5 rounded-xl border border-purple-100 shadow-xs">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-bold text-amber-900 flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-amber-500"></span>
+                  Close-Up View Prompt
+                </label>
+                {formData.promptCloseUp && (
+                  <span className="text-[10px] font-mono text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded">
+                    {formData.promptCloseUp.length} chars
+                  </span>
+                )}
+              </div>
+              <textarea
+                name="promptCloseUp"
+                rows={4}
+                placeholder="Fabric weave, stitching details, ribbing, texture, button/zipper close-up specifications..."
+                value={formData.promptCloseUp}
+                onChange={handleChange}
+                className="border border-gray-200 p-2.5 rounded-lg w-full text-xs text-gray-800 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-amber-400 transition"
+              />
+            </div>
+          </div>
+        </div>
 
         {/* Allowed Genders */}
         <div className="flex flex-col">

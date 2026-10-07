@@ -37,6 +37,7 @@ const notificationSchema = new mongoose.Schema(
                 "order_rejected",
                 "order_cancelled",
                 "refund_credited",
+                "item_out_of_stock",
 
                 // Rider notifications (verbose — show all steps)
                 "new_order_request",

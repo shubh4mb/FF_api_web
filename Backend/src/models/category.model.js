@@ -13,6 +13,31 @@ const categorySchema = new mongoose.Schema({
     unique: true,
     lowercase: true,
   },
+  description: {
+    type: String,
+    default: "",
+    trim: true,
+  },
+  prompts: {
+    front: { type: String, default: "", trim: true },
+    back: { type: String, default: "", trim: true },
+    closeUp: { type: String, default: "", trim: true },
+  },
+  promptFront: {
+    type: String,
+    default: "",
+    trim: true,
+  },
+  promptBack: {
+    type: String,
+    default: "",
+    trim: true,
+  },
+  promptCloseUp: {
+    type: String,
+    default: "",
+    trim: true,
+  },
   parentId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: "Category",

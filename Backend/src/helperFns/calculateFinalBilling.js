@@ -14,7 +14,7 @@ export function calculateFinalBilling({
 
   // === STEP 1: Accepted (kept or non-triable) items ===
   const acceptedItems = orderItems.filter(
-    item => item.tryStatus === "accepted" || item.tryStatus === "keep" || item.tryStatus === "not-triable"
+    item => item.status !== "out_of_stock" && (item.tryStatus === "accepted" || item.tryStatus === "keep" || item.tryStatus === "not-triable")
   );
 
   // Base amount calculation
@@ -37,10 +37,10 @@ export function calculateFinalBilling({
   const actualReturnCharge = isReturnFree ? 0 : (Number(returnCharge) || 0);
 
   const returnedItemsCount = orderItems.filter(
-    i => i.tryStatus === "returned" || i.tryStatus === "return"
+    i => i.status !== "out_of_stock" && (i.tryStatus === "returned" || i.tryStatus === "return")
   ).length;
-  const totalItemsCount = orderItems.length;
-  const allItemsKept = returnedItemsCount === 0 && totalItemsCount > 0;
+  const availableItemsCount = orderItems.filter(i => i.status !== "out_of_stock").length;
+  const allItemsKept = returnedItemsCount === 0 && availableItemsCount > 0;
 
   // Deduction only if all items are kept (or if return charge is free)
   const returnChargeDeduction = allItemsKept ? actualReturnCharge : 0;

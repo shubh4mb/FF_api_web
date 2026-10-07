@@ -5,7 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import { getCategories } from "@/api/categories";
 import { useEffect, useState, useMemo } from "react";
 import Table from "@/components/admin/Table";
-import { Plus, Search, Filter, ArrowUpDown, ChevronRight, Layers } from "lucide-react";
+import { Plus, Search, Filter, ArrowUpDown, ChevronRight, Layers, Sparkles, Copy, Check, X, FileText, ArrowRight } from "lucide-react";
 
 export default function CategoryPage() {
   const navigate = useNavigate();
@@ -15,6 +15,17 @@ export default function CategoryPage() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [levelFilter, setLevelFilter] = useState("all");
   const [sortBy, setSortBy] = useState("hierarchy");
+  const [selectedPromptCategory, setSelectedPromptCategory] = useState(null);
+  const [copiedId, setCopiedId] = useState(null);
+
+  const handleCopyPrompt = (text, id) => {
+    if (!text) return;
+    navigator.clipboard.writeText(text);
+    setCopiedId(id);
+    setTimeout(() => {
+      setCopiedId(null);
+    }, 2000);
+  };
 
   useEffect(() => {
     setLoading(true);
@@ -266,6 +277,57 @@ export default function CategoryPage() {
       )
     },
     {
+      header: "Prompts (Front / Back / Close-Up)",
+      accessor: "prompts",
+      render: (_, row) => {
+        const front = (row.promptFront || row.prompts?.front || "").trim();
+        const back = (row.promptBack || row.prompts?.back || "").trim();
+        const closeUp = (row.promptCloseUp || row.prompts?.closeUp || row.prompts?.closeup || "").trim();
+        const hasAny = !!(front || back || closeUp || row.description?.trim());
+
+        if (!hasAny) {
+          return (
+            <button
+              type="button"
+              onClick={() => navigate(`/admin/edit-category/${row._id}`)}
+              className="text-[11px] text-gray-400 hover:text-purple-600 italic hover:underline transition"
+              title="Configure 3 prompts in edit category"
+            >
+              + Set prompts
+            </button>
+          );
+        }
+
+        return (
+          <button
+            type="button"
+            onClick={() => setSelectedPromptCategory(row)}
+            className="flex items-center gap-1.5 flex-wrap cursor-pointer group py-1 text-left"
+            title="Click to view & copy Front, Back, and Close-Up prompts"
+          >
+            {front ? (
+              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200 group-hover:bg-blue-100 transition">
+                Front
+              </span>
+            ) : null}
+            {back ? (
+              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-purple-50 text-purple-700 border border-purple-200 group-hover:bg-purple-100 transition">
+                Back
+              </span>
+            ) : null}
+            {closeUp ? (
+              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200 group-hover:bg-amber-100 transition">
+                Close-up
+              </span>
+            ) : null}
+            <span className="text-[10px] text-gray-400 group-hover:text-purple-600 font-medium ml-0.5">
+              View ↗
+            </span>
+          </button>
+        );
+      },
+    },
+    {
       header: "Order",
       accessor: "sortOrder",
       render: (value) => (
@@ -290,6 +352,11 @@ export default function CategoryPage() {
   ];
 
   const CategoryActions = [
+    {
+      label: "View Prompt",
+      onClick: (row) => setSelectedPromptCategory(row),
+      className: "inline-flex items-center px-2.5 py-1.5 text-xs font-medium text-purple-700 bg-purple-50 hover:bg-purple-100 rounded-lg transition-colors duration-200",
+    },
     {
       label: "Edit",
       onClick: (row) => navigate(`/admin/edit-category/${row._id}`),
@@ -400,6 +467,270 @@ export default function CategoryPage() {
         columns={CategoryColumns}
         actions={CategoryActions}
       />
+
+      {/* Category Prompt View & Reuse Modal */}
+      {selectedPromptCategory && (
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl shadow-2xl max-w-xl w-full border border-gray-100 overflow-hidden flex flex-col max-h-[90vh]">
+            {/* Modal Header */}
+            <div className="px-6 py-5 border-b border-gray-100 flex items-center justify-between bg-gradient-to-r from-purple-50/60 to-white">
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 rounded-2xl bg-purple-100 border border-purple-200 flex items-center justify-center text-purple-700 shadow-xs">
+                  <Sparkles className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-gray-900 text-lg">
+                    {selectedPromptCategory.name}
+                  </h3>
+                  <p className="text-xs text-gray-500 flex items-center gap-1.5 mt-0.5">
+                    <span className="font-medium text-purple-700">
+                      {selectedPromptCategory.level === 0 ? "Top Tier Category" : "Sub Category"}
+                    </span>
+                    {selectedPromptCategory.ancestors?.parentName && (
+                      <>
+                        <span>•</span>
+                        <span>in {selectedPromptCategory.ancestors.parentName}</span>
+                      </>
+                    )}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedPromptCategory(null)}
+                className="h-9 w-9 rounded-xl border border-gray-100 bg-white flex items-center justify-center text-gray-400 hover:text-gray-700 hover:bg-gray-50 transition shadow-xs"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-6 space-y-4 overflow-y-auto flex-1">
+              {(() => {
+                const frontPrompt = (selectedPromptCategory.promptFront || selectedPromptCategory.prompts?.front || "").trim();
+                const backPrompt = (selectedPromptCategory.promptBack || selectedPromptCategory.prompts?.back || "").trim();
+                const closeUpPrompt = (selectedPromptCategory.promptCloseUp || selectedPromptCategory.prompts?.closeUp || selectedPromptCategory.prompts?.closeup || "").trim();
+                const legacyDesc = (!frontPrompt && !backPrompt && !closeUpPrompt) ? (selectedPromptCategory.description || "").trim() : "";
+                const hasAny = !!(frontPrompt || backPrompt || closeUpPrompt || legacyDesc);
+
+                if (!hasAny) {
+                  return (
+                    <div className="rounded-2xl border-2 border-dashed border-gray-200 p-8 text-center bg-gray-50/50">
+                      <FileText className="w-8 h-8 text-gray-300 mx-auto mb-2" />
+                      <p className="text-sm font-medium text-gray-700">No prompts configured yet</p>
+                      <p className="text-xs text-gray-400 mt-1 max-w-sm mx-auto">
+                        You can set prompts for front, back, and close-up angles by editing this category.
+                      </p>
+                    </div>
+                  );
+                }
+
+                return (
+                  <div className="space-y-4">
+                    {/* Front View Prompt */}
+                    {frontPrompt && (
+                      <div className="border border-blue-100 bg-blue-50/20 rounded-2xl p-4 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <span className="w-2.5 h-2.5 rounded-full bg-blue-500"></span>
+                            <span className="text-xs font-bold text-blue-900">Front View Prompt</span>
+                            <span className="text-[10px] font-mono text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-100">
+                              {frontPrompt.length} chars
+                            </span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleCopyPrompt(frontPrompt, `${selectedPromptCategory._id}-front`)}
+                            className="inline-flex items-center gap-1 text-[11px] font-medium text-blue-700 bg-white border border-blue-200 hover:bg-blue-50 px-2.5 py-1 rounded-lg transition shadow-xs"
+                          >
+                            {copiedId === `${selectedPromptCategory._id}-front` ? (
+                              <>
+                                <Check className="w-3 h-3 text-emerald-600" />
+                                <span>Copied!</span>
+                              </>
+                            ) : (
+                              <>
+                                <Copy className="w-3 h-3" />
+                                <span>Copy Front</span>
+                              </>
+                            )}
+                          </button>
+                        </div>
+                        <div className="bg-white border border-blue-100/80 rounded-xl p-3 font-mono text-xs text-slate-800 whitespace-pre-wrap leading-relaxed max-h-32 overflow-y-auto">
+                          {frontPrompt}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Back View Prompt */}
+                    {backPrompt && (
+                      <div className="border border-purple-100 bg-purple-50/20 rounded-2xl p-4 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <span className="w-2.5 h-2.5 rounded-full bg-purple-500"></span>
+                            <span className="text-xs font-bold text-purple-900">Back View Prompt</span>
+                            <span className="text-[10px] font-mono text-purple-600 bg-purple-50 px-1.5 py-0.5 rounded border border-purple-100">
+                              {backPrompt.length} chars
+                            </span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleCopyPrompt(backPrompt, `${selectedPromptCategory._id}-back`)}
+                            className="inline-flex items-center gap-1 text-[11px] font-medium text-purple-700 bg-white border border-purple-200 hover:bg-purple-50 px-2.5 py-1 rounded-lg transition shadow-xs"
+                          >
+                            {copiedId === `${selectedPromptCategory._id}-back` ? (
+                              <>
+                                <Check className="w-3 h-3 text-emerald-600" />
+                                <span>Copied!</span>
+                              </>
+                            ) : (
+                              <>
+                                <Copy className="w-3 h-3" />
+                                <span>Copy Back</span>
+                              </>
+                            )}
+                          </button>
+                        </div>
+                        <div className="bg-white border border-purple-100/80 rounded-xl p-3 font-mono text-xs text-slate-800 whitespace-pre-wrap leading-relaxed max-h-32 overflow-y-auto">
+                          {backPrompt}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Close-Up View Prompt */}
+                    {closeUpPrompt && (
+                      <div className="border border-amber-100 bg-amber-50/20 rounded-2xl p-4 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <span className="w-2.5 h-2.5 rounded-full bg-amber-500"></span>
+                            <span className="text-xs font-bold text-amber-900">Close-Up View Prompt</span>
+                            <span className="text-[10px] font-mono text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-100">
+                              {closeUpPrompt.length} chars
+                            </span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleCopyPrompt(closeUpPrompt, `${selectedPromptCategory._id}-closeup`)}
+                            className="inline-flex items-center gap-1 text-[11px] font-medium text-amber-800 bg-white border border-amber-200 hover:bg-amber-50 px-2.5 py-1 rounded-lg transition shadow-xs"
+                          >
+                            {copiedId === `${selectedPromptCategory._id}-closeup` ? (
+                              <>
+                                <Check className="w-3 h-3 text-emerald-600" />
+                                <span>Copied!</span>
+                              </>
+                            ) : (
+                              <>
+                                <Copy className="w-3 h-3" />
+                                <span>Copy Close-Up</span>
+                              </>
+                            )}
+                          </button>
+                        </div>
+                        <div className="bg-white border border-amber-100/80 rounded-xl p-3 font-mono text-xs text-slate-800 whitespace-pre-wrap leading-relaxed max-h-32 overflow-y-auto">
+                          {closeUpPrompt}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Legacy description fallback if present */}
+                    {legacyDesc && (
+                      <div className="border border-gray-200 bg-gray-50 rounded-2xl p-4 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-bold text-gray-700">General Prompt / Description</span>
+                          <button
+                            type="button"
+                            onClick={() => handleCopyPrompt(legacyDesc, `${selectedPromptCategory._id}-desc`)}
+                            className="text-[11px] font-medium text-gray-700 bg-white border border-gray-200 px-2.5 py-1 rounded-lg shadow-xs"
+                          >
+                            {copiedId === `${selectedPromptCategory._id}-desc` ? "Copied!" : "Copy"}
+                          </button>
+                        </div>
+                        <div className="bg-white border border-gray-200 rounded-xl p-3 font-mono text-xs text-slate-800 whitespace-pre-wrap">
+                          {legacyDesc}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+
+              {/* Category Context Info */}
+              <div className="grid grid-cols-2 gap-3 pt-2">
+                <div className="bg-gray-50 p-3 rounded-xl border border-gray-100">
+                  <span className="text-[10px] uppercase font-bold text-gray-400 block mb-1">Slug</span>
+                  <span className="text-xs font-mono text-gray-700">{selectedPromptCategory.slug}</span>
+                </div>
+                <div className="bg-gray-50 p-3 rounded-xl border border-gray-100">
+                  <span className="text-[10px] uppercase font-bold text-gray-400 block mb-1">Target Genders</span>
+                  <span className="text-xs font-medium text-gray-700">
+                    {selectedPromptCategory.allowedGenders?.join(', ') || 'MEN, WOMEN'}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="px-6 py-4 border-t border-gray-100 bg-gray-50 flex items-center justify-between gap-3">
+              <Button
+                variant="outline"
+                onClick={() => navigate(`/admin/edit-category/${selectedPromptCategory._id}`)}
+                className="rounded-xl border-gray-200 text-gray-700 hover:bg-gray-100 text-xs font-medium"
+              >
+                Edit Category
+              </Button>
+
+              <div className="flex items-center gap-2">
+                {(() => {
+                  const frontPrompt = selectedPromptCategory.promptFront || selectedPromptCategory.prompts?.front || "";
+                  const backPrompt = selectedPromptCategory.promptBack || selectedPromptCategory.prompts?.back || "";
+                  const closeUpPrompt = selectedPromptCategory.promptCloseUp || selectedPromptCategory.prompts?.closeUp || selectedPromptCategory.prompts?.closeup || "";
+                  const legacyDesc = (!frontPrompt && !backPrompt && !closeUpPrompt) ? (selectedPromptCategory.description || "") : "";
+                  const combined = [
+                    frontPrompt ? `Front: ${frontPrompt}` : '',
+                    backPrompt ? `Back: ${backPrompt}` : '',
+                    closeUpPrompt ? `Close-Up: ${closeUpPrompt}` : '',
+                    legacyDesc ? `Prompt: ${legacyDesc}` : '',
+                  ].filter(Boolean).join("\n\n");
+
+                  if (!combined) return null;
+
+                  return (
+                    <Button
+                      onClick={() => handleCopyPrompt(combined, `${selectedPromptCategory._id}-all`)}
+                      className="bg-purple-600 hover:bg-purple-700 text-white rounded-xl gap-1.5 text-xs font-semibold shadow-sm"
+                    >
+                      {copiedId === `${selectedPromptCategory._id}-all` ? (
+                        <>
+                          <Check className="w-3.5 h-3.5" />
+                          <span>Copied All!</span>
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="w-3.5 h-3.5" />
+                          <span>Copy All 3 Prompts</span>
+                        </>
+                      )}
+                    </Button>
+                  );
+                })()}
+
+                <Button
+                  onClick={() => {
+                    const catId = selectedPromptCategory.level === 0 ? selectedPromptCategory._id : (selectedPromptCategory.parentId || '');
+                    const subId = selectedPromptCategory.level === 1 ? selectedPromptCategory._id : '';
+                    setSelectedPromptCategory(null);
+                    navigate(`/admin/add-product?categoryId=${catId}&subCategoryId=${subId}`);
+                  }}
+                  className="bg-blue-600 hover:bg-blue-700 text-white rounded-xl gap-1.5 text-xs font-semibold shadow-sm"
+                >
+                  <span>Create Product</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

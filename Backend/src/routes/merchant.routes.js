@@ -8,7 +8,7 @@ import { loginMerchant, registerMerchant, updateMerchantShopDetails, updateMerch
 import { getAllOrder, saveProductDetails, requestOrderCancellation, getMyWarehouseSales } from '../controllers/merchantController/order.controllers.js';
 import { authMiddlewareMerchant, authMiddlewareMerchantOptional } from '../middleware/jwtAuth.js';
 import { getWalletDetails } from '../helperFns/walletHelper.js';
-import { getPlacedOrder, orderRequestForMerchant, orderPacked, getPackingPhotos, uploadPackingPhoto, deletePackingPhoto, getPackingInfoPublic, reportUnresponsiveRider } from '../controllers/merchantController/order.controllers.js';
+import { getPlacedOrder, orderRequestForMerchant, orderPacked, markItemOutOfStock, getPackingPhotos, uploadPackingPhoto, deletePackingPhoto, getPackingInfoPublic, reportUnresponsiveRider } from '../controllers/merchantController/order.controllers.js';
 import { getMerchantById } from '../controllers/merchantController/merchant.controller.js';
 import { getMerchantAnalytics } from '../controllers/merchantController/analytics.controller.js';
 import { getMerchantCourierOrders, updateCourierOrderStatus, updateCourierOrderReturnStatus } from '../controllers/userControllers/courierOrder.controllers.js';
@@ -229,6 +229,7 @@ router.get('/order/packing-info/:orderId', getPackingInfoPublic)
 router.post('/order/packing-photos/upload', upload.single('image'), handleMulterError, uploadPackingPhoto)
 router.delete('/order/:orderId/packing-photos/:photoId', authMiddlewareMerchant, deletePackingPhoto)
 router.post('/order/packed/:orderId', authMiddlewareMerchant, orderPacked)
+router.post('/order/:orderId/item-out-of-stock', authMiddlewareMerchant, markItemOutOfStock);
 router.put('/order/:orderId/request-cancellation', authMiddlewareMerchant, requestOrderCancellation);
 router.post('/order/report-rider/:orderId', authMiddlewareMerchant, reportUnresponsiveRider);
 

@@ -34,7 +34,7 @@ export const settleOrder = async (order, providedSession = null) => {
 
         // 1. Calculate item splits (Revenue & Commission)
         const acceptedItems = order.items.filter(
-            item => item.tryStatus === "accepted" || item.tryStatus === "keep" || item.tryStatus === "not-triable"
+            item => item.status !== "out_of_stock" && (item.tryStatus === "accepted" || item.tryStatus === "keep" || item.tryStatus === "not-triable")
         );
 
         for (const item of acceptedItems) {
@@ -74,7 +74,7 @@ export const settleOrder = async (order, providedSession = null) => {
         merchantDiscount = Math.min(merchantDiscount, totalMerchantPayout);
 
         // 3. Handle Rider Payout & Free Delivery Costing
-        const hasReturns = order.items.some(i => i.tryStatus === "returned");
+        const hasReturns = order.items.some(i => i.status !== "out_of_stock" && i.tryStatus === "returned");
         const tipAmount = order.finalBilling?.deliveryTip || 0;
 
         const config = await AppConfig.getConfig();

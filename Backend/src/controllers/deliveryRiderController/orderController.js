@@ -930,7 +930,7 @@ export const confirmCashCollection = async (req, res) => {
       order.deliveryFeeRecovery.paidAt = new Date();
     }
 
-    const returnedItems = (order.items || []).filter((i) => i.tryStatus === "returned");
+    const returnedItems = (order.items || []).filter((i) => i.status !== 'out_of_stock' && i.tryStatus === "returned");
     const hasReturns = returnedItems.length > 0;
     const allItemsAccepted = !hasReturns;
 
@@ -940,7 +940,7 @@ export const confirmCashCollection = async (req, res) => {
 
     // Deduct stock for accepted items if customer kept items
     const acceptedItems = (order.items || []).filter(
-      item => item.tryStatus === "accepted" || item.tryStatus === "not-triable"
+      item => item.status !== 'out_of_stock' && (item.tryStatus === "accepted" || item.tryStatus === "not-triable")
     );
     for (const item of acceptedItems) {
       try {

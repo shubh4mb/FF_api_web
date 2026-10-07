@@ -35,11 +35,24 @@ const OrderSchema = new mongoose.Schema({
       image: String,
       tryStatus: {
         type: String,
-        enum: ['pending', 'accepted', 'returned', 'not-triable'],
+        enum: ['pending', 'accepted', 'returned', 'not-triable', 'out_of_stock'],
         default: 'pending'  // For Try & Buy
       },
       returnReason: {
         type: String,
+        default: null
+      },
+      status: {
+        type: String,
+        enum: ['available', 'out_of_stock', 'cancelled'],
+        default: 'available'
+      },
+      outOfStockReason: {
+        type: String,
+        default: null
+      },
+      outOfStockAt: {
+        type: Date,
         default: null
       }
     }
@@ -262,6 +275,20 @@ const OrderSchema = new mongoose.Schema({
     razorpayOrderId: { type: String, default: null },
     razorpayPaymentId: { type: String, default: null },
     collectedByRider: { type: Boolean, default: false },
+  },
+
+  // ── Partial Fulfillment / Out-of-stock items ──
+  hasUnavailableItems: {
+    type: Boolean,
+    default: false
+  },
+  customerCancellationAllowed: {
+    type: Boolean,
+    default: false
+  },
+  unavailableItemsCount: {
+    type: Number,
+    default: 0
   }
 
 }, { timestamps: true });

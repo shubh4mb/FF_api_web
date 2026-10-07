@@ -330,12 +330,182 @@ export const requestOrderCancellation = async (req, res) => {
   }
 };
 
+export const markItemOutOfStock = async (req, res) => {
+  const io = getIO();
+  const { orderId } = req.params;
+  const { itemId, reason } = req.body;
+
+  try {
+    if (!itemId) {
+      return res.status(400).json({ message: "Item ID is required" });
+    }
+
+    const { order, isWarehouseOrder, error, status } = await findOrderForMerchant(orderId, req.merchantId);
+    if (error) return res.status(status).json({ message: error });
+
+    // Allow marking out of stock only while order is pre-transit
+    const allowedStatuses = ['placed', 'accepted'];
+    if (!allowedStatuses.includes(order.orderStatus)) {
+      return res.status(400).json({
+        message: `Cannot modify items when order is in '${order.orderStatus}' state`
+      });
+    }
+
+    // Find the item in order.items
+    const itemIndex = order.items.findIndex(
+      i => i._id.toString() === itemId.toString()
+    );
+    if (itemIndex === -1) {
+      return res.status(404).json({ message: "Item not found in order" });
+    }
+
+    const item = order.items[itemIndex];
+    if (item.status === 'out_of_stock') {
+      return res.status(400).json({ message: "Item is already marked as out of stock" });
+    }
+
+    // Mark item out of stock
+    item.status = 'out_of_stock';
+    item.tryStatus = 'out_of_stock';
+    item.outOfStockReason = reason || 'Item unavailable at store partner';
+    item.outOfStockAt = new Date();
+
+    // 1. Release reserved inventory in ProductFlat so stock isn't locked
+    if (item.variantId) {
+      try {
+        await ProductFlat.updateOne(
+          { _id: item.variantId },
+          { $inc: { reservedStock: -(item.quantity || 1) } }
+        );
+      } catch (stockErr) {
+        console.error(`Error releasing stock for variant ${item.variantId}:`, stockErr);
+      }
+    }
+
+    const availableItems = order.items.filter(i => i.status !== 'out_of_stock');
+    const unavailableCount = order.items.filter(i => i.status === 'out_of_stock').length;
+
+    // CASE 1: ALL items in this order are now out of stock!
+    if (availableItems.length === 0) {
+      order.hasUnavailableItems = true;
+      order.unavailableItemsCount = unavailableCount;
+      await order.save();
+
+      const cancelResult = await cancelAndCleanupOrder({
+        orderId,
+        cancelledBy: isWarehouseOrder ? 'warehouse' : 'merchant',
+        reason: 'All items marked out of stock by store partner',
+        action: 'rejected',
+        req,
+      });
+
+      return res.status(200).json({
+        success: true,
+        allItemsOutOfStock: true,
+        message: "All items marked out of stock. Order cancelled and customer notified.",
+        order: cancelResult.order || order,
+      });
+    }
+
+    // CASE 2: At least 1 item is still available!
+    order.hasUnavailableItems = true;
+    order.unavailableItemsCount = unavailableCount;
+    order.customerCancellationAllowed = true;
+
+    // Recalculate totalAmount based only on available items
+    const newTotal = availableItems.reduce(
+      (sum, i) => sum + (Number(i.price || 0) * (Number(i.quantity) || 1)),
+      0
+    );
+    order.totalAmount = newTotal;
+
+    // If order was prepaid online, refund the out-of-stock item amount to customer wallet
+    if (order.paymentStatus === 'paid' && item.price) {
+      const refundItemAmount = Number(item.price) * (Number(item.quantity) || 1);
+      const shortId = order._id.toString().slice(-5).toUpperCase();
+      try {
+        await creditWallet({
+          ownerType: 'user',
+          ownerId: order.userId,
+          amount: refundItemAmount,
+          description: `Refund: ₹${refundItemAmount} for out-of-stock item (${item.name || 'item'}) in Order #${shortId}`,
+          orderId: order._id,
+        });
+      } catch (walletErr) {
+        console.error("Wallet refund error for out-of-stock item:", walletErr);
+      }
+    }
+
+    await order.save();
+
+    // Broadcast real-time updates via Socket.IO
+    emitOrderUpdate(io, orderId, order);
+    if (isWarehouseOrder && order.warehouseId) {
+      await emitWarehouseOrderUpdate(io, order.warehouseId, orderId, order);
+    }
+
+    const eventPayload = {
+      orderId: order._id.toString(),
+      item: {
+        _id: item._id,
+        name: item.name,
+        price: item.price,
+        quantity: item.quantity,
+        size: item.size,
+        image: item.image,
+      },
+      remainingItemsCount: availableItems.length,
+      newTotal: order.totalAmount,
+      customerCancellationAllowed: true,
+      message: `"${item.name || 'An item'}" is out of stock. Order updated with remaining items.`,
+    };
+
+    io.to(orderId.toString()).emit("orderItemUnavailable", eventPayload);
+    if (order.userId) {
+      io.to(`user:${order.userId}`).emit("orderItemUnavailable", eventPayload);
+    }
+
+    // 📱 Push notification to customer
+    if (order.userId) {
+      notifyOrderEvent("customer", "item_out_of_stock", {
+        userId: order.userId,
+        orderId: order._id,
+        message: `"${item.name || 'An item'}" is out of stock in order #${order._id.toString().slice(-5).toUpperCase()}. Remaining items are being packed. Tap to review or cancel.`,
+        data: {
+          orderId: order._id.toString(),
+          type: "item_out_of_stock",
+          itemId: item._id.toString(),
+        },
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      allItemsOutOfStock: false,
+      message: `Item marked out of stock. Order updated with ${availableItems.length} remaining item(s).`,
+      order,
+      item,
+      remainingCount: availableItems.length,
+    });
+
+  } catch (error) {
+    console.error("markItemOutOfStock error:", error);
+    return res.status(500).json({ message: "Error marking item as out of stock", error: error.message });
+  }
+};
+
 export const orderPacked = async (req, res) => {
   const io = getIO();
   const { orderId } = req.params;
   try {
     const { order, isWarehouseOrder, error, status } = await findOrderForMerchant(orderId, req.merchantId);
     if (error) return res.status(status).json({ message: error });
+
+    // Guard: Ensure there is at least 1 available item to pack
+    const availableItems = (order.items || []).filter(i => i.status !== 'out_of_stock');
+    if (availableItems.length === 0) {
+      return res.status(400).json({ message: "Cannot mark packed: all items in this order are out of stock" });
+    }
 
     order.orderStatus = "packed";
     order.otp = generateOTP();

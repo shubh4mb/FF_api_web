@@ -25,7 +25,10 @@ export const addCategory = asyncHandler(async (req, res) => {
   let logoDetails = null;
   let titleBannersDetails = [];
 
-  const { name, slug, parentId, level, allowedGenders, sortOrder, isActive, isTriable, commissionPercentage } = req.body;
+  const { 
+    name, slug, parentId, level, allowedGenders, sortOrder, isActive, isTriable, commissionPercentage, 
+    description, promptFront, promptBack, promptCloseUp, prompts 
+  } = req.body;
 
   if (parentId) {
     const parentCategory = await Category.findById(parentId);
@@ -82,9 +85,33 @@ export const addCategory = asyncHandler(async (req, res) => {
     }
   }
 
+  // Parse prompts object if sent as JSON
+  let parsedPrompts = {};
+  if (prompts) {
+    if (typeof prompts === 'string') {
+      try { parsedPrompts = JSON.parse(prompts); } catch { /* ignore */ }
+    } else if (typeof prompts === 'object') {
+      parsedPrompts = prompts;
+    }
+  }
+
+  const finalPromptFront = (promptFront ?? parsedPrompts.front ?? "").trim();
+  const finalPromptBack = (promptBack ?? parsedPrompts.back ?? "").trim();
+  const finalPromptCloseUp = (promptCloseUp ?? parsedPrompts.closeUp ?? parsedPrompts.closeup ?? "").trim();
+  const finalDescription = (description ? description.trim() : [finalPromptFront, finalPromptBack, finalPromptCloseUp].filter(Boolean).join("\n\n"));
+
   const category = new Category({
     name,
     slug,
+    description: finalDescription,
+    prompts: {
+      front: finalPromptFront,
+      back: finalPromptBack,
+      closeUp: finalPromptCloseUp,
+    },
+    promptFront: finalPromptFront,
+    promptBack: finalPromptBack,
+    promptCloseUp: finalPromptCloseUp,
     parentId: parentId || null,
     level,
     allowedGenders: parsedAllowedGenders,
@@ -164,7 +191,45 @@ export const updateCategory = asyncHandler(async (req, res) => {
   }
 
   // Remove legacy gender field if present
-  delete updateData.gender;
+  if (updateData.description !== undefined) {
+    updateData.description = typeof updateData.description === 'string' ? updateData.description.trim() : updateData.description;
+  }
+
+  // Parse or normalize 3 prompt fields (front, back, closeUp)
+  let parsedUpdatePrompts = null;
+  if (updateData.prompts) {
+    if (typeof updateData.prompts === 'string') {
+      try { parsedUpdatePrompts = JSON.parse(updateData.prompts); } catch { /* ignore */ }
+    } else if (typeof updateData.prompts === 'object') {
+      parsedUpdatePrompts = updateData.prompts;
+    }
+  }
+
+  const pFront = updateData.promptFront !== undefined 
+    ? String(updateData.promptFront).trim() 
+    : (parsedUpdatePrompts?.front !== undefined ? String(parsedUpdatePrompts.front).trim() : undefined);
+
+  const pBack = updateData.promptBack !== undefined 
+    ? String(updateData.promptBack).trim() 
+    : (parsedUpdatePrompts?.back !== undefined ? String(parsedUpdatePrompts.back).trim() : undefined);
+
+  const pCloseUp = updateData.promptCloseUp !== undefined 
+    ? String(updateData.promptCloseUp).trim() 
+    : (parsedUpdatePrompts?.closeUp !== undefined ? String(parsedUpdatePrompts.closeUp).trim() : (parsedUpdatePrompts?.closeup !== undefined ? String(parsedUpdatePrompts.closeup).trim() : undefined));
+
+  if (pFront !== undefined) {
+    updateData.promptFront = pFront;
+    updateData['prompts.front'] = pFront;
+  }
+  if (pBack !== undefined) {
+    updateData.promptBack = pBack;
+    updateData['prompts.back'] = pBack;
+  }
+  if (pCloseUp !== undefined) {
+    updateData.promptCloseUp = pCloseUp;
+    updateData['prompts.closeUp'] = pCloseUp;
+  }
+  delete updateData.prompts;
 
   if (updateData.isActive !== undefined) {
     updateData.isActive = updateData.isActive === 'true' || updateData.isActive === true;

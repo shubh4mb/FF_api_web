@@ -278,6 +278,10 @@ export async function notifyOrderEvent(target, event, ctx = {}) {
             title: "Refund Credited 💰",
             body: `₹${ctx.amount || 0} has been added to your FlashFits wallet.`,
         },
+        item_out_of_stock: {
+            title: "Item Unavailable in Order ⚠️",
+            body: ctx.message || `An item in your order #${shortId} is out of stock. Remaining items are being packed. Tap to review or cancel.`,
+        },
 
         // ── Rider (verbose) ──
         new_order_request: {

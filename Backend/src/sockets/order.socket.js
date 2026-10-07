@@ -59,6 +59,9 @@ export const emitOrderUpdate = async (io, orderId, order) => {
     reason: order.reason,
     cancellationRequest: order.cancellationRequest,
     cancellationRequestReason: order.cancellationRequestReason,
+    hasUnavailableItems: order.hasUnavailableItems || false,
+    customerCancellationAllowed: order.customerCancellationAllowed || false,
+    unavailableItemsCount: order.unavailableItemsCount || 0,
   };
 
   // Always emit to merchant room

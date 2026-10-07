@@ -17,7 +17,7 @@ function getAiClient() {
 
 async function getCategoryOptions() {
   const categories = await Category.find({ isActive: true })
-    .select("_id name parentId level allowedGenders isTriable")
+    .select("_id name parentId level allowedGenders isTriable description prompts promptFront promptBack promptCloseUp")
     .lean();
 
   const categoryMap = new Map(
@@ -28,6 +28,12 @@ async function getCategoryOptions() {
     id: String(category._id),
     name: category.name,
     level: category.level,
+    description: category.description || "",
+    prompts: {
+      front: category.promptFront || category.prompts?.front || "",
+      back: category.promptBack || category.prompts?.back || "",
+      closeUp: category.promptCloseUp || category.prompts?.closeUp || "",
+    },
     parentId: category.parentId ? String(category.parentId) : null,
     parentName: category.parentId
       ? categoryMap.get(String(category.parentId))?.name || null

@@ -8,6 +8,7 @@ import AddCategory from '../pages/admin/AddCategory';
 import Category from '../pages/admin/Category';
 import MerchantDashboard from '../pages/merchant/MerchantDashboard';
 import AddProduct from '../pages/merchant/AddProduct';
+import AddProductPage from '../pages/admin/AddProducts';
 import NotFound from '../pages/NotFound';
 import Products from '../pages/admin/Products';
 import Variants from '../pages/admin/Variants';
@@ -74,6 +75,7 @@ const AppRoutes = () => {
             <Route path="edit-category/:categoryId" element={<EditCategory />} />
             <Route path="matching-products/:productId" element={<MatchingProducts />} />
             <Route path="products" element={<Products />} />
+            <Route path="add-product" element={<AddProductPage />} />
             <Route path="variants/:productId" element={<Variants />} />
             <Route path="add-title-banner" element={<Title_Banner />} />
             <Route path="merchants/:merchantId" element={<EditMerchant />} />
