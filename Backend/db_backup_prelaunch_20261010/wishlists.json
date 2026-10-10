@@ -1,0 +1,682 @@
+[
+  {
+    "_id": "6a55281e2fdcd189bfeeea62",
+    "userId": "6a5526932fdcd189bfeee469",
+    "productId": "6a4b59c31b70cf59848da1cb",
+    "variantId": "6a4b5a751b70cf59848da258",
+    "variantSnapshot": {
+      "color": {
+        "name": "Black",
+        "hex": "#000000"
+      },
+      "size": "S",
+      "price": 599,
+      "mrp": 699,
+      "discount": 14.31,
+      "image": "https://res.cloudinary.com/dpmliygpg/image/upload/v1783323258/products/x9kpuzfrzi28revl36ts.jpg"
+    },
+    "createdAt": "2026-07-13T18:02:06.789Z",
+    "updatedAt": "2026-07-13T18:02:06.789Z",
+    "__v": 0
+  },
+  {
+    "_id": "6a5528262fdcd189bfeeea70",
+    "userId": "6a5526932fdcd189bfeee469",
+    "productId": "6a52ce12f5d225d81a328521",
+    "variantId": "6a52d11ac46a7c32af09b920",
+    "variantSnapshot": {
+      "color": {
+        "name": "Blue",
+        "hex": "#0000FF"
+      },
+      "size": "S",
+      "price": 5,
+      "mrp": 10,
+      "discount": 50,
+      "image": "https://res.cloudinary.com/dpmliygpg/image/upload/v1783812376/products/hqdqfkbpawxr5wfkzqyc.jpg"
+    },
+    "createdAt": "2026-07-13T18:02:14.405Z",
+    "updatedAt": "2026-07-13T18:02:14.405Z",
+    "__v": 0
+  },
+  {
+    "_id": "6a57c6392fdcd189bfef2adb",
+    "userId": "6a57c5d12fdcd189bfef266e",
+    "productId": "6a4b59c31b70cf59848da1cb",
+    "variantId": "6a4b5a751b70cf59848da258",
+    "variantSnapshot": {
+      "color": {
+        "name": "Black",
+        "hex": "#000000"
+      },
+      "size": "S",
+      "price": 599,
+      "mrp": 699,
+      "discount": 14.31,
+      "image": "https://res.cloudinary.com/dpmliygpg/image/upload/v1783323258/products/x9kpuzfrzi28revl36ts.jpg"
+    },
+    "createdAt": "2026-07-15T17:41:13.762Z",
+    "updatedAt": "2026-07-15T17:41:13.762Z",
+    "__v": 0
+  },
+  {
+    "_id": "6a5cdf1214883e49240cb5b1",
+    "userId": "6a4900efea78373da07b4c7d",
+    "productId": "6a52ce12f5d225d81a328521",
+    "variantId": "4c7bd6880358b08aaeaa4f9c",
+    "variantSnapshot": {
+      "color": {
+        "name": "Rust",
+        "hex": "#B7410E"
+      },
+      "size": "S",
+      "price": 699,
+      "mrp": 899,
+      "discount": 22.25,
+      "image": "https://res.cloudinary.com/dpmliygpg/image/upload/v1784408915/products/a3uahr7lf515auerh1en.jpg"
+    },
+    "createdAt": "2026-07-19T14:28:34.043Z",
+    "updatedAt": "2026-07-19T14:28:34.043Z",
+    "__v": 0
+  },
+  {
+    "_id": "6aafca142b5f071056cf9672",
+    "userId": "6a4900efea78373da07b4c7d",
+    "productId": "6a9d4785319820f47b26adb7",
+    "variantId": "6a9d4785319820f47b26adb8",
+    "variantSnapshot": {
+      "color": {
+        "name": "Blue",
+        "hex": "#0000FF"
+      },
+      "size": "L",
+      "price": 1800,
+      "mrp": 2000,
+      "discount": 10,
+      "image": "https://res.cloudinary.com/dpmliygpg/image/upload/v1785770490/products/kpjjqu8eh90yjbxyyq97.jpg"
+    },
+    "createdAt": "2026-09-20T11:57:08.824Z",
+    "updatedAt": "2026-09-20T11:57:08.824Z",
+    "__v": 0
+  },
+  {
+    "_id": "6ab10c99966490317e23176d",
+    "userId": "6a4900efea78373da07b4c7d",
+    "productId": "6aac5fa52b6e0dcf9badf14e",
+    "variantId": "6aac5fa52b6e0dcf9badf14f",
+    "variantSnapshot": {
+      "color": {
+        "name": "Red",
+        "hex": "#D00000"
+      },
+      "size": "S",
+      "price": 1499,
+      "mrp": 2499,
+      "discount": 40,
+      "image": "https://res.cloudinary.com/dpmliygpg/image/upload/v1789681569/products/agalswavrbbosnntdtms.jpg"
+    },
+    "createdAt": "2026-09-21T10:53:13.376Z",
+    "updatedAt": "2026-09-21T10:53:13.376Z",
+    "__v": 0
+  },
+  {
+    "_id": "6ab17c95966490317e233aff",
+    "userId": "6ab17831966490317e23390e",
+    "productId": "6a5bf9ec2fdcd189bfef7093",
+    "variantId": "acd19f7318d6a3a829de8e57",
+    "variantSnapshot": {
+      "color": {
+        "name": "Silver",
+        "hex": "#C0C0C0"
+      },
+      "size": "S",
+      "price": 500,
+      "mrp": 800,
+      "discount": 37.5,
+      "image": "https://res.cloudinary.com/dpmliygpg/image/upload/v1784412843/products/lgwrxkaow0hvddlzrnrj.jpg"
+    },
+    "createdAt": "2026-09-21T18:51:01.058Z",
+    "updatedAt": "2026-09-21T18:51:01.058Z",
+    "__v": 0
+  },
+  {
+    "_id": "6ab210f77dc612397c5ace41",
+    "userId": "6ab20f857dc612397c5acdc5",
+    "productId": "6a5f1e7400916329dd05eac2",
+    "variantId": "385c800b002346f50380d5ff",
+    "variantSnapshot": {
+      "color": {
+        "name": "White",
+        "hex": "#FFFFFF"
+      },
+      "size": "S",
+      "price": 400,
+      "mrp": 500,
+      "discount": 20,
+      "image": "https://res.cloudinary.com/dpmliygpg/image/upload/v1784618612/warehouse-products/wqkj1oocdv2jdz7j3wtq.jpg"
+    },
+    "createdAt": "2026-09-22T05:24:07.267Z",
+    "updatedAt": "2026-09-22T05:24:07.267Z",
+    "__v": 0
+  },
+  {
+    "_id": "6ab373287dc612397c5b038f",
+    "userId": "6ab2cb557dc612397c5af000",
+    "productId": "6a5bfd8d2fdcd189bfef71aa",
+    "variantId": "6a70bbab9b593d8098545aa2",
+    "variantSnapshot": {
+      "color": {
+        "name": "Blue",
+        "hex": "#0000FF"
+      },
+      "size": "S",
+      "price": 500,
+      "mrp": 800,
+      "discount": 37.5,
+      "image": "https://res.cloudinary.com/dpmliygpg/image/upload/v1784414902/products/oowfqfkgkmafwz5ty05h.jpg"
+    },
+    "createdAt": "2026-09-23T06:35:20.088Z",
+    "updatedAt": "2026-09-23T06:35:20.088Z",
+    "__v": 0
+  },
+  {
+    "_id": "6ab39ee47dc612397c5b0af5",
+    "userId": "6aa965f1ffb7042723332bd7",
+    "productId": "6aad0d61481fe017fdb384e3",
+    "variantId": "b66f5bc4e790f02d73f55564",
+    "variantSnapshot": {
+      "color": {
+        "name": "Sky Blue & White",
+        "hex": "#75AADB"
+      },
+      "size": "XXL",
+      "price": 1499,
+      "mrp": 2499,
+      "discount": 40,
+      "image": "https://res.cloudinary.com/dpmliygpg/image/upload/v1789681558/products/vuzoogmd7knwpt6zmipi.jpg"
+    },
+    "createdAt": "2026-09-23T09:41:56.802Z",
+    "updatedAt": "2026-09-23T09:41:56.802Z",
+    "__v": 0
+  },
+  {
+    "_id": "6ab86672336ce3b353538bae",
+    "userId": "6a4900efea78373da07b4c7d",
+    "productId": "6aad0d61481fe017fdb384e3",
+    "variantId": "6aad0d61481fe017fdb384e4",
+    "variantSnapshot": {
+      "color": {
+        "name": "Sky Blue & White",
+        "hex": "#75AADB"
+      },
+      "size": "XXL",
+      "price": 1499,
+      "mrp": 2499,
+      "discount": 40,
+      "image": "https://res.cloudinary.com/dpmliygpg/image/upload/v1789681558/products/vuzoogmd7knwpt6zmipi.jpg"
+    },
+    "createdAt": "2026-09-27T00:42:26.799Z",
+    "updatedAt": "2026-09-27T00:42:26.799Z",
+    "__v": 0
+  },
+  {
+    "_id": "6ab867ba336ce3b353538ea2",
+    "userId": "6a4900efea78373da07b4c7d",
+    "productId": "6a52ce12f5d225d81a328521",
+    "variantId": "6a52d11ac46a7c32af09b921",
+    "variantSnapshot": {
+      "color": {
+        "name": "Blue",
+        "hex": "#0000FF"
+      },
+      "size": "S",
+      "price": 5,
+      "mrp": 10,
+      "discount": 50,
+      "image": "https://res.cloudinary.com/dpmliygpg/image/upload/v1783812376/products/hqdqfkbpawxr5wfkzqyc.jpg"
+    },
+    "createdAt": "2026-09-27T00:47:54.110Z",
+    "updatedAt": "2026-09-27T00:47:54.110Z",
+    "__v": 0
+  },
+  {
+    "_id": "6aba63ae5e47711f76ce9388",
+    "userId": "6a4900efea78373da07b4c7d",
+    "productId": "6aad0d61481fe017fdb384e3",
+    "variantId": "6aad0d61481fe017fdb384f8",
+    "variantSnapshot": {
+      "color": {
+        "name": "Sky Blue & White",
+        "hex": "#75AADB"
+      },
+      "size": "S",
+      "price": 1499,
+      "mrp": 2499,
+      "discount": 40,
+      "image": "https://res.cloudinary.com/dpmliygpg/image/upload/v1789681558/products/vuzoogmd7knwpt6zmipi.jpg"
+    },
+    "createdAt": "2026-09-28T12:55:10.793Z",
+    "updatedAt": "2026-09-28T12:55:10.793Z",
+    "__v": 0
+  },
+  {
+    "_id": "6abac75938f8ab7186dadd07",
+    "userId": "6abac6ac38f8ab7186dadaa2",
+    "productId": "6a5f1e7400916329dd05eac2",
+    "variantId": "385c800b002346f50380d5ff",
+    "variantSnapshot": {
+      "color": {
+        "name": "White",
+        "hex": "#FFFFFF"
+      },
+      "size": "S",
+      "price": 400,
+      "mrp": 500,
+      "discount": 20,
+      "image": "https://res.cloudinary.com/dpmliygpg/image/upload/v1784618612/warehouse-products/wqkj1oocdv2jdz7j3wtq.jpg"
+    },
+    "createdAt": "2026-09-28T20:00:25.661Z",
+    "updatedAt": "2026-09-28T20:00:25.661Z",
+    "__v": 0
+  },
+  {
+    "_id": "6abad27b38f8ab7186dae903",
+    "userId": "6abacef638f8ab7186dae2e5",
+    "productId": "6aac5ffa394acee436bffff9",
+    "variantId": "6aac5ffa394acee436c0000e",
+    "variantSnapshot": {
+      "color": {
+        "name": "Navy & Maroon",
+        "hex": "#004D98"
+      },
+      "size": "XXL",
+      "price": 1499,
+      "mrp": 2499,
+      "discount": 40,
+      "image": "https://res.cloudinary.com/dpmliygpg/image/upload/v1789681654/products/tz2kpfk0gbmziuovnske.jpg"
+    },
+    "createdAt": "2026-09-28T20:47:55.153Z",
+    "updatedAt": "2026-09-28T20:47:55.153Z",
+    "__v": 0
+  },
+  {
+    "_id": "6abad36e38f8ab7186daea5f",
+    "userId": "6abacef638f8ab7186dae2e5",
+    "productId": "6a5f5f2576055ea046fd72c3",
+    "variantId": "dd3becd95356c8c0158e376e",
+    "variantSnapshot": {
+      "color": {
+        "name": "White",
+        "hex": "#FFFFFF"
+      },
+      "size": "S",
+      "price": 405,
+      "mrp": 500,
+      "discount": 19,
+      "image": "https://res.cloudinary.com/dpmliygpg/image/upload/v1784635173/warehouse-products/mwmu6y5uwcweetczmugp.jpg"
+    },
+    "createdAt": "2026-09-28T20:51:58.399Z",
+    "updatedAt": "2026-09-28T20:51:58.399Z",
+    "__v": 0
+  },
+  {
+    "_id": "6abadb2138f8ab7186daef9c",
+    "userId": "6a7062be7779baaf28d0191d",
+    "productId": "6a5a42d62fdcd189bfef52dd",
+    "variantId": "6a5a43202fdcd189bfef5310",
+    "variantSnapshot": {
+      "color": {
+        "name": "Yellow",
+        "hex": "#FFFF00"
+      },
+      "size": "S",
+      "price": 1199,
+      "mrp": 1299,
+      "discount": 7.7,
+      "image": "https://res.cloudinary.com/dpmliygpg/image/upload/v1784300319/products/mdvcxl6oh8hnqmdu5brj.jpg"
+    },
+    "createdAt": "2026-09-28T21:24:49.328Z",
+    "updatedAt": "2026-09-28T21:24:49.328Z",
+    "__v": 0
+  },
+  {
+    "_id": "6abbbe1f7b60d8ee8f835d8d",
+    "userId": "6aa965f1ffb7042723332bd7",
+    "productId": "6a54d0a12fdcd189bfeed3d7",
+    "variantId": "3adf0cfeec6b5c91ff824223",
+    "variantSnapshot": {
+      "color": {
+        "name": "Amethyst",
+        "hex": "#9966CC"
+      },
+      "size": "L",
+      "price": 999,
+      "mrp": 1299,
+      "discount": 23.09,
+      "image": "https://res.cloudinary.com/dpmliygpg/image/upload/v1783943479/products/zko7xnwvzc6hkacun896.jpg"
+    },
+    "createdAt": "2026-09-29T13:33:19.478Z",
+    "updatedAt": "2026-09-29T13:33:19.478Z",
+    "__v": 0
+  },
+  {
+    "_id": "6abbbe4c7b60d8ee8f835e6b",
+    "userId": "6aa965f1ffb7042723332bd7",
+    "productId": "6abb40a07b60d8ee8f834ab5",
+    "variantId": "2c016c78fb144b27adfe118e",
+    "variantSnapshot": {
+      "color": {
+        "name": "Black",
+        "hex": "#000000"
+      },
+      "size": "S",
+      "price": 799,
+      "mrp": 799,
+      "discount": 0,
+      "image": "https://res.cloudinary.com/dpmliygpg/image/upload/v1790656673/products/oji84mxxrdg2cbqavynz.jpg"
+    },
+    "createdAt": "2026-09-29T13:34:04.706Z",
+    "updatedAt": "2026-09-29T13:34:04.706Z",
+    "__v": 0
+  },
+  {
+    "_id": "6abbbe4f7b60d8ee8f835e98",
+    "userId": "6aa965f1ffb7042723332bd7",
+    "productId": "6abb40a07b60d8ee8f834ab5",
+    "variantId": "6abb40a47b60d8ee8f834ab6",
+    "variantSnapshot": {
+      "color": {
+        "name": "Black",
+        "hex": "#000000"
+      },
+      "size": "S",
+      "price": 799,
+      "mrp": 799,
+      "discount": 0,
+      "image": "https://res.cloudinary.com/dpmliygpg/image/upload/v1790656673/products/oji84mxxrdg2cbqavynz.jpg"
+    },
+    "createdAt": "2026-09-29T13:34:07.206Z",
+    "updatedAt": "2026-09-29T13:34:07.206Z",
+    "__v": 0
+  },
+  {
+    "_id": "6abbbe997b60d8ee8f835f93",
+    "userId": "6aa965f1ffb7042723332bd7",
+    "productId": "6a52ce12f5d225d81a328521",
+    "variantId": "3caf7807d1f254990e68ee4f",
+    "variantSnapshot": {
+      "color": {
+        "name": "Blue",
+        "hex": "#0000FF"
+      },
+      "size": "M",
+      "price": 5,
+      "mrp": 10,
+      "discount": 50,
+      "image": "https://res.cloudinary.com/dpmliygpg/image/upload/v1783812376/products/hqdqfkbpawxr5wfkzqyc.jpg"
+    },
+    "createdAt": "2026-09-29T13:35:21.689Z",
+    "updatedAt": "2026-09-29T13:35:21.689Z",
+    "__v": 0
+  },
+  {
+    "_id": "6abbc0517b60d8ee8f8360fd",
+    "userId": "6a4900efea78373da07b4c7d",
+    "productId": "6aad0d61481fe017fdb384e3",
+    "variantId": "b66f5bc4e790f02d73f55564",
+    "variantSnapshot": {
+      "color": {
+        "name": "Sky Blue & White",
+        "hex": "#75AADB"
+      },
+      "size": "XXL",
+      "price": 1499,
+      "mrp": 2499,
+      "discount": 40,
+      "image": "https://res.cloudinary.com/dpmliygpg/image/upload/v1789681558/products/vuzoogmd7knwpt6zmipi.jpg"
+    },
+    "createdAt": "2026-09-29T13:42:41.913Z",
+    "updatedAt": "2026-09-29T13:42:41.913Z",
+    "__v": 0
+  },
+  {
+    "_id": "6abbc05f7b60d8ee8f836124",
+    "userId": "6a4900efea78373da07b4c7d",
+    "productId": "6abb1b9b7b60d8ee8f83422d",
+    "variantId": "91dee9886b6f9e025dd7c5af",
+    "variantSnapshot": {
+      "color": {
+        "name": "Team Red",
+        "hex": "#C71C2E"
+      },
+      "size": "S",
+      "price": 799,
+      "mrp": 799,
+      "discount": 0,
+      "image": "https://res.cloudinary.com/dpmliygpg/image/upload/v1790647196/products/qvjwzc6tta8bz1jqlphw.jpg"
+    },
+    "createdAt": "2026-09-29T13:42:55.896Z",
+    "updatedAt": "2026-09-29T13:42:55.896Z",
+    "__v": 0
+  },
+  {
+    "_id": "6abbc0667b60d8ee8f836132",
+    "userId": "6a4900efea78373da07b4c7d",
+    "productId": "6abb1b9b7b60d8ee8f83422d",
+    "variantId": "6abb1b9e7b60d8ee8f83422e",
+    "variantSnapshot": {
+      "color": {
+        "name": "Team Red",
+        "hex": "#C71C2E"
+      },
+      "size": "S",
+      "price": 799,
+      "mrp": 799,
+      "discount": 0,
+      "image": "https://res.cloudinary.com/dpmliygpg/image/upload/v1790647196/products/qvjwzc6tta8bz1jqlphw.jpg"
+    },
+    "createdAt": "2026-09-29T13:43:02.814Z",
+    "updatedAt": "2026-09-29T13:43:02.814Z",
+    "__v": 0
+  },
+  {
+    "_id": "6abbe9977b60d8ee8f83698e",
+    "userId": "6aa965f1ffb7042723332bd7",
+    "productId": "6abb1b9b7b60d8ee8f83422d",
+    "variantId": "6abb1b9e7b60d8ee8f83422e",
+    "variantSnapshot": {
+      "color": {
+        "name": "Team Red",
+        "hex": "#C71C2E"
+      },
+      "size": "S",
+      "price": 799,
+      "mrp": 799,
+      "discount": 0,
+      "image": "https://res.cloudinary.com/dpmliygpg/image/upload/v1790647196/products/qvjwzc6tta8bz1jqlphw.jpg"
+    },
+    "createdAt": "2026-09-29T16:38:47.887Z",
+    "updatedAt": "2026-09-29T16:38:47.887Z",
+    "__v": 0
+  },
+  {
+    "_id": "6abbe9a87b60d8ee8f836a92",
+    "userId": "6aa965f1ffb7042723332bd7",
+    "productId": "6abb14477e1ee7ec6f31e134",
+    "variantId": "6abb14497e1ee7ec6f31e135",
+    "variantSnapshot": {
+      "color": {
+        "name": "Off-White",
+        "hex": "#F5F5F0"
+      },
+      "size": "28",
+      "price": 1099,
+      "mrp": 1099,
+      "discount": 0,
+      "image": "https://res.cloudinary.com/dpmliygpg/image/upload/v1790645320/products/pfqcs543en01jnzwhhf8.jpg"
+    },
+    "createdAt": "2026-09-29T16:39:04.249Z",
+    "updatedAt": "2026-09-29T16:39:04.249Z",
+    "__v": 0
+  },
+  {
+    "_id": "6abbebee7b60d8ee8f83717c",
+    "userId": "6a54ea402fdcd189bfeed97a",
+    "productId": "6abb1b9b7b60d8ee8f83422d",
+    "variantId": "91dee9886b6f9e025dd7c5af",
+    "variantSnapshot": {
+      "color": {
+        "name": "Team Red",
+        "hex": "#C71C2E"
+      },
+      "size": "S",
+      "price": 799,
+      "mrp": 799,
+      "discount": 0,
+      "image": "https://res.cloudinary.com/dpmliygpg/image/upload/v1790647196/products/qvjwzc6tta8bz1jqlphw.jpg"
+    },
+    "createdAt": "2026-09-29T16:48:46.732Z",
+    "updatedAt": "2026-09-29T16:48:46.732Z",
+    "__v": 0
+  },
+  {
+    "_id": "6abbebf87b60d8ee8f8371b8",
+    "userId": "6a54ea402fdcd189bfeed97a",
+    "productId": "6a5a42d62fdcd189bfef52dd",
+    "variantId": "9a309d6b4fb108260af247ab",
+    "variantSnapshot": {
+      "color": {
+        "name": "Yellow",
+        "hex": "#FFFF00"
+      },
+      "size": "L",
+      "price": 1199,
+      "mrp": 1299,
+      "discount": 7.7,
+      "image": "https://res.cloudinary.com/dpmliygpg/image/upload/v1784300319/products/mdvcxl6oh8hnqmdu5brj.jpg"
+    },
+    "createdAt": "2026-09-29T16:48:56.249Z",
+    "updatedAt": "2026-09-29T16:48:56.249Z",
+    "__v": 0
+  },
+  {
+    "_id": "6abbee967b60d8ee8f837a26",
+    "userId": "6a55331f2fdcd189bfeeee32",
+    "productId": "6a52ce12f5d225d81a328521",
+    "variantId": "4c7bd6880358b08aaeaa4f9c",
+    "variantSnapshot": {
+      "color": {
+        "name": "Rust",
+        "hex": "#B7410E"
+      },
+      "size": "S",
+      "price": 699,
+      "mrp": 899,
+      "discount": 22.25,
+      "image": "https://res.cloudinary.com/dpmliygpg/image/upload/v1784408915/products/a3uahr7lf515auerh1en.jpg"
+    },
+    "createdAt": "2026-09-29T17:00:06.669Z",
+    "updatedAt": "2026-09-29T17:00:06.669Z",
+    "__v": 0
+  },
+  {
+    "_id": "6ac3b7958b4f200d945d724c",
+    "userId": "6ac3b7008b4f200d945d717d",
+    "productId": "6a5a42d62fdcd189bfef52dd",
+    "variantId": "9a309d6b4fb108260af247ab",
+    "variantSnapshot": {
+      "color": {
+        "name": "Yellow",
+        "hex": "#FFFF00"
+      },
+      "size": "S",
+      "price": 1199,
+      "mrp": 1299,
+      "discount": 7.7,
+      "image": "https://res.cloudinary.com/dpmliygpg/image/upload/v1784300319/products/mdvcxl6oh8hnqmdu5brj.jpg"
+    },
+    "createdAt": "2026-10-05T14:43:33.889Z",
+    "updatedAt": "2026-10-05T14:43:33.889Z",
+    "__v": 0
+  },
+  {
+    "_id": "6ac3bafe8b4f200d945d748e",
+    "userId": "6ac3bad18b4f200d945d740d",
+    "productId": "6a5f5f2576055ea046fd72c3",
+    "variantId": "dd3becd95356c8c0158e376e",
+    "variantSnapshot": {
+      "color": {
+        "name": "White",
+        "hex": "#FFFFFF"
+      },
+      "size": "S",
+      "price": 405,
+      "mrp": 500,
+      "discount": 19,
+      "image": "https://res.cloudinary.com/dpmliygpg/image/upload/v1784635173/warehouse-products/mwmu6y5uwcweetczmugp.jpg"
+    },
+    "createdAt": "2026-10-05T14:58:06.929Z",
+    "updatedAt": "2026-10-05T14:58:06.929Z",
+    "__v": 0
+  },
+  {
+    "_id": "6ac3ce0e8b4f200d945d7c99",
+    "userId": "6ac3bad18b4f200d945d740d",
+    "productId": "6aad0d61481fe017fdb384e3",
+    "variantId": "b66f5bc4e790f02d73f55564",
+    "variantSnapshot": {
+      "color": {
+        "name": "Sky Blue & White",
+        "hex": "#75AADB"
+      },
+      "size": "XXL",
+      "price": 1499,
+      "mrp": 2499,
+      "discount": 40,
+      "image": "https://res.cloudinary.com/dpmliygpg/image/upload/v1789681558/products/vuzoogmd7knwpt6zmipi.jpg"
+    },
+    "createdAt": "2026-10-05T16:19:26.036Z",
+    "updatedAt": "2026-10-05T16:19:26.036Z",
+    "__v": 0
+  },
+  {
+    "_id": "6ac51f498b4f200d945daec0",
+    "userId": "6abbfe317b60d8ee8f8384ff",
+    "productId": "6ac4b7557ff53ee2ac5284fa",
+    "variantId": "b018d2fe5420d742bc74f26c",
+    "variantSnapshot": {
+      "color": {
+        "name": "Olive Green",
+        "hex": "#708238"
+      },
+      "size": "M",
+      "price": 1199,
+      "mrp": 1199,
+      "discount": 0,
+      "image": "https://res.cloudinary.com/dpmliygpg/image/upload/v1791276888/products/pofdvwjkzglhtlzw0nas.jpg"
+    },
+    "createdAt": "2026-10-06T16:18:17.823Z",
+    "updatedAt": "2026-10-06T16:18:17.823Z",
+    "__v": 0
+  },
+  {
+    "_id": "6ac8a43497e7c4c7202c126b",
+    "userId": "6a4900efea78373da07b4c7d",
+    "productId": "6a54d0a12fdcd189bfeed3d7",
+    "variantId": "3adf0cfeec6b5c91ff824223",
+    "variantSnapshot": {
+      "color": {
+        "name": "Amethyst",
+        "hex": "#9966CC"
+      },
+      "size": "L",
+      "price": 999,
+      "mrp": 1299,
+      "discount": 23.09,
+      "image": "https://res.cloudinary.com/dpmliygpg/image/upload/v1783943479/products/zko7xnwvzc6hkacun896.jpg"
+    },
+    "createdAt": "2026-10-09T08:22:12.775Z",
+    "updatedAt": "2026-10-09T08:22:12.775Z",
+    "__v": 0
+  }
+]

@@ -69,6 +69,11 @@ const appConfigSchema = new mongoose.Schema(
             type: Boolean,
             default: false, // Default to false pre-launch so orders can only be placed when admin toggles it ON
         },
+        // ── Order Testing Mode (SB Fashion Isolation) ──
+        isTestingMode: {
+            type: Boolean,
+            default: false, // When true, Customer App is restricted exclusively to SB Fashion (warehouse & store)
+        },
         maintenanceTitle: {
             type: String,
             default: "Maintenance in Progress",
@@ -83,6 +88,47 @@ const appConfigSchema = new mongoose.Schema(
             type: Number,
             default: 5 * 60 * 1000, // 5 minutes
             min: 60000,
+        },
+
+        // ── Dynamic Promotional Marquee Announcements ──
+        promoAnnouncements: {
+            type: [
+                {
+                    id: { type: String, default: () => new mongoose.Types.ObjectId().toString() },
+                    badge: { type: String, default: "OFFER" },
+                    title: { type: String, required: true },
+                    subtitle: { type: String, default: "" },
+                    highlightText: { type: String, default: "" },
+                    actionUrl: { type: String, default: "" },
+                    icon: { type: String, default: "flash" },
+                    isActive: { type: Boolean, default: true },
+                    order: { type: Number, default: 0 },
+                }
+            ],
+            default: [
+                {
+                    id: "promo_free_delivery",
+                    badge: "2 FREE DELIVERIES",
+                    title: "2 Free Deliveries on your first 2 orders!",
+                    subtitle: "Auto-applied at checkout • Zero delivery fee",
+                    highlightText: "2 Free Deliveries",
+                    actionUrl: "",
+                    icon: "flash",
+                    isActive: true,
+                    order: 0,
+                },
+                {
+                    id: "promo_refer_earn",
+                    badge: "REFER & EARN",
+                    title: "Refer a friend & get a free delivery coupon!",
+                    subtitle: "Tap to share your invite code with friends",
+                    highlightText: "+1 Free Delivery",
+                    actionUrl: "/(app)/refer-earn",
+                    icon: "gift",
+                    isActive: true,
+                    order: 1,
+                },
+            ],
         },
 
         // ── App Versions & Force Update Policies ──
@@ -102,6 +148,22 @@ const appConfigSchema = new mongoose.Schema(
             webUrl: {
                 type: String,
                 default: "https://play.google.com/store/apps/details?id=com.flashfits.app",
+            },
+            minVersionIos: {
+                type: String,
+                default: "1.0.0",
+            },
+            latestVersionIos: {
+                type: String,
+                default: "1.1.0",
+            },
+            storeUrlIos: {
+                type: String,
+                default: "itms-apps://itunes.apple.com/app/com.flashfits.app",
+            },
+            webUrlIos: {
+                type: String,
+                default: "https://apps.apple.com/app/com.flashfits.app",
             },
             mandatoryTitle: {
                 type: String,
@@ -145,6 +207,22 @@ const appConfigSchema = new mongoose.Schema(
                 type: String,
                 default: "https://play.google.com/store/apps/details?id=com.flashfits.delivery",
             },
+            minVersionIos: {
+                type: String,
+                default: "1.0.0",
+            },
+            latestVersionIos: {
+                type: String,
+                default: "1.0.0",
+            },
+            storeUrlIos: {
+                type: String,
+                default: "itms-apps://itunes.apple.com/app/com.flashfits.delivery",
+            },
+            webUrlIos: {
+                type: String,
+                default: "https://apps.apple.com/app/com.flashfits.delivery",
+            },
         },
 
         merchantAppVersion: {
@@ -163,6 +241,22 @@ const appConfigSchema = new mongoose.Schema(
             webUrl: {
                 type: String,
                 default: "https://play.google.com/store/apps/details?id=com.flashfits.merchant",
+            },
+            minVersionIos: {
+                type: String,
+                default: "1.0.0",
+            },
+            latestVersionIos: {
+                type: String,
+                default: "1.0.0",
+            },
+            storeUrlIos: {
+                type: String,
+                default: "itms-apps://itunes.apple.com/app/com.flashfits.merchant",
+            },
+            webUrlIos: {
+                type: String,
+                default: "https://apps.apple.com/app/com.flashfits.merchant",
             },
         },
     },

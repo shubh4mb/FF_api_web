@@ -57,6 +57,8 @@ export const emitOrderUpdate = async (io, orderId, order) => {
     settlementStatus: order.settlementStatus,
     packingPhotos: order.packingPhotos,
     reason: order.reason,
+    cancelledBy: order.cancelledBy || null,
+    cancelledAt: order.cancelledAt || null,
     cancellationRequest: order.cancellationRequest,
     cancellationRequestReason: order.cancellationRequestReason,
     hasUnavailableItems: order.hasUnavailableItems || false,

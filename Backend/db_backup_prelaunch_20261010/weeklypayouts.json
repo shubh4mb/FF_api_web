@@ -1,0 +1,1088 @@
+[
+  {
+    "_id": "6a53e00d9533cc7c00bd8ea5",
+    "ownerType": "rider",
+    "ownerId": "6a45776e80bbd764a88a440b",
+    "weekStart": "2026-07-05T18:30:00.000Z",
+    "weekEnd": "2026-07-12T18:29:59.999Z",
+    "status": "paid",
+    "totalEarnings": 922,
+    "totalDeductions": 0,
+    "netPayout": 922,
+    "completedOrders": 22,
+    "cancelledOrders": 0,
+    "totalIncentive": 150,
+    "finalAmount": 1072,
+    "orders": [
+      {
+        "orderId": "6a53e00d9533cc7c00bd8e8f",
+        "amount": 47,
+        "type": "credit",
+        "description": "Delivery for Order #62788",
+        "settledAt": "2026-07-10T16:21:34.605Z",
+        "_id": "6a53e00d9533cc7c00bd8ea6"
+      },
+      {
+        "orderId": "6a53e00d9533cc7c00bd8e90",
+        "amount": 46,
+        "type": "credit",
+        "description": "Delivery for Order #98241",
+        "settledAt": "2026-07-07T21:22:17.683Z",
+        "_id": "6a53e00d9533cc7c00bd8ea7"
+      },
+      {
+        "orderId": "6a53e00d9533cc7c00bd8e91",
+        "amount": 58,
+        "type": "credit",
+        "description": "Delivery for Order #91412",
+        "settledAt": "2026-07-07T13:10:41.986Z",
+        "_id": "6a53e00d9533cc7c00bd8ea8"
+      },
+      {
+        "orderId": "6a53e00d9533cc7c00bd8e92",
+        "amount": 28,
+        "type": "credit",
+        "description": "Delivery for Order #70513",
+        "settledAt": "2026-07-09T22:20:38.955Z",
+        "_id": "6a53e00d9533cc7c00bd8ea9"
+      },
+      {
+        "orderId": "6a53e00d9533cc7c00bd8e93",
+        "amount": 33,
+        "type": "credit",
+        "description": "Delivery for Order #21891",
+        "settledAt": "2026-07-11T11:43:47.260Z",
+        "_id": "6a53e00d9533cc7c00bd8eaa"
+      },
+      {
+        "orderId": "6a53e00d9533cc7c00bd8e94",
+        "amount": 26,
+        "type": "credit",
+        "description": "Delivery for Order #84381",
+        "settledAt": "2026-07-07T03:28:32.250Z",
+        "_id": "6a53e00d9533cc7c00bd8eab"
+      },
+      {
+        "orderId": "6a53e00d9533cc7c00bd8e95",
+        "amount": 66,
+        "type": "credit",
+        "description": "Delivery for Order #91091",
+        "settledAt": "2026-07-10T02:41:05.665Z",
+        "_id": "6a53e00d9533cc7c00bd8eac"
+      },
+      {
+        "orderId": "6a53e00d9533cc7c00bd8e96",
+        "amount": 43,
+        "type": "credit",
+        "description": "Delivery for Order #34567",
+        "settledAt": "2026-07-08T11:58:20.037Z",
+        "_id": "6a53e00d9533cc7c00bd8ead"
+      },
+      {
+        "orderId": "6a53e00d9533cc7c00bd8e97",
+        "amount": 29,
+        "type": "credit",
+        "description": "Delivery for Order #80954",
+        "settledAt": "2026-07-06T07:55:24.139Z",
+        "_id": "6a53e00d9533cc7c00bd8eae"
+      },
+      {
+        "orderId": "6a53e00d9533cc7c00bd8e98",
+        "amount": 62,
+        "type": "credit",
+        "description": "Delivery for Order #91813",
+        "settledAt": "2026-07-07T08:38:07.373Z",
+        "_id": "6a53e00d9533cc7c00bd8eaf"
+      },
+      {
+        "orderId": "6a53e00d9533cc7c00bd8e99",
+        "amount": 67,
+        "type": "credit",
+        "description": "Delivery for Order #91386",
+        "settledAt": "2026-07-09T23:37:36.975Z",
+        "_id": "6a53e00d9533cc7c00bd8eb0"
+      },
+      {
+        "orderId": "6a53e00d9533cc7c00bd8e9a",
+        "amount": 22,
+        "type": "credit",
+        "description": "Delivery for Order #78527",
+        "settledAt": "2026-07-09T17:55:24.246Z",
+        "_id": "6a53e00d9533cc7c00bd8eb1"
+      },
+      {
+        "orderId": "6a53e00d9533cc7c00bd8e9b",
+        "amount": 47,
+        "type": "credit",
+        "description": "Delivery for Order #31361",
+        "settledAt": "2026-07-09T21:50:17.802Z",
+        "_id": "6a53e00d9533cc7c00bd8eb2"
+      },
+      {
+        "orderId": "6a53e00d9533cc7c00bd8e9c",
+        "amount": 34,
+        "type": "credit",
+        "description": "Delivery for Order #93941",
+        "settledAt": "2026-07-05T19:24:34.929Z",
+        "_id": "6a53e00d9533cc7c00bd8eb3"
+      },
+      {
+        "orderId": "6a53e00d9533cc7c00bd8e9d",
+        "amount": 63,
+        "type": "credit",
+        "description": "Delivery for Order #63828",
+        "settledAt": "2026-07-06T08:18:10.084Z",
+        "_id": "6a53e00d9533cc7c00bd8eb4"
+      },
+      {
+        "orderId": "6a53e00d9533cc7c00bd8e9e",
+        "amount": 42,
+        "type": "credit",
+        "description": "Delivery for Order #87910",
+        "settledAt": "2026-07-09T14:14:31.802Z",
+        "_id": "6a53e00d9533cc7c00bd8eb5"
+      },
+      {
+        "orderId": "6a53e00d9533cc7c00bd8e9f",
+        "amount": 25,
+        "type": "credit",
+        "description": "Delivery for Order #92351",
+        "settledAt": "2026-07-07T04:26:39.890Z",
+        "_id": "6a53e00d9533cc7c00bd8eb6"
+      },
+      {
+        "orderId": "6a53e00d9533cc7c00bd8ea0",
+        "amount": 41,
+        "type": "credit",
+        "description": "Delivery for Order #35189",
+        "settledAt": "2026-07-10T18:11:05.350Z",
+        "_id": "6a53e00d9533cc7c00bd8eb7"
+      },
+      {
+        "orderId": "6a53e00d9533cc7c00bd8ea1",
+        "amount": 31,
+        "type": "credit",
+        "description": "Delivery for Order #84731",
+        "settledAt": "2026-07-09T05:23:48.781Z",
+        "_id": "6a53e00d9533cc7c00bd8eb8"
+      },
+      {
+        "orderId": "6a53e00d9533cc7c00bd8ea2",
+        "amount": 55,
+        "type": "credit",
+        "description": "Delivery for Order #38745",
+        "settledAt": "2026-07-06T22:07:37.609Z",
+        "_id": "6a53e00d9533cc7c00bd8eb9"
+      },
+      {
+        "orderId": "6a53e00d9533cc7c00bd8ea3",
+        "amount": 21,
+        "type": "credit",
+        "description": "Delivery for Order #69208",
+        "settledAt": "2026-07-08T21:41:23.908Z",
+        "_id": "6a53e00d9533cc7c00bd8eba"
+      },
+      {
+        "orderId": "6a53e00d9533cc7c00bd8ea4",
+        "amount": 36,
+        "type": "credit",
+        "description": "Delivery for Order #80293",
+        "settledAt": "2026-07-10T04:44:02.257Z",
+        "_id": "6a53e00d9533cc7c00bd8ebb"
+      }
+    ],
+    "paidAt": "2026-07-13T18:29:59.999Z",
+    "incentivesEarned": [],
+    "createdAt": "2026-07-12T18:42:21.328Z",
+    "updatedAt": "2026-07-12T18:42:21.328Z",
+    "__v": 0
+  },
+  {
+    "_id": "6a53e00d9533cc7c00bd8ecc",
+    "ownerType": "rider",
+    "ownerId": "6a45776e80bbd764a88a440b",
+    "weekStart": "2026-06-28T18:30:00.000Z",
+    "weekEnd": "2026-07-05T18:29:59.999Z",
+    "status": "paid",
+    "totalEarnings": 676,
+    "totalDeductions": 0,
+    "netPayout": 676,
+    "completedOrders": 14,
+    "cancelledOrders": 0,
+    "totalIncentive": 0,
+    "finalAmount": 676,
+    "orders": [
+      {
+        "orderId": "6a53e00d9533cc7c00bd8ebe",
+        "amount": 32,
+        "type": "credit",
+        "description": "Delivery for Order #10412",
+        "settledAt": "2026-07-03T11:01:28.694Z",
+        "_id": "6a53e00d9533cc7c00bd8ecd"
+      },
+      {
+        "orderId": "6a53e00d9533cc7c00bd8ebf",
+        "amount": 55,
+        "type": "credit",
+        "description": "Delivery for Order #12580",
+        "settledAt": "2026-06-30T20:32:10.312Z",
+        "_id": "6a53e00d9533cc7c00bd8ece"
+      },
+      {
+        "orderId": "6a53e00d9533cc7c00bd8ec0",
+        "amount": 58,
+        "type": "credit",
+        "description": "Delivery for Order #51114",
+        "settledAt": "2026-07-05T11:49:32.418Z",
+        "_id": "6a53e00d9533cc7c00bd8ecf"
+      },
+      {
+        "orderId": "6a53e00d9533cc7c00bd8ec1",
+        "amount": 65,
+        "type": "credit",
+        "description": "Delivery for Order #22618",
+        "settledAt": "2026-07-02T02:15:52.971Z",
+        "_id": "6a53e00d9533cc7c00bd8ed0"
+      },
+      {
+        "orderId": "6a53e00d9533cc7c00bd8ec2",
+        "amount": 49,
+        "type": "credit",
+        "description": "Delivery for Order #95057",
+        "settledAt": "2026-07-04T15:45:36.299Z",
+        "_id": "6a53e00d9533cc7c00bd8ed1"
+      },
+      {
+        "orderId": "6a53e00d9533cc7c00bd8ec3",
+        "amount": 61,
+        "type": "credit",
+        "description": "Delivery for Order #70883",
+        "settledAt": "2026-07-05T18:08:29.870Z",
+        "_id": "6a53e00d9533cc7c00bd8ed2"
+      },
+      {
+        "orderId": "6a53e00d9533cc7c00bd8ec4",
+        "amount": 28,
+        "type": "credit",
+        "description": "Delivery for Order #18853",
+        "settledAt": "2026-06-28T23:40:35.293Z",
+        "_id": "6a53e00d9533cc7c00bd8ed3"
+      },
+      {
+        "orderId": "6a53e00d9533cc7c00bd8ec5",
+        "amount": 24,
+        "type": "credit",
+        "description": "Delivery for Order #13350",
+        "settledAt": "2026-06-29T18:22:25.466Z",
+        "_id": "6a53e00d9533cc7c00bd8ed4"
+      },
+      {
+        "orderId": "6a53e00d9533cc7c00bd8ec6",
+        "amount": 60,
+        "type": "credit",
+        "description": "Delivery for Order #69089",
+        "settledAt": "2026-06-29T05:19:00.427Z",
+        "_id": "6a53e00d9533cc7c00bd8ed5"
+      },
+      {
+        "orderId": "6a53e00d9533cc7c00bd8ec7",
+        "amount": 28,
+        "type": "credit",
+        "description": "Delivery for Order #85531",
+        "settledAt": "2026-06-29T11:39:54.544Z",
+        "_id": "6a53e00d9533cc7c00bd8ed6"
+      },
+      {
+        "orderId": "6a53e00d9533cc7c00bd8ec8",
+        "amount": 60,
+        "type": "credit",
+        "description": "Delivery for Order #26448",
+        "settledAt": "2026-06-29T11:18:40.966Z",
+        "_id": "6a53e00d9533cc7c00bd8ed7"
+      },
+      {
+        "orderId": "6a53e00d9533cc7c00bd8ec9",
+        "amount": 50,
+        "type": "credit",
+        "description": "Delivery for Order #61024",
+        "settledAt": "2026-07-02T13:02:54.043Z",
+        "_id": "6a53e00d9533cc7c00bd8ed8"
+      },
+      {
+        "orderId": "6a53e00d9533cc7c00bd8eca",
+        "amount": 44,
+        "type": "credit",
+        "description": "Delivery for Order #37725",
+        "settledAt": "2026-06-30T10:08:50.660Z",
+        "_id": "6a53e00d9533cc7c00bd8ed9"
+      },
+      {
+        "orderId": "6a53e00d9533cc7c00bd8ecb",
+        "amount": 62,
+        "type": "credit",
+        "description": "Delivery for Order #73581",
+        "settledAt": "2026-07-02T21:26:53.205Z",
+        "_id": "6a53e00d9533cc7c00bd8eda"
+      }
+    ],
+    "paidAt": "2026-07-06T18:29:59.999Z",
+    "incentivesEarned": [],
+    "createdAt": "2026-07-12T18:42:21.376Z",
+    "updatedAt": "2026-07-12T18:42:21.376Z",
+    "__v": 0
+  },
+  {
+    "_id": "6a53e00d9533cc7c00bd8ee6",
+    "ownerType": "rider",
+    "ownerId": "6a45776e80bbd764a88a440b",
+    "weekStart": "2026-06-21T18:30:00.000Z",
+    "weekEnd": "2026-06-28T18:29:59.999Z",
+    "status": "paid",
+    "totalEarnings": 374,
+    "totalDeductions": 0,
+    "netPayout": 374,
+    "completedOrders": 10,
+    "cancelledOrders": 1,
+    "totalIncentive": 0,
+    "finalAmount": 374,
+    "orders": [
+      {
+        "orderId": "6a53e00d9533cc7c00bd8edc",
+        "amount": 22,
+        "type": "credit",
+        "description": "Delivery for Order #32818",
+        "settledAt": "2026-06-26T06:36:35.318Z",
+        "_id": "6a53e00d9533cc7c00bd8ee7"
+      },
+      {
+        "orderId": "6a53e00d9533cc7c00bd8edd",
+        "amount": 51,
+        "type": "credit",
+        "description": "Delivery for Order #48718",
+        "settledAt": "2026-06-23T15:17:37.830Z",
+        "_id": "6a53e00d9533cc7c00bd8ee8"
+      },
+      {
+        "orderId": "6a53e00d9533cc7c00bd8ede",
+        "amount": 30,
+        "type": "credit",
+        "description": "Delivery for Order #12140",
+        "settledAt": "2026-06-24T10:44:03.762Z",
+        "_id": "6a53e00d9533cc7c00bd8ee9"
+      },
+      {
+        "orderId": "6a53e00d9533cc7c00bd8edf",
+        "amount": 30,
+        "type": "credit",
+        "description": "Delivery for Order #12178",
+        "settledAt": "2026-06-25T13:46:39.303Z",
+        "_id": "6a53e00d9533cc7c00bd8eea"
+      },
+      {
+        "orderId": "6a53e00d9533cc7c00bd8ee0",
+        "amount": 37,
+        "type": "credit",
+        "description": "Delivery for Order #17121",
+        "settledAt": "2026-06-27T03:20:46.993Z",
+        "_id": "6a53e00d9533cc7c00bd8eeb"
+      },
+      {
+        "orderId": "6a53e00d9533cc7c00bd8ee1",
+        "amount": 53,
+        "type": "credit",
+        "description": "Delivery for Order #81926",
+        "settledAt": "2026-06-28T07:57:33.375Z",
+        "_id": "6a53e00d9533cc7c00bd8eec"
+      },
+      {
+        "orderId": "6a53e00d9533cc7c00bd8ee2",
+        "amount": 59,
+        "type": "credit",
+        "description": "Delivery for Order #51909",
+        "settledAt": "2026-06-27T14:43:26.208Z",
+        "_id": "6a53e00d9533cc7c00bd8eed"
+      },
+      {
+        "orderId": "6a53e00d9533cc7c00bd8ee3",
+        "amount": 25,
+        "type": "credit",
+        "description": "Delivery for Order #47133",
+        "settledAt": "2026-06-27T20:14:10.464Z",
+        "_id": "6a53e00d9533cc7c00bd8eee"
+      },
+      {
+        "orderId": "6a53e00d9533cc7c00bd8ee4",
+        "amount": 40,
+        "type": "credit",
+        "description": "Delivery for Order #75633",
+        "settledAt": "2026-06-22T23:07:56.763Z",
+        "_id": "6a53e00d9533cc7c00bd8eef"
+      },
+      {
+        "orderId": "6a53e00d9533cc7c00bd8ee5",
+        "amount": 27,
+        "type": "credit",
+        "description": "Delivery for Order #17456",
+        "settledAt": "2026-06-27T11:39:24.539Z",
+        "_id": "6a53e00d9533cc7c00bd8ef0"
+      }
+    ],
+    "paidAt": "2026-06-29T18:29:59.999Z",
+    "incentivesEarned": [],
+    "createdAt": "2026-07-12T18:42:21.419Z",
+    "updatedAt": "2026-07-12T18:42:21.419Z",
+    "__v": 0
+  },
+  {
+    "_id": "6a53e00d9533cc7c00bd8efe",
+    "ownerType": "rider",
+    "ownerId": "6a45776e80bbd764a88a440b",
+    "weekStart": "2026-06-14T18:30:00.000Z",
+    "weekEnd": "2026-06-21T18:29:59.999Z",
+    "status": "paid",
+    "totalEarnings": 625,
+    "totalDeductions": 0,
+    "netPayout": 625,
+    "completedOrders": 12,
+    "cancelledOrders": 1,
+    "totalIncentive": 0,
+    "finalAmount": 625,
+    "orders": [
+      {
+        "orderId": "6a53e00d9533cc7c00bd8ef2",
+        "amount": 53,
+        "type": "credit",
+        "description": "Delivery for Order #32396",
+        "settledAt": "2026-06-18T16:35:40.901Z",
+        "_id": "6a53e00d9533cc7c00bd8eff"
+      },
+      {
+        "orderId": "6a53e00d9533cc7c00bd8ef3",
+        "amount": 53,
+        "type": "credit",
+        "description": "Delivery for Order #25123",
+        "settledAt": "2026-06-16T15:01:07.363Z",
+        "_id": "6a53e00d9533cc7c00bd8f00"
+      },
+      {
+        "orderId": "6a53e00d9533cc7c00bd8ef4",
+        "amount": 68,
+        "type": "credit",
+        "description": "Delivery for Order #25987",
+        "settledAt": "2026-06-16T21:11:23.630Z",
+        "_id": "6a53e00d9533cc7c00bd8f01"
+      },
+      {
+        "orderId": "6a53e00d9533cc7c00bd8ef5",
+        "amount": 49,
+        "type": "credit",
+        "description": "Delivery for Order #38279",
+        "settledAt": "2026-06-19T15:06:44.601Z",
+        "_id": "6a53e00d9533cc7c00bd8f02"
+      },
+      {
+        "orderId": "6a53e00d9533cc7c00bd8ef6",
+        "amount": 53,
+        "type": "credit",
+        "description": "Delivery for Order #59769",
+        "settledAt": "2026-06-21T05:52:28.412Z",
+        "_id": "6a53e00d9533cc7c00bd8f03"
+      },
+      {
+        "orderId": "6a53e00d9533cc7c00bd8ef7",
+        "amount": 34,
+        "type": "credit",
+        "description": "Delivery for Order #21816",
+        "settledAt": "2026-06-21T03:38:17.476Z",
+        "_id": "6a53e00d9533cc7c00bd8f04"
+      },
+      {
+        "orderId": "6a53e00d9533cc7c00bd8ef8",
+        "amount": 58,
+        "type": "credit",
+        "description": "Delivery for Order #94081",
+        "settledAt": "2026-06-16T06:27:23.472Z",
+        "_id": "6a53e00d9533cc7c00bd8f05"
+      },
+      {
+        "orderId": "6a53e00d9533cc7c00bd8ef9",
+        "amount": 60,
+        "type": "credit",
+        "description": "Delivery for Order #23524",
+        "settledAt": "2026-06-18T01:51:23.578Z",
+        "_id": "6a53e00d9533cc7c00bd8f06"
+      },
+      {
+        "orderId": "6a53e00d9533cc7c00bd8efa",
+        "amount": 45,
+        "type": "credit",
+        "description": "Delivery for Order #97070",
+        "settledAt": "2026-06-21T01:02:52.931Z",
+        "_id": "6a53e00d9533cc7c00bd8f07"
+      },
+      {
+        "orderId": "6a53e00d9533cc7c00bd8efb",
+        "amount": 29,
+        "type": "credit",
+        "description": "Delivery for Order #76759",
+        "settledAt": "2026-06-16T06:11:28.403Z",
+        "_id": "6a53e00d9533cc7c00bd8f08"
+      },
+      {
+        "orderId": "6a53e00d9533cc7c00bd8efc",
+        "amount": 64,
+        "type": "credit",
+        "description": "Delivery for Order #49662",
+        "settledAt": "2026-06-18T01:51:37.477Z",
+        "_id": "6a53e00d9533cc7c00bd8f09"
+      },
+      {
+        "orderId": "6a53e00d9533cc7c00bd8efd",
+        "amount": 59,
+        "type": "credit",
+        "description": "Delivery for Order #48772",
+        "settledAt": "2026-06-16T10:25:20.615Z",
+        "_id": "6a53e00d9533cc7c00bd8f0a"
+      }
+    ],
+    "paidAt": "2026-06-22T18:29:59.999Z",
+    "incentivesEarned": [],
+    "createdAt": "2026-07-12T18:42:21.462Z",
+    "updatedAt": "2026-07-12T18:42:21.462Z",
+    "__v": 0
+  },
+  {
+    "_id": "6a53e00d9533cc7c00bd8f13",
+    "ownerType": "rider",
+    "ownerId": "6a45776e80bbd764a88a440b",
+    "weekStart": "2026-07-12T18:30:00.000Z",
+    "weekEnd": "2026-07-19T18:29:59.999Z",
+    "status": "finalized",
+    "totalEarnings": 127,
+    "totalDeductions": 0,
+    "netPayout": 127,
+    "completedOrders": 6,
+    "cancelledOrders": 0,
+    "totalIncentive": 0,
+    "finalAmount": 127,
+    "orders": [
+      {
+        "orderId": "6a53e00d9533cc7c00bd8f0c",
+        "amount": 31,
+        "type": "credit",
+        "description": "Delivery for Order #65802",
+        "settledAt": "2026-07-13T03:06:56.144Z",
+        "_id": "6a53e00d9533cc7c00bd8f14"
+      },
+      {
+        "orderId": "6a53e00d9533cc7c00bd8f0f",
+        "amount": 27,
+        "type": "credit",
+        "description": "Delivery for Order #99324",
+        "settledAt": "2026-07-14T01:57:07.023Z",
+        "_id": "6a53e00d9533cc7c00bd8f15"
+      },
+      {
+        "orderId": "6a53e00d9533cc7c00bd8f10",
+        "amount": 27,
+        "type": "credit",
+        "description": "Delivery for Order #75369",
+        "settledAt": "2026-07-14T00:24:36.843Z",
+        "_id": "6a53e00d9533cc7c00bd8f16"
+      },
+      {
+        "orderId": "6a548d731db6c93ac7ea41a6",
+        "amount": 12,
+        "type": "credit",
+        "description": "Delivery payout for order 6a548d731db6c93ac7ea41a6",
+        "settledAt": "2026-07-13T07:24:07.287Z",
+        "_id": "6a5492971db6c93ac7ea45ec"
+      },
+      {
+        "orderId": "6a58cf96388f6caac6297fd3",
+        "amount": 15,
+        "type": "credit",
+        "description": "Delivery payout for order 6a58cf96388f6caac6297fd3",
+        "settledAt": "2026-07-16T12:38:28.232Z",
+        "_id": "6a58d0c4388f6caac6298115"
+      },
+      {
+        "orderId": "6a58d3a9388f6caac62982ff",
+        "amount": 15,
+        "type": "credit",
+        "description": "Delivery payout for order 6a58d3a9388f6caac62982ff",
+        "settledAt": "2026-07-16T12:57:27.026Z",
+        "_id": "6a58d537388f6caac6298549"
+      }
+    ],
+    "paidAt": null,
+    "incentivesEarned": [],
+    "createdAt": "2026-07-12T18:42:21.584Z",
+    "updatedAt": "2026-07-20T21:00:00.045Z",
+    "__v": 0
+  },
+  {
+    "_id": "6a7da7afa2e4e5d9bc75f6d6",
+    "ownerId": "6a45776e80bbd764a88a440b",
+    "ownerType": "rider",
+    "weekStart": "2026-08-09T18:30:00.000Z",
+    "__v": 0,
+    "adminDeduction": {
+      "amount": 0,
+      "reason": ""
+    },
+    "cancelledOrders": 0,
+    "completedOrders": 1,
+    "createdAt": "2026-08-13T11:17:03.093Z",
+    "finalAmount": 15,
+    "incentivesEarned": [],
+    "netPayout": 15,
+    "orders": [
+      {
+        "orderId": "6a7da62a16fd4cefaea09faa",
+        "amount": 15,
+        "type": "credit",
+        "description": "Delivery payout for order 6a7da62a16fd4cefaea09faa",
+        "settledAt": "2026-08-13T11:17:03.092Z",
+        "_id": "6a7da7af2ce0c29a9b06fcf3"
+      }
+    ],
+    "paidAt": null,
+    "status": "finalized",
+    "totalDeductions": 0,
+    "totalEarnings": 15,
+    "totalIncentive": 0,
+    "updatedAt": "2026-08-17T21:00:00.033Z",
+    "weekEnd": "2026-08-16T18:29:59.999Z"
+  },
+  {
+    "_id": "6a9d37bd6a31bdbf9c8bb258",
+    "ownerId": "6a45776e80bbd764a88a440b",
+    "weekStart": "2026-08-30T18:30:00.000Z",
+    "ownerType": "rider",
+    "__v": 0,
+    "adminDeduction": {
+      "amount": 0,
+      "reason": ""
+    },
+    "cancelledOrders": 0,
+    "completedOrders": 2,
+    "createdAt": "2026-09-06T09:51:56.804Z",
+    "finalAmount": 44,
+    "incentivesEarned": [],
+    "netPayout": 44,
+    "orders": [
+      {
+        "orderId": "6a9d35e5bafc5096257e4995",
+        "amount": 12,
+        "type": "credit",
+        "description": "Delivery payout for order 6a9d35e5bafc5096257e4995",
+        "settledAt": "2026-09-06T09:51:56.803Z",
+        "_id": "6a9d37bcbafc5096257e4c45"
+      },
+      {
+        "orderId": "6a9d53559febaff7cc45895a",
+        "amount": 32,
+        "type": "credit",
+        "description": "Delivery payout for order 6a9d53559febaff7cc45895a",
+        "settledAt": "2026-09-06T11:58:31.158Z",
+        "_id": "6a9d55671b214f690344bca7"
+      }
+    ],
+    "paidAt": null,
+    "status": "finalized",
+    "totalDeductions": 0,
+    "totalEarnings": 44,
+    "totalIncentive": 0,
+    "updatedAt": "2026-09-07T21:00:00.027Z",
+    "weekEnd": "2026-09-06T18:29:59.999Z"
+  },
+  {
+    "_id": "6a9e9c646a31bdbf9c8bef0d",
+    "ownerId": "6a45776e80bbd764a88a440b",
+    "weekStart": "2026-09-06T18:30:00.000Z",
+    "ownerType": "rider",
+    "__v": 0,
+    "adminDeduction": {
+      "amount": 0,
+      "reason": ""
+    },
+    "cancelledOrders": 0,
+    "completedOrders": 13,
+    "createdAt": "2026-09-07T11:13:38.554Z",
+    "finalAmount": 256,
+    "incentivesEarned": [],
+    "netPayout": 256,
+    "orders": [
+      {
+        "orderId": "6a9d59bde0e2e985db94d62d",
+        "amount": 32,
+        "type": "credit",
+        "description": "Delivery payout for order 6a9d59bde0e2e985db94d62d",
+        "settledAt": "2026-09-07T11:13:38.554Z",
+        "_id": "6a9e9c62dd3acccb131a81bf"
+      },
+      {
+        "orderId": "6a9ea31cedcd2fa5b3a287c3",
+        "amount": 12,
+        "type": "credit",
+        "description": "Delivery payout for order 6a9ea31cedcd2fa5b3a287c3",
+        "settledAt": "2026-09-07T11:45:58.859Z",
+        "_id": "6a9ea3f6edcd2fa5b3a28a78"
+      },
+      {
+        "orderId": "6a9eab211bb8e331e2da1a47",
+        "amount": 32,
+        "type": "credit",
+        "description": "Delivery payout for order 6a9eab211bb8e331e2da1a47",
+        "settledAt": "2026-09-07T12:19:44.279Z",
+        "_id": "6a9eabe01bb8e331e2da1cd2"
+      },
+      {
+        "orderId": "6a9eb033314b33cab4cb1110",
+        "amount": 32,
+        "type": "credit",
+        "description": "Delivery payout for order 6a9eb033314b33cab4cb1110",
+        "settledAt": "2026-09-07T12:40:55.497Z",
+        "_id": "6a9eb0d7314b33cab4cb13bc"
+      },
+      {
+        "orderId": "6a9eb128314b33cab4cb1470",
+        "amount": 12,
+        "type": "credit",
+        "description": "Delivery payout for order 6a9eb128314b33cab4cb1470",
+        "settledAt": "2026-09-07T12:44:46.827Z",
+        "_id": "6a9eb1be314b33cab4cb16ea"
+      },
+      {
+        "orderId": "6a9eb5849218f6e4cb634567",
+        "amount": 12,
+        "type": "credit",
+        "description": "Delivery payout for order 6a9eb5849218f6e4cb634567",
+        "settledAt": "2026-09-07T13:03:27.918Z",
+        "_id": "6a9eb61f9218f6e4cb6346c8"
+      },
+      {
+        "orderId": "6a9ec4784d51e46e921c96cc",
+        "amount": 0,
+        "type": "credit",
+        "description": "Delivery for order 6a9ec4784d51e46e921c96cc (Collected ₹32 directly from customer via QR)",
+        "settledAt": "2026-09-07T14:07:23.889Z",
+        "_id": "6a9ec51b4d51e46e921c9928"
+      },
+      {
+        "orderId": "6a9f535264f9cfea764e412b",
+        "amount": 30,
+        "type": "credit",
+        "description": "Delivery payout for order 6a9f535264f9cfea764e412b",
+        "settledAt": "2026-09-08T00:26:05.516Z",
+        "_id": "6a9f561d6c235985abe1f6e2"
+      },
+      {
+        "orderId": "6aa08d2dd41b32d1927a09b4",
+        "amount": 12,
+        "type": "credit",
+        "description": "Delivery payout for order 6aa08d2dd41b32d1927a09b4",
+        "settledAt": "2026-09-08T22:50:14.699Z",
+        "_id": "6aa09126d41b32d1927a0fdd"
+      },
+      {
+        "orderId": "6aa09ad5d41b32d1927a11ec",
+        "amount": 12,
+        "type": "credit",
+        "description": "Delivery payout for order 6aa09ad5d41b32d1927a11ec",
+        "settledAt": "2026-09-08T23:58:10.938Z",
+        "_id": "6aa0a112a010fd41f941b7b0"
+      },
+      {
+        "orderId": "6aa15b1afed84f1ecb7a47b2",
+        "amount": 12,
+        "type": "credit",
+        "description": "Delivery payout for order 6aa15b1afed84f1ecb7a47b2",
+        "settledAt": "2026-09-09T13:22:20.515Z",
+        "_id": "6aa15d8cfed84f1ecb7a58a3"
+      },
+      {
+        "orderId": "6aa192f64f18a949e6b15b90",
+        "amount": 46,
+        "type": "credit",
+        "description": "Delivery payout for order 6aa192f64f18a949e6b15b90",
+        "settledAt": "2026-09-09T17:36:46.931Z",
+        "_id": "6aa1992e4f18a949e6b186d1"
+      },
+      {
+        "orderId": "6aa41404af134cf27b9e2b0b",
+        "amount": 12,
+        "type": "credit",
+        "description": "Delivery payout for order 6aa41404af134cf27b9e2b0b",
+        "settledAt": "2026-09-11T15:07:31.000Z",
+        "_id": "6aa41933b474ae9c41c28d01"
+      }
+    ],
+    "paidAt": null,
+    "status": "finalized",
+    "totalDeductions": 0,
+    "totalEarnings": 256,
+    "totalIncentive": 0,
+    "updatedAt": "2026-09-14T21:00:00.032Z",
+    "weekEnd": "2026-09-13T18:29:59.999Z"
+  },
+  {
+    "_id": "6aa41933897ed38dd12a4399",
+    "ownerType": "merchant",
+    "weekStart": "2026-09-06T18:30:00.000Z",
+    "ownerId": "6a52c077f5d225d81a327965",
+    "__v": 0,
+    "adminDeduction": {
+      "amount": 0,
+      "reason": ""
+    },
+    "cancelledOrders": 0,
+    "completedOrders": 0,
+    "createdAt": "2026-09-11T15:07:30.953Z",
+    "finalAmount": -12,
+    "incentivesEarned": [],
+    "netPayout": -12,
+    "orders": [
+      {
+        "orderId": "6aa41404af134cf27b9e2b0b",
+        "amount": 12,
+        "type": "debit",
+        "description": "Discount cost for order 6aa41404af134cf27b9e2b0b",
+        "settledAt": "2026-09-11T15:07:30.953Z",
+        "_id": "6aa41932b474ae9c41c28cfe"
+      }
+    ],
+    "paidAt": null,
+    "status": "finalized",
+    "totalDeductions": 12,
+    "totalEarnings": 0,
+    "totalIncentive": 0,
+    "updatedAt": "2026-09-14T21:00:00.057Z",
+    "weekEnd": "2026-09-13T18:29:59.999Z"
+  },
+  {
+    "_id": "6aa91a21897ed38dd12b0437",
+    "ownerType": "rider",
+    "ownerId": "6a45776e80bbd764a88a440b",
+    "weekStart": "2026-09-13T18:30:00.000Z",
+    "__v": 0,
+    "adminDeduction": {
+      "amount": 0,
+      "reason": ""
+    },
+    "cancelledOrders": 0,
+    "completedOrders": 3,
+    "createdAt": "2026-09-15T10:12:47.217Z",
+    "finalAmount": 93,
+    "incentivesEarned": [],
+    "netPayout": 93,
+    "orders": [
+      {
+        "orderId": "6aa9185bb18a0a26e1415b3f",
+        "amount": 15,
+        "type": "credit",
+        "description": "Delivery payout for order 6aa9185bb18a0a26e1415b3f",
+        "settledAt": "2026-09-15T10:12:47.217Z",
+        "_id": "6aa91a1fb18a0a26e1415e26"
+      },
+      {
+        "orderId": "6aadb1b28173d1fd6833d496",
+        "amount": 66,
+        "type": "credit",
+        "description": "Delivery payout for order 6aadb1b28173d1fd6833d496",
+        "settledAt": "2026-09-18T22:57:18.869Z",
+        "_id": "6aadc1ce32f816f374640a64"
+      },
+      {
+        "orderId": "6aae569d4fefb9da44d71769",
+        "amount": 12,
+        "type": "credit",
+        "description": "Delivery payout for order 6aae569d4fefb9da44d71769",
+        "settledAt": "2026-09-19T09:36:23.353Z",
+        "_id": "6aae57974fefb9da44d71924"
+      }
+    ],
+    "paidAt": null,
+    "status": "finalized",
+    "totalDeductions": 0,
+    "totalEarnings": 93,
+    "totalIncentive": 0,
+    "updatedAt": "2026-09-21T21:00:00.051Z",
+    "weekEnd": "2026-09-20T18:29:59.999Z"
+  },
+  {
+    "_id": "6ab145f8897ed38dd12c3f8c",
+    "ownerType": "rider",
+    "ownerId": "6a45776e80bbd764a88a440b",
+    "weekStart": "2026-09-20T18:30:00.000Z",
+    "__v": 0,
+    "adminDeduction": {
+      "amount": 0,
+      "reason": ""
+    },
+    "cancelledOrders": 0,
+    "completedOrders": 2,
+    "createdAt": "2026-09-21T14:57:59.692Z",
+    "finalAmount": 28,
+    "incentivesEarned": [],
+    "netPayout": 28,
+    "orders": [
+      {
+        "orderId": "6ab14576964a5cdeffc47f1d",
+        "amount": 14,
+        "type": "credit",
+        "description": "Delivery payout for order 6ab14576964a5cdeffc47f1d",
+        "settledAt": "2026-09-21T14:57:59.691Z",
+        "_id": "6ab145f7964a5cdeffc4803a"
+      },
+      {
+        "orderId": "6ab7f74b65f954301400099d",
+        "amount": 14,
+        "type": "credit",
+        "description": "Delivery payout for order 6ab7f74b65f954301400099d",
+        "settledAt": "2026-09-26T16:56:04.540Z",
+        "_id": "6ab7f92465f9543014000c4a"
+      }
+    ],
+    "paidAt": null,
+    "status": "finalized",
+    "totalDeductions": 0,
+    "totalEarnings": 28,
+    "totalIncentive": 0,
+    "updatedAt": "2026-09-28T21:00:00.039Z",
+    "weekEnd": "2026-09-27T18:29:59.999Z"
+  },
+  {
+    "_id": "6aba6e67897ed38dd12f6e5c",
+    "ownerType": "rider",
+    "weekStart": "2026-09-27T18:30:00.000Z",
+    "ownerId": "6a45776e80bbd764a88a440b",
+    "__v": 0,
+    "adminDeduction": {
+      "amount": 0,
+      "reason": ""
+    },
+    "cancelledOrders": 0,
+    "completedOrders": 1,
+    "createdAt": "2026-09-28T13:40:55.037Z",
+    "finalAmount": 118,
+    "incentivesEarned": [],
+    "netPayout": 118,
+    "orders": [
+      {
+        "orderId": "6ab9b0ad3428d97b03724efd",
+        "amount": 118,
+        "type": "credit",
+        "description": "Delivery payout for order 6ab9b0ad3428d97b03724efd",
+        "settledAt": "2026-09-28T13:40:55.037Z",
+        "_id": "6aba6e6760eed84bd77ab1c0"
+      }
+    ],
+    "paidAt": null,
+    "status": "finalized",
+    "totalDeductions": 0,
+    "totalEarnings": 118,
+    "totalIncentive": 0,
+    "updatedAt": "2026-10-05T20:30:00.151Z",
+    "weekEnd": "2026-10-04T18:29:59.999Z"
+  },
+  {
+    "_id": "6ac971a65e5b16efe47b39c5",
+    "ownerId": "6a52c077f5d225d81a327965",
+    "ownerType": "merchant",
+    "weekStart": "2026-10-04T18:30:00.000Z",
+    "__v": 0,
+    "adminDeduction": {
+      "amount": 0,
+      "reason": ""
+    },
+    "cancelledOrders": 0,
+    "completedOrders": 1,
+    "createdAt": "2026-10-09T22:58:46.647Z",
+    "finalAmount": 0,
+    "incentivesEarned": [],
+    "netPayout": 4.8,
+    "notes": "",
+    "orders": [
+      {
+        "orderId": "6ac9639f414b0fa74eb7639e",
+        "orderModel": "Order",
+        "amount": 4.8,
+        "type": "credit",
+        "grossAmount": 5,
+        "commissionRate": 4,
+        "commissionAmount": 0.2,
+        "merchantDiscount": 0,
+        "description": "Payout for order #B7639E (1 item purchased)",
+        "settledAt": "2026-10-09T22:58:46.646Z",
+        "_id": "6ac971a670146b3efd35a2f8"
+      }
+    ],
+    "paidAt": null,
+    "paymentMethod": "bank_transfer",
+    "receipt": {
+      "public_id": null,
+      "url": null
+    },
+    "referenceNumber": null,
+    "status": "accumulating",
+    "totalCommission": 0.2,
+    "totalDeductions": 0,
+    "totalEarnings": 4.8,
+    "totalGrossSales": 5,
+    "totalIncentive": 0,
+    "transactionId": null,
+    "updatedAt": "2026-10-09T22:58:46.647Z",
+    "weekEnd": "2026-10-11T18:29:59.999Z"
+  },
+  {
+    "_id": "6ac971a65e5b16efe47b39c6",
+    "ownerType": "rider",
+    "weekStart": "2026-10-04T18:30:00.000Z",
+    "ownerId": "6a45776e80bbd764a88a440b",
+    "__v": 0,
+    "adminDeduction": {
+      "amount": 0,
+      "reason": ""
+    },
+    "cancelledOrders": 0,
+    "completedOrders": 1,
+    "createdAt": "2026-10-09T22:58:46.823Z",
+    "finalAmount": 0,
+    "incentivesEarned": [],
+    "netPayout": 29,
+    "notes": "",
+    "orders": [
+      {
+        "orderId": "6ac9639f414b0fa74eb7639e",
+        "orderModel": "Order",
+        "amount": 29,
+        "type": "credit",
+        "grossAmount": 0,
+        "commissionRate": 4,
+        "commissionAmount": 0,
+        "merchantDiscount": 0,
+        "description": "Delivery payout for order 6ac9639f414b0fa74eb7639e",
+        "settledAt": "2026-10-09T22:58:46.823Z",
+        "_id": "6ac971a670146b3efd35a30d"
+      }
+    ],
+    "paidAt": null,
+    "paymentMethod": "bank_transfer",
+    "receipt": {
+      "public_id": null,
+      "url": null
+    },
+    "referenceNumber": null,
+    "status": "accumulating",
+    "totalCommission": 0,
+    "totalDeductions": 0,
+    "totalEarnings": 29,
+    "totalGrossSales": 0,
+    "totalIncentive": 0,
+    "transactionId": null,
+    "updatedAt": "2026-10-09T22:58:46.904Z",
+    "weekEnd": "2026-10-11T18:29:59.999Z"
+  }
+]

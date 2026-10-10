@@ -1,0 +1,892 @@
+[
+  {
+    "_id": "6a9f459517b464f8ba36b678",
+    "userId": "6a4900efea78373da07b4c7d",
+    "warehouseId": "6a5e4d630906bf3164ab4db5",
+    "warehouseDetails": {
+      "name": "Flashfits Kaloor",
+      "code": "WH-A33E4DA4"
+    },
+    "sourceMerchantId": "6a52c077f5d225d81a327965",
+    "merchantDetails": {
+      "name": "SB Fashion",
+      "phone": "8383823813"
+    },
+    "fulfillmentType": "try_and_buy",
+    "items": [
+      {
+        "warehouseProductId": "6a9d4785319820f47b26adb7",
+        "variantId": "6a9d4785319820f47b26adb8",
+        "name": "Baggy Denim Jeans",
+        "quantity": 1,
+        "price": 1800,
+        "size": "L",
+        "image": "https://res.cloudinary.com/dpmliygpg/image/upload/v1785770490/products/kpjjqu8eh90yjbxyyq97.jpg",
+        "tryStatus": "pending",
+        "returnReason": null,
+        "_id": "6a9f459517b464f8ba36b679"
+      }
+    ],
+    "totalAmount": 1800,
+    "commissionRate": 10,
+    "commissionAmount": 180,
+    "merchantPayout": 1620,
+    "finalBilling": {
+      "baseAmount": 1800,
+      "serviceGST": 0,
+      "deliveryTip": 20,
+      "totalPayable": 1830,
+      "tryAndBuyFee": 0,
+      "gst": 0,
+      "discount": 0,
+      "deliveryCharge": 0
+    },
+    "deliveryCharge": 10,
+    "returnCharge": 0,
+    "originalDeliveryCharge": 10,
+    "originalReturnCharge": 0,
+    "waitingTimeCharge": 0,
+    "deliveryDistance": 0,
+    "estimatedTime": 35,
+    "orderStatus": "cancelled",
+    "customerDeliveryStatus": "cancelled",
+    "paymentStatus": "refunded",
+    "paymentMethod": "online",
+    "deliveryRiderId": null,
+    "deliveryRiderDetails": {
+      "name": null,
+      "phone": null
+    },
+    "deliveryRiderStatus": "cancelled",
+    "otp": null,
+    "trialPhaseStart": null,
+    "trialPhaseEnd": null,
+    "trialPhaseDuration": 0,
+    "overtimePenalty": 0,
+    "deliveryLocation": {
+      "name": "Shubham",
+      "phone": "8383823813",
+      "addressLine1": "72/1533",
+      "addressLine2": "Veed",
+      "landmark": "Ss",
+      "city": "Ernakulam",
+      "state": "Kerala",
+      "pincode": "682026",
+      "country": "India",
+      "addressType": "Home",
+      "coordinates": [
+        76.289137,
+        10.0072269
+      ]
+    },
+    "pickupLocation": {
+      "coordinates": [
+        76.289138,
+        10.007182
+      ]
+    },
+    "trackingDetails": {
+      "trackingId": null,
+      "courierPartner": null,
+      "trackingUrl": null,
+      "estimatedDelivery": null
+    },
+    "deliveredAt": null,
+    "returnRequest": {
+      "status": "none",
+      "reason": null,
+      "requestedAt": null,
+      "items": []
+    },
+    "razorpayOrderId": "free_1788822933646",
+    "razorpayPaymentId": null,
+    "settlementStatus": "unsettled",
+    "reason": "Admin approved cancellation request",
+    "cancellationRequest": "approved",
+    "cancellationRequestReason": "sss",
+    "appliedOffers": [],
+    "returnPhotos": [],
+    "packingPhotos": [],
+    "createdAt": "2026-09-07T23:15:33.657Z",
+    "updatedAt": "2026-09-08T00:12:06.699Z",
+    "__v": 0,
+    "riderUnresponsiveReport": {
+      "reportedAt": "2026-09-07T23:48:37.863Z",
+      "status": "pending"
+    }
+  },
+  {
+    "_id": "6a9f535264f9cfea764e412b",
+    "userId": "6a4900efea78373da07b4c7d",
+    "warehouseId": "6a5e4d630906bf3164ab4db5",
+    "warehouseDetails": {
+      "name": "Flashfits Kaloor",
+      "code": "WH-A33E4DA4"
+    },
+    "sourceMerchantId": "6a52c077f5d225d81a327965",
+    "merchantDetails": {
+      "name": "SB Fashion",
+      "phone": "8383823813"
+    },
+    "fulfillmentType": "try_and_buy",
+    "items": [
+      {
+        "warehouseProductId": "6a9d4785319820f47b26adb7",
+        "variantId": "6a9d4785319820f47b26adb8",
+        "name": "Baggy Denim Jeans",
+        "quantity": 1,
+        "price": 1800,
+        "size": "L",
+        "image": "https://res.cloudinary.com/dpmliygpg/image/upload/v1785770490/products/kpjjqu8eh90yjbxyyq97.jpg",
+        "tryStatus": "returned",
+        "returnReason": "Not liked",
+        "_id": "6a9f535264f9cfea764e412c"
+      }
+    ],
+    "totalAmount": 1800,
+    "commissionRate": 10,
+    "commissionAmount": 180,
+    "merchantPayout": 1620,
+    "finalBilling": {
+      "baseAmount": 1800,
+      "serviceGST": 0,
+      "deliveryTip": 20,
+      "totalPayable": 1830,
+      "tryAndBuyFee": 0,
+      "gst": 0,
+      "discount": 0,
+      "deliveryCharge": 0
+    },
+    "deliveryCharge": 10,
+    "returnCharge": 0,
+    "originalDeliveryCharge": 10,
+    "originalReturnCharge": 0,
+    "waitingTimeCharge": 0,
+    "deliveryDistance": 0,
+    "estimatedTime": 35,
+    "orderStatus": "cancelled",
+    "customerDeliveryStatus": "cancelled",
+    "paymentStatus": "refunded",
+    "paymentMethod": "online",
+    "deliveryRiderId": "6a45776e80bbd764a88a440b",
+    "deliveryRiderDetails": {
+      "name": "Shubham",
+      "phone": "8383823813"
+    },
+    "deliveryRiderStatus": "cancelled",
+    "otp": "1782",
+    "trialPhaseStart": "2026-09-08T00:25:44.832Z",
+    "trialPhaseEnd": null,
+    "trialPhaseDuration": 30,
+    "overtimePenalty": 0,
+    "deliveryLocation": {
+      "name": "Shubham",
+      "phone": "8383823813",
+      "addressLine1": "72/1533",
+      "addressLine2": "Veed",
+      "landmark": "Ss",
+      "city": "Ernakulam",
+      "state": "Kerala",
+      "pincode": "682026",
+      "country": "India",
+      "addressType": "Home",
+      "coordinates": [
+        76.289137,
+        10.0072269
+      ]
+    },
+    "pickupLocation": {
+      "coordinates": [
+        76.289138,
+        10.007182
+      ]
+    },
+    "trackingDetails": {
+      "trackingId": null,
+      "courierPartner": null,
+      "trackingUrl": null,
+      "estimatedDelivery": null
+    },
+    "deliveredAt": null,
+    "returnRequest": {
+      "status": "none",
+      "reason": null,
+      "requestedAt": null,
+      "items": []
+    },
+    "razorpayOrderId": "free_1788826450762",
+    "razorpayPaymentId": null,
+    "settlementStatus": "settled",
+    "reason": "Admin approved cancellation request",
+    "cancellationRequest": "approved",
+    "cancellationRequestReason": "ss",
+    "riderUnresponsiveReport": {
+      "status": "pending",
+      "reportedAt": "2026-09-08T00:14:10.765Z"
+    },
+    "appliedOffers": [],
+    "returnPhotos": [],
+    "packingPhotos": [],
+    "createdAt": "2026-09-08T00:14:10.766Z",
+    "updatedAt": "2026-09-08T11:46:20.031Z",
+    "__v": 0
+  },
+  {
+    "_id": "6ab04d6f966490317e23060f",
+    "userId": "6a4900efea78373da07b4c7d",
+    "warehouseId": "6a5e4d630906bf3164ab4db5",
+    "warehouseDetails": {
+      "name": "Flashfits Kaloor",
+      "code": "WH-A33E4DA4"
+    },
+    "sourceMerchantId": "6aa17e8fdbaf8b6cf8cf75a8",
+    "merchantDetails": {
+      "name": "Calsio Club",
+      "phone": "8383823813"
+    },
+    "fulfillmentType": "try_and_buy",
+    "items": [
+      {
+        "warehouseProductId": "6aac5fa52b6e0dcf9badf14e",
+        "variantId": "6aac5fa52b6e0dcf9badf14f",
+        "name": "Liverpool Vintage Carlsberg Floral Embroidered Jersey",
+        "quantity": 1,
+        "price": 1499,
+        "size": "S",
+        "image": "https://res.cloudinary.com/dpmliygpg/image/upload/v1789681569/products/agalswavrbbosnntdtms.jpg",
+        "tryStatus": "pending",
+        "returnReason": null,
+        "_id": "6ab04d6f966490317e230610"
+      }
+    ],
+    "totalAmount": 1499,
+    "commissionRate": 10,
+    "commissionAmount": 150,
+    "merchantPayout": 1349,
+    "finalBilling": {
+      "baseAmount": 1499,
+      "serviceGST": 0,
+      "deliveryTip": 0,
+      "totalPayable": 1509,
+      "tryAndBuyFee": 0,
+      "gst": 0,
+      "discount": 0,
+      "deliveryCharge": 0
+    },
+    "deliveryCharge": 10,
+    "returnCharge": 0,
+    "originalDeliveryCharge": 10,
+    "originalReturnCharge": 0,
+    "waitingTimeCharge": 0,
+    "deliveryDistance": 0,
+    "estimatedTime": 35,
+    "orderStatus": "cancelled",
+    "customerDeliveryStatus": "cancelled",
+    "paymentStatus": "delivery_fee_paid",
+    "paymentMethod": "online",
+    "deliveryRiderId": null,
+    "deliveryRiderDetails": {
+      "name": null,
+      "phone": null
+    },
+    "deliveryRiderStatus": "cancelled",
+    "otp": null,
+    "trialPhaseStart": null,
+    "trialPhaseEnd": null,
+    "trialPhaseDuration": 0,
+    "overtimePenalty": 0,
+    "photoVerified": false,
+    "deliveryLocation": {
+      "name": "Shubham",
+      "phone": "8383823813",
+      "addressLine1": "72/1533",
+      "addressLine2": "Veed",
+      "landmark": "Ss",
+      "city": "Ernakulam",
+      "state": "Kerala",
+      "pincode": "682026",
+      "country": "India",
+      "addressType": "Home",
+      "coordinates": [
+        76.289137,
+        10.0072269
+      ]
+    },
+    "pickupLocation": {
+      "coordinates": [
+        76.289138,
+        10.007182
+      ]
+    },
+    "trackingDetails": {
+      "trackingId": null,
+      "courierPartner": null,
+      "trackingUrl": null,
+      "estimatedDelivery": null
+    },
+    "deliveredAt": null,
+    "returnRequest": {
+      "status": "none",
+      "reason": null,
+      "requestedAt": null,
+      "items": []
+    },
+    "razorpayOrderId": "free_1789939055769",
+    "razorpayPaymentId": null,
+    "settlementStatus": "unsettled",
+    "reason": "Admin approved cancellation request",
+    "cancellationRequest": "approved",
+    "cancellationRequestReason": "ss",
+    "riderUnresponsiveReport": {
+      "status": "pending",
+      "reportedAt": "2026-09-20T21:17:35.772Z"
+    },
+    "appliedOffers": [],
+    "returnPhotos": [],
+    "packingPhotos": [],
+    "createdAt": "2026-09-20T21:17:35.773Z",
+    "updatedAt": "2026-09-21T09:04:31.697Z",
+    "__v": 0
+  },
+  {
+    "_id": "6ab16efc966490317e233615",
+    "userId": "6aa965f1ffb7042723332bd7",
+    "warehouseId": "6a5e4d630906bf3164ab4db5",
+    "warehouseDetails": {
+      "name": "Flashfits Kaloor",
+      "code": "WH-A33E4DA4"
+    },
+    "sourceMerchantId": "6a52c077f5d225d81a327965",
+    "merchantDetails": {
+      "name": "SB Fashion",
+      "phone": "8383823813"
+    },
+    "fulfillmentType": "try_and_buy",
+    "items": [
+      {
+        "warehouseProductId": "6a9d4785319820f47b26adb7",
+        "variantId": "6a9d4785319820f47b26adb8",
+        "name": "Baggy Denim Jeans",
+        "quantity": 1,
+        "price": 1800,
+        "size": "L",
+        "image": "https://res.cloudinary.com/dpmliygpg/image/upload/v1785770490/products/kpjjqu8eh90yjbxyyq97.jpg",
+        "tryStatus": "pending",
+        "returnReason": null,
+        "_id": "6ab16efc966490317e233616"
+      },
+      {
+        "warehouseProductId": "6a9d4785319820f47b26adb7",
+        "variantId": "6a9d4785319820f47b26adb8",
+        "name": "Baggy Denim Jeans",
+        "quantity": 1,
+        "price": 1800,
+        "size": "L",
+        "image": "https://res.cloudinary.com/dpmliygpg/image/upload/v1785770490/products/kpjjqu8eh90yjbxyyq97.jpg",
+        "tryStatus": "pending",
+        "returnReason": null,
+        "_id": "6ab16efc966490317e233617"
+      },
+      {
+        "warehouseProductId": "6a9d4785319820f47b26adb7",
+        "variantId": "6a9d4785319820f47b26adb8",
+        "name": "Baggy Denim Jeans",
+        "quantity": 1,
+        "price": 1800,
+        "size": "L",
+        "image": "https://res.cloudinary.com/dpmliygpg/image/upload/v1785770490/products/kpjjqu8eh90yjbxyyq97.jpg",
+        "tryStatus": "pending",
+        "returnReason": null,
+        "_id": "6ab16efc966490317e233618"
+      },
+      {
+        "warehouseProductId": "6a9d4785319820f47b26adb7",
+        "variantId": "6a9d4785319820f47b26adb8",
+        "name": "Baggy Denim Jeans",
+        "quantity": 1,
+        "price": 1800,
+        "size": "L",
+        "image": "https://res.cloudinary.com/dpmliygpg/image/upload/v1785770490/products/kpjjqu8eh90yjbxyyq97.jpg",
+        "tryStatus": "pending",
+        "returnReason": null,
+        "_id": "6ab16efc966490317e233619"
+      },
+      {
+        "warehouseProductId": "6a9d4785319820f47b26adb7",
+        "variantId": "6a9d4785319820f47b26adb8",
+        "name": "Baggy Denim Jeans",
+        "quantity": 1,
+        "price": 1800,
+        "size": "L",
+        "image": "https://res.cloudinary.com/dpmliygpg/image/upload/v1785770490/products/kpjjqu8eh90yjbxyyq97.jpg",
+        "tryStatus": "pending",
+        "returnReason": null,
+        "_id": "6ab16efc966490317e23361a"
+      }
+    ],
+    "totalAmount": 9000,
+    "commissionRate": 10,
+    "commissionAmount": 900,
+    "merchantPayout": 8100,
+    "finalBilling": {
+      "baseAmount": 9000,
+      "serviceGST": 0,
+      "deliveryTip": 0,
+      "totalPayable": 9184,
+      "tryAndBuyFee": 0,
+      "gst": 0,
+      "discount": 0,
+      "deliveryCharge": 0
+    },
+    "deliveryCharge": 120,
+    "returnCharge": 64,
+    "originalDeliveryCharge": 120,
+    "originalReturnCharge": 64,
+    "waitingTimeCharge": 0,
+    "deliveryDistance": 9.14,
+    "estimatedTime": 30,
+    "orderStatus": "cancelled",
+    "customerDeliveryStatus": "cancelled",
+    "paymentStatus": "delivery_fee_paid",
+    "paymentMethod": "online",
+    "deliveryRiderId": null,
+    "deliveryRiderDetails": {
+      "name": null,
+      "phone": null
+    },
+    "deliveryRiderStatus": "cancelled",
+    "otp": null,
+    "trialPhaseStart": null,
+    "trialPhaseEnd": null,
+    "trialPhaseDuration": 0,
+    "overtimePenalty": 0,
+    "photoVerified": false,
+    "deliveryLocation": {
+      "name": "Efron",
+      "phone": "8138834116",
+      "addressLine1": "Kachipuly",
+      "addressLine2": "Yem",
+      "landmark": "Tuwn",
+      "city": "Ernakulam",
+      "state": "Kerala",
+      "pincode": "682306",
+      "country": "India",
+      "addressType": "Home",
+      "coordinates": [
+        76.33634448051453,
+        9.97320412258985
+      ]
+    },
+    "pickupLocation": {
+      "coordinates": [
+        76.289138,
+        10.007182
+      ]
+    },
+    "trackingDetails": {
+      "trackingId": null,
+      "courierPartner": null,
+      "trackingUrl": null,
+      "estimatedDelivery": null
+    },
+    "deliveredAt": null,
+    "returnRequest": {
+      "status": "none",
+      "reason": null,
+      "requestedAt": null,
+      "items": []
+    },
+    "razorpayOrderId": "free_1790013180447",
+    "razorpayPaymentId": null,
+    "settlementStatus": "unsettled",
+    "reason": "Admin approved cancellation request",
+    "cancellationRequest": "approved",
+    "cancellationRequestReason": "sdf",
+    "riderUnresponsiveReport": {
+      "status": "pending",
+      "reportedAt": "2026-09-21T17:53:00.451Z"
+    },
+    "appliedOffers": [],
+    "returnPhotos": [],
+    "packingPhotos": [],
+    "createdAt": "2026-09-21T17:53:00.452Z",
+    "updatedAt": "2026-09-21T18:12:21.031Z",
+    "__v": 0
+  },
+  {
+    "_id": "6ab295487dc612397c5ae0a4",
+    "userId": "6aa965f1ffb7042723332bd7",
+    "warehouseId": "6a5e4d630906bf3164ab4db5",
+    "warehouseDetails": {
+      "name": "Flashfits Kaloor",
+      "code": "WH-A33E4DA4"
+    },
+    "sourceMerchantId": "6a52c077f5d225d81a327965",
+    "merchantDetails": {
+      "name": "SB Fashion",
+      "phone": "8383823813"
+    },
+    "fulfillmentType": "try_and_buy",
+    "items": [
+      {
+        "warehouseProductId": "6a9d4785319820f47b26adb7",
+        "variantId": "6a9d4785319820f47b26adb8",
+        "name": "Baggy Denim Jeans",
+        "quantity": 1,
+        "price": 1800,
+        "size": "L",
+        "image": "https://res.cloudinary.com/dpmliygpg/image/upload/v1785770490/products/kpjjqu8eh90yjbxyyq97.jpg",
+        "tryStatus": "pending",
+        "returnReason": null,
+        "_id": "6ab295487dc612397c5ae0a5"
+      },
+      {
+        "warehouseProductId": "6a9d4785319820f47b26adb7",
+        "variantId": "6a9d4785319820f47b26adb8",
+        "name": "Baggy Denim Jeans",
+        "quantity": 1,
+        "price": 1800,
+        "size": "L",
+        "image": "https://res.cloudinary.com/dpmliygpg/image/upload/v1785770490/products/kpjjqu8eh90yjbxyyq97.jpg",
+        "tryStatus": "pending",
+        "returnReason": null,
+        "_id": "6ab295487dc612397c5ae0a6"
+      }
+    ],
+    "totalAmount": 3600,
+    "commissionRate": 10,
+    "commissionAmount": 360,
+    "merchantPayout": 3240,
+    "finalBilling": {
+      "baseAmount": 3600,
+      "serviceGST": 0,
+      "deliveryTip": 0,
+      "totalPayable": 3784,
+      "tryAndBuyFee": 0,
+      "gst": 0,
+      "discount": 0,
+      "deliveryCharge": 0
+    },
+    "deliveryCharge": 120,
+    "returnCharge": 64,
+    "originalDeliveryCharge": 120,
+    "originalReturnCharge": 64,
+    "waitingTimeCharge": 0,
+    "deliveryDistance": 9.14,
+    "estimatedTime": 30,
+    "orderStatus": "cancelled",
+    "customerDeliveryStatus": "cancelled",
+    "paymentStatus": "delivery_fee_paid",
+    "paymentMethod": "online",
+    "deliveryRiderId": "6a45776e80bbd764a88a440b",
+    "deliveryRiderDetails": {
+      "name": "Shubham",
+      "phone": "8383823813"
+    },
+    "deliveryRiderStatus": "cancelled",
+    "otp": "7363",
+    "trialPhaseStart": null,
+    "trialPhaseEnd": null,
+    "trialPhaseDuration": 0,
+    "overtimePenalty": 0,
+    "photoVerified": false,
+    "deliveryLocation": {
+      "name": "Efron",
+      "phone": "8138834116",
+      "addressLine1": "Kachipuly",
+      "addressLine2": "Yem",
+      "landmark": "Tuwn",
+      "city": "Ernakulam",
+      "state": "Kerala",
+      "pincode": "682306",
+      "country": "India",
+      "addressType": "Home",
+      "coordinates": [
+        76.33634448051453,
+        9.97320412258985
+      ]
+    },
+    "pickupLocation": {
+      "coordinates": [
+        76.289138,
+        10.007182
+      ]
+    },
+    "trackingDetails": {
+      "trackingId": null,
+      "courierPartner": null,
+      "trackingUrl": null,
+      "estimatedDelivery": null
+    },
+    "deliveredAt": null,
+    "returnRequest": {
+      "status": "none",
+      "reason": null,
+      "requestedAt": null,
+      "items": []
+    },
+    "razorpayOrderId": "free_1790088520197",
+    "razorpayPaymentId": null,
+    "settlementStatus": "unsettled",
+    "reason": "Admin approved cancellation request",
+    "cancellationRequest": "approved",
+    "cancellationRequestReason": "dd",
+    "riderUnresponsiveReport": {
+      "status": "pending",
+      "reportedAt": "2026-09-22T14:48:40.201Z"
+    },
+    "appliedOffers": [],
+    "returnPhotos": [],
+    "packingPhotos": [],
+    "createdAt": "2026-09-22T14:48:40.203Z",
+    "updatedAt": "2026-09-22T18:11:33.046Z",
+    "__v": 0
+  },
+  {
+    "_id": "6ab5703e7dc612397c5b3add",
+    "userId": "6aa965f1ffb7042723332bd7",
+    "warehouseId": "6a5e4d630906bf3164ab4db5",
+    "warehouseDetails": {
+      "name": "Flashfits Kaloor",
+      "code": "WH-A33E4DA4"
+    },
+    "sourceMerchantId": "6aa17e8fdbaf8b6cf8cf75a8",
+    "merchantDetails": {
+      "name": "Calsio Club",
+      "phone": "8383823813"
+    },
+    "fulfillmentType": "try_and_buy",
+    "items": [
+      {
+        "warehouseProductId": "6aad0d61481fe017fdb384e3",
+        "variantId": "6aad0d61481fe017fdb384f3",
+        "name": "Argentina 2022 World Cup 3-Star Floral Embroidered Jersey",
+        "quantity": 1,
+        "price": 1499,
+        "size": "M",
+        "image": "https://res.cloudinary.com/dpmliygpg/image/upload/v1789681558/products/vuzoogmd7knwpt6zmipi.jpg",
+        "tryStatus": "pending",
+        "returnReason": null,
+        "_id": "6ab5703e7dc612397c5b3ade"
+      }
+    ],
+    "totalAmount": 1499,
+    "commissionRate": 10,
+    "commissionAmount": 150,
+    "merchantPayout": 1349,
+    "finalBilling": {
+      "baseAmount": 1499,
+      "serviceGST": 0,
+      "deliveryTip": 0,
+      "totalPayable": 1539,
+      "tryAndBuyFee": 0,
+      "gst": 0,
+      "discount": 0,
+      "deliveryCharge": 0
+    },
+    "deliveryCharge": 29,
+    "returnCharge": 11,
+    "originalDeliveryCharge": 29,
+    "originalReturnCharge": 11,
+    "waitingTimeCharge": 0,
+    "deliveryDistance": 1.53,
+    "estimatedTime": 19,
+    "orderStatus": "cancelled",
+    "customerDeliveryStatus": "cancelled",
+    "paymentStatus": "delivery_fee_paid",
+    "paymentMethod": "online",
+    "deliveryRiderId": null,
+    "deliveryRiderDetails": {
+      "name": null,
+      "phone": null
+    },
+    "deliveryRiderStatus": "cancelled",
+    "otp": null,
+    "trialPhaseStart": null,
+    "trialPhaseEnd": null,
+    "trialPhaseDuration": 0,
+    "overtimePenalty": 0,
+    "photoVerified": false,
+    "deliveryLocation": {
+      "name": "Antony Efron K M",
+      "phone": "8138834116",
+      "addressLine1": "HRR2-34",
+      "addressLine2": "Django",
+      "landmark": "",
+      "city": "Ernakulam",
+      "state": "Kerala",
+      "pincode": "682017",
+      "country": "India",
+      "addressType": "Home",
+      "coordinates": [
+        76.2920393,
+        9.9951217
+      ]
+    },
+    "pickupLocation": {
+      "coordinates": [
+        76.289138,
+        10.007182
+      ]
+    },
+    "trackingDetails": {
+      "trackingId": null,
+      "courierPartner": null,
+      "trackingUrl": null,
+      "estimatedDelivery": null
+    },
+    "deliveredAt": null,
+    "returnRequest": {
+      "status": "none",
+      "reason": null,
+      "requestedAt": null,
+      "items": []
+    },
+    "razorpayOrderId": "free_1790275646569",
+    "razorpayPaymentId": null,
+    "settlementStatus": "unsettled",
+    "reason": "Admin approved cancellation request",
+    "cancellationRequest": "approved",
+    "cancellationRequestReason": "ddd",
+    "riderUnresponsiveReport": {
+      "status": "pending",
+      "reportedAt": "2026-09-24T18:47:26.571Z"
+    },
+    "appliedOffers": [],
+    "returnPhotos": [],
+    "packingPhotos": [],
+    "createdAt": "2026-09-24T18:47:26.572Z",
+    "updatedAt": "2026-09-26T16:42:35.363Z",
+    "__v": 0,
+    "refundAmount": 0,
+    "refundDetails": {
+      "amount": 0
+    }
+  },
+  {
+    "_id": "6abb9ad57b60d8ee8f8354ae",
+    "userId": "6abb96d57b60d8ee8f834fb9",
+    "warehouseId": "6a5e4d630906bf3164ab4db5",
+    "warehouseDetails": {
+      "name": "Flashfits Kaloor",
+      "code": "WH-A33E4DA4"
+    },
+    "sourceMerchantId": "6aa17e8fdbaf8b6cf8cf75a8",
+    "merchantDetails": {
+      "name": "Calsio Club",
+      "phone": "8383823813"
+    },
+    "fulfillmentType": "try_and_buy",
+    "items": [
+      {
+        "warehouseProductId": "6aad0d61481fe017fdb384e3",
+        "variantId": "6aad0d61481fe017fdb384f3",
+        "name": "Argentina 2022 World Cup 3-Star Floral Embroidered Jersey",
+        "quantity": 1,
+        "price": 1499,
+        "size": "M",
+        "image": "https://res.cloudinary.com/dpmliygpg/image/upload/v1789681558/products/vuzoogmd7knwpt6zmipi.jpg",
+        "tryStatus": "pending",
+        "returnReason": null,
+        "_id": "6abb9ad57b60d8ee8f8354af"
+      }
+    ],
+    "totalAmount": 1499,
+    "commissionRate": 10,
+    "commissionAmount": 150,
+    "merchantPayout": 1349,
+    "finalBilling": {
+      "baseAmount": 1499,
+      "serviceGST": 0,
+      "deliveryTip": 0,
+      "totalPayable": 1607,
+      "tryAndBuyFee": 0,
+      "gst": 0,
+      "discount": 0,
+      "deliveryCharge": 0
+    },
+    "deliveryCharge": 72,
+    "returnCharge": 36,
+    "originalDeliveryCharge": 72,
+    "originalReturnCharge": 36,
+    "waitingTimeCharge": 0,
+    "deliveryDistance": 5.09,
+    "estimatedTime": 24,
+    "orderStatus": "cancelled",
+    "customerDeliveryStatus": "cancelled",
+    "paymentStatus": "delivery_fee_paid",
+    "refundAmount": 0,
+    "refundDetails": {
+      "amount": 0,
+      "method": null,
+      "referenceNumber": null,
+      "refundedAt": null,
+      "reason": null,
+      "transactionId": null
+    },
+    "paymentMethod": "online",
+    "deliveryRiderId": null,
+    "deliveryRiderDetails": {
+      "name": null,
+      "phone": null
+    },
+    "deliveryRiderStatus": "cancelled",
+    "otp": null,
+    "trialPhaseStart": null,
+    "trialPhaseEnd": null,
+    "trialPhaseDuration": 0,
+    "overtimePenalty": 0,
+    "photoVerified": false,
+    "deliveryLocation": {
+      "name": "Anas",
+      "phone": "8606414384",
+      "addressLine1": "Byteboot",
+      "addressLine2": "DD milestone",
+      "landmark": "Gn",
+      "city": "Ernakulam",
+      "state": "Kerala",
+      "pincode": "682020",
+      "country": "India",
+      "addressType": "Home",
+      "coordinates": [
+        76.2995072,
+        9.9676036
+      ]
+    },
+    "pickupLocation": {
+      "coordinates": [
+        76.289138,
+        10.007182
+      ]
+    },
+    "trackingDetails": {
+      "trackingId": null,
+      "courierPartner": null,
+      "trackingUrl": null,
+      "estimatedDelivery": null
+    },
+    "deliveredAt": null,
+    "returnRequest": {
+      "status": "none",
+      "reason": null,
+      "requestedAt": null,
+      "items": []
+    },
+    "razorpayOrderId": "free_1790679765323",
+    "razorpayPaymentId": null,
+    "settlementStatus": "unsettled",
+    "reason": "Admin approved cancellation request",
+    "cancellationRequest": "approved",
+    "cancellationRequestReason": "xx",
+    "riderUnresponsiveReport": {
+      "status": "pending",
+      "reportedAt": "2026-09-29T11:02:45.325Z"
+    },
+    "appliedOffers": [],
+    "returnPhotos": [],
+    "packingPhotos": [],
+    "createdAt": "2026-09-29T11:02:45.327Z",
+    "updatedAt": "2026-09-29T12:35:10.393Z",
+    "__v": 0
+  }
+]

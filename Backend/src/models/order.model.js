@@ -92,6 +92,15 @@ const OrderSchema = new mongoose.Schema({
     type: String,
     default: null
   },
+  cancelledBy: {
+    type: String,
+    enum: ['user', 'merchant', 'warehouse', 'admin', 'system', null],
+    default: null
+  },
+  cancelledAt: {
+    type: Date,
+    default: null
+  },
   deliveryRiderStatus: {
     type: String,
     enum: [
@@ -240,6 +249,21 @@ const OrderSchema = new mongoose.Schema({
     type: String,
     enum: ['unsettled', 'settled', 'failed'],
     default: 'unsettled'
+  },
+  commissionRate: { type: Number, default: 4 }, // Category commission percentage
+  commissionAmount: { type: Number, default: 0 }, // Platform retained fee
+  merchantPayout: { type: Number, default: 0 }, // Net merchant earning
+  settlementBreakdown: {
+    grossAmount: { type: Number, default: 0 },
+    commissionRate: { type: Number, default: 4 },
+    commissionAmount: { type: Number, default: 0 },
+    merchantPayout: { type: Number, default: 0 },
+    merchantDiscount: { type: Number, default: 0 },
+    adminDiscount: { type: Number, default: 0 },
+    deliveryFee: { type: Number, default: 0 },
+    returnFee: { type: Number, default: 0 },
+    riderPayout: { type: Number, default: 0 },
+    settledAt: { type: Date, default: null },
   },
   cancellationRequest: {
     type: String,

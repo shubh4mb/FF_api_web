@@ -9,6 +9,19 @@ import { ApiError } from '../../utils/ApiError.js';
 import { ApiResponse } from '../../utils/ApiResponse.js';
 import crypto from 'crypto';
 import mongoose from 'mongoose';
+import { resolveCategoryHierarchy } from '../../helperFns/categoryHelper.js';
+
+const safeParse = (value) => {
+  if (!value) return value;
+  if (typeof value === "string") {
+    try {
+      return JSON.parse(value);
+    } catch {
+      return value;
+    }
+  }
+  return value;
+};
 
 /**
  * Helper to group flat variants for the response
@@ -118,7 +131,7 @@ export const createWarehouseProductFull = asyncHandler(async (req, res) => {
 
   let { 
     merchantId, commissionRate, name, description, styleName, categoryId, subCategoryId, gender, 
-    attributes, tags, collectionIds, variants, linkedMerchantProductId 
+    attributes, tags, collectionIds, variants, linkedMerchantProductId, additionalCategoryIds 
   } = req.body;
 
   const safeParse = (value) => {
@@ -159,6 +172,7 @@ export const createWarehouseProductFull = asyncHandler(async (req, res) => {
   const finalName = name ? name.trim() : (styleName ? styleName.trim() : "New Product");
   const validCategoryId = (categoryId && mongoose.Types.ObjectId.isValid(categoryId)) ? new mongoose.Types.ObjectId(categoryId) : undefined;
   const validSubCategoryId = (subCategoryId && mongoose.Types.ObjectId.isValid(subCategoryId)) ? new mongoose.Types.ObjectId(subCategoryId) : undefined;
+  const validAdditionalCategoryIds = await resolveCategoryHierarchy(safeParse(additionalCategoryIds));
 
   const sourceMerchant = await Merchant.findById(merchantId);
   if (!sourceMerchant) throw new ApiError(404, 'Source Merchant not found');
@@ -234,6 +248,7 @@ export const createWarehouseProductFull = asyncHandler(async (req, res) => {
         styleName,
         categoryId: validCategoryId,
         subCategoryId: validSubCategoryId,
+        additionalCategoryIds: validAdditionalCategoryIds,
         brandId,
         merchantId: sourceMerchant._id,
         source: 'warehouse',
@@ -282,13 +297,18 @@ export const updateMyWarehouseProduct = asyncHandler(async (req, res) => {
   const { warehouseProductId } = req.params; // styleGroupId
   const allowedFields = [
     'name', 'description', 'brandId', 'categoryId', 'merchantId', 'subCategoryId',
-    'subSubCategoryId', 'gender', 'tags', 'features', 'attributes',
+    'subSubCategoryId', 'additionalCategoryIds', 'gender', 'tags', 'features', 'attributes',
     'isTriable', 'commissionRate'
   ];
 
   const updates = {};
   for (const field of allowedFields) {
     if (req.body[field] !== undefined) updates[field] = req.body[field];
+  }
+
+  if (updates.additionalCategoryIds !== undefined) {
+    const raw = safeParse(updates.additionalCategoryIds);
+    updates.additionalCategoryIds = await resolveCategoryHierarchy(Array.isArray(raw) ? raw : (raw ? [raw] : []));
   }
 
   const result = await ProductFlat.updateMany(

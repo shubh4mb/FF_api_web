@@ -100,6 +100,7 @@ const merchantSchema = new mongoose.Schema(
     acceptsReturns: { type: Boolean, default: false },
     isVerified: { type: Boolean, default: false },
     isActive: { type: Boolean, default: false },
+    isStoreActive: { type: Boolean, default: true }, // Controls whether the physical retail store appears on customer app
     status: {
       type: String,
       enum: ['incomplete', 'pending_verification', 'pending_payment', 'payment_pending_verification', 'active', 'rejected', 'suspended'],
@@ -160,6 +161,28 @@ const merchantSchema = new mongoose.Schema(
       {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Warehouse',
+      }
+    ],
+    // Granular per-warehouse consignment status
+    warehouseAssignments: [
+      {
+        warehouseId: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: 'Warehouse',
+          required: true,
+        },
+        isActive: {
+          type: Boolean,
+          default: true,
+        },
+        deactivatedAt: {
+          type: Date,
+          default: null,
+        },
+        reason: {
+          type: String,
+          default: '',
+        },
       }
     ],
     emailOtp: { type: String },

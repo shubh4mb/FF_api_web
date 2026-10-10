@@ -1,6 +1,7 @@
 import AppConfig from "../../models/appConfig.model.js";
 import { ApiResponse } from "../../utils/ApiResponse.js";
 import { generateReceiptPDF } from "../../utils/pdfGenerator.js";
+import { isBackendInTestMode } from "../../helperFns/testModeHelper.js";
 
 /**
  * GET /api/admin/config
@@ -31,6 +32,7 @@ export const updateAppConfig = async (req, res) => {
             tryAndBuyRadius,
             merchantRegistrationFee,
             isOrderPlacementEnabled,
+            isTestingMode,
             maintenanceTitle,
             maintenanceMessage,
         } = req.body;
@@ -45,6 +47,7 @@ export const updateAppConfig = async (req, res) => {
         if (merchantRegistrationFee !== undefined) config.merchantRegistrationFee = merchantRegistrationFee;
 
         if (isOrderPlacementEnabled !== undefined) config.isOrderPlacementEnabled = !!isOrderPlacementEnabled;
+        if (isTestingMode !== undefined) config.isTestingMode = !!isTestingMode;
         if (maintenanceTitle !== undefined) config.maintenanceTitle = maintenanceTitle;
         if (maintenanceMessage !== undefined) config.maintenanceMessage = maintenanceMessage;
 
@@ -67,6 +70,10 @@ export const updateAppConfig = async (req, res) => {
             };
         }
 
+        if (req.body.promoAnnouncements !== undefined) {
+            config.promoAnnouncements = req.body.promoAnnouncements;
+        }
+
         await config.save();
 
         return res.status(200).json(new ApiResponse(200, { config }, "Config updated successfully"));
@@ -82,7 +89,7 @@ export const updateAppConfig = async (req, res) => {
  */
 export const getAppVersionPolicy = async (req, res) => {
     try {
-        const { app = "customer" } = req.query;
+        const { app = "customer", platform = "" } = req.query;
         const config = await AppConfig.getConfig();
 
         let versionPolicy;
@@ -94,17 +101,60 @@ export const getAppVersionPolicy = async (req, res) => {
             versionPolicy = config.customerAppVersion?.toObject?.() || config.customerAppVersion || {};
         }
 
+        const isIos = String(platform || "").toLowerCase() === "ios";
+
+        // Fallback URLs for iOS if not yet set in database
+        const defaultIosStoreUrl = app === "delivery"
+            ? "itms-apps://itunes.apple.com/app/com.flashfits.delivery"
+            : (app === "merchant"
+                ? "itms-apps://itunes.apple.com/app/com.flashfits.merchant"
+                : "itms-apps://itunes.apple.com/app/com.flashfits.app");
+
+        const defaultIosWebUrl = app === "delivery"
+            ? "https://apps.apple.com/app/com.flashfits.delivery"
+            : (app === "merchant"
+                ? "https://apps.apple.com/app/com.flashfits.merchant"
+                : "https://apps.apple.com/app/com.flashfits.app");
+
+        // Resolve platform-specific versions with backwards-compatible defaults
+        const minVersion = isIos
+            ? (versionPolicy.minVersionIos || versionPolicy.minVersion || "1.0.0")
+            : (versionPolicy.minVersion || "1.0.0");
+
+        const latestVersion = isIos
+            ? (versionPolicy.latestVersionIos || versionPolicy.latestVersion || "1.1.0")
+            : (versionPolicy.latestVersion || "1.1.0");
+
+        const storeUrl = isIos
+            ? (versionPolicy.storeUrlIos || (versionPolicy.storeUrl?.startsWith("market://") ? defaultIosStoreUrl : versionPolicy.storeUrl) || defaultIosStoreUrl)
+            : (versionPolicy.storeUrl || "market://details?id=com.flashfits.app");
+
+        const webUrl = isIos
+            ? (versionPolicy.webUrlIos || (versionPolicy.webUrl?.includes("play.google.com") ? defaultIosWebUrl : versionPolicy.webUrl) || defaultIosWebUrl)
+            : (versionPolicy.webUrl || "https://play.google.com/store/apps/details?id=com.flashfits.app");
+
         // Attach system operational status for fast client boot lookup
+        const inTestMode = await isBackendInTestMode();
         const payload = {
             ...versionPolicy,
-            isOrderPlacementEnabled: config.isOrderPlacementEnabled ?? false,
+            minVersion,
+            latestVersion,
+            storeUrl,
+            webUrl,
+            isOrderPlacementEnabled: inTestMode ? true : (config.isOrderPlacementEnabled ?? false),
             maintenanceTitle: config.maintenanceTitle || "Maintenance in Progress",
             maintenanceMessage: config.maintenanceMessage || "We are currently gearing up for launch! Live ordering is temporarily paused. Please check back soon.",
         };
 
-        return res.status(200).json(
-            new ApiResponse(200, payload, "App version policy fetched successfully")
-        );
+        // Dual-format payload for 100% backward compatibility:
+        // Works both when client reads res.data directly or res.data.data
+        return res.status(200).json({
+            statusCode: 200,
+            success: true,
+            message: "App version policy fetched successfully",
+            data: payload,
+            ...payload,
+        });
     } catch (error) {
         console.error("Get AppVersionPolicy Error:", error);
         return res.status(500).json({ message: "Failed to fetch app version policy" });
@@ -118,11 +168,12 @@ export const getAppVersionPolicy = async (req, res) => {
 export const getSystemStatus = async (req, res) => {
     try {
         const config = await AppConfig.getConfig();
+        const inTestMode = await isBackendInTestMode();
         return res.status(200).json({
             success: true,
-            isOrderPlacementEnabled: config.isOrderPlacementEnabled ?? false,
-            maintenanceTitle: config.maintenanceTitle || "Maintenance in Progress",
-            maintenanceMessage: config.maintenanceMessage || "We are currently gearing up for launch! Live ordering is temporarily paused. Please check back soon.",
+            isOrderPlacementEnabled: inTestMode ? true : (config.isOrderPlacementEnabled ?? false),
+            maintenanceTitle: inTestMode ? "" : (config.maintenanceTitle || "Maintenance in Progress"),
+            maintenanceMessage: inTestMode ? "" : (config.maintenanceMessage || "We are currently gearing up for launch! Live ordering is temporarily paused. Please check back soon."),
         });
     } catch (error) {
         console.error("Get SystemStatus Error:", error);
@@ -147,5 +198,52 @@ export const generateDummyReceipt = async (req, res) => {
     } catch (error) {
         console.error("Generate Dummy Receipt Error:", error);
         return res.status(500).json({ message: "Failed to generate receipt" });
+    }
+};
+
+/**
+ * GET /api/user/promotions
+ * Public lightweight endpoint to fetch active promotional marquee / carousel announcements.
+ */
+export const getPromotions = async (req, res) => {
+    try {
+        const config = await AppConfig.getConfig();
+        let promos = config.promoAnnouncements || [];
+        if (!promos || promos.length === 0) {
+            promos = [
+                {
+                    id: "promo_free_delivery",
+                    badge: "2 FREE DELIVERIES",
+                    title: "2 Free Deliveries on your first 2 orders!",
+                    subtitle: "Auto-applied at checkout • Zero delivery fee",
+                    highlightText: "2 Free Deliveries",
+                    actionUrl: "",
+                    icon: "flash",
+                    isActive: true,
+                    order: 0,
+                },
+                {
+                    id: "promo_refer_earn",
+                    badge: "REFER & EARN",
+                    title: "Refer a friend & get a free delivery coupon!",
+                    subtitle: "Tap to share your invite code with friends",
+                    highlightText: "+1 Free Delivery",
+                    actionUrl: "/(app)/refer-earn",
+                    icon: "gift",
+                    isActive: true,
+                    order: 1,
+                },
+            ];
+        }
+        const activePromos = promos.filter(p => p.isActive !== false).sort((a, b) => (a.order || 0) - (b.order || 0));
+        return res.status(200).json({
+            statusCode: 200,
+            success: true,
+            promotions: activePromos,
+            data: activePromos,
+        });
+    } catch (error) {
+        console.error("Get Promotions Error:", error);
+        return res.status(500).json({ success: false, message: "Failed to fetch promotions" });
     }
 };

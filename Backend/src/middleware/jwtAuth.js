@@ -3,6 +3,7 @@ import User from '../models/user.model.js';
 import Merchant from '../models/merchant.model.js';
 import DeliveryRider from '../models/deliveryRider.model.js';
 import Blacklist from '../models/blacklist.model.js';
+import { isBackendInTestMode, isTestMerchant } from '../helperFns/testModeHelper.js';
 
 export const authMiddleware = async (req, res, next) => {
   const authHeader = req.headers.authorization;
@@ -79,8 +80,11 @@ export const authMiddlewareMerchant = async (req, res, next) => {
     try {
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
-      const merchant = await Merchant.findById(decoded.id).select('status blockedReason');
-      if (merchant && merchant.status === 'suspended') {
+      const merchant = await Merchant.findById(decoded.id).select('status blockedReason shopName');
+      const inTestMode = await isBackendInTestMode();
+      const isTest = inTestMode && isTestMerchant(merchant || decoded.id);
+
+      if (merchant && merchant.status === 'suspended' && !isTest) {
         return res.status(403).json({
           success: false,
           isSuspended: true,

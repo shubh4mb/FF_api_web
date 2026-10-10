@@ -1,0 +1,100 @@
+[
+  {
+    "_id": "6a55c1a82fdcd189bfef0b95",
+    "userId": "6a54ea402fdcd189bfeed97a",
+    "phone": "N/A",
+    "category": "report_bug",
+    "orderId": null,
+    "message": "User initiated support for: Report a Bug",
+    "status": "open",
+    "createdAt": "2026-07-14T04:57:12.946Z",
+    "updatedAt": "2026-07-14T04:57:12.946Z",
+    "__v": 0
+  },
+  {
+    "_id": "6a55c1b42fdcd189bfef0b97",
+    "userId": "6a54ea402fdcd189bfeed97a",
+    "phone": "N/A",
+    "category": "merchant_issue",
+    "orderId": null,
+    "message": "User initiated support for: Merchant Issue",
+    "status": "open",
+    "createdAt": "2026-07-14T04:57:24.557Z",
+    "updatedAt": "2026-07-14T04:57:24.557Z",
+    "__v": 0
+  },
+  {
+    "_id": "6a55c1ca2fdcd189bfef0b99",
+    "userId": "6a54ea402fdcd189bfeed97a",
+    "phone": "N/A",
+    "category": "size_exchange",
+    "orderId": null,
+    "message": "User initiated support for: Size Exchange",
+    "status": "open",
+    "createdAt": "2026-07-14T04:57:46.107Z",
+    "updatedAt": "2026-07-14T04:57:46.107Z",
+    "__v": 0
+  },
+  {
+    "_id": "6a55c1e32fdcd189bfef0b9d",
+    "userId": "6a54ea402fdcd189bfeed97a",
+    "phone": "N/A",
+    "category": "other",
+    "orderId": null,
+    "message": "User contacted general support",
+    "status": "open",
+    "createdAt": "2026-07-14T04:58:11.587Z",
+    "updatedAt": "2026-07-14T04:58:11.587Z",
+    "__v": 0
+  },
+  {
+    "_id": "6a7b84d27779baaf28d09def",
+    "userId": "6a79be637779baaf28d08496",
+    "phone": "N/A",
+    "category": "other",
+    "orderId": null,
+    "message": "User contacted general support",
+    "status": "open",
+    "createdAt": "2026-08-11T20:23:46.993Z",
+    "updatedAt": "2026-08-11T20:23:46.993Z",
+    "__v": 0
+  },
+  {
+    "_id": "6a7b84e57779baaf28d09df3",
+    "userId": "6a79be637779baaf28d08496",
+    "phone": "N/A",
+    "category": "size_exchange",
+    "orderId": null,
+    "message": "User initiated support for: Size Exchange",
+    "status": "open",
+    "createdAt": "2026-08-11T20:24:05.090Z",
+    "updatedAt": "2026-08-11T20:24:05.090Z",
+    "__v": 0
+  },
+  {
+    "_id": "6aba64745e47711f76ce9434",
+    "userId": "6a4900efea78373da07b4c7d",
+    "phone": "N/A",
+    "category": "damaged_product",
+    "orderId": "6ab9b0ad3428d97b03724efd",
+    "itemId": "6ab9b0ad3428d97b03724efe",
+    "itemDetails": {
+      "name": "Oversized Cotton Shirt",
+      "size": "S",
+      "image": "https://res.cloudinary.com/dpmliygpg/image/upload/v1783812376/products/hqdqfkbpawxr5wfkzqyc.jpg",
+      "price": 5
+    },
+    "message": "Gcf",
+    "images": [
+      {
+        "url": "https://res.cloudinary.com/dpmliygpg/image/upload/v1790600308/flashfits/support-tickets/6ab9b0ad3428d97b03724efd/kcymrsutphby4slqvm9r.jpg",
+        "public_id": "flashfits/support-tickets/6ab9b0ad3428d97b03724efd/kcymrsutphby4slqvm9r",
+        "_id": "6aba64745e47711f76ce9435"
+      }
+    ],
+    "status": "open",
+    "createdAt": "2026-09-28T12:58:28.554Z",
+    "updatedAt": "2026-09-28T12:58:28.554Z",
+    "__v": 0
+  }
+]

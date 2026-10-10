@@ -127,6 +127,13 @@ export const orderRequestForMerchant = async (req, res) => {
     }
 
     if (status === "accept" || status === "ACCEPTED") {
+      if (['cancelled', 'rejected'].includes(order.orderStatus) || order.customerDeliveryStatus === 'cancelled') {
+        return res.status(400).json({ message: "Cannot accept order: this order has already been cancelled" });
+      }
+      if (order.orderStatus !== 'placed') {
+        return res.status(400).json({ message: `Cannot accept order in '${order.orderStatus}' state` });
+      }
+
       order.orderStatus = (isWarehouseOrder && order.fulfillmentType === 'courier') ? 'confirmed' : 'accepted';
       order.customerDeliveryStatus = "accepted";
 
@@ -233,7 +240,11 @@ export const getAllOrder = async (req, res) => {
     const merchant = await Merchant.findById(req.merchantId).select('accountType warehouseId');
     
     const enrichOrderWithPurchasedAmount = (order) => {
-      const isDecisionMade = ['completed', 'delivered', 'return_in_progress', 'selection_made'].includes(order.orderStatus);
+      if ((order.customerDeliveryStatus === 'cancelled' || order.cancelledBy) && order.orderStatus !== 'cancelled') {
+        order.orderStatus = 'cancelled';
+      }
+
+      const isDecisionMade = ['completed', 'delivered', 'return_in_progress', 'selection_made', 'cancelled'].includes(order.orderStatus);
       const acceptedItems = (order.items || []).filter(
         item => item.tryStatus === 'accepted' || item.tryStatus === 'keep' || item.tryStatus === 'not-triable'
       );
@@ -251,7 +262,7 @@ export const getAllOrder = async (req, res) => {
 
     if (merchant?.accountType === 'warehouse' && merchant.warehouseId) {
       const rawOrders = await WarehouseOrder.find({ warehouseId: merchant.warehouseId, orderStatus: { $ne: 'pending' } })
-        .select('orderStatus items totalAmount finalBilling deliveryRiderStatus createdAt updatedAt deliveryRiderId deliveryRiderDetails deliveryLocation userId otp cancellationRequest cancellationRequestReason riderUnresponsiveReport fulfillmentType settlementStatus')
+        .select('orderStatus items totalAmount finalBilling deliveryRiderStatus createdAt updatedAt deliveryRiderId deliveryRiderDetails deliveryLocation userId otp cancellationRequest cancellationRequestReason riderUnresponsiveReport fulfillmentType settlementStatus reason cancelledBy cancelledAt hasUnavailableItems unavailableItemsCount customerCancellationAllowed paymentStatus refundAmount customerDeliveryStatus')
         .sort({ createdAt: -1 })
         .lean();
       const orders = rawOrders.map(enrichOrderWithPurchasedAmount);
@@ -259,7 +270,7 @@ export const getAllOrder = async (req, res) => {
     }
 
     const rawOrders = await Order.find({ merchantId: req.merchantId, orderStatus: { $ne: 'pending' } })
-      .select('orderStatus items totalAmount finalBilling deliveryRiderStatus createdAt updatedAt deliveryRiderId deliveryRiderDetails deliveryLocation userId otp cancellationRequest cancellationRequestReason riderUnresponsiveReport')
+      .select('orderStatus items totalAmount finalBilling deliveryRiderStatus createdAt updatedAt deliveryRiderId deliveryRiderDetails deliveryLocation userId otp cancellationRequest cancellationRequestReason riderUnresponsiveReport reason cancelledBy cancelledAt hasUnavailableItems unavailableItemsCount customerCancellationAllowed paymentStatus refundAmount customerDeliveryStatus')
       .sort({ createdAt: -1 })
       .lean();
     const orders = rawOrders.map(enrichOrderWithPurchasedAmount);
@@ -343,9 +354,9 @@ export const markItemOutOfStock = async (req, res) => {
     const { order, isWarehouseOrder, error, status } = await findOrderForMerchant(orderId, req.merchantId);
     if (error) return res.status(status).json({ message: error });
 
-    // Allow marking out of stock only while order is pre-transit
+    // Allow marking out of stock only while order is pre-transit and not cancelled
     const allowedStatuses = ['placed', 'accepted'];
-    if (!allowedStatuses.includes(order.orderStatus)) {
+    if (!allowedStatuses.includes(order.orderStatus) || order.customerDeliveryStatus === 'cancelled') {
       return res.status(400).json({
         message: `Cannot modify items when order is in '${order.orderStatus}' state`
       });
@@ -500,6 +511,16 @@ export const orderPacked = async (req, res) => {
   try {
     const { order, isWarehouseOrder, error, status } = await findOrderForMerchant(orderId, req.merchantId);
     if (error) return res.status(status).json({ message: error });
+
+    // Guard: Prevent packing cancelled or rejected orders
+    if (['cancelled', 'rejected'].includes(order.orderStatus) || order.customerDeliveryStatus === 'cancelled') {
+      return res.status(400).json({ message: "Cannot mark packed: this order has already been cancelled" });
+    }
+
+    // Guard: Order must be in 'accepted' state to be packed
+    if (order.orderStatus !== 'accepted') {
+      return res.status(400).json({ message: `Cannot pack order in '${order.orderStatus}' state. Order must be in 'accepted' state.` });
+    }
 
     // Guard: Ensure there is at least 1 available item to pack
     const availableItems = (order.items || []).filter(i => i.status !== 'out_of_stock');

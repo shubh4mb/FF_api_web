@@ -1,0 +1,762 @@
+[
+  {
+    "_id": "6a5bf052593c5f00b76ef8c2",
+    "userId": "6a4900efea78373da07b4c7d",
+    "merchantId": "6a52c077f5d225d81a327965",
+    "merchantDetails": {
+      "name": "SB Fashion",
+      "phone": "8383823813"
+    },
+    "items": [
+      {
+        "productId": "6a52ce12f5d225d81a328521",
+        "variantId": "4c7bd6880358b08aaeaa4f9c",
+        "name": "Oversized Cotton Shirt",
+        "quantity": 2,
+        "price": 0,
+        "size": "M",
+        "image": "https://res.cloudinary.com/dpmliygpg/image/upload/v1784408915/products/a3uahr7lf515auerh1en.jpg",
+        "_id": "6a5bf052593c5f00b76ef8c3"
+      }
+    ],
+    "totalAmount": 0,
+    "deliveryCharge": 40,
+    "gst": 0,
+    "serviceGST": 0,
+    "deliveryTip": 0,
+    "discount": 0,
+    "totalPayable": 40,
+    "appliedOffers": [],
+    "deliveryLocation": {
+      "name": "Varapuzha",
+      "phone": "8383823813",
+      "addressLine1": "Varapuzha ",
+      "addressLine2": "",
+      "landmark": "",
+      "city": "Varappuzha",
+      "state": "Kerala",
+      "pincode": "683517",
+      "country": "India",
+      "addressType": "Work",
+      "coordinates": [
+        76.2691698729951,
+        10.084443198451021
+      ]
+    },
+    "orderStatus": "delivered",
+    "customerDeliveryStatus": "delivered",
+    "paymentStatus": "paid",
+    "returnRequest": {
+      "status": "none",
+      "reason": null,
+      "faultType": null,
+      "returnCharge": 0,
+      "requestedAt": null,
+      "processedAt": null,
+      "images": [],
+      "items": []
+    },
+    "trackingDetails": {
+      "trackingId": null,
+      "courierPartner": null,
+      "trackingUrl": null,
+      "estimatedDelivery": null
+    },
+    "razorpayOrderId": "order_TF79NMfrM7oqjq",
+    "razorpayPaymentId": "pay_TF79X4V38cWD1K",
+    "settlementStatus": "unsettled",
+    "deliveredAt": "2026-07-18T21:32:00.337Z",
+    "createdAt": "2026-07-18T21:29:54.844Z",
+    "updatedAt": "2026-07-18T21:32:00.338Z",
+    "__v": 0
+  },
+  {
+    "_id": "6a5bf17bd51234d07b3990d2",
+    "userId": "6a4900efea78373da07b4c7d",
+    "merchantId": "6a52c077f5d225d81a327965",
+    "merchantDetails": {
+      "name": "SB Fashion",
+      "phone": "8383823813"
+    },
+    "items": [
+      {
+        "productId": "6a52ce12f5d225d81a328521",
+        "variantId": "4c7bd6880358b08aaeaa4f9c",
+        "name": "Oversized Cotton Shirt",
+        "quantity": 2,
+        "price": 699,
+        "size": "M",
+        "image": "https://res.cloudinary.com/dpmliygpg/image/upload/v1784408915/products/a3uahr7lf515auerh1en.jpg",
+        "_id": "6a5bf17bd51234d07b3990d3"
+      }
+    ],
+    "totalAmount": 1398,
+    "deliveryCharge": 40,
+    "gst": 0,
+    "serviceGST": 0,
+    "deliveryTip": 0,
+    "discount": 0,
+    "totalPayable": 1438,
+    "appliedOffers": [],
+    "deliveryLocation": {
+      "name": "Varapuzha",
+      "phone": "8383823813",
+      "addressLine1": "Varapuzha ",
+      "addressLine2": "",
+      "landmark": "",
+      "city": "Varappuzha",
+      "state": "Kerala",
+      "pincode": "683517",
+      "country": "India",
+      "addressType": "Work",
+      "coordinates": [
+        76.2691698729951,
+        10.084443198451021
+      ]
+    },
+    "orderStatus": "confirmed",
+    "customerDeliveryStatus": "placed",
+    "paymentStatus": "paid",
+    "returnRequest": {
+      "status": "none",
+      "reason": null,
+      "faultType": null,
+      "returnCharge": 0,
+      "requestedAt": null,
+      "processedAt": null,
+      "images": [],
+      "items": []
+    },
+    "trackingDetails": {
+      "trackingId": null,
+      "courierPartner": null,
+      "trackingUrl": null,
+      "estimatedDelivery": null
+    },
+    "razorpayOrderId": "order_TF7Eb2OmvG6p6m",
+    "razorpayPaymentId": "pay_TF7EiOMFeScqrJ",
+    "settlementStatus": "unsettled",
+    "deliveredAt": null,
+    "createdAt": "2026-07-18T21:34:51.367Z",
+    "updatedAt": "2026-07-18T21:35:15.196Z",
+    "__v": 0
+  },
+  {
+    "_id": "6a5ce9688392ee5597eee331",
+    "userId": "6a4900efea78373da07b4c7d",
+    "merchantId": "6a52c077f5d225d81a327965",
+    "merchantDetails": {
+      "name": "SB Fashion",
+      "phone": "8383823813"
+    },
+    "items": [
+      {
+        "productId": "6a5beb55b9292fa5ba74e5c5",
+        "variantId": "4c7bd6880358b08aaeaa4f9c",
+        "name": "Oversized Cotton Shirt",
+        "quantity": 1,
+        "price": 0,
+        "size": "S",
+        "image": "https://res.cloudinary.com/dpmliygpg/image/upload/v1784408915/products/a3uahr7lf515auerh1en.jpg",
+        "_id": "6a5ce9688392ee5597eee332"
+      },
+      {
+        "productId": "6a52d11ac46a7c32af09b921",
+        "variantId": "3caf7807d1f254990e68ee4f",
+        "name": "Oversized Cotton Shirt",
+        "quantity": 1,
+        "price": 0,
+        "size": "S",
+        "image": "https://res.cloudinary.com/dpmliygpg/image/upload/v1783812376/products/hqdqfkbpawxr5wfkzqyc.jpg",
+        "_id": "6a5ce9688392ee5597eee333"
+      }
+    ],
+    "totalAmount": 0,
+    "deliveryCharge": 40,
+    "gst": 0,
+    "serviceGST": 0,
+    "deliveryTip": 0,
+    "discount": 0,
+    "totalPayable": 40,
+    "appliedOffers": [],
+    "deliveryLocation": {
+      "name": "Shubham",
+      "phone": "8383823813",
+      "addressLine1": "72/1533",
+      "addressLine2": "Veed",
+      "landmark": "Ss",
+      "city": "Ernakulam",
+      "state": "Kerala",
+      "pincode": "682026",
+      "country": "India",
+      "addressType": "Home",
+      "coordinates": [
+        76.289137,
+        10.0072269
+      ]
+    },
+    "orderStatus": "confirmed",
+    "customerDeliveryStatus": "placed",
+    "paymentStatus": "paid",
+    "returnRequest": {
+      "status": "none",
+      "reason": null,
+      "faultType": null,
+      "returnCharge": 0,
+      "requestedAt": null,
+      "processedAt": null,
+      "images": [],
+      "items": []
+    },
+    "trackingDetails": {
+      "trackingId": null,
+      "courierPartner": null,
+      "trackingUrl": null,
+      "estimatedDelivery": null
+    },
+    "razorpayOrderId": "order_TFPG0kfJjpV5am",
+    "razorpayPaymentId": "pay_TFPG5gPSVyt6q9",
+    "settlementStatus": "unsettled",
+    "deliveredAt": null,
+    "createdAt": "2026-07-19T15:12:40.049Z",
+    "updatedAt": "2026-07-19T15:13:04.921Z",
+    "__v": 0
+  },
+  {
+    "_id": "6a719b527779baaf28d0326f",
+    "userId": "6a6424d02fdcd189bfefb9d6",
+    "merchantId": "6a52c077f5d225d81a327965",
+    "merchantDetails": {
+      "name": "SB Fashion",
+      "phone": "8383823813"
+    },
+    "items": [
+      {
+        "productId": "6a52ce12f5d225d81a328521",
+        "variantId": "6a52d11ac46a7c32af09b920",
+        "name": "Oversized Cotton Shirt",
+        "quantity": 5,
+        "price": 5,
+        "size": "S",
+        "image": "https://res.cloudinary.com/dpmliygpg/image/upload/v1783812376/products/hqdqfkbpawxr5wfkzqyc.jpg",
+        "_id": "6a719b527779baaf28d03270"
+      }
+    ],
+    "totalAmount": 25,
+    "deliveryCharge": 40,
+    "gst": 0,
+    "serviceGST": 0,
+    "deliveryTip": 0,
+    "discount": 0,
+    "totalPayable": 65,
+    "appliedOffers": [],
+    "deliveryLocation": {
+      "name": "Govind Jayakumar ",
+      "phone": "9037920297",
+      "addressLine1": "Moolakkattu house ",
+      "addressLine2": "Malloossery P.O",
+      "landmark": "Near chungam junction ",
+      "city": "Kottayam",
+      "state": "Kerala",
+      "pincode": "686017",
+      "country": "India",
+      "addressType": "Home",
+      "coordinates": [
+        76.5172094,
+        9.6029988
+      ]
+    },
+    "orderStatus": "placed",
+    "customerDeliveryStatus": "placed",
+    "paymentStatus": "pending",
+    "returnRequest": {
+      "status": "none",
+      "reason": null,
+      "faultType": null,
+      "returnCharge": 0,
+      "requestedAt": null,
+      "processedAt": null,
+      "images": [],
+      "items": []
+    },
+    "trackingDetails": {
+      "trackingId": null,
+      "courierPartner": null,
+      "trackingUrl": null,
+      "estimatedDelivery": null
+    },
+    "razorpayOrderId": "order_TLcNotNb8InAIq",
+    "razorpayPaymentId": null,
+    "settlementStatus": "unsettled",
+    "deliveredAt": null,
+    "createdAt": "2026-08-04T07:57:06.278Z",
+    "updatedAt": "2026-08-04T07:57:06.485Z",
+    "__v": 0
+  },
+  {
+    "_id": "6a71b5617779baaf28d03dde",
+    "userId": "6a6424d02fdcd189bfefb9d6",
+    "merchantId": "6a52c077f5d225d81a327965",
+    "merchantDetails": {
+      "name": "SB Fashion",
+      "phone": "8383823813"
+    },
+    "items": [
+      {
+        "productId": "6a52ce12f5d225d81a328521",
+        "variantId": "6a52d11ac46a7c32af09b920",
+        "name": "Oversized Cotton Shirt",
+        "quantity": 6,
+        "price": 5,
+        "size": "S",
+        "image": "https://res.cloudinary.com/dpmliygpg/image/upload/v1783812376/products/hqdqfkbpawxr5wfkzqyc.jpg",
+        "_id": "6a71b5617779baaf28d03ddf"
+      }
+    ],
+    "totalAmount": 30,
+    "deliveryCharge": 40,
+    "gst": 0,
+    "serviceGST": 0,
+    "deliveryTip": 0,
+    "discount": 0,
+    "totalPayable": 70,
+    "appliedOffers": [],
+    "deliveryLocation": {
+      "name": "Govind Jayakumar ",
+      "phone": "9037920297",
+      "addressLine1": "Moolakkattu house ",
+      "addressLine2": "Malloossery P.O",
+      "landmark": "Near chungam junction ",
+      "city": "Kottayam",
+      "state": "Kerala",
+      "pincode": "686017",
+      "country": "India",
+      "addressType": "Home",
+      "coordinates": [
+        76.5172094,
+        9.6029988
+      ]
+    },
+    "orderStatus": "placed",
+    "customerDeliveryStatus": "placed",
+    "paymentStatus": "pending",
+    "returnRequest": {
+      "status": "none",
+      "reason": null,
+      "faultType": null,
+      "returnCharge": 0,
+      "requestedAt": null,
+      "processedAt": null,
+      "images": [],
+      "items": []
+    },
+    "trackingDetails": {
+      "trackingId": null,
+      "courierPartner": null,
+      "trackingUrl": null,
+      "estimatedDelivery": null
+    },
+    "razorpayOrderId": "order_TLeHH0tHrYtK5r",
+    "razorpayPaymentId": null,
+    "settlementStatus": "unsettled",
+    "deliveredAt": null,
+    "createdAt": "2026-08-04T09:48:17.652Z",
+    "updatedAt": "2026-08-04T09:48:17.877Z",
+    "__v": 0
+  },
+  {
+    "_id": "6a71feaeea1c72a8807a9972",
+    "userId": "6a4900efea78373da07b4c7d",
+    "merchantId": "6a52c077f5d225d81a327965",
+    "merchantDetails": {
+      "name": "SB Fashion",
+      "phone": "8383823813"
+    },
+    "items": [
+      {
+        "productId": "6a5e139affc76cb31cae70b2",
+        "variantId": "6a5e13a0ffc76cb31cae70b3",
+        "name": "Cotton Blend plain Tshirt test",
+        "quantity": 1,
+        "price": 300,
+        "size": "S",
+        "image": "https://res.cloudinary.com/dpmliygpg/image/upload/v1784550301/products/kcpgpsolgwi0clzl85pa.jpg",
+        "_id": "6a71feaeea1c72a8807a9973"
+      }
+    ],
+    "totalAmount": 300,
+    "deliveryCharge": 40,
+    "gst": 0,
+    "serviceGST": 0,
+    "deliveryTip": 0,
+    "discount": 0,
+    "totalPayable": 340,
+    "appliedOffers": [],
+    "deliveryLocation": {
+      "name": "Shubham",
+      "phone": "8383823813",
+      "addressLine1": "72/1533",
+      "addressLine2": "Veed",
+      "landmark": "Ss",
+      "city": "Ernakulam",
+      "state": "Kerala",
+      "pincode": "682026",
+      "country": "India",
+      "addressType": "Home",
+      "coordinates": [
+        76.289137,
+        10.0072269
+      ]
+    },
+    "orderStatus": "delivered",
+    "customerDeliveryStatus": "delivered",
+    "paymentStatus": "paid",
+    "returnRequest": {
+      "status": "none",
+      "reason": null,
+      "faultType": null,
+      "returnCharge": 0,
+      "requestedAt": null,
+      "processedAt": null,
+      "images": [],
+      "items": []
+    },
+    "trackingDetails": {
+      "trackingId": null,
+      "courierPartner": null,
+      "trackingUrl": null,
+      "estimatedDelivery": null
+    },
+    "razorpayOrderId": "order_TLjbcYE1i1O9yS",
+    "razorpayPaymentId": "pay_TLjbmod54WiMYl",
+    "settlementStatus": "unsettled",
+    "deliveredAt": "2026-08-04T20:12:04.118Z",
+    "createdAt": "2026-08-04T15:01:02.305Z",
+    "updatedAt": "2026-08-04T20:12:04.119Z",
+    "__v": 0
+  },
+  {
+    "_id": "6ab001d0966490317e22fb82",
+    "userId": "6aa965f1ffb7042723332bd7",
+    "merchantId": "6a491850f0b1ac63ab6766e6",
+    "merchantDetails": {
+      "name": "SUKI Design House",
+      "phone": "8848741790"
+    },
+    "items": [
+      {
+        "productId": "6a5a45a02fdcd189bfef558f",
+        "variantId": "6a5a45fa2fdcd189bfef55d3",
+        "name": "Royal Plum Embroidered Kurta Palazzo Set",
+        "quantity": 1,
+        "price": 4200,
+        "size": "S",
+        "image": "https://res.cloudinary.com/dpmliygpg/image/upload/v1784301049/products/qzdnbgzv2umkobcdou5q.jpg",
+        "_id": "6ab001d0966490317e22fb83"
+      },
+      {
+        "productId": "6a5a48062fdcd189bfef57d4",
+        "variantId": "6a5a48252fdcd189bfef5825",
+        "name": "Ivory Prism Panel Maxi Dress",
+        "quantity": 1,
+        "price": 1800,
+        "size": "S",
+        "image": "https://res.cloudinary.com/dpmliygpg/image/upload/v1784301604/products/wvi4llr6rrylhcu93f2s.jpg",
+        "_id": "6ab001d0966490317e22fb84"
+      }
+    ],
+    "totalAmount": 6000,
+    "deliveryCharge": 0,
+    "gst": 0,
+    "serviceGST": 0,
+    "deliveryTip": 0,
+    "discount": 0,
+    "totalPayable": 6000,
+    "appliedOffers": [],
+    "deliveryLocation": {
+      "name": "Aa",
+      "phone": "9999999999",
+      "addressLine1": "Aa",
+      "addressLine2": "Aa",
+      "landmark": "",
+      "city": "Ernakulam",
+      "state": "Kerala",
+      "pincode": "682017",
+      "country": "India",
+      "addressType": "Home",
+      "coordinates": [
+        76.29030704498292,
+        10.001141307819816
+      ]
+    },
+    "orderStatus": "placed",
+    "customerDeliveryStatus": "placed",
+    "paymentStatus": "pending",
+    "returnRequest": {
+      "status": "none",
+      "reason": null,
+      "faultType": null,
+      "returnCharge": 0,
+      "requestedAt": null,
+      "processedAt": null,
+      "images": [],
+      "items": []
+    },
+    "trackingDetails": {
+      "trackingId": null,
+      "courierPartner": null,
+      "trackingUrl": null,
+      "estimatedDelivery": null
+    },
+    "razorpayOrderId": "order_TeLdF0mzCUgjVg",
+    "razorpayPaymentId": null,
+    "settlementStatus": "unsettled",
+    "deliveredAt": null,
+    "createdAt": "2026-09-20T15:54:56.773Z",
+    "updatedAt": "2026-09-20T15:54:56.960Z",
+    "__v": 0
+  },
+  {
+    "_id": "6ab001e1966490317e22fb91",
+    "userId": "6aa965f1ffb7042723332bd7",
+    "merchantId": "6a491850f0b1ac63ab6766e6",
+    "merchantDetails": {
+      "name": "SUKI Design House",
+      "phone": "8848741790"
+    },
+    "items": [
+      {
+        "productId": "6a5a45a02fdcd189bfef558f",
+        "variantId": "6a5a45fa2fdcd189bfef55d3",
+        "name": "Royal Plum Embroidered Kurta Palazzo Set",
+        "quantity": 1,
+        "price": 4200,
+        "size": "S",
+        "image": "https://res.cloudinary.com/dpmliygpg/image/upload/v1784301049/products/qzdnbgzv2umkobcdou5q.jpg",
+        "_id": "6ab001e1966490317e22fb92"
+      },
+      {
+        "productId": "6a5a48062fdcd189bfef57d4",
+        "variantId": "6a5a48252fdcd189bfef5825",
+        "name": "Ivory Prism Panel Maxi Dress",
+        "quantity": 1,
+        "price": 1800,
+        "size": "S",
+        "image": "https://res.cloudinary.com/dpmliygpg/image/upload/v1784301604/products/wvi4llr6rrylhcu93f2s.jpg",
+        "_id": "6ab001e1966490317e22fb93"
+      }
+    ],
+    "totalAmount": 6000,
+    "deliveryCharge": 0,
+    "gst": 0,
+    "serviceGST": 0,
+    "deliveryTip": 0,
+    "discount": 0,
+    "totalPayable": 6000,
+    "appliedOffers": [],
+    "deliveryLocation": {
+      "name": "Aa",
+      "phone": "9999999999",
+      "addressLine1": "Aa",
+      "addressLine2": "Aa",
+      "landmark": "",
+      "city": "Ernakulam",
+      "state": "Kerala",
+      "pincode": "682017",
+      "country": "India",
+      "addressType": "Home",
+      "coordinates": [
+        76.29030704498292,
+        10.001141307819816
+      ]
+    },
+    "orderStatus": "placed",
+    "customerDeliveryStatus": "placed",
+    "paymentStatus": "pending",
+    "returnRequest": {
+      "status": "none",
+      "reason": null,
+      "faultType": null,
+      "returnCharge": 0,
+      "requestedAt": null,
+      "processedAt": null,
+      "images": [],
+      "items": []
+    },
+    "trackingDetails": {
+      "trackingId": null,
+      "courierPartner": null,
+      "trackingUrl": null,
+      "estimatedDelivery": null
+    },
+    "razorpayOrderId": "order_TeLdXa5KvUQOVr",
+    "razorpayPaymentId": null,
+    "settlementStatus": "unsettled",
+    "deliveredAt": null,
+    "createdAt": "2026-09-20T15:55:13.850Z",
+    "updatedAt": "2026-09-20T15:55:13.956Z",
+    "__v": 0
+  },
+  {
+    "_id": "6ab005d1966490317e22ff3f",
+    "userId": "6aa965f1ffb7042723332bd7",
+    "merchantId": "6a491850f0b1ac63ab6766e6",
+    "merchantDetails": {
+      "name": "SUKI Design House",
+      "phone": "8848741790"
+    },
+    "items": [
+      {
+        "productId": "6a5a45a02fdcd189bfef558f",
+        "variantId": "6a5a45fa2fdcd189bfef55d3",
+        "name": "Royal Plum Embroidered Kurta Palazzo Set",
+        "quantity": 1,
+        "price": 4200,
+        "size": "S",
+        "image": "https://res.cloudinary.com/dpmliygpg/image/upload/v1784301049/products/qzdnbgzv2umkobcdou5q.jpg",
+        "_id": "6ab005d1966490317e22ff40"
+      },
+      {
+        "productId": "6a5a48062fdcd189bfef57d4",
+        "variantId": "6a5a48252fdcd189bfef5825",
+        "name": "Ivory Prism Panel Maxi Dress",
+        "quantity": 1,
+        "price": 1800,
+        "size": "S",
+        "image": "https://res.cloudinary.com/dpmliygpg/image/upload/v1784301604/products/wvi4llr6rrylhcu93f2s.jpg",
+        "_id": "6ab005d1966490317e22ff41"
+      }
+    ],
+    "totalAmount": 6000,
+    "deliveryCharge": 0,
+    "gst": 0,
+    "serviceGST": 0,
+    "deliveryTip": 0,
+    "discount": 0,
+    "totalPayable": 6000,
+    "appliedOffers": [],
+    "deliveryLocation": {
+      "name": "Efron",
+      "phone": "8138834116",
+      "addressLine1": "Kachipuly",
+      "addressLine2": "Yem",
+      "landmark": "Tuwn",
+      "city": "Ernakulam",
+      "state": "Kerala",
+      "pincode": "682306",
+      "country": "India",
+      "addressType": "Home",
+      "coordinates": [
+        76.33634448051453,
+        9.97320412258985
+      ]
+    },
+    "orderStatus": "placed",
+    "customerDeliveryStatus": "placed",
+    "paymentStatus": "pending",
+    "returnRequest": {
+      "status": "none",
+      "reason": null,
+      "faultType": null,
+      "returnCharge": 0,
+      "requestedAt": null,
+      "processedAt": null,
+      "images": [],
+      "items": []
+    },
+    "trackingDetails": {
+      "trackingId": null,
+      "courierPartner": null,
+      "trackingUrl": null,
+      "estimatedDelivery": null
+    },
+    "razorpayOrderId": "order_TeLvHsJfwacjXw",
+    "razorpayPaymentId": null,
+    "settlementStatus": "unsettled",
+    "deliveredAt": null,
+    "createdAt": "2026-09-20T16:12:01.814Z",
+    "updatedAt": "2026-09-20T16:12:01.972Z",
+    "__v": 0
+  },
+  {
+    "_id": "6ab2dcfc7dc612397c5af3ff",
+    "userId": "6aa965f1ffb7042723332bd7",
+    "merchantId": "6a491850f0b1ac63ab6766e6",
+    "merchantDetails": {
+      "name": "SUKI Design House",
+      "phone": "8848741790"
+    },
+    "items": [
+      {
+        "productId": "6a5a45a02fdcd189bfef558f",
+        "variantId": "6a5a45fa2fdcd189bfef55d3",
+        "name": "Royal Plum Embroidered Kurta Palazzo Set",
+        "quantity": 1,
+        "price": 4200,
+        "size": "S",
+        "image": "https://res.cloudinary.com/dpmliygpg/image/upload/v1784301049/products/qzdnbgzv2umkobcdou5q.jpg",
+        "_id": "6ab2dcfc7dc612397c5af400"
+      },
+      {
+        "productId": "6a5a48062fdcd189bfef57d4",
+        "variantId": "6a5a48252fdcd189bfef5825",
+        "name": "Ivory Prism Panel Maxi Dress",
+        "quantity": 1,
+        "price": 1800,
+        "size": "S",
+        "image": "https://res.cloudinary.com/dpmliygpg/image/upload/v1784301604/products/wvi4llr6rrylhcu93f2s.jpg",
+        "_id": "6ab2dcfc7dc612397c5af401"
+      }
+    ],
+    "totalAmount": 6000,
+    "deliveryCharge": 0,
+    "gst": 0,
+    "serviceGST": 0,
+    "deliveryTip": 0,
+    "discount": 0,
+    "totalPayable": 6000,
+    "appliedOffers": [],
+    "deliveryLocation": {
+      "name": "Antony Efron K M",
+      "phone": "8138834116",
+      "addressLine1": "HRR2-34",
+      "addressLine2": "Django",
+      "landmark": "",
+      "city": "Ernakulam",
+      "state": "Kerala",
+      "pincode": "682017",
+      "country": "India",
+      "addressType": "Home",
+      "coordinates": [
+        76.2920393,
+        9.9951217
+      ]
+    },
+    "orderStatus": "placed",
+    "customerDeliveryStatus": "placed",
+    "paymentStatus": "pending",
+    "returnRequest": {
+      "status": "none",
+      "reason": null,
+      "faultType": null,
+      "returnCharge": 0,
+      "requestedAt": null,
+      "processedAt": null,
+      "images": [],
+      "items": []
+    },
+    "trackingDetails": {
+      "trackingId": null,
+      "courierPartner": null,
+      "trackingUrl": null,
+      "estimatedDelivery": null
+    },
+    "razorpayOrderId": "order_TfCmdwu9fuNzki",
+    "razorpayPaymentId": null,
+    "settlementStatus": "unsettled",
+    "deliveredAt": null,
+    "createdAt": "2026-09-22T19:54:36.388Z",
+    "updatedAt": "2026-09-22T19:54:36.580Z",
+    "__v": 0
+  }
+]

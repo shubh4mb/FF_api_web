@@ -58,6 +58,12 @@ export const appleLogin = asyncHandler(async (req, res) => {
   // 1. Check if user already exists by appleId
   let user = await User.findOne({ appleId });
 
+  // Sanitize referral code if provided
+  let sanitizedReferralCode = null;
+  if (referralCode && typeof referralCode === 'string' && referralCode.trim()) {
+    sanitizedReferralCode = referralCode.trim().toUpperCase();
+  }
+
   // 2. If not, check by email (if email was provided)
   if (!user && email) {
     user = await User.findOne({ email });
@@ -66,6 +72,13 @@ export const appleLogin = asyncHandler(async (req, res) => {
       user.appleId = appleId;
       if (!user.name && name) {
         user.name = name;
+      }
+      if (!user.referredBy && sanitizedReferralCode) {
+        const referrer = await User.findOne({ referralCode: sanitizedReferralCode });
+        if (referrer && referrer._id.toString() !== user._id.toString()) {
+          user.referredBy = referrer._id;
+          issueReferralCoupon(user._id, false).catch(err => console.error(err));
+        }
       }
       user.lastLogin = new Date();
       await user.save();
@@ -77,8 +90,8 @@ export const appleLogin = asyncHandler(async (req, res) => {
 
   // 3. If user still does not exist, create new user
   if (!user) {
-    if (referralCode) {
-      const referrer = await User.findOne({ referralCode: referralCode.toUpperCase() });
+    if (sanitizedReferralCode) {
+      const referrer = await User.findOne({ referralCode: sanitizedReferralCode });
       if (referrer) {
         referrerId = referrer._id;
       }

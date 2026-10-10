@@ -182,6 +182,9 @@ export const getMerchantAnalytics = async (req, res) => {
         ]);
 
         const formattedStats = stats.length > 0 ? stats[0] : { totalRevenue: 0, totalOrders: 0, deliveredOrders: 0, pendingOrders: 0, cancelledOrders: 0, returnedOrders: 0 };
+        const grossRevenue = formattedStats.totalRevenue || 0;
+        const platformCommission = Math.round(grossRevenue * 0.04);
+        const netRevenue = Math.max(0, grossRevenue - platformCommission);
         const avgOrderValue = formattedStats.deliveredOrders > 0 ? formattedStats.totalRevenue / formattedStats.deliveredOrders : 0;
         const returnRate = formattedStats.deliveredOrders > 0 ? (formattedStats.returnedOrders / formattedStats.deliveredOrders) * 100 : 0;
         const deliveryRate = formattedStats.totalOrders > 0 ? (formattedStats.deliveredOrders / formattedStats.totalOrders) * 100 : 0;
@@ -208,7 +211,15 @@ export const getMerchantAnalytics = async (req, res) => {
 
         res.status(200).json({
             success: true,
-            stats: { ...formattedStats, avgOrderValue, returnRate, deliveryRate },
+            stats: { 
+                ...formattedStats, 
+                grossRevenue, 
+                platformCommission, 
+                netRevenue, 
+                avgOrderValue, 
+                returnRate, 
+                deliveryRate 
+            },
             dailyTrend: (filledTrend.length > 0 ? filledTrend : dailyTrend).map(d => ({ date: d._id, ...d })),
             topProducts
         });

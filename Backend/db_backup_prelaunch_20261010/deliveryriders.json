@@ -1,0 +1,136 @@
+[
+  {
+    "_id": "6a45776e80bbd764a88a440b",
+    "phone": "8383823813",
+    "training": {
+      "videoWatched": false,
+      "completedAt": null
+    },
+    "isAvailable": true,
+    "isBusy": false,
+    "status": "active",
+    "isVerified": true,
+    "onboardingFeePaid": false,
+    "location": {
+      "coordinates": [
+        76.2891941,
+        10.0072375
+      ],
+      "updatedAt": "2026-10-09T22:02:16.378Z"
+    },
+    "currentOrderId": null,
+    "rating": 5,
+    "reviewCount": 6,
+    "expoPushTokens": [],
+    "createdAt": "2026-07-01T20:24:14.362Z",
+    "__v": 0,
+    "age": 25,
+    "city": "Ernakulam",
+    "dob": "2000-09-18T20:30:00.000Z",
+    "email": "shubhambiswas9899@gmail.com",
+    "fullName": "Shubham",
+    "gender": "Male",
+    "pincode": "682026",
+    "zoneId": "6a4398c4567d471ffedbad91",
+    "zoneName": "Ernakulam North",
+    "documents": {
+      "aadhaarFront": {
+        "public_id": "riders/6a45776e80bbd764a88a440b/documents/sq7nf0ptksh3oh2cpuwx",
+        "url": "https://res.cloudinary.com/dpmliygpg/image/upload/v1782939278/riders/6a45776e80bbd764a88a440b/documents/sq7nf0ptksh3oh2cpuwx.jpg"
+      },
+      "aadhaarBack": {
+        "public_id": "riders/6a45776e80bbd764a88a440b/documents/yplrvtyesioaxj3m7gj0",
+        "url": "https://res.cloudinary.com/dpmliygpg/image/upload/v1782939279/riders/6a45776e80bbd764a88a440b/documents/yplrvtyesioaxj3m7gj0.jpg"
+      },
+      "licenseFront": {
+        "public_id": "riders/6a45776e80bbd764a88a440b/documents/g9bucje5pfsmay4bu4if",
+        "url": "https://res.cloudinary.com/dpmliygpg/image/upload/v1782939281/riders/6a45776e80bbd764a88a440b/documents/g9bucje5pfsmay4bu4if.jpg"
+      },
+      "licenseBack": {
+        "public_id": "riders/6a45776e80bbd764a88a440b/documents/tybyj8cx1tenamcxkmvd",
+        "url": "https://res.cloudinary.com/dpmliygpg/image/upload/v1782939283/riders/6a45776e80bbd764a88a440b/documents/tybyj8cx1tenamcxkmvd.jpg"
+      },
+      "panFront": {
+        "public_id": "riders/6a45776e80bbd764a88a440b/documents/vhk4xcavsv6jrlzvs4dv",
+        "url": "https://res.cloudinary.com/dpmliygpg/image/upload/v1782939285/riders/6a45776e80bbd764a88a440b/documents/vhk4xcavsv6jrlzvs4dv.jpg"
+      },
+      "panBack": {
+        "public_id": "riders/6a45776e80bbd764a88a440b/documents/abdzbnnmk2egxhwikxux",
+        "url": "https://res.cloudinary.com/dpmliygpg/image/upload/v1782939286/riders/6a45776e80bbd764a88a440b/documents/abdzbnnmk2egxhwikxux.jpg"
+      }
+    },
+    "bankDetails": {
+      "accountHolderName": "sss",
+      "bankName": "State Bank of India (SBI)",
+      "accountNumber": "444"
+    },
+    "incidentCount": 0
+  },
+  {
+    "_id": "6aa97523eeae6dae95213d88",
+    "phone": "6282671491",
+    "training": {
+      "videoWatched": false,
+      "completedAt": null
+    },
+    "upiId": null,
+    "isAvailable": false,
+    "isBusy": false,
+    "status": "active",
+    "isVerified": true,
+    "onboardingFeePaid": false,
+    "location": {
+      "coordinates": [
+        76.2871865,
+        10.0113948
+      ],
+      "updatedAt": "2026-09-15T16:58:51.749Z"
+    },
+    "currentOrderId": null,
+    "rating": 0,
+    "reviewCount": 0,
+    "expoPushTokens": [],
+    "createdAt": "2026-09-15T16:41:07.441Z",
+    "__v": 0,
+    "age": 0,
+    "city": "Ernakulam",
+    "dob": "2026-09-15T16:44:00.000Z",
+    "email": "zz@gmail.com",
+    "fullName": "Vishak pv",
+    "gender": "Male",
+    "pincode": "546499",
+    "zoneId": "6a4398c4567d471ffedbad91",
+    "zoneName": "Ernakulam North",
+    "documents": {
+      "aadhaarFront": {
+        "public_id": "riders/6aa97523eeae6dae95213d88/documents/khubzwnepv9htcfpzyb0",
+        "url": "https://res.cloudinary.com/dpmliygpg/image/upload/v1789490720/riders/6aa97523eeae6dae95213d88/documents/khubzwnepv9htcfpzyb0.jpg"
+      },
+      "aadhaarBack": {
+        "public_id": "riders/6aa97523eeae6dae95213d88/documents/ietnrosy6qr8kevs9wxd",
+        "url": "https://res.cloudinary.com/dpmliygpg/image/upload/v1789490723/riders/6aa97523eeae6dae95213d88/documents/ietnrosy6qr8kevs9wxd.jpg"
+      },
+      "licenseFront": {
+        "public_id": "riders/6aa97523eeae6dae95213d88/documents/ar90kw1gu4etlhpavdnl",
+        "url": "https://res.cloudinary.com/dpmliygpg/image/upload/v1789490724/riders/6aa97523eeae6dae95213d88/documents/ar90kw1gu4etlhpavdnl.jpg"
+      },
+      "licenseBack": {
+        "public_id": "riders/6aa97523eeae6dae95213d88/documents/xozv9htja5ewk80mn6ct",
+        "url": "https://res.cloudinary.com/dpmliygpg/image/upload/v1789490726/riders/6aa97523eeae6dae95213d88/documents/xozv9htja5ewk80mn6ct.jpg"
+      },
+      "panFront": {
+        "public_id": "riders/6aa97523eeae6dae95213d88/documents/zldfy9zw9venlfvnugoe",
+        "url": "https://res.cloudinary.com/dpmliygpg/image/upload/v1789490728/riders/6aa97523eeae6dae95213d88/documents/zldfy9zw9venlfvnugoe.jpg"
+      },
+      "panBack": {
+        "public_id": "riders/6aa97523eeae6dae95213d88/documents/fdymdrmksp9zpyq3f15u",
+        "url": "https://res.cloudinary.com/dpmliygpg/image/upload/v1789490729/riders/6aa97523eeae6dae95213d88/documents/fdymdrmksp9zpyq3f15u.jpg"
+      }
+    },
+    "bankDetails": {
+      "accountHolderName": "Aa",
+      "bankName": "HDFC Bank",
+      "accountNumber": "11"
+    }
+  }
+]

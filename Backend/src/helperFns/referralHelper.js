@@ -5,32 +5,32 @@ import { notifyCustomer } from './notificationHelper.js';
 import crypto from 'crypto';
 
 /**
- * Issues a 14-day Free Delivery coupon to a user.
+ * Issues a 60-day Free Delivery coupon to a user.
  * @param {string} userId - The ID of the user receiving the coupon.
- * @param {boolean} isReferrer - Whether the user is the referrer (true) or the new user (false).
+ * @param {boolean} isReferrer - Whether the user is the referrer (true) or new user (false).
  */
-export const issueReferralCoupon = async (userId, isReferrer = false) => {
+export const issueReferralCoupon = async (userId, isReferrer = true) => {
   try {
     const user = await User.findById(userId);
     if (!user) return null;
 
-    // Generate a unique 8-character coupon code
-    const uniqueStr = crypto.randomBytes(4).toString('hex').toUpperCase();
+    // Generate a clean 6-character coupon code
+    const uniqueStr = crypto.randomBytes(3).toString('hex').toUpperCase();
     const prefix = isReferrer ? 'REF' : 'NEW';
     const couponCode = `${prefix}-FREEDEL-${uniqueStr}`;
 
     const startDate = new Date();
     const endDate = new Date();
-    endDate.setDate(endDate.getDate() + 14); // Valid for 14 days
+    endDate.setDate(endDate.getDate() + 60); // Valid for 60 days
 
-    // Create the offer
+    // Create the personalized offer
     const offer = await Offer.create({
       title: isReferrer ? 'Referral Reward: Free Delivery' : 'Welcome Gift: Free Delivery',
       description: isReferrer
-        ? 'You earned a free delivery coupon because your friend completed their first order!'
-        : 'Welcome! Enjoy free delivery on your first order.',
+        ? 'You earned a Free Delivery coupon because your referred friend completed their order!'
+        : 'Enjoy free delivery on your order.',
       badgeText: 'FREE DELIVERY',
-      type: 'FIRST_TIME_USER', // Using existing enum
+      type: 'FREE_DELIVERY',
       scope: 'admin',
       applicableTo: 'both',
       benefitType: 'DELIVERY',
@@ -38,26 +38,32 @@ export const issueReferralCoupon = async (userId, isReferrer = false) => {
       discountType: 'flat',
       discountValue: 0,
       freeDelivery: true,
+      freeReturn: true,
+      freeWaiting: true,
       startDate,
       endDate,
       couponCode,
       requiresCoupon: true,
       isPublic: false,
+      targetUserId: user._id,
       maxUsageTotal: 1,
       maxUsagePerUser: 1,
+      priority: 150,
+      isActive: true,
     });
 
-    // Notify the user
+    // Notify the user via push/in-app notification
     await notifyCustomer({
       userId,
       type: 'info',
-      title: 'Free Delivery Coupon! 🎁',
+      title: 'Free Delivery Reward! 🎁',
       body: isReferrer
-        ? `Your friend completed their first order! Use code ${couponCode} for Free Delivery.`
-        : `Welcome! Use code ${couponCode} for Free Delivery on your first order.`,
+        ? `Your friend completed their order! Use coupon ${couponCode} for Free Delivery on your next order.`
+        : `Use coupon ${couponCode} for Free Delivery on your order.`,
       data: { couponCode },
     });
 
+    console.log(`[Referral Reward] Successfully issued ${couponCode} to user ${userId}`);
     return offer;
   } catch (error) {
     console.error('Error issuing referral coupon:', error);
@@ -67,15 +73,30 @@ export const issueReferralCoupon = async (userId, isReferrer = false) => {
 
 /**
  * Handles logic when a user completes an order.
- * If it's their first order and they were referred, the referrer gets a coupon.
+ * If this is the referred user's first completed order, the referrer gets a free delivery coupon.
  * @param {string} newUserId - The ID of the user who completed the order.
  */
 export const handleFirstOrderCompletion = async (newUserId) => {
   try {
     const user = await User.findById(newUserId);
-    if (!user || !user.referredBy) return;
+    if (!user || !user.referredBy || user.referralRewardIssued) {
+      return;
+    }
 
-    // Issue the coupon to the referrer
+    // Atomically mark reward issued so it only ever triggers once
+    const updated = await User.findOneAndUpdate(
+      { _id: newUserId, referralRewardIssued: { $ne: true } },
+      { $set: { referralRewardIssued: true } },
+      { new: true }
+    );
+
+    if (!updated) {
+      return;
+    }
+
+    console.log(`[Referral Reward] Friend ${newUserId} completed first order. Rewarding referrer ${user.referredBy}...`);
+
+    // Issue the free delivery coupon to the referrer
     await issueReferralCoupon(user.referredBy, true);
   } catch (error) {
     console.error('Error handling first order completion referral reward:', error);

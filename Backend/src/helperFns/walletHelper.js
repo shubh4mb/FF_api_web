@@ -193,8 +193,21 @@ export async function getWalletDetails(ownerType, ownerId) {
     }
     combined.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 
+    let effectiveBalance = wallet.balance;
+    if (ownerType === 'merchant' && (!effectiveBalance || effectiveBalance === 0)) {
+        try {
+            const Merchant = (await import("../models/merchant.model.js")).default;
+            const m = await Merchant.findById(ownerId).select("earnings").lean();
+            if (m?.earnings?.pendingBalance !== undefined && m.earnings.pendingBalance > 0) {
+                effectiveBalance = m.earnings.pendingBalance;
+            }
+        } catch (mErr) {
+            console.warn("Could not fetch merchant pending balance for wallet:", mErr.message);
+        }
+    }
+
     return {
-        balance: wallet.balance,
+        balance: effectiveBalance,
         transactions: combined.slice(0, 30),
     };
 }

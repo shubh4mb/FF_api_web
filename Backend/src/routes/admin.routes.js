@@ -1,9 +1,10 @@
 import express from 'express';
 import { addCategory, getCategories, updateCategory, getCategoryById } from '../controllers/adminControllers/category.controllers.js';
-import { addMerchant, getMerchants, getMerchantById, updateMerchantById, verifyMerchant } from '../controllers/adminControllers/merchant.controllers.js';
+import { addMerchant, getMerchants, getMerchantById, updateMerchantById, verifyMerchant, toggleMerchantWarehouseStatus, assignWarehouseToMerchant, removeWarehouseFromMerchant, toggleMerchantStoreStatus } from '../controllers/adminControllers/merchant.controllers.js';
 import { addBrand, getBrands } from '../controllers/adminControllers/brand.controllers.js';
 import upload, { handleMulterError } from '../middleware/multer.js';
 import { getBaseProducts, getVariants, getBaseProductById, addVariant, getProductsByMerchantId, updateMatchingProducts, toggleProductStatus, toggleProductVerification } from '../controllers/adminControllers/product.controllers.js';
+import { editProduct, deleteProduct, updatePrice, updateVariant, deleteVariant } from '../controllers/merchantController/product.controllers.js';
 import { addTitleBanner } from '../controllers/adminControllers/titleBanner.controllers.js';
 import { addCart, getCart } from '../controllers/adminControllers/cart.controllers.js';
 import { addZone, getAllZones, checkZoneOverlap, updateZone, deleteZone } from '../controllers/adminControllers/zone.controllers.js';
@@ -88,6 +89,10 @@ router.get('/getMerchants', getMerchants);
 router.get('/getMerchant/:id', getMerchantById);
 router.patch('/updateMerchant/:id', verifyAdmin, upload.fields([{ name: 'logo', maxCount: 1 }, { name: 'backgroundImage', maxCount: 1 }]), handleMulterError, updateMerchantById);
 router.patch('/updateMerchant/:id/verify', verifyAdmin, verifyMerchant);
+router.patch('/merchant/:id/toggle-store-status', verifyAdmin, toggleMerchantStoreStatus);
+router.patch('/merchant/:id/warehouse/:warehouseId/toggle-status', verifyAdmin, toggleMerchantWarehouseStatus);
+router.post('/merchant/:id/warehouse/assign', verifyAdmin, assignWarehouseToMerchant);
+router.delete('/merchant/:id/warehouse/:warehouseId', verifyAdmin, removeWarehouseFromMerchant);
 
 // ── Brands ──
 router.post('/brand/add', verifyAdmin, upload.single('logo'), handleMulterError, addBrand);
@@ -98,6 +103,12 @@ router.get('/getBaseProducts', getBaseProducts);
 router.get('/getVariants', getVariants);
 router.get('/getBaseProductById/:productId', getBaseProductById);
 router.post('/addVariant/:productId', upload.array('images'), handleMulterError, addVariant);
+router.patch('/updateVariant/:productId/:variantId', verifyAdmin, upload.array('images'), handleMulterError, updateVariant);
+router.put('/updatePrice/:productId/:variantId', verifyAdmin, updatePrice);
+router.delete('/deleteVariant/:productId/:variantId', verifyAdmin, deleteVariant);
+router.patch('/editProduct/:id', verifyAdmin, editProduct);
+router.put('/editProduct/:id', verifyAdmin, editProduct);
+router.delete('/deleteProduct/:productId', verifyAdmin, deleteProduct);
 router.get('/products/merchant/:merchantId', getProductsByMerchantId);
 router.put('/updateMatchingProducts/:productId', updateMatchingProducts);
 router.patch('/updateProductStatus/:productId', verifyAdmin, toggleProductStatus);
@@ -152,7 +163,7 @@ router.delete('/incentives/:id', verifyAdmin, deleteIncentive);
 router.get('/payouts', verifyAdmin, getPayouts);
 router.get('/payouts/pending', verifyAdmin, getPendingPayouts);
 router.get('/payouts/:id', verifyAdmin, getPayoutById);
-router.post('/payouts/:id/mark-paid', verifyAdmin, markPayoutPaid);
+router.post('/payouts/:id/mark-paid', verifyAdmin, upload.single('receipt'), handleMulterError, markPayoutPaid);
 router.post('/payouts/trigger', verifyAdmin, triggerPayout);
 
 // ── Financial Transactions & Ledger ──

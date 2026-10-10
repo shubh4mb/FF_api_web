@@ -6,6 +6,7 @@ import CourierCart from '../../models/courierCart.model.js';
 import { asyncHandler } from '../../utils/asyncHandler.js';
 import { ApiError } from '../../utils/ApiError.js';
 import { generateColorVariantId } from '../../utils/variantAdapter.js';
+import { isBackendInTestMode, getTestMerchant } from "../../helperFns/testModeHelper.js";
 
 /**
  * Helper: check if a warehouse is currently active and serving the user's zone.
@@ -19,20 +20,54 @@ const getActiveWarehouse = async (warehouseId) => {
  * Fast path to get all approved merchants assigned to the local warehouse.
  */
 export const getWarehouseMerchants = asyncHandler(async (req, res) => {
+  // ── Testing Mode Override (Isolate to SB Fashion in FlashMart) ──
+  const inTestMode = await isBackendInTestMode();
+  if (inTestMode) {
+    const testMerchant = await getTestMerchant();
+    if (testMerchant) {
+      return res.status(200).json({
+        merchants: [{
+          _id: testMerchant._id,
+          shopName: testMerchant.shopName,
+          logo: testMerchant.logo,
+          isOnline: true,
+          rating: testMerchant.rating || 4.8,
+          reviewCount: testMerchant.reviewCount || 10,
+          warehouseStatus: 'approved',
+          assignedWarehouseIds: testMerchant.assignedWarehouseIds || []
+        }]
+      });
+    }
+  }
+
   if (!req.nearbyWarehouseIds || req.nearbyWarehouseIds.length === 0) {
     return res.status(200).json({ merchants: [] });
   }
 
   const merchants = await Merchant.find({
-    isActive: true,
     isVerified: true,
     warehouseStatus: 'approved',
-    assignedWarehouseIds: { $in: req.nearbyWarehouseIds }
+    assignedWarehouseIds: { $in: req.nearbyWarehouseIds },
+    status: { $nin: ['suspended', 'rejected'] }
   })
-    .select('_id shopName logo isOnline rating reviewCount')
+    .select('_id shopName logo isOnline rating reviewCount warehouseAssignments assignedWarehouseIds')
     .lean();
 
-  return res.status(200).json({ merchants });
+  const nearbyWhIdsSet = new Set(req.nearbyWarehouseIds.map(id => id.toString()));
+  const activeMerchants = merchants.filter(m => {
+    const assignments = m.warehouseAssignments || [];
+    const relevantAssignments = assignments.filter(wa => {
+      const wId = (wa.warehouseId?._id || wa.warehouseId)?.toString();
+      return nearbyWhIdsSet.has(wId);
+    });
+
+    if (relevantAssignments.length > 0) {
+      return relevantAssignments.some(wa => wa.isActive !== false);
+    }
+    return true;
+  });
+
+  return res.status(200).json({ merchants: activeMerchants });
 });
 
 /**
@@ -52,8 +87,20 @@ export const getWarehouseProducts = asyncHandler(async (req, res) => {
   if (gender && gender !== 'All') {
     filter.gender = { $in: [new RegExp("^" + gender + "$", "i")] };
   }
-  if (categoryId) filter.categoryId = categoryId;
-  if (subCategoryId) filter.subCategoryId = subCategoryId;
+  if (categoryId) {
+    const cId = mongoose.Types.ObjectId.isValid(categoryId) ? new mongoose.Types.ObjectId(categoryId) : categoryId;
+    filter.$and = filter.$and || [];
+    filter.$and.push({
+      $or: [{ categoryId: cId }, { additionalCategoryIds: cId }]
+    });
+  }
+  if (subCategoryId) {
+    const sId = mongoose.Types.ObjectId.isValid(subCategoryId) ? new mongoose.Types.ObjectId(subCategoryId) : subCategoryId;
+    filter.$and = filter.$and || [];
+    filter.$and.push({
+      $or: [{ subCategoryId: sId }, { additionalCategoryIds: sId }]
+    });
+  }
 
   const skip = (Number(page) - 1) * Number(limit);
 

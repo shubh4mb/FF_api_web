@@ -309,6 +309,8 @@ export const getAllTransactions = async (req, res) => {
     // Fetch items with sort
     const transactions = await Transaction.find(query)
       .populate("orderId", "totalAmount orderStatus paymentStatus")
+      .populate("courierOrderId", "totalAmount totalPayable orderStatus paymentStatus")
+      .populate("warehouseOrderId", "totalAmount finalBilling orderStatus paymentStatus")
       .populate("weeklyPayoutId", "weekStart weekEnd finalAmount status")
       .sort({ createdAt: -1 })
       .skip(skip)
@@ -508,11 +510,15 @@ export const getTransactionById = async (req, res) => {
     if (mongoose.Types.ObjectId.isValid(id)) {
       txn = await Transaction.findById(id)
         .populate("orderId")
+        .populate("courierOrderId")
+        .populate("warehouseOrderId")
         .populate("weeklyPayoutId")
         .populate("performedBy.adminId", "name email");
     } else {
       txn = await Transaction.findOne({ transactionId: id })
         .populate("orderId")
+        .populate("courierOrderId")
+        .populate("warehouseOrderId")
         .populate("weeklyPayoutId")
         .populate("performedBy.adminId", "name email");
     }

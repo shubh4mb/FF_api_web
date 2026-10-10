@@ -33,7 +33,7 @@ import userBannerRoutes from './userBanner.routes.js';
 import { getCollectionsForHome, getCollectionDetails } from '../controllers/userControllers/collection.controllers.js';
 import { getHomeFeed } from '../controllers/userControllers/home.controllers.js';
 import { getReferralStats } from '../controllers/userControllers/referral.controllers.js';
-import { getAppVersionPolicy, getSystemStatus } from '../controllers/adminControllers/appConfig.controllers.js';
+import { getAppVersionPolicy, getSystemStatus, getPromotions } from '../controllers/adminControllers/appConfig.controllers.js';
 
 const router = express.Router();
 
@@ -47,6 +47,7 @@ const router = express.Router();
 // ── App Version Policy & System Status (Public) ──
 router.get('/app-version', getAppVersionPolicy);
 router.get('/system-status', getSystemStatus);
+router.get('/promotions', getPromotions);
 
 router.use('/banners', userBannerRoutes);
 

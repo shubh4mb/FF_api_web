@@ -67,6 +67,12 @@ export const googleLogin = asyncHandler(async (req, res) => {
   // 1. Check if user already exists by googleId
   let user = await User.findOne({ googleId });
 
+  // Sanitize referral code if provided
+  let sanitizedReferralCode = null;
+  if (referralCode && typeof referralCode === 'string' && referralCode.trim()) {
+    sanitizedReferralCode = referralCode.trim().toUpperCase();
+  }
+
   // 2. If not, check by email
   if (!user) {
     user = await User.findOne({ email });
@@ -75,6 +81,13 @@ export const googleLogin = asyncHandler(async (req, res) => {
       user.googleId = googleId;
       if (!user.profilePicture) {
         user.profilePicture = picture || '';
+      }
+      if (!user.referredBy && sanitizedReferralCode) {
+        const referrer = await User.findOne({ referralCode: sanitizedReferralCode });
+        if (referrer && referrer._id.toString() !== user._id.toString()) {
+          user.referredBy = referrer._id;
+          issueReferralCoupon(user._id, false).catch(err => console.error(err));
+        }
       }
       user.lastLogin = new Date();
       await user.save();
@@ -85,8 +98,8 @@ export const googleLogin = asyncHandler(async (req, res) => {
   let referrerId = null;
   // 3. If still doesn't exist, create a new user
   if (!user) {
-    if (referralCode) {
-      const referrer = await User.findOne({ referralCode: referralCode.toUpperCase() });
+    if (sanitizedReferralCode) {
+      const referrer = await User.findOne({ referralCode: sanitizedReferralCode });
       if (referrer) {
         referrerId = referrer._id;
       }

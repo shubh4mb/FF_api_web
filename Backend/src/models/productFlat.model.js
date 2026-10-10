@@ -52,6 +52,10 @@ const productFlatSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Category',
   },
+  additionalCategoryIds: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Category',
+  }],
   gender: {
     type: [String],
     enum: ['MEN', 'WOMEN', 'KIDS', 'BOYS', 'GIRLS'],
@@ -118,6 +122,7 @@ const productFlatSchema = new mongoose.Schema({
 productFlatSchema.index({ gender: 1, subCategoryId: 1 });
 productFlatSchema.index({ merchantId: 1, gender: 1 });
 productFlatSchema.index({ styleGroupId: 1, "color.name": 1, size: 1 }, { unique: true });
+productFlatSchema.index({ additionalCategoryIds: 1 });
 
 productFlatSchema.pre('save', function (next) {
   if (this.isNew && !this.productCode) {

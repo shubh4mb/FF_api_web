@@ -21,8 +21,19 @@ export const getAssignedMerchants = asyncHandler(async (req, res) => {
     assignedWarehouseIds: warehouseId,
     warehouseStatus: "approved",
   })
-    .select("_id shopName ownerName email phoneNumber")
+    .select("_id shopName ownerName email phoneNumber warehouseAssignments")
     .lean();
 
-  return res.status(200).json(new ApiResponse(200, { merchants }, "Assigned merchants retrieved successfully"));
+  const formatted = merchants.map(m => {
+    const wa = (m.warehouseAssignments || []).find(a => 
+      (a.warehouseId?._id || a.warehouseId)?.toString() === warehouseId.toString()
+    );
+    return {
+      ...m,
+      isHubActive: wa ? wa.isActive !== false : true,
+      hubDeactivationReason: wa?.reason || null
+    };
+  });
+
+  return res.status(200).json(new ApiResponse(200, { merchants: formatted }, "Assigned merchants retrieved successfully"));
 });

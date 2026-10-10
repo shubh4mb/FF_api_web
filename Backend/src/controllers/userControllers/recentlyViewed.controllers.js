@@ -82,7 +82,7 @@ export const getMyRecentlyViewed = asyncHandler(async (req, res) => {
     const styleGroupId = item.productId.toString();
     const siblings = await ProductFlat.find({ styleGroupId, isDeleted: { $ne: true } })
       .populate('brandId', 'name')
-      .populate('merchantId', 'shopName isOnline isZoneLive fulfillmentType')
+      .populate('merchantId', 'shopName isOnline isZoneLive fulfillmentType isActive status isVerified')
       .lean();
 
     if (siblings.length > 0) {
@@ -95,7 +95,18 @@ export const getMyRecentlyViewed = asyncHandler(async (req, res) => {
       const merchantIdVal = merchantObj?._id || matched.merchantId;
 
       const isWh = matched.source === 'warehouse' || !!matched.warehouseId || merchantObj?.fulfillmentType === 'warehouse';
-      const isWhNearby = matched.warehouseId ? nearbyWhSet.has(matched.warehouseId.toString()) : (isWh && nearbyWhSet.size > 0);
+
+      // Check active state for both merchant and product
+      const isMerchantActive = isWh ? true : (merchantObj ? (merchantObj.isActive !== false && merchantObj.status !== 'suspended' && merchantObj.status !== 'rejected') : true);
+      const isProductActive = matched.isActive !== false && matched.isVerified !== false;
+
+      // In Recently Viewed, omit items if merchant or product is inactive/suspended
+      if (!isMerchantActive || !isProductActive) {
+        continue;
+      }
+
+      const whIdStr = (matched.warehouseId?._id || matched.warehouseId)?.toString();
+      const isWhNearby = whIdStr ? nearbyWhSet.has(whIdStr) : (isWh && nearbyWhSet.size > 0);
 
       const isMerchantNearby = merchantIdVal ? nearbySet.has(merchantIdVal.toString()) : false;
       const isNearby = isWh ? isWhNearby : isMerchantNearby;
@@ -129,6 +140,8 @@ export const getMyRecentlyViewed = asyncHandler(async (req, res) => {
         isWarehouseListing: isWh,
         source: isWh ? 'warehouse' : (matched.source || 'shop'),
         isOnline,
+        isStoreInactive: false,
+        isAvailable: true,
         stock: totalStock,
         totalStock,
         inStock: totalStock > 0,

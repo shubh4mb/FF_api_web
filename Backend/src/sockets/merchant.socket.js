@@ -4,24 +4,37 @@ import { setMerchantMeta, getMerchantMeta } from "../helperFns/merchantFns.js";
 import { sendPushNotifications } from "../helperFns/notificationHelper.js";
 
 export const registerMerchantSockets = (io, socket) => {
+  const queryMerchantId = socket.handshake.query.merchantId;
+  if (queryMerchantId) {
+    socket.join(`merchant:${queryMerchantId}`);
+    socket.data.merchantId = queryMerchantId;
+    console.log(`🔌 [Socket] Merchant ${queryMerchantId} auto-joined room merchant:${queryMerchantId} from handshake query`);
+  }
+
   socket.on("registerMerchant", async (merchantId) => {
-    const merchant = await Merchant.findById(merchantId);
-    if (!merchant) return;
+    if (!merchantId) return;
+    const mId = String(merchantId);
+    socket.join(`merchant:${mId}`);
+    socket.data.merchantId = mId;
 
-    // Join a Socket.io room specific to this merchant
-    socket.join(`merchant:${merchantId}`);
-    socket.data.merchantId = merchantId; // store merchantId on socket itself
-
-    if (merchant.accountType === 'warehouse' && merchant.warehouseId) {
-      socket.join(`warehouse:${merchant.warehouseId}`);
-      socket.data.warehouseId = merchant.warehouseId;
-      console.log(`✅ Warehouse operator ${merchantId} joined room warehouse:${merchant.warehouseId}`);
+    try {
+      const merchant = await Merchant.findById(mId);
+      if (merchant) {
+        const whId = merchant.warehouseId || merchant.assignedWarehouse;
+        if (whId) {
+          socket.join(`warehouse:${whId}`);
+          socket.data.warehouseId = String(whId);
+          console.log(`✅ Merchant ${mId} also joined warehouse room warehouse:${whId}`);
+        }
+      }
+    } catch (err) {
+      console.warn("Error resolving merchant warehouse rooms:", err);
     }
 
     // Update Redis State — mark merchant ONLINE so emitOrderUpdate delivers events
-    await setMerchantMeta(merchantId, { lastSeenAt: Date.now(), isOnline: true });
+    await setMerchantMeta(mId, { lastSeenAt: Date.now(), isOnline: true }).catch(() => {});
 
-    console.log(`✅ Merchant ${merchantId} connected with socket ${socket.id} to room merchant:${merchantId}`);
+    console.log(`✅ Merchant ${mId} registered socket ${socket.id} to room merchant:${mId}`);
   });
 
   socket.on("disconnect", async () => {
@@ -49,9 +62,10 @@ export const notifyMerchant = async (io, merchantId, orderData) => {
   const mId = String(merchantId);
   const room = `merchant:${mId}`;
 
-  // Always attempt to emit to the socket room first
+  // Always emit both event names for maximum client compatibility
   io.to(room).emit("newOrder", orderData);
-  console.log(`📩 [Socket] Attempted newOrder emission to room ${room}`);
+  io.to(room).emit("newWarehouseOrder", orderData);
+  console.log(`📩 [Socket] Emitted newOrder & newWarehouseOrder to room ${room}`);
 
   // Send Push Notification
   try {

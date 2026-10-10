@@ -18,6 +18,7 @@ import crypto from 'crypto';
 import { calculateFinalBilling } from "../../helperFns/calculateFinalBilling.js";
 import { enqueueOrder } from "../../helperFns/orderFns.js";
 import { notifyOrderEvent } from "../../helperFns/notificationHelper.js";
+import { isBackendInTestMode } from "../../helperFns/testModeHelper.js";
 import mongoose from 'mongoose';
 import { findBestOffers, recordOfferUsage, validateOfferEligibility, getApplicableAmount, calculateDiscount } from '../../services/offerEngine.js';
 import Offer from '../../models/offer.model.js';
@@ -120,8 +121,13 @@ export const createRazorpayOrder = async (req, res) => {
       return res.status(404).json({ message: "Merchant not found" });
     }
 
+    // === FETCH APP CONFIG & TEST MODE ===
+    const AppConfig = (await import("../../models/appConfig.model.js")).default;
+    const config = await AppConfig.getConfig();
+    const inTestMode = await isBackendInTestMode();
+
     // === VALIDATE MERCHANT STATUS ===
-    if (merchant.isOnline === false) {
+    if (!inTestMode && merchant.isOnline === false) {
       return res.status(400).json({ 
         success: false, 
         message: "This merchant is currently offline and not accepting orders. Please try again later." 
@@ -129,13 +135,9 @@ export const createRazorpayOrder = async (req, res) => {
     }
 
     const merchantCoords = merchant.address.location.coordinates;
-    
-    // === FETCH APP CONFIG ===
-    const AppConfig = (await import("../../models/appConfig.model.js")).default;
-    const config = await AppConfig.getConfig();
 
     // === VALIDATE GLOBAL ORDER PLACEMENT (MAINTENANCE MODE) ===
-    if (config.isOrderPlacementEnabled === false) {
+    if (!inTestMode && config.isOrderPlacementEnabled === false) {
       return res.status(403).json({
         success: false,
         isMaintenance: true,
@@ -153,7 +155,7 @@ export const createRazorpayOrder = async (req, res) => {
     });
 
     // === TRY & BUY RADIUS VALIDATION ===
-    if (roadDistanceKm > config.tryAndBuyRadius) {
+    if (!inTestMode && roadDistanceKm > config.tryAndBuyRadius) {
       return res.status(400).json({
         success: false,
         serviceable: false,
@@ -836,6 +838,14 @@ export const orderPacked = async (req, res) => {
 
   const order = await Order.findById(orderId);
   if (!order) return res.status(404).json({ message: "Order not found" });
+
+  if (['cancelled', 'rejected'].includes(order.orderStatus) || order.customerDeliveryStatus === 'cancelled') {
+    return res.status(400).json({ message: "Cannot mark packed: this order has already been cancelled" });
+  }
+
+  if (order.orderStatus !== 'accepted') {
+    return res.status(400).json({ message: `Cannot pack order in '${order.orderStatus}' state. Order must be in 'accepted' state.` });
+  }
 
   order.orderStatus = "packed"
   await order.save();

@@ -1,0 +1,612 @@
+[
+  {
+    "_id": "6a4b5ba11b70cf59848da5ab",
+    "userId": "6a4900efea78373da07b4c7d",
+    "items": [
+      {
+        "productId": "6aad0d61481fe017fdb384e3",
+        "variantId": "6aad0d61481fe017fdb384f3",
+        "image": {
+          "url": "https://res.cloudinary.com/dpmliygpg/image/upload/v1789681558/products/vuzoogmd7knwpt6zmipi.jpg"
+        },
+        "size": "M",
+        "quantity": 1,
+        "stockQuantity": 1,
+        "merchantId": "6aa17e8fdbaf8b6cf8cf75a8",
+        "source": "warehouse",
+        "warehouseId": "6a5e4d630906bf3164ab4db5",
+        "warehouseProductId": "6aad0d61481fe017fdb384e3",
+        "_id": "6ab04d7f966490317e2306bd"
+      },
+      {
+        "productId": "6aac5f9b2b6e0dcf9badf115",
+        "variantId": "6aac5f9c2b6e0dcf9badf125",
+        "image": {
+          "url": "https://res.cloudinary.com/dpmliygpg/image/upload/v1789681558/products/vuzoogmd7knwpt6zmipi.jpg"
+        },
+        "size": "XL",
+        "quantity": 1,
+        "stockQuantity": 5,
+        "merchantId": null,
+        "source": "warehouse",
+        "warehouseId": "6a5e4d630906bf3164ab4db5",
+        "warehouseProductId": "6aac5f9b2b6e0dcf9badf115",
+        "_id": "6ab68ef1f4ae382872ac7607"
+      }
+    ],
+    "couponCode": null,
+    "selectedOffers": [],
+    "updatedAt": "2026-10-09T21:58:46.391Z",
+    "__v": 82
+  },
+  {
+    "_id": "6a5a5cfc2fdcd189bfef5cd8",
+    "userId": "6a54ea402fdcd189bfeed97a",
+    "items": [],
+    "couponCode": "SBFREEDEL",
+    "selectedOffers": [],
+    "updatedAt": "2026-10-08T10:15:35.190Z",
+    "__v": 12
+  },
+  {
+    "_id": "6a79bce27779baaf28d07f62",
+    "userId": "6a79bcbe7779baaf28d07e74",
+    "items": [
+      {
+        "productId": "6a52ce12f5d225d81a328521",
+        "variantId": "6a52d11ac46a7c32af09b920",
+        "image": {
+          "url": "https://res.cloudinary.com/dpmliygpg/image/upload/v1783812376/products/hqdqfkbpawxr5wfkzqyc.jpg"
+        },
+        "size": "S",
+        "quantity": 1,
+        "stockQuantity": 443,
+        "merchantId": "6a52c077f5d225d81a327965",
+        "source": "shop",
+        "warehouseId": null,
+        "warehouseProductId": null,
+        "_id": "6a79bce27779baaf28d07f63"
+      },
+      {
+        "productId": "6a5a48062fdcd189bfef57d4",
+        "variantId": "6a5a48252fdcd189bfef5824",
+        "image": {
+          "url": "https://res.cloudinary.com/dpmliygpg/image/upload/v1784301604/products/wvi4llr6rrylhcu93f2s.jpg"
+        },
+        "size": "S",
+        "quantity": 1,
+        "stockQuantity": 3,
+        "merchantId": "6a491850f0b1ac63ab6766e6",
+        "source": "shop",
+        "warehouseId": null,
+        "warehouseProductId": null,
+        "_id": "6a79bd127779baaf28d07fef"
+      },
+      {
+        "productId": "6abb14477e1ee7ec6f31e134",
+        "variantId": "6abb14497e1ee7ec6f31e135",
+        "image": {
+          "url": "https://res.cloudinary.com/dpmliygpg/image/upload/v1790645320/products/pfqcs543en01jnzwhhf8.jpg"
+        },
+        "size": "28",
+        "quantity": 1,
+        "stockQuantity": 1,
+        "merchantId": "6a5b52df2fdcd189bfef67c1",
+        "source": "shop",
+        "warehouseId": null,
+        "warehouseProductId": null,
+        "_id": "6abeb1348b4f200d945d30c2"
+      },
+      {
+        "productId": "6a5a42d62fdcd189bfef52dd",
+        "variantId": "6a5a43202fdcd189bfef5312",
+        "image": {
+          "url": "https://res.cloudinary.com/dpmliygpg/image/upload/v1784300319/products/mdvcxl6oh8hnqmdu5brj.jpg"
+        },
+        "size": "L",
+        "quantity": 1,
+        "stockQuantity": 3,
+        "merchantId": "6a491850f0b1ac63ab6766e6",
+        "source": "shop",
+        "warehouseId": null,
+        "warehouseProductId": null,
+        "_id": "6abeb1818b4f200d945d3197"
+      }
+    ],
+    "couponCode": null,
+    "selectedOffers": [],
+    "updatedAt": "2026-10-01T19:16:17.835Z",
+    "__v": 3
+  },
+  {
+    "_id": "6a7b84927779baaf28d09d66",
+    "userId": "6a79be637779baaf28d08496",
+    "items": [
+      {
+        "productId": "6a54d0a12fdcd189bfeed3d7",
+        "variantId": "6a54d1382fdcd189bfeed3f7",
+        "image": {
+          "url": "https://res.cloudinary.com/dpmliygpg/image/upload/v1783943479/products/zko7xnwvzc6hkacun896.jpg"
+        },
+        "size": "S",
+        "quantity": 1,
+        "stockQuantity": 2,
+        "merchantId": "6a491850f0b1ac63ab6766e6",
+        "source": "shop",
+        "warehouseId": null,
+        "warehouseProductId": null,
+        "_id": "6a7b84927779baaf28d09d67"
+      }
+    ],
+    "couponCode": null,
+    "selectedOffers": [],
+    "updatedAt": "2026-08-11T20:22:42.526Z",
+    "__v": 0
+  },
+  {
+    "_id": "6a8d42a77779baaf28d1278f",
+    "userId": "6a85768f7779baaf28d0fba5",
+    "items": [
+      {
+        "productId": "6a5f5f2576055ea046fd72c3",
+        "variantId": "6a5f5f2576055ea046fd72c7",
+        "image": {
+          "url": "https://res.cloudinary.com/dpmliygpg/image/upload/v1784635173/warehouse-products/mwmu6y5uwcweetczmugp.jpg"
+        },
+        "size": "S",
+        "quantity": 1,
+        "stockQuantity": 346,
+        "merchantId": "6a52c077f5d225d81a327965",
+        "source": "warehouse",
+        "warehouseId": "6a5e4d630906bf3164ab4db5",
+        "warehouseProductId": "6a5f5f2576055ea046fd72c3",
+        "_id": "6a8d42a77779baaf28d12790"
+      }
+    ],
+    "couponCode": null,
+    "selectedOffers": [],
+    "updatedAt": "2026-08-25T07:22:15.196Z",
+    "__v": 0
+  },
+  {
+    "_id": "6a9554dd84d5e2f0be0f0e34",
+    "userId": "6a9554a984d5e2f0be0f0d40",
+    "items": [
+      {
+        "productId": "6a5f5f2576055ea046fd72c3",
+        "variantId": "6a70bbab9b593d8098545ae5",
+        "image": {
+          "url": "https://res.cloudinary.com/dpmliygpg/image/upload/v1784635173/warehouse-products/mwmu6y5uwcweetczmugp.jpg"
+        },
+        "size": "M",
+        "quantity": 1,
+        "stockQuantity": 34,
+        "merchantId": "6a52c077f5d225d81a327965",
+        "source": "warehouse",
+        "warehouseId": "6a5e4d630906bf3164ab4db5",
+        "warehouseProductId": "6a5f5f2576055ea046fd72c3",
+        "_id": "6a9554dd84d5e2f0be0f0e35"
+      }
+    ],
+    "couponCode": null,
+    "selectedOffers": [],
+    "updatedAt": "2026-08-31T10:18:05.362Z",
+    "__v": 0
+  },
+  {
+    "_id": "6aa2e0c54f18a949e6b1a672",
+    "userId": "6a9da1337779baaf28d192d6",
+    "items": [
+      {
+        "productId": "6a9d4785319820f47b26adb7",
+        "variantId": "6a9d4785319820f47b26adb8",
+        "image": {
+          "url": "https://res.cloudinary.com/dpmliygpg/image/upload/v1785770490/products/kpjjqu8eh90yjbxyyq97.jpg"
+        },
+        "size": "L",
+        "quantity": 1,
+        "stockQuantity": 5,
+        "merchantId": "6a52c077f5d225d81a327965",
+        "source": "warehouse",
+        "warehouseId": "6a5e4d630906bf3164ab4db5",
+        "warehouseProductId": "6a9d4785319820f47b26adb7",
+        "_id": "6aa2e0c54f18a949e6b1a673"
+      }
+    ],
+    "couponCode": null,
+    "selectedOffers": [],
+    "updatedAt": "2026-09-10T16:54:29.276Z",
+    "__v": 0
+  },
+  {
+    "_id": "6aa3eb064f18a949e6b1c7a2",
+    "userId": "6aa3e7044f18a949e6b1b66c",
+    "items": [
+      {
+        "productId": "6a5f5f2576055ea046fd72c3",
+        "variantId": "6a70bbab9b593d8098545ae5",
+        "image": {
+          "url": "https://res.cloudinary.com/dpmliygpg/image/upload/v1784635173/warehouse-products/mwmu6y5uwcweetczmugp.jpg"
+        },
+        "size": "S",
+        "quantity": 1,
+        "stockQuantity": 346,
+        "merchantId": "6a52c077f5d225d81a327965",
+        "source": "warehouse",
+        "warehouseId": "6a5e4d630906bf3164ab4db5",
+        "warehouseProductId": "6a5f5f2576055ea046fd72c3",
+        "_id": "6aa3eb064f18a949e6b1c7a3"
+      }
+    ],
+    "couponCode": null,
+    "selectedOffers": [],
+    "updatedAt": "2026-09-11T11:50:30.878Z",
+    "__v": 0
+  },
+  {
+    "_id": "6aa9721eeeae6dae95213ba6",
+    "userId": "6aa965f1ffb7042723332bd7",
+    "items": [
+      {
+        "productId": "6abb14477e1ee7ec6f31e134",
+        "variantId": "6abb14497e1ee7ec6f31e135",
+        "image": {
+          "url": "https://res.cloudinary.com/dpmliygpg/image/upload/v1790645320/products/pfqcs543en01jnzwhhf8.jpg"
+        },
+        "size": "28",
+        "quantity": 1,
+        "stockQuantity": 1,
+        "merchantId": "6a5b52df2fdcd189bfef67c1",
+        "source": "shop",
+        "warehouseId": null,
+        "warehouseProductId": null,
+        "_id": "6abbea9e7b60d8ee8f836e2c"
+      }
+    ],
+    "couponCode": null,
+    "selectedOffers": [],
+    "updatedAt": "2026-09-29T16:43:10.850Z",
+    "__v": 18
+  },
+  {
+    "_id": "6ab17b27966490317e233a6c",
+    "userId": "6ab17831966490317e23390e",
+    "items": [
+      {
+        "productId": "6a5bf9ec2fdcd189bfef7093",
+        "variantId": "6a70bbaa9b593d8098545a8d",
+        "image": {
+          "url": "https://res.cloudinary.com/dpmliygpg/image/upload/v1784412843/products/lgwrxkaow0hvddlzrnrj.jpg"
+        },
+        "size": "S",
+        "quantity": 1,
+        "stockQuantity": 1,
+        "merchantId": "6a55077e2fdcd189bfeee3c1",
+        "source": "shop",
+        "warehouseId": null,
+        "warehouseProductId": null,
+        "_id": "6ab17b27966490317e233a6d"
+      }
+    ],
+    "couponCode": null,
+    "selectedOffers": [],
+    "updatedAt": "2026-09-21T18:44:55.700Z",
+    "__v": 0
+  },
+  {
+    "_id": "6ab607587dc612397c5b4a1a",
+    "userId": "6ab4d8647dc612397c5b2751",
+    "items": [
+      {
+        "productId": "6aac5fa52b6e0dcf9badf14e",
+        "variantId": "6aac5fa52b6e0dcf9badf14f",
+        "image": {
+          "url": "https://res.cloudinary.com/dpmliygpg/image/upload/v1789681569/products/agalswavrbbosnntdtms.jpg"
+        },
+        "size": "S",
+        "quantity": 1,
+        "stockQuantity": 5,
+        "merchantId": null,
+        "source": "warehouse",
+        "warehouseId": "6a5e4d630906bf3164ab4db5",
+        "warehouseProductId": "6aac5fa52b6e0dcf9badf14e",
+        "_id": "6ab607587dc612397c5b4a1b"
+      }
+    ],
+    "couponCode": null,
+    "selectedOffers": [],
+    "updatedAt": "2026-09-25T05:32:08.345Z",
+    "__v": 0
+  },
+  {
+    "_id": "6ab7593e7dc612397c5b6bbb",
+    "userId": "6a7c65037779baaf28d0adfb",
+    "items": [],
+    "couponCode": null,
+    "selectedOffers": [],
+    "updatedAt": "2026-09-26T05:33:50.420Z",
+    "__v": 1
+  },
+  {
+    "_id": "6aba734760eed84bd77ab2dd",
+    "userId": "6aba723360eed84bd77ab230",
+    "items": [],
+    "couponCode": null,
+    "selectedOffers": [],
+    "updatedAt": "2026-09-28T14:01:43.907Z",
+    "__v": 0
+  },
+  {
+    "_id": "6aba7a8d60eed84bd77abbaa",
+    "userId": "6aba7a8260eed84bd77abb10",
+    "items": [],
+    "couponCode": null,
+    "selectedOffers": [],
+    "updatedAt": "2026-09-28T14:32:45.482Z",
+    "__v": 0
+  },
+  {
+    "_id": "6abad14138f8ab7186dae80e",
+    "userId": "6abacef638f8ab7186dae2e5",
+    "items": [
+      {
+        "productId": "6a70b1f97a025f353ef9494d",
+        "variantId": "6a70b1fc7a025f353ef9494e",
+        "image": {
+          "url": "https://res.cloudinary.com/dpmliygpg/image/upload/v1785770490/products/kpjjqu8eh90yjbxyyq97.jpg"
+        },
+        "size": "S",
+        "quantity": 1,
+        "stockQuantity": 18,
+        "merchantId": null,
+        "source": "warehouse",
+        "warehouseId": null,
+        "warehouseProductId": "6a70b1f97a025f353ef9494d",
+        "_id": "6abad14138f8ab7186dae80f"
+      },
+      {
+        "productId": "6a70b1f97a025f353ef9494d",
+        "variantId": "6a70b1fc7a025f353ef9494e",
+        "image": {
+          "url": "https://res.cloudinary.com/dpmliygpg/image/upload/v1785770490/products/kpjjqu8eh90yjbxyyq97.jpg"
+        },
+        "size": "S",
+        "quantity": 1,
+        "stockQuantity": 18,
+        "merchantId": "6a52c077f5d225d81a327965",
+        "source": "shop",
+        "warehouseId": null,
+        "warehouseProductId": null,
+        "_id": "6abad14b38f8ab7186dae829"
+      },
+      {
+        "productId": "6aac5ffa394acee436bffff9",
+        "variantId": "6aac5ffa394acee436bffffa",
+        "image": {
+          "url": "https://res.cloudinary.com/dpmliygpg/image/upload/v1789681654/products/tz2kpfk0gbmziuovnske.jpg"
+        },
+        "size": "S",
+        "quantity": 1,
+        "stockQuantity": 5,
+        "merchantId": null,
+        "source": "warehouse",
+        "warehouseId": "6a5e4d630906bf3164ab4db5",
+        "warehouseProductId": "6aac5ffa394acee436bffff9",
+        "_id": "6abad2d538f8ab7186dae982"
+      }
+    ],
+    "couponCode": null,
+    "selectedOffers": [],
+    "updatedAt": "2026-09-28T20:49:25.792Z",
+    "__v": 2
+  },
+  {
+    "_id": "6abadaaa38f8ab7186daedbd",
+    "userId": "6a7062be7779baaf28d0191d",
+    "items": [
+      {
+        "productId": "6a5f5f2576055ea046fd72c3",
+        "variantId": "6a70bbab9b593d8098545ae5",
+        "image": {
+          "url": "https://res.cloudinary.com/dpmliygpg/image/upload/v1784635173/warehouse-products/mwmu6y5uwcweetczmugp.jpg"
+        },
+        "size": "S",
+        "quantity": 1,
+        "stockQuantity": 346,
+        "merchantId": null,
+        "source": "warehouse",
+        "warehouseId": "6a5e4d630906bf3164ab4db5",
+        "warehouseProductId": "6a5f5f2576055ea046fd72c3",
+        "_id": "6abadaaa38f8ab7186daedbe"
+      }
+    ],
+    "couponCode": null,
+    "selectedOffers": [],
+    "updatedAt": "2026-09-28T21:22:50.062Z",
+    "__v": 0
+  },
+  {
+    "_id": "6abb96eb7b60d8ee8f83505c",
+    "userId": "6abb96d57b60d8ee8f834fb9",
+    "items": [],
+    "couponCode": null,
+    "selectedOffers": [],
+    "updatedAt": "2026-09-29T10:46:03.981Z",
+    "__v": 0
+  },
+  {
+    "_id": "6abbeec17b60d8ee8f837b0d",
+    "userId": "6a55331f2fdcd189bfeeee32",
+    "items": [
+      {
+        "productId": "6abb14477e1ee7ec6f31e134",
+        "variantId": "6abb14497e1ee7ec6f31e135",
+        "image": {
+          "url": "https://res.cloudinary.com/dpmliygpg/image/upload/v1790645320/products/pfqcs543en01jnzwhhf8.jpg"
+        },
+        "size": "28",
+        "quantity": 1,
+        "stockQuantity": 1,
+        "merchantId": "6a5b52df2fdcd189bfef67c1",
+        "source": "shop",
+        "warehouseId": null,
+        "warehouseProductId": null,
+        "_id": "6abbeec17b60d8ee8f837b0e"
+      }
+    ],
+    "couponCode": "FREEDELIVERY",
+    "selectedOffers": [],
+    "updatedAt": "2026-09-29T17:01:23.689Z",
+    "__v": 2
+  },
+  {
+    "_id": "6ac10f598b4f200d945d4677",
+    "userId": "6abbf13c7b60d8ee8f837f56",
+    "items": [
+      {
+        "productId": "6ac5eed38d9a86165acad1b8",
+        "variantId": "6ac5eed78d9a86165acad1b9",
+        "image": {
+          "url": "https://res.cloudinary.com/dpmliygpg/image/upload/v1791356629/products/b3d7xj4izcoj1mwhacsq.jpg"
+        },
+        "size": "M",
+        "quantity": 1,
+        "stockQuantity": 1,
+        "merchantId": "6a5b52df2fdcd189bfef67c1",
+        "source": "shop",
+        "warehouseId": null,
+        "warehouseProductId": null,
+        "_id": "6ac929388d9a86165acb588a"
+      }
+    ],
+    "couponCode": null,
+    "selectedOffers": [],
+    "updatedAt": "2026-10-09T17:49:44.800Z",
+    "__v": 3
+  },
+  {
+    "_id": "6ac14c058b4f200d945d49e5",
+    "userId": "6abc061a7b60d8ee8f83866e",
+    "items": [
+      {
+        "productId": "6abb1b9b7b60d8ee8f83422d",
+        "variantId": "6abb1b9e7b60d8ee8f834232",
+        "image": {
+          "url": "https://res.cloudinary.com/dpmliygpg/image/upload/v1790647196/products/qvjwzc6tta8bz1jqlphw.jpg"
+        },
+        "size": "M",
+        "quantity": 1,
+        "stockQuantity": 1,
+        "merchantId": "6a5b52df2fdcd189bfef67c1",
+        "source": "shop",
+        "warehouseId": null,
+        "warehouseProductId": null,
+        "_id": "6ac14c058b4f200d945d49e6"
+      }
+    ],
+    "couponCode": null,
+    "selectedOffers": [],
+    "updatedAt": "2026-10-03T18:40:05.355Z",
+    "__v": 0
+  },
+  {
+    "_id": "6ac1ef018b4f200d945d5071",
+    "userId": "6a736d497779baaf28d051d3",
+    "items": [
+      {
+        "productId": "6a70b1f97a025f353ef9494d",
+        "variantId": "6a70b1fc7a025f353ef94955",
+        "image": {
+          "url": "https://res.cloudinary.com/dpmliygpg/image/upload/v1785770490/products/kpjjqu8eh90yjbxyyq97.jpg"
+        },
+        "size": "M",
+        "quantity": 1,
+        "stockQuantity": 23,
+        "merchantId": null,
+        "source": "warehouse",
+        "warehouseId": null,
+        "warehouseProductId": "6a70b1f97a025f353ef9494d",
+        "_id": "6ac1ef378b4f200d945d5097"
+      },
+      {
+        "productId": "6aad0d61481fe017fdb384e3",
+        "variantId": "6aad0d61481fe017fdb384f3",
+        "image": {
+          "url": "https://res.cloudinary.com/dpmliygpg/image/upload/v1789681558/products/vuzoogmd7knwpt6zmipi.jpg"
+        },
+        "size": "M",
+        "quantity": 1,
+        "stockQuantity": 1,
+        "merchantId": null,
+        "source": "warehouse",
+        "warehouseId": "6a5e4d630906bf3164ab4db5",
+        "warehouseProductId": "6aad0d61481fe017fdb384e3",
+        "_id": "6ac1ef598b4f200d945d5166"
+      },
+      {
+        "productId": "6abb14477e1ee7ec6f31e134",
+        "variantId": "6abb14497e1ee7ec6f31e135",
+        "image": {
+          "url": "https://res.cloudinary.com/dpmliygpg/image/upload/v1790645320/products/pfqcs543en01jnzwhhf8.jpg"
+        },
+        "size": "28",
+        "quantity": 1,
+        "stockQuantity": 1,
+        "merchantId": "6a5b52df2fdcd189bfef67c1",
+        "source": "shop",
+        "warehouseId": null,
+        "warehouseProductId": null,
+        "_id": "6ac1ef7c8b4f200d945d51c9"
+      }
+    ],
+    "couponCode": null,
+    "selectedOffers": [],
+    "updatedAt": "2026-10-04T06:17:32.680Z",
+    "__v": 3
+  },
+  {
+    "_id": "6ac38da78b4f200d945d63ec",
+    "userId": "6ac383728b4f200d945d6117",
+    "items": [],
+    "couponCode": null,
+    "selectedOffers": [],
+    "updatedAt": "2026-10-05T11:44:39.563Z",
+    "__v": 0
+  },
+  {
+    "_id": "6ac390e08b4f200d945d66c8",
+    "userId": "6ac38fd38b4f200d945d64d5",
+    "items": [],
+    "couponCode": null,
+    "selectedOffers": [],
+    "updatedAt": "2026-10-05T11:58:24.146Z",
+    "__v": 0
+  },
+  {
+    "_id": "6ac3ce3d8b4f200d945d7d04",
+    "userId": "6ac3bad18b4f200d945d740d",
+    "items": [],
+    "couponCode": null,
+    "selectedOffers": [],
+    "updatedAt": "2026-10-05T16:20:13.594Z",
+    "__v": 0
+  },
+  {
+    "_id": "6ac3d8128b4f200d945d7eeb",
+    "userId": "6ac3d7f58b4f200d945d7ddc",
+    "items": [],
+    "couponCode": null,
+    "selectedOffers": [],
+    "updatedAt": "2026-10-05T17:02:10.246Z",
+    "__v": 0
+  },
+  {
+    "_id": "6ac3da288b4f200d945d8131",
+    "userId": "6ac3d9c98b4f200d945d807f",
+    "items": [],
+    "couponCode": null,
+    "selectedOffers": [],
+    "updatedAt": "2026-10-05T17:18:08.402Z",
+    "__v": 2
+  }
+]

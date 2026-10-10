@@ -1,3 +1,4 @@
+
 /**
  * weeklyPayoutHelper.js
  *
@@ -103,7 +104,12 @@ export async function addToWeeklyPayout({
     ownerType,
     ownerId,
     orderId,
+    orderModel = "Order",
     amount,
+    grossAmount = 0,
+    commissionRate = 4,
+    commissionAmount = 0,
+    merchantDiscount = 0,
     type, // "credit" | "debit"
     description = "",
     session = null,
@@ -114,6 +120,8 @@ export async function addToWeeklyPayout({
     if (type === "credit") {
         incFields.totalEarnings = amount;
         incFields.netPayout = amount;
+        if (grossAmount) incFields.totalGrossSales = grossAmount;
+        if (commissionAmount) incFields.totalCommission = commissionAmount;
         if (ownerType === "merchant") {
             incFields.completedOrders = 1;
         }
@@ -129,7 +137,12 @@ export async function addToWeeklyPayout({
             $push: {
                 orders: {
                     orderId,
+                    orderModel,
                     amount,
+                    grossAmount,
+                    commissionRate,
+                    commissionAmount,
+                    merchantDiscount,
                     type,
                     description,
                     settledAt: new Date(),
@@ -141,11 +154,6 @@ export async function addToWeeklyPayout({
                 weekStart,
                 weekEnd,
                 status: "accumulating",
-                completedOrders: 0,
-                cancelledOrders: 0,
-                incentivesEarned: [],
-                totalIncentive: 0,
-                finalAmount: 0,
             },
         },
         {

@@ -156,6 +156,13 @@ export const validateOfferEligibility = async (offer, userId, cartContext) => {
     }
   }
 
+  // 3b. Target user restriction (for personalized coupons like referral rewards)
+  if (offer.targetUserId) {
+    if (!userId || offer.targetUserId.toString() !== userId.toString()) {
+      return { eligible: false, reason: 'This coupon is not valid for your account' };
+    }
+  }
+
   // 4. First-time user check
   if (offer.conditions?.firstTimeUserOnly) {
     if (!userId) return { eligible: false, reason: 'Login required for this offer' };
@@ -488,12 +495,23 @@ export const findBestOffers = async (userId, cartContext, couponCode = null, sel
 export const getAvailableOffersForUser = async (userId, cartContext = null, orderType = null) => {
   const now = new Date();
 
-  const offers = await Offer.find({
+  const query = {
     isActive: true,
-    isPublic: { $ne: false },
     startDate: { $lte: now },
     endDate: { $gt: now },
-  })
+  };
+
+  if (userId) {
+    query.$or = [
+      { isPublic: { $ne: false }, targetUserId: null },
+      { targetUserId: userId },
+    ];
+  } else {
+    query.isPublic = { $ne: false };
+    query.targetUserId = null;
+  }
+
+  const offers = await Offer.find(query)
     .sort({ priority: -1, createdAt: -1 })
     .lean();
 

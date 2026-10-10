@@ -8,6 +8,7 @@ import Hub from "../../models/hub.model.js";
 import dotenv from 'dotenv';
 dotenv.config();
 import { storageService } from '../../services/storage.service.js';
+import { isBackendInTestMode, isTestMerchant } from '../../helperFns/testModeHelper.js';
 const jwt_secret = "hehe"
 const generateOtp = () => Math.floor(100000 + Math.random() * 900000).toString();
 
@@ -151,8 +152,9 @@ export const toggleMerchantOnlineStatus = async (req, res) => {
       return res.status(404).json({ success: false, message: "Merchant not found" });
     }
 
+    const inTestMode = await isBackendInTestMode();
     // Safety check: Only merchants in a Try & Buy zone can toggle online status
-    if (!merchant.zoneId) {
+    if (!merchant.zoneId && !inTestMode) {
       return res.status(403).json({
         success: false,
         message: "Online toggle is only available for merchants in Try & Buy zones."
@@ -505,6 +507,9 @@ export const loginMerchant = async (req, res) => {
         maxAge: 30 * 24 * 60 * 60 * 1000
     });
 
+    const inTestMode = await isBackendInTestMode();
+    const isTest = inTestMode && isTestMerchant(merchant);
+
     // ==== Response ====
     return res.json({
       token,
@@ -514,8 +519,8 @@ export const loginMerchant = async (req, res) => {
         shopName: merchant.shopName,
         email: merchant.email,
         phoneNumber: merchant.phoneNumber,
-        isActive: merchant.isActive,
-        status: merchant.status,
+        isActive: isTest ? true : merchant.isActive,
+        status: isTest ? 'active' : merchant.status,
         zoneId: merchant.zoneId,
         accountType: merchant.accountType || 'merchant',
         warehouseId: merchant.warehouseId || null,

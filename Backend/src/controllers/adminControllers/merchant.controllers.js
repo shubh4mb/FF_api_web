@@ -9,6 +9,7 @@ import { sendVerificationEmail } from "../../services/mail.service.js";
 import { getRoadDistance } from "../../helperFns/orsHelper.js";
 import { haversineDistance } from "../../helperFns/geoHelpers.js";
 import AppConfig from "../../models/appConfig.model.js";
+import { isBackendInTestMode, isTestMerchant } from "../../helperFns/testModeHelper.js";
 
 
 
@@ -60,7 +61,10 @@ export const getMerchants = asyncHandler(async (req, res) => {
 });
 
 export const getMerchantById = asyncHandler(async (req, res) => {
-  let merchant = await Merchant.findById(req.params.id).lean();
+  let merchant = await Merchant.findById(req.params.id)
+    .populate('assignedWarehouseIds', 'name code address operatingHours')
+    .populate('warehouseAssignments.warehouseId', 'name code address operatingHours')
+    .lean();
   if (!merchant) {
     try {
       const Warehouse = (await import("../../models/warehouse.model.js")).default;
@@ -70,7 +74,14 @@ export const getMerchantById = asyncHandler(async (req, res) => {
       }
       if (warehouse || req.params.id === 'ff-warehouse-hub' || req.params.id === 'warehouse' || req.params.id?.includes('warehouse')) {
         const ProductFlat = (await import("../../models/productFlat.model.js")).default;
-        const count = await ProductFlat.countDocuments({ source: 'warehouse', isActive: true, isDeleted: { $ne: true } });
+        const whFilter = { source: 'warehouse', isActive: true, isDeleted: { $ne: true } };
+        const uniqueWhProducts = (await ProductFlat.distinct('styleGroupId', whFilter)).filter(Boolean);
+        const count = uniqueWhProducts.length;
+        const stockAgg = await ProductFlat.aggregate([
+          { $match: whFilter },
+          { $group: { _id: null, totalStock: { $sum: '$stock' } } }
+        ]);
+        const totalStock = stockAgg[0]?.totalStock || 0;
         const virtualMerchant = {
           _id: warehouse ? warehouse._id.toString() : 'ff-warehouse-hub',
           shopName: warehouse?.name || 'FlashFits Warehouse Hub',
@@ -88,7 +99,7 @@ export const getMerchantById = asyncHandler(async (req, res) => {
           address: warehouse?.address || { city: 'FlashFits Hub', area: 'FlashFits Hub' },
           distanceKm: 2.5,
           durationMins: 20,
-          stats: { totalProducts: count },
+          stats: { totalProducts: count, totalStock },
         };
         return res.status(200).json(new ApiResponse(200, { merchant: virtualMerchant }, "Warehouse retrieved as merchant"));
       }
@@ -98,6 +109,29 @@ export const getMerchantById = asyncHandler(async (req, res) => {
     throw new ApiError(404, "Merchant not found");
   }
 
+  // Normalize warehouseAssignments so all assigned warehouses have a status object
+  if (merchant) {
+    const rawAssignments = merchant.warehouseAssignments || [];
+    const assignmentMap = new Map();
+    rawAssignments.forEach(wa => {
+      const wId = (wa.warehouseId?._id || wa.warehouseId)?.toString();
+      if (wId) assignmentMap.set(wId, wa);
+    });
+
+    (merchant.assignedWarehouseIds || []).forEach(wh => {
+      const whId = (wh?._id || wh)?.toString();
+      if (whId && !assignmentMap.has(whId)) {
+        rawAssignments.push({
+          warehouseId: wh,
+          isActive: true,
+          deactivatedAt: null,
+          reason: ''
+        });
+      }
+    });
+    merchant.warehouseAssignments = rawAssignments;
+  }
+
   // For warehouse-only brands, resolve fulfillment location from the assigned warehouse hub
   if (merchant.fulfillmentType === 'warehouse') {
     merchant.isWarehouse = true;
@@ -105,7 +139,9 @@ export const getMerchantById = asyncHandler(async (req, res) => {
       const Warehouse = (await import("../../models/warehouse.model.js")).default;
       let wh = null;
       if (merchant.assignedWarehouseIds && merchant.assignedWarehouseIds.length > 0) {
-        wh = await Warehouse.findById(merchant.assignedWarehouseIds[0]).lean();
+        const firstWh = merchant.assignedWarehouseIds[0];
+        const firstWhId = firstWh?._id || firstWh;
+        wh = await Warehouse.findById(firstWhId).lean();
       }
       if (!wh) {
         wh = await Warehouse.findOne({ isActive: true }).lean();
@@ -122,16 +158,33 @@ export const getMerchantById = asyncHandler(async (req, res) => {
     }
   }
 
-  // Ensure total product count is fresh
+  // Ensure total product count is fresh (count unique styleGroups, not individual stock/variant rows)
   try {
     const ProductFlat = (await import("../../models/productFlat.model.js")).default;
-    const totalCount = await ProductFlat.countDocuments({ 
+    const filter = { 
       merchantId: merchant._id, 
       isActive: true, 
       isDeleted: { $ne: true },
       isVerified: true 
-    });
-    merchant.stats = { ...(merchant.stats || {}), totalProducts: totalCount };
+    };
+    if (merchant.fulfillmentType === 'warehouse' || merchant.isWarehouse) {
+      delete filter.merchantId;
+      filter.$or = [{ merchantId: merchant._id }, { source: 'warehouse' }];
+    }
+    const uniqueProductIds = (await ProductFlat.distinct('styleGroupId', filter)).filter(Boolean);
+    const totalCount = uniqueProductIds.length;
+
+    const stockAgg = await ProductFlat.aggregate([
+      { $match: filter },
+      { $group: { _id: null, totalStock: { $sum: '$stock' } } }
+    ]);
+    const totalStock = stockAgg[0]?.totalStock || 0;
+
+    merchant.stats = { 
+      ...(merchant.stats || {}), 
+      totalProducts: totalCount,
+      totalStock
+    };
   } catch (e) {
     // Ignore stat count error
   }
@@ -305,4 +358,198 @@ export const verifyMerchant = asyncHandler(async (req, res) => {
   return res.status(200).json(
     new ApiResponse(200, { merchant }, `Merchant updated successfully`)
   );
+});
+
+/**
+ * PATCH /admin/merchant/:id/warehouse/:warehouseId/toggle-status
+ * Toggle brand active status in a specific warehouse and cascade to ProductFlat
+ */
+export const toggleMerchantWarehouseStatus = asyncHandler(async (req, res) => {
+  const { id, warehouseId } = req.params;
+  const { isActive, reason } = req.body;
+
+  const merchant = await Merchant.findById(id);
+  if (!merchant) throw new ApiError(404, "Merchant not found");
+
+  const Warehouse = (await import("../../models/warehouse.model.js")).default;
+  const wh = await Warehouse.findById(warehouseId);
+  if (!wh) throw new ApiError(404, "Warehouse not found");
+
+  // Ensure assignedWarehouseIds contains this warehouse
+  if (!merchant.assignedWarehouseIds) merchant.assignedWarehouseIds = [];
+  if (!merchant.assignedWarehouseIds.some(w => w.toString() === warehouseId.toString())) {
+    merchant.assignedWarehouseIds.push(warehouseId);
+  }
+
+  if (!merchant.warehouseAssignments) merchant.warehouseAssignments = [];
+  const existingIndex = merchant.warehouseAssignments.findIndex(
+    wa => wa.warehouseId.toString() === warehouseId.toString()
+  );
+
+  const newStatus = isActive !== undefined ? !!isActive : true;
+
+  if (existingIndex > -1) {
+    merchant.warehouseAssignments[existingIndex].isActive = newStatus;
+    merchant.warehouseAssignments[existingIndex].deactivatedAt = newStatus ? null : new Date();
+    if (reason !== undefined) merchant.warehouseAssignments[existingIndex].reason = reason;
+  } else {
+    merchant.warehouseAssignments.push({
+      warehouseId,
+      isActive: newStatus,
+      deactivatedAt: newStatus ? null : new Date(),
+      reason: reason || ''
+    });
+  }
+
+  await merchant.save();
+
+  // Cascade to ProductFlat in this warehouse only!
+  const ProductFlat = (await import("../../models/productFlat.model.js")).default;
+  const filter = {
+    merchantId: merchant._id,
+    warehouseId: wh._id,
+    source: 'warehouse'
+  };
+  if (newStatus) {
+    filter.isDeleted = { $ne: true };
+  }
+
+  const updateRes = await ProductFlat.updateMany(filter, { $set: { isActive: newStatus } });
+
+  // Re-fetch populated merchant
+  const updatedMerchant = await Merchant.findById(id)
+    .populate('assignedWarehouseIds', 'name code address operatingHours')
+    .populate('warehouseAssignments.warehouseId', 'name code address operatingHours')
+    .lean();
+
+  return res.status(200).json(new ApiResponse(200, {
+    merchant: updatedMerchant,
+    productsAffected: updateRes.modifiedCount,
+    status: newStatus ? 'activated' : 'deactivated'
+  }, `Brand successfully ${newStatus ? 'activated' : 'deactivated'} in ${wh.name}`));
+});
+
+/**
+ * POST /admin/merchant/:id/warehouse/assign
+ * Assign a merchant to a warehouse with active status
+ */
+export const assignWarehouseToMerchant = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const { warehouseId } = req.body;
+
+  if (!warehouseId) throw new ApiError(400, "warehouseId is required");
+
+  const merchant = await Merchant.findById(id);
+  if (!merchant) throw new ApiError(404, "Merchant not found");
+
+  const Warehouse = (await import("../../models/warehouse.model.js")).default;
+  const wh = await Warehouse.findById(warehouseId);
+  if (!wh) throw new ApiError(404, "Warehouse not found");
+
+  if (!merchant.assignedWarehouseIds) merchant.assignedWarehouseIds = [];
+  if (!merchant.assignedWarehouseIds.some(w => w.toString() === warehouseId.toString())) {
+    merchant.assignedWarehouseIds.push(warehouseId);
+  }
+
+  if (!merchant.warehouseAssignments) merchant.warehouseAssignments = [];
+  if (!merchant.warehouseAssignments.some(wa => wa.warehouseId.toString() === warehouseId.toString())) {
+    merchant.warehouseAssignments.push({
+      warehouseId,
+      isActive: true,
+      deactivatedAt: null,
+      reason: ''
+    });
+  }
+
+  if (merchant.warehouseStatus !== 'approved') {
+    merchant.warehouseStatus = 'approved';
+  }
+
+  await merchant.save();
+
+  const updatedMerchant = await Merchant.findById(id)
+    .populate('assignedWarehouseIds', 'name code address operatingHours')
+    .populate('warehouseAssignments.warehouseId', 'name code address operatingHours')
+    .lean();
+
+  return res.status(200).json(new ApiResponse(200, { merchant: updatedMerchant }, `Assigned to ${wh.name} successfully`));
+});
+
+/**
+ * DELETE /admin/merchant/:id/warehouse/:warehouseId
+ * Remove merchant's warehouse assignment and deactivate warehouse stock
+ */
+export const removeWarehouseFromMerchant = asyncHandler(async (req, res) => {
+  const { id, warehouseId } = req.params;
+
+  const merchant = await Merchant.findById(id);
+  if (!merchant) throw new ApiError(404, "Merchant not found");
+
+  merchant.assignedWarehouseIds = (merchant.assignedWarehouseIds || []).filter(
+    w => w.toString() !== warehouseId.toString()
+  );
+  merchant.warehouseAssignments = (merchant.warehouseAssignments || []).filter(
+    wa => wa.warehouseId.toString() !== warehouseId.toString()
+  );
+
+  if (merchant.assignedWarehouseIds.length === 0) {
+    merchant.warehouseStatus = 'none';
+  }
+
+  await merchant.save();
+
+  // Also deactivate any warehouse products in this warehouse
+  const ProductFlat = (await import("../../models/productFlat.model.js")).default;
+  await ProductFlat.updateMany(
+    { merchantId: merchant._id, warehouseId, source: 'warehouse' },
+    { $set: { isActive: false } }
+  );
+
+  const updatedMerchant = await Merchant.findById(id)
+    .populate('assignedWarehouseIds', 'name code address operatingHours')
+    .populate('warehouseAssignments.warehouseId', 'name code address operatingHours')
+    .lean();
+
+  return res.status(200).json(new ApiResponse(200, { merchant: updatedMerchant }, "Warehouse assignment removed"));
+});
+
+/**
+ * PATCH /admin/merchant/:id/toggle-store-status
+ * Toggle physical retail store visibility on customer app without affecting warehouse brand consignment
+ */
+export const toggleMerchantStoreStatus = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const { isStoreActive } = req.body;
+
+  const merchant = await Merchant.findById(id);
+  if (!merchant) throw new ApiError(404, "Merchant not found");
+
+  const currentStoreActive = merchant.isStoreActive !== false;
+  const newStoreStatus = isStoreActive !== undefined ? !!isStoreActive : !currentStoreActive;
+
+  merchant.isStoreActive = newStoreStatus;
+  await merchant.save();
+
+  // Cascade to physical store direct products only (source !== 'warehouse')
+  const ProductFlat = (await import("../../models/productFlat.model.js")).default;
+  const directFilter = {
+    merchantId: merchant._id,
+    source: { $ne: 'warehouse' },
+    isDeleted: { $ne: true }
+  };
+
+  const updateResult = await ProductFlat.updateMany(directFilter, {
+    $set: { isActive: newStoreStatus }
+  });
+
+  const updatedMerchant = await Merchant.findById(id)
+    .populate('assignedWarehouseIds', 'name code address operatingHours')
+    .populate('warehouseAssignments.warehouseId', 'name code address operatingHours')
+    .lean();
+
+  return res.status(200).json(new ApiResponse(200, {
+    merchant: updatedMerchant,
+    isStoreActive: newStoreStatus,
+    productsAffected: updateResult.modifiedCount
+  }, `Physical store has been ${newStoreStatus ? 'activated (Live)' : 'hidden from customer app'}`));
 });

@@ -302,12 +302,21 @@ router.get("/earnings/current-week", authMiddlewareMerchant, async (req, res) =>
             });
         }
 
+        const totalGrossSales = payout?.totalGrossSales || (payout?.orders || []).reduce((acc, o) => acc + (o.grossAmount || o.amount || 0), 0);
+        const totalCommission = payout?.totalCommission || (payout?.orders || []).reduce((acc, o) => acc + (o.commissionAmount || (o.grossAmount ? (o.grossAmount * 0.04) : 0)), 0);
+
         return res.status(200).json({
             success: true,
             weekStart,
             weekEnd,
             dailyBreakdown,
-            payout: payout || {
+            payout: payout ? {
+                ...payout,
+                totalGrossSales: Math.round(totalGrossSales),
+                totalCommission: Math.round(totalCommission),
+            } : {
+                totalGrossSales: 0,
+                totalCommission: 0,
                 totalEarnings: 0,
                 totalDeductions: 0,
                 netPayout: 0,
@@ -347,14 +356,36 @@ router.get("/earnings/history", authMiddlewareMerchant, async (req, res) => {
             .sort({ createdAt: -1 })
             .lean();
 
-        // 3. Normalize and merge
-        const linkedWeeklyPayoutIds = new Set(
-            manualTxns
-                .filter(t => t.weeklyPayoutId)
-                .map(t => t.weeklyPayoutId.toString())
-        );
+        // 3. Map transactions linked to weekly payouts
+        const txnByWeeklyPayoutId = new Map();
+        const standaloneTxns = [];
 
-        const normalizedTxns = manualTxns.map(t => ({
+        for (const t of manualTxns) {
+            if (t.weeklyPayoutId) {
+                txnByWeeklyPayoutId.set(t.weeklyPayoutId.toString(), t);
+            } else {
+                standaloneTxns.push(t);
+            }
+        }
+
+        // 4. Enrich WeeklyPayout records with linked transaction receipts and UTRs
+        const enrichedWeeklyPayouts = weeklyPayouts.map(wp => {
+            const linkedTxn = txnByWeeklyPayoutId.get(wp._id.toString());
+            return {
+                ...wp,
+                amount: wp.finalAmount,
+                receipt: wp.receipt?.url ? wp.receipt : (linkedTxn?.receipt || null),
+                referenceNumber: wp.referenceNumber || linkedTxn?.referenceNumber || null,
+                paymentMethod: wp.paymentMethod || linkedTxn?.paymentMethod || "bank_transfer",
+                transactionId: wp.transactionId || linkedTxn?.transactionId || null,
+                paidAt: wp.paidAt || linkedTxn?.createdAt || null,
+                notes: wp.notes || linkedTxn?.notes || "",
+                isManual: false,
+            };
+        });
+
+        // 5. Normalize standalone transactions
+        const normalizedStandaloneTxns = standaloneTxns.map(t => ({
             _id: t._id,
             transactionId: t.transactionId,
             ownerType: "merchant",
@@ -368,22 +399,16 @@ router.get("/earnings/history", authMiddlewareMerchant, async (req, res) => {
             category: t.category,
             referenceNumber: t.referenceNumber,
             paymentMethod: t.paymentMethod,
+            receipt: t.receipt || null,
             notes: t.notes,
             paidAt: t.createdAt,
             createdAt: t.createdAt,
             weekStart: t.createdAt,
             weekEnd: t.createdAt,
-            isManual: t.source === "manual_admin",
+            isManual: true,
         }));
 
-        const remainingWeeklyPayouts = weeklyPayouts
-            .filter(wp => !linkedWeeklyPayoutIds.has(wp._id.toString()))
-            .map(wp => ({
-                ...wp,
-                amount: wp.finalAmount,
-            }));
-
-        const combinedPayouts = [...normalizedTxns, ...remainingWeeklyPayouts];
+        const combinedPayouts = [...enrichedWeeklyPayouts, ...normalizedStandaloneTxns];
         combinedPayouts.sort((a, b) => new Date(b.paidAt || b.createdAt || b.weekStart) - new Date(a.paidAt || a.createdAt || a.weekStart));
 
         const total = combinedPayouts.length;

@@ -15,19 +15,30 @@ import { asyncHandler } from '../../utils/asyncHandler.js';
 import { ApiError } from '../../utils/ApiError.js';
 import { getIO } from '../../config/socket.js';
 import { notifyWarehouse } from '../../sockets/warehouseOrder.socket.js';
+import { isBackendInTestMode } from '../../helperFns/testModeHelper.js';
 
 /**
  * Helper: resolve the effective commission rate for a warehouse order.
  * Priority chain: product.commissionRate → warehouse.commissionRate → appConfig.defaultWarehouseCommissionRate
  */
-const resolveCommissionRate = (product, warehouse, config) => {
-  if (product.commissionRate !== null && product.commissionRate !== undefined) {
+const resolveCommissionRate = async (product, warehouse, config) => {
+  if (product?.commissionRate !== null && product?.commissionRate !== undefined) {
     return product.commissionRate;
   }
-  if (warehouse.commissionRate !== null && warehouse.commissionRate !== undefined) {
+  if (warehouse?.commissionRate !== null && warehouse?.commissionRate !== undefined) {
     return warehouse.commissionRate;
   }
-  return config.defaultWarehouseCommissionRate ?? 10;
+  if (product?.subCategoryId) {
+    const Category = (await import('../../models/category.model.js')).default;
+    const cat = await Category.findById(product.subCategoryId).select('commissionPercentage');
+    if (cat && typeof cat.commissionPercentage === 'number' && cat.commissionPercentage > 0) return cat.commissionPercentage;
+  }
+  if (product?.categoryId) {
+    const Category = (await import('../../models/category.model.js')).default;
+    const cat = await Category.findById(product.categoryId).select('commissionPercentage');
+    if (cat && typeof cat.commissionPercentage === 'number' && cat.commissionPercentage > 0) return cat.commissionPercentage;
+  }
+  return config?.defaultWarehouseCommissionRate ?? 4;
 };
 
 /**
@@ -81,9 +92,10 @@ export const createWarehouseTBOrder = asyncHandler(async (req, res) => {
 
   // ── 4. Config + delivery charge ──
   const config = await AppConfig.getConfig();
+  const inTestMode = await isBackendInTestMode();
 
   // ── Validate Global Order Placement (Maintenance Mode) ──
-  if (config.isOrderPlacementEnabled === false) {
+  if (!inTestMode && config.isOrderPlacementEnabled === false) {
     return res.status(403).json({
       success: false,
       isMaintenance: true,
@@ -99,7 +111,7 @@ export const createWarehouseTBOrder = asyncHandler(async (req, res) => {
       waitingCharge: config.waitingCharge,
     });
 
-  if (roadDistanceKm > config.tryAndBuyRadius) {
+  if (!inTestMode && roadDistanceKm > config.tryAndBuyRadius) {
     return res.status(400).json({
       success: false,
       serviceable: false,
@@ -188,7 +200,7 @@ export const createWarehouseTBOrder = asyncHandler(async (req, res) => {
 
   // ── 6. Commission calculation ──
   const firstProduct = await ProductFlat.findById(warehouseItems[0].variantId);
-  const commissionRate = resolveCommissionRate(firstProduct, warehouse, config);
+  const commissionRate = await resolveCommissionRate(firstProduct, warehouse, config);
   const commissionAmount = Math.round((totalAmount * commissionRate) / 100);
   const merchantPayout = totalAmount - commissionAmount;
 
@@ -425,7 +437,7 @@ export const createWarehouseCourierOrder = asyncHandler(async (req, res) => {
   if (!orderItems.length) throw new ApiError(400, 'No valid items');
 
   const firstProduct = await ProductFlat.findById(warehouseItems[0].variantId);
-  const commissionRate = resolveCommissionRate(firstProduct, warehouse, config);
+  const commissionRate = await resolveCommissionRate(firstProduct, warehouse, config);
   const commissionAmount = Math.round((totalAmount * commissionRate) / 100);
   const merchantPayout = totalAmount - commissionAmount;
 
@@ -559,6 +571,38 @@ export const verifyWarehousePayment = asyncHandler(async (req, res) => {
   order.paymentStatus = order.fulfillmentType === 'courier' ? 'paid' : 'delivery_fee_paid';
   order.orderStatus = 'placed';
   await order.save();
+
+  // Auto-record Inflow in Unified Transaction Ledger
+  try {
+    const { recordTransaction } = await import('../../helperFns/transactionHelper.js');
+    const paymentAmount = order.fulfillmentType === 'courier'
+      ? (order.finalBilling?.totalPayable ?? order.totalAmount ?? 0)
+      : (order.deliveryCharge || 0);
+
+    if (paymentAmount > 0) {
+      await recordTransaction({
+        amount: paymentAmount,
+        type: 'credit',
+        category: 'customer_payment',
+        source: 'system_razorpay',
+        status: 'completed',
+        paymentMethod: 'razorpay',
+        referenceNumber: razorpayPaymentId || null,
+        recipientType: 'user',
+        recipientId: order.userId,
+        recipientDetails: {
+          name: order.deliveryLocation?.name || '',
+          phone: order.deliveryLocation?.phone || '',
+        },
+        orderId: order._id,
+        orderModel: 'WarehouseOrder',
+        warehouseOrderId: order._id,
+        notes: `Customer payment collected for Warehouse Order #${order._id.toString().slice(-6).toUpperCase()} (${order.fulfillmentType})`,
+      });
+    }
+  } catch (txnLedgerErr) {
+    console.warn('Could not log warehouse order payment to transaction ledger:', txnLedgerErr.message);
+  }
 
   try {
     const io = getIO();

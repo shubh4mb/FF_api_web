@@ -42,7 +42,7 @@ export async function sendPushNotifications(userId, riderId, title, body, data, 
             continue;
         }
         let soundOpt = data?.silent ? null : 'default';
-        const isOrderAlert = isRider && data?.type === 'new_order_request';
+        const isOrderAlert = (isRider && data?.type === 'new_order_request') || isMerchant;
         messages.push({
             to: pushToken,
             sound: soundOpt,
@@ -51,6 +51,7 @@ export async function sendPushNotifications(userId, riderId, title, body, data, 
             data,
             channelId: isOrderAlert ? 'order_alerts' : 'default',
             priority: isOrderAlert ? 'high' : 'default',
+            _displayInForeground: true,
         });
     }
 

@@ -264,6 +264,15 @@ const WarehouseOrderSchema = new mongoose.Schema(
     },
 
     reason: { type: String, default: null },
+    cancelledBy: {
+      type: String,
+      enum: ['user', 'merchant', 'warehouse', 'admin', 'system', null],
+      default: null,
+    },
+    cancelledAt: {
+      type: Date,
+      default: null,
+    },
     cancellationRequest: {
       type: String,
       enum: ['none', 'pending', 'approved', 'rejected'],

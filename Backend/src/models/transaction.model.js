@@ -23,6 +23,8 @@ const transactionSchema = new mongoose.Schema(
         "rider_payout",
         "user_refund",
         "customer_payment",
+        "courier_order_payment",
+        "warehouse_order_payment",
         "delivery_fee_recovery",
         "registration_fee",
         "damage_compensation",
@@ -88,7 +90,24 @@ const transactionSchema = new mongoose.Schema(
     // ── Order / Payout Linkages ──
     orderId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "Order",
+      refPath: "orderModel",
+      default: null,
+      index: true,
+    },
+    orderModel: {
+      type: String,
+      enum: ["Order", "CourierOrder", "WarehouseOrder"],
+      default: "Order",
+    },
+    courierOrderId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "CourierOrder",
+      default: null,
+      index: true,
+    },
+    warehouseOrderId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "WarehouseOrder",
       default: null,
       index: true,
     },
@@ -97,6 +116,21 @@ const transactionSchema = new mongoose.Schema(
       ref: "WeeklyPayout",
       default: null,
       index: true,
+    },
+
+    // ── Financial Split Breakdown (Platform vs Merchant vs Rider) ──
+    split: {
+      grossAmount: { type: Number, default: 0 },         // Total item retail sales
+      commissionRate: { type: Number, default: 4 },      // Platform commission percentage applied (e.g. 4%)
+      commissionAmount: { type: Number, default: 0 },    // Flashfits retained platform commission
+      merchantAmount: { type: Number, default: 0 },      // Net earnings credited to merchant weekly payout
+      merchantDiscount: { type: Number, default: 0 },    // Merchant-funded coupon discount deducted
+      adminDiscount: { type: Number, default: 0 },       // Flashfits-subsidized coupon discount absorbed
+      deliveryFee: { type: Number, default: 0 },         // Rider forward delivery fee portion
+      returnFee: { type: Number, default: 0 },           // Rider return trip fee portion
+      riderTip: { type: Number, default: 0 },            // Rider tip (100% to rider)
+      waitingCharge: { type: Number, default: 0 },       // Rider overtime waiting compensation
+      taxes: { type: Number, default: 0 },               // GST component
     },
 
     // ── Proof / Receipt ──
@@ -132,6 +166,8 @@ transactionSchema.index({ createdAt: -1 });
 transactionSchema.index({ category: 1, createdAt: -1 });
 transactionSchema.index({ recipientType: 1, recipientId: 1 });
 transactionSchema.index({ type: 1, status: 1 });
+transactionSchema.index({ courierOrderId: 1 });
+transactionSchema.index({ warehouseOrderId: 1 });
 
 export default mongoose.models.Transaction ||
   mongoose.model("Transaction", transactionSchema);

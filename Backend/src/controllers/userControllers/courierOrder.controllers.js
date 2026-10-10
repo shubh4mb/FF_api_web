@@ -11,6 +11,7 @@ import { findBestOffers, recordOfferUsage, getApplicableAmount } from '../../ser
 import { v2 as cloudinary } from 'cloudinary';
 import { logAuditEvent } from "../../utils/auditLogger.js";
 import AppConfig from "../../models/appConfig.model.js";
+import { isBackendInTestMode } from "../../helperFns/testModeHelper.js";
 
 const COURIER_DELIVERY_CHARGE = 40;
 
@@ -29,7 +30,8 @@ export const initiateCourierOrder = async (req, res) => {
   try {
     // 0. Validate Global Order Placement (Maintenance Mode)
     const config = await AppConfig.getConfig();
-    if (config.isOrderPlacementEnabled === false) {
+    const inTestMode = await isBackendInTestMode();
+    if (!inTestMode && config.isOrderPlacementEnabled === false) {
       return res.status(403).json({
         success: false,
         isMaintenance: true,
@@ -347,7 +349,8 @@ export const initiateCourierCheckout = async (req, res) => {
   try {
     // 0. Validate Global Order Placement (Maintenance Mode)
     const config = await AppConfig.getConfig();
-    if (config.isOrderPlacementEnabled === false) {
+    const inTestMode = await isBackendInTestMode();
+    if (!inTestMode && config.isOrderPlacementEnabled === false) {
       return res.status(403).json({
         success: false,
         isMaintenance: true,
@@ -809,6 +812,37 @@ export const verifyCourierOrderPayment = async (req, res) => {
       });
     }
 
+    // Auto-record Inflow in Unified Transaction Ledger
+    try {
+      const { recordTransaction } = await import("../../helperFns/transactionHelper.js");
+      for (const order of orders) {
+        const paymentAmount = order.totalPayable ?? order.totalAmount ?? 0;
+        if (paymentAmount > 0) {
+          await recordTransaction({
+            amount: paymentAmount,
+            type: "credit",
+            category: "customer_payment",
+            source: "system_razorpay",
+            status: "completed",
+            paymentMethod: "razorpay",
+            referenceNumber: razorpay_payment_id || null,
+            recipientType: "user",
+            recipientId: order.userId,
+            recipientDetails: {
+              name: order.deliveryLocation?.name || "",
+              phone: order.deliveryLocation?.phone || "",
+            },
+            orderId: order._id,
+            orderModel: "CourierOrder",
+            courierOrderId: order._id,
+            notes: `Customer payment collected for Courier Order #${order._id.toString().slice(-6).toUpperCase()}`,
+          });
+        }
+      }
+    } catch (txnLedgerErr) {
+      console.warn("Could not log courier payment to transaction ledger:", txnLedgerErr.message);
+    }
+
     res.status(200).json({
       success: true,
       message: "Payment verified. Orders confirmed.",
@@ -909,6 +943,86 @@ export const updateCourierOrderStatus = async (req, res) => {
     }
     if (status === 'delivered') {
       order.deliveredAt = new Date();
+
+      if (order.settlementStatus !== 'settled') {
+        try {
+          const { addToWeeklyPayout } = await import('../../helperFns/weeklyPayoutHelper.js');
+          const Merchant = (await import('../../models/merchant.model.js')).default;
+          const ProductFlat = (await import('../../models/productFlat.model.js')).default;
+          const Category = (await import('../../models/category.model.js')).default;
+
+          let totalCommission = 0;
+          for (const item of (order.items || [])) {
+            let commissionPercentage = 4; // Launch baseline 4%
+            if (item.productId) {
+              const product = await ProductFlat.findById(item.productId).select("categoryId subCategoryId");
+              if (product?.subCategoryId) {
+                const category = await Category.findById(product.subCategoryId).select("commissionPercentage");
+                if (category && typeof category.commissionPercentage === "number" && category.commissionPercentage > 0) {
+                  commissionPercentage = category.commissionPercentage;
+                }
+              } else if (product?.categoryId) {
+                const category = await Category.findById(product.categoryId).select("commissionPercentage");
+                if (category && typeof category.commissionPercentage === "number" && category.commissionPercentage > 0) {
+                  commissionPercentage = category.commissionPercentage;
+                }
+              }
+            }
+            const itemTotal = (item.price || 0) * (item.quantity || 1);
+            totalCommission += (itemTotal * commissionPercentage) / 100;
+          }
+
+          let merchantDiscount = 0;
+          for (const offer of (order.appliedOffers || [])) {
+            if (offer.scope === 'merchant') {
+              merchantDiscount += (offer.discountApplied || 0);
+            }
+          }
+          const payoutAmount = Math.max(0, (order.totalAmount || 0) - totalCommission - merchantDiscount);
+
+          order.commissionRate = 4;
+          order.commissionAmount = totalCommission;
+          order.merchantPayout = payoutAmount;
+          order.settlementBreakdown = {
+            grossAmount: order.totalAmount || 0,
+            commissionRate: 4,
+            commissionAmount: totalCommission,
+            merchantPayout: payoutAmount,
+            merchantDiscount: merchantDiscount,
+            settledAt: new Date(),
+          };
+
+          if (payoutAmount > 0 && order.merchantId) {
+            await addToWeeklyPayout({
+              ownerType: 'merchant',
+              ownerId: order.merchantId,
+              orderId: order._id,
+              orderModel: 'CourierOrder',
+              amount: payoutAmount,
+              grossAmount: order.totalAmount || 0,
+              commissionRate: 4,
+              commissionAmount: totalCommission,
+              merchantDiscount: merchantDiscount,
+              type: 'credit',
+              description: `Payout for delivered Courier Order #${order._id.toString().slice(-6).toUpperCase()}`,
+            });
+
+            await Merchant.findByIdAndUpdate(order.merchantId, {
+              $inc: { 'earnings.pendingBalance': payoutAmount }
+            });
+
+            order.settlementStatus = 'settled';
+
+            // ── Referral System: Trigger reward if this is the user's first completed order ──
+            if (order.userId) {
+              const { handleFirstOrderCompletion } = await import('../../helperFns/referralHelper.js');
+              handleFirstOrderCompletion(order.userId).catch(err => console.error('Referral Reward Error (Courier):', err));
+            }
+          }
+        } catch (settleErr) {
+          console.error('Failed to credit merchant weekly payout for courier order:', settleErr);
+        }
+      }
     }
 
     await order.save();
@@ -1210,6 +1324,42 @@ export const updateCourierOrderReturnStatus = async (req, res) => {
           orderId: order._id,
           session
         });
+
+        // Auto-record debit in Unified Transaction Ledger
+        try {
+          const { recordTransaction } = await import("../../helperFns/transactionHelper.js");
+          const refundTxn = await recordTransaction({
+            amount: refundAmount,
+            type: "debit",
+            category: "user_refund",
+            source: "system_auto",
+            status: "completed",
+            paymentMethod: "wallet",
+            referenceNumber: `REFUND-COURIER-${order._id.toString().slice(-6).toUpperCase()}`,
+            recipientType: "user",
+            recipientId: order.userId,
+            recipientDetails: {
+              name: order.deliveryLocation?.name || "",
+              phone: order.deliveryLocation?.phone || "",
+            },
+            orderId: order._id,
+            orderModel: "CourierOrder",
+            courierOrderId: order._id,
+            notes: desc,
+          }, session);
+
+          order.refundAmount = refundAmount;
+          order.refundDetails = {
+            amount: refundAmount,
+            method: "wallet",
+            referenceNumber: refundTxn?.transactionId || `REFUND-COURIER-${order._id.toString().slice(-6).toUpperCase()}`,
+            refundedAt: new Date(),
+            reason: desc,
+            transactionId: refundTxn?._id || null,
+          };
+        } catch (txnErr) {
+          console.warn("Could not log courier refund to transaction ledger:", txnErr.message);
+        }
       }
 
       if (isMerchantFault && returnCharge > 0) {
@@ -1222,6 +1372,28 @@ export const updateCourierOrderReturnStatus = async (req, res) => {
           session,
           allowNegative: true
         });
+
+        // Auto-record merchant return fee in Unified Transaction Ledger
+        try {
+          const { recordTransaction } = await import("../../helperFns/transactionHelper.js");
+          await recordTransaction({
+            amount: returnCharge,
+            type: "debit",
+            category: "damage_compensation",
+            source: "system_auto",
+            status: "completed",
+            paymentMethod: "wallet",
+            referenceNumber: `RETURN-FEE-${order._id.toString().slice(-6).toUpperCase()}`,
+            recipientType: "merchant",
+            recipientId: order.merchantId,
+            orderId: order._id,
+            orderModel: "CourierOrder",
+            courierOrderId: order._id,
+            notes: `Return charge for merchant-fault return in courier order #${order._id.toString().slice(-6).toUpperCase()}`,
+          }, session);
+        } catch (feeTxnErr) {
+          console.warn("Could not log merchant return fee to transaction ledger:", feeTxnErr.message);
+        }
       }
 
       order.returnRequest.status = 'received';

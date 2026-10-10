@@ -49,7 +49,23 @@ export async function recordTransaction(params, session = null) {
     recipientId: params.recipientId || null,
     recipientDetails: params.recipientDetails || {},
     orderId: params.orderId || null,
+    orderModel: params.orderModel || (params.courierOrderId ? "CourierOrder" : (params.warehouseOrderId ? "WarehouseOrder" : "Order")),
+    courierOrderId: params.courierOrderId || (params.orderModel === "CourierOrder" ? params.orderId : null),
+    warehouseOrderId: params.warehouseOrderId || (params.orderModel === "WarehouseOrder" ? params.orderId : null),
     weeklyPayoutId: params.weeklyPayoutId || null,
+    split: params.split || {
+      grossAmount: Number(params.split?.grossAmount || 0),
+      commissionRate: Number(params.split?.commissionRate || 4),
+      commissionAmount: Number(params.split?.commissionAmount || 0),
+      merchantAmount: Number(params.split?.merchantAmount || 0),
+      merchantDiscount: Number(params.split?.merchantDiscount || 0),
+      adminDiscount: Number(params.split?.adminDiscount || 0),
+      deliveryFee: Number(params.split?.deliveryFee || 0),
+      returnFee: Number(params.split?.returnFee || 0),
+      riderTip: Number(params.split?.riderTip || 0),
+      waitingCharge: Number(params.split?.waitingCharge || 0),
+      taxes: Number(params.split?.taxes || 0),
+    },
     receipt: params.receipt || { url: null, public_id: null },
     notes: params.notes || "",
     performedBy: params.performedBy || { adminId: null, name: "System", email: "" },
@@ -61,7 +77,8 @@ export async function recordTransaction(params, session = null) {
   // Optionally log financial audit
   try {
     const auditData = {
-      orderId: txnData.orderId,
+      orderId: txnData.orderModel === "Order" ? txnData.orderId : null,
+      courierOrderId: txnData.courierOrderId || (txnData.orderModel === "CourierOrder" ? txnData.orderId : null),
       userId: txnData.recipientType === "user" ? txnData.recipientId : null,
       merchantId: txnData.recipientType === "merchant" ? txnData.recipientId : null,
       deliveryRiderId: txnData.recipientType === "rider" ? txnData.recipientId : null,

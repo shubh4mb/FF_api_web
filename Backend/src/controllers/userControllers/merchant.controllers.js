@@ -1,12 +1,43 @@
 import Merchant from "../../models/merchant.model.js";
+import { isBackendInTestMode, getTestMerchant } from "../../helperFns/testModeHelper.js";
 
 export const getNearbyMerchants = async (req, res) => {
   try {
     const { gender, strict } = req.query;
     const isStrict = strict === 'true';
 
-    // Exclude warehouse-only brands (e.g. Calsioclub) from physical stores list
-    let filter = { isActive: true, isVerified: true, fulfillmentType: { $ne: 'warehouse' } };
+    // ── Testing Mode Override (Isolate to SB Fashion in Stores Tab) ──
+    const inTestMode = await isBackendInTestMode();
+    if (inTestMode) {
+      const testMerchant = await getTestMerchant();
+      if (testMerchant) {
+        const ProductFlat = (await import("../../models/productFlat.model.js")).default;
+        const uniqueTestProducts = (await ProductFlat.distinct('styleGroupId', {
+          merchantId: testMerchant._id,
+          source: { $ne: 'warehouse' },
+          isActive: true,
+          isDeleted: { $ne: true }
+        })).filter(Boolean);
+        const count = uniqueTestProducts.length;
+        return res.status(200).json({
+          merchants: [{
+            ...testMerchant,
+            status: 'active',
+            isActive: true,
+            isOnline: true,
+            isZoneLive: true,
+            isStoreActive: true,
+            stats: {
+              ...(testMerchant.stats || {}),
+              totalProducts: count
+            }
+          }]
+        });
+      }
+    }
+
+    // Exclude warehouse-only brands (e.g. Calsioclub) and merchants whose physical store is hidden from physical stores list
+    let filter = { isActive: true, isVerified: true, fulfillmentType: { $ne: 'warehouse' }, isStoreActive: { $ne: false } };
 
     if (isStrict) {
       // ── Instant Try (Home): Only online, nearby, and in-zone merchants ──
@@ -41,7 +72,8 @@ export const getNearbyMerchants = async (req, res) => {
 
     const ProductFlat = (await import("../../models/productFlat.model.js")).default;
     const merchantsWithCount = await Promise.all(merchants.map(async (m) => {
-      const count = await ProductFlat.countDocuments({ merchantId: m._id, isActive: true, isDeleted: { $ne: true } });
+      const uniqueProducts = (await ProductFlat.distinct('styleGroupId', { merchantId: m._id, isActive: true, isDeleted: { $ne: true } })).filter(Boolean);
+      const count = uniqueProducts.length;
       return {
         ...m,
         stats: {
@@ -64,19 +96,21 @@ export const getNearbyMerchants = async (req, res) => {
     try {
       const Warehouse = (await import("../../models/warehouse.model.js")).default;
       const activeWarehouses = await Warehouse.find({ isActive: true }).lean();
-      const totalWarehouseProducts = await ProductFlat.countDocuments({
+      const uniqueWarehouseProducts = (await ProductFlat.distinct('styleGroupId', {
         $or: [{ source: 'warehouse' }, { warehouseId: { $exists: true, $ne: null } }],
         isActive: true,
         isDeleted: { $ne: true }
-      });
+      })).filter(Boolean);
+      const totalWarehouseProducts = uniqueWarehouseProducts.length;
 
       if (activeWarehouses.length > 0) {
         for (const wh of activeWarehouses) {
-          const whCount = await ProductFlat.countDocuments({
+          const uniqueWh = (await ProductFlat.distinct('styleGroupId', {
             $or: [{ warehouseId: wh._id }, { source: 'warehouse' }],
             isActive: true,
             isDeleted: { $ne: true }
-          });
+          })).filter(Boolean);
+          const whCount = uniqueWh.length;
           warehouseStores.push({
             _id: wh._id.toString(),
             shopName: wh.name || 'FlashFits Warehouse Hub',

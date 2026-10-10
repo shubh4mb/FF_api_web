@@ -21,10 +21,20 @@ const buildCollectionProductQuery = (coll, onlineNearbyIds, { gender, subCuratio
   const ruleConditions = [];
 
   if (rules.categoryIds?.length > 0) {
-    ruleConditions.push({ categoryId: { $in: rules.categoryIds } });
+    ruleConditions.push({
+      $or: [
+        { categoryId: { $in: rules.categoryIds } },
+        { additionalCategoryIds: { $in: rules.categoryIds } }
+      ]
+    });
   }
   if (rules.subCategoryIds?.length > 0) {
-    ruleConditions.push({ subCategoryId: { $in: rules.subCategoryIds } });
+    ruleConditions.push({
+      $or: [
+        { subCategoryId: { $in: rules.subCategoryIds } },
+        { additionalCategoryIds: { $in: rules.subCategoryIds } }
+      ]
+    });
   }
   if (rules.tags?.length > 0) {
     ruleConditions.push({ tags: { $in: rules.tags.map(t => new RegExp(`^${t}$`, 'i')) } });

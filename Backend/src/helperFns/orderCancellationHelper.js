@@ -85,6 +85,8 @@ export const cancelAndCleanupOrder = async ({
     order.customerDeliveryStatus = 'cancelled';
     order.deliveryRiderStatus = 'cancelled';
     order.reason = reason;
+    order.cancelledBy = cancelledBy;
+    order.cancelledAt = new Date();
 
     if (order.cancellationRequest === 'pending') {
       order.cancellationRequest = action === 'rejected' ? 'rejected' : 'approved';
@@ -134,6 +136,43 @@ export const cancelAndCleanupOrder = async ({
           session,
         });
         order.paymentStatus = 'refunded';
+        order.refundAmount = refundAmount;
+
+        // Auto-record debit in Unified Transaction Ledger
+        try {
+          const { recordTransaction } = await import("./transactionHelper.js");
+          const isWarehouse = Boolean(order.warehouseId || order.fulfillmentType);
+          const refundTxn = await recordTransaction({
+            amount: refundAmount,
+            type: "debit",
+            category: "user_refund",
+            source: "system_auto",
+            status: "completed",
+            paymentMethod: "wallet",
+            referenceNumber: `REFUND-CANCEL-${order._id.toString().slice(-6).toUpperCase()}`,
+            recipientType: "user",
+            recipientId: order.userId,
+            recipientDetails: {
+              name: order.deliveryLocation?.name || "",
+              phone: order.deliveryLocation?.phone || "",
+            },
+            orderId: order._id,
+            orderModel: isWarehouse ? "WarehouseOrder" : "Order",
+            warehouseOrderId: isWarehouse ? order._id : null,
+            notes: refundDescription,
+          }, session);
+
+          order.refundDetails = {
+            amount: refundAmount,
+            method: "wallet",
+            referenceNumber: refundTxn?.transactionId || `REFUND-CANCEL-${order._id.toString().slice(-6).toUpperCase()}`,
+            refundedAt: new Date(),
+            reason: reason || "Order cancelled",
+            transactionId: refundTxn?._id || null,
+          };
+        } catch (txnLedgerErr) {
+          console.warn("Could not log cancellation refund to transaction ledger:", txnLedgerErr.message);
+        }
       } catch (refundErr) {
         console.error('Wallet credit error during order cancellation:', refundErr);
       }
@@ -221,10 +260,35 @@ export const cancelAndCleanupOrder = async ({
         const orderIdStr = order._id.toString();
 
         emitOrderUpdate(io, orderIdStr, order);
-        io.to(orderIdStr).emit('orderCancelled', { orderId: orderIdStr, reason });
+        io.to(orderIdStr).emit('orderCancelled', { orderId: orderIdStr, reason, cancelledBy, order });
+
+        if (order.userId) {
+          const userIdStr = (order.userId._id || order.userId).toString();
+          const cleanUserId = userIdStr.replace(/^["']|["']$/g, '').trim();
+          io.to(`user:${cleanUserId}`).emit('orderCancelled', {
+            orderId: orderIdStr,
+            reason,
+            cancelledBy,
+            order,
+          });
+          if (cleanUserId) {
+            io.to(cleanUserId).emit('orderCancelled', {
+              orderId: orderIdStr,
+              reason,
+              cancelledBy,
+              order,
+            });
+          }
+        }
 
         if (isWarehouseOrder) {
           await emitWarehouseOrderUpdate(io, order.warehouseId, orderIdStr, order);
+          io.to(`warehouse:${order.warehouseId}`).emit('orderCancelled', {
+            orderId: orderIdStr,
+            reason,
+            cancelledBy,
+            order,
+          });
           notifyWarehouse(
             io,
             order.warehouseId,
@@ -232,6 +296,12 @@ export const cancelAndCleanupOrder = async ({
           );
         } else if (order.merchantId) {
           const merchantIdStr = (order.merchantId._id || order.merchantId).toString();
+          io.to(`merchant:${merchantIdStr}`).emit('orderCancelled', {
+            orderId: orderIdStr,
+            reason,
+            cancelledBy,
+            order,
+          });
           notifyMerchant(
             io,
             merchantIdStr,

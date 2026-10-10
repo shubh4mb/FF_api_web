@@ -164,40 +164,91 @@ export function parseTelegramCaption(text) {
     return found;
   }
 
-  // --- 1. Labeled Extraction ---
-  const skuMatch = raw.match(/(?:sku|item\s*code|prod(?:uct)?\s*code|code|design\s*no\.?|style\s*no\.?|art\s*no\.?)\s*[:=\-]?\s*([a-zA-Z0-9_\-]+)/i);
-  if (skuMatch) sku = skuMatch[1].trim();
+  // --- Helper to parse a line that represents purely price/mrp ---
+  function parseDedicatedPriceLine(line) {
+    if (!line) return null;
+    const trimmed = line.trim();
 
-  const priceMatch = raw.match(/(?:price|rate|sp|selling\s*price)\s*[:=\-]?\s*(?:₹|rs\.?|inr)?\s*(\d+(?:\.\d+)?)/i);
-  if (priceMatch) price = Number(priceMatch[1]);
+    // Two prices on one line (e.g. "800 1200", "800 / 1200", "SP 800 MRP 1200")
+    const twoPricesMatch = trimmed.match(
+      /^(?:(?:sp|price|rate|selling\s*price)\s*[:=\-]?\s*)?(?:₹|(?:\b(?:rs\.?|inr)\b\s*))?\s*(\d+(?:\.\d+)?)\s*(?:\/|\s+)\s*(?:(?:mrp|original\s*price)\s*[:=\-]?\s*)?(?:₹|(?:\b(?:rs\.?|inr)\b\s*))?\s*(\d+(?:\.\d+)?)$/i
+    );
+    if (twoPricesMatch) {
+      const n1 = Number(twoPricesMatch[1]);
+      const n2 = Number(twoPricesMatch[2]);
+      if (n1 >= 30 && n2 >= 30) {
+        return { price: Math.min(n1, n2), mrp: Math.max(n1, n2) };
+      }
+    }
 
-  const mrpMatch = raw.match(/(?:mrp|original\s*price)\s*[:=\-]?\s*(?:₹|rs\.?|inr)?\s*(\d+(?:\.\d+)?)/i);
-  if (mrpMatch) mrp = Number(mrpMatch[1]);
+    // Single price line (e.g. "800", "₹800", "Rs. 800", "800/-", "800 rs", "Price: 800")
+    const singlePriceMatch = trimmed.match(
+      /^(?:(?:price|rate|sp|selling\s*price)\s*[:=\-]?\s*)?(?:₹|(?:\b(?:rs\.?|inr)\b\s*))?\s*(\d+(?:\.\d+)?)(?:\s*(?:\/(?:-|rs)?|(?:rs\.?|inr)\b))?$/i
+    );
+    if (singlePriceMatch) {
+      const val = Number(singlePriceMatch[1]);
+      if (val >= 30) {
+        return { price: val };
+      }
+    }
 
-  // Currency symbol price fallback: ₹999 or 999/-
-  if (!price) {
-    const symbolPriceMatch = raw.match(/(?:₹|rs\.?|inr)\s*(\d+(?:\.\d+)?)/i) || raw.match(/\b(\d{2,6})\s*\/(?:-|rs)?\b/i);
-    if (symbolPriceMatch) price = Number(symbolPriceMatch[1]);
+    return null;
   }
 
+  // --- 1. Labeled Extraction ---
+  const skuMatch = raw.match(/\b(?:sku|item\s*code|prod(?:uct)?\s*code|code|design\s*no\.?|style\s*no\.?|art\s*no\.?)\s*[:=\-]?\s*([a-zA-Z0-9_\-]+)/i);
+  if (skuMatch) sku = skuMatch[1].trim();
+
+  const priceMatch = raw.match(/\b(?:price|rate|sp|selling\s*price)\b\s*[:=\-]?\s*(?:₹|(?:\b(?:rs\.?|inr)\b\s*))?\s*(\d+(?:\.\d+)?)/i);
+  if (priceMatch) price = Number(priceMatch[1]);
+
+  const mrpMatch = raw.match(/\b(?:mrp|original\s*price)\b\s*[:=\-]?\s*(?:₹|(?:\b(?:rs\.?|inr)\b\s*))?\s*(\d+(?:\.\d+)?)/i);
+  if (mrpMatch) mrp = Number(mrpMatch[1]);
+
   // --- 2. Line-Based Structure Extraction (Standard Flashfits Format) ---
+  // If multi-line, check lines directly:
+  // Standard format: Line 1 = SKU, Line 2 = Price, Line 3+ = Sizes
   if (lines.length >= 2) {
-    const line2PriceMatch = lines[1].match(/^(?:₹|rs\.?|inr)?\s*(\d+(?:\.\d+)?)(?:\s*\/(?:-|rs)?)?$/i);
-    if (!price && line2PriceMatch) {
-      price = Number(line2PriceMatch[1]);
+    const line2Price = parseDedicatedPriceLine(lines[1]);
+    if (line2Price) {
+      if (!price) price = line2Price.price;
+      if (!mrp && line2Price.mrp) mrp = line2Price.mrp;
+
       if (!sku && lines[0]) {
-        const potentialSku = lines[0].replace(/^(?:sku|code)[:=\-\s]*/i, '').trim();
-        if (potentialSku && !potentialSku.toLowerCase().startsWith('size') && !potentialSku.toLowerCase().startsWith('rate')) {
+        const potentialSku = lines[0].replace(/^(?:sku|item\s*code|code)[:=\-\s]*/i, '').trim();
+        if (
+          potentialSku &&
+          !potentialSku.toLowerCase().startsWith('size') &&
+          !potentialSku.toLowerCase().startsWith('rate') &&
+          !potentialSku.toLowerCase().startsWith('price')
+        ) {
           sku = potentialSku;
         }
+      }
+    } else {
+      // Line 1 may be price (e.g. "450 \n Size M" or "₹650 \n Sizes: 38 40")
+      const line1Price = parseDedicatedPriceLine(lines[0]);
+      if (line1Price) {
+        if (!price) price = line1Price.price;
+        if (!mrp && line1Price.mrp) mrp = line1Price.mrp;
       }
     }
   }
 
-  // --- 3. Extract Sizes ---
+  // --- 3. Currency Symbol Price Fallback (₹999, Rs. 750, 1250/-, 750 rs) ---
+  // Ensure we require word boundaries so letters like 'RS' in 'DRS31' are NEVER treated as currency!
+  if (!price) {
+    const symbolPriceMatch =
+      raw.match(/₹\s*(\d+(?:\.\d+)?)/i) ||
+      raw.match(/(?:\b(?:rs\.|inr)\s*|\b(?:rs|inr)\s+)(\d+(?:\.\d+)?)/i) ||
+      raw.match(/\b(\d+(?:\.\d+)?)\s*(?:\/(?:-|rs)?|(?:rs\.?|inr)\b)/i);
+    if (symbolPriceMatch) price = Number(symbolPriceMatch[1]);
+  }
+
+  // --- 4. Extract Sizes ---
   sizes = extractSizes(raw);
 
-  // --- 4. Fallback Token Extraction for Price and SKU ---
+  // --- 5. Fallback Token Extraction for Price and SKU ---
   const words = raw
     .replace(/[,\/]/g, ' ')
     .split(/\s+/)

@@ -77,12 +77,13 @@ function normalizeGender(gender, allowedGenders = []) {
   let resolved = [];
 
   if (normalized.includes("UNISEX")) {
-    if (allowedGenders.length > 0) {
-      resolved = allowedGenders.filter((g) =>
-        ["MEN", "WOMEN", "KIDS", "BOYS", "GIRLS"].includes(g)
-      );
+    const adultGenders = ["MEN", "WOMEN"].filter(
+      (g) => allowedGenders.length === 0 || allowedGenders.includes(g)
+    );
+    if (adultGenders.length > 0) {
+      resolved = adultGenders;
     } else {
-      resolved = ["MEN", "WOMEN"];
+      resolved = allowedGenders.length > 0 ? allowedGenders : ["MEN", "WOMEN"];
     }
   } else {
     resolved = normalized.filter((g) =>
@@ -94,7 +95,10 @@ function normalizeGender(gender, allowedGenders = []) {
     return resolved;
   }
 
-  return allowedGenders.length > 0 ? allowedGenders : ["MEN", "WOMEN"];
+  const defaultAdult = ["MEN", "WOMEN"].filter(
+    (g) => allowedGenders.length === 0 || allowedGenders.includes(g)
+  );
+  return defaultAdult.length > 0 ? defaultAdult : (allowedGenders.length > 0 ? allowedGenders : ["MEN", "WOMEN"]);
 }
 
 function normalizeHex(hex) {

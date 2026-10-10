@@ -161,14 +161,19 @@ export const addVariant = asyncHandler(async (req, res) => {
 
 export const getFilteredProducts = asyncHandler(async (req, res) => {
   const filter = { isDeleted: { $ne: true } };
-  if (req.params.categoryId) filter.categoryId = req.params.categoryId;
-  if (req.params.subCategoryId) filter.subCategoryId = req.params.subCategoryId;
+  if (req.params.categoryId) {
+    filter.$or = [{ categoryId: req.params.categoryId }, { additionalCategoryIds: req.params.categoryId }];
+  }
+  if (req.params.subCategoryId) {
+    filter.$or = [{ subCategoryId: req.params.subCategoryId }, { additionalCategoryIds: req.params.subCategoryId }];
+  }
   if (req.params.subSubCategoryId) filter.subSubCategoryId = req.params.subSubCategoryId;
 
   const flatProducts = await ProductFlat.find(filter)
     .populate('brandId', 'name')
     .populate('categoryId', 'name')
     .populate('subCategoryId', 'name')
+    .populate('additionalCategoryIds', 'name parentId level')
     .populate('merchantId', 'shopName email');
 
   const products = groupFlatToLegacy(flatProducts);

@@ -64,7 +64,7 @@ const categorySchema = new mongoose.Schema({
   // ── Commission (set on leaf categories, level 1) ──
   commissionPercentage: {
     type: Number,
-    default: 0,
+    default: 4,
     min: 0,
     max: 100,
   },

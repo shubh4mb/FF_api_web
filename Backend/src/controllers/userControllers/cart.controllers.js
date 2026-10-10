@@ -10,6 +10,7 @@ import Offer from "../../models/offer.model.js";
 import ProductFlat from '../../models/productFlat.model.js';
 import { generateColorVariantId } from '../../utils/variantAdapter.js';
 import Warehouse from '../../models/warehouse.model.js';
+import { isBackendInTestMode, isTestMerchant } from '../../helperFns/testModeHelper.js';
 
 export const addToCart = async (req, res) => {
   const userId = req.user.userId;
@@ -351,12 +352,28 @@ export const getCart = async (req, res) => {
     const allItems = [];
     const allDeliveryDetails = [];
 
+    const inTestMode = await isBackendInTestMode();
+
     for (const [merchantKey, group] of Object.entries(merchantGroupMap)) {
       const { merchant, items } = group;
       globalTotalItems += items.length;
 
+      const isTestMerch = inTestMode && (isTestMerchant(merchantKey) || isTestMerchant(merchant));
+
       let deliveryInfo = null;
-      if (selectedAddress && merchant && merchant.address) {
+      if (isTestMerch) {
+        deliveryInfo = {
+          merchantId: merchant?._id || merchantKey,
+          shopName: merchant?.shopName || 'SB Fashion',
+          distanceKm: 1.5,
+          deliveryCharge: 0,
+          returnCharge: 0,
+          estimatedTime: 25,
+          isEligibleForTryBuy: true,
+          message: null
+        };
+        allDeliveryDetails.push(deliveryInfo);
+      } else if (selectedAddress && merchant && merchant.address) {
         let userCoords = selectedAddress.location?.coordinates;
         if (!userCoords || userCoords.length < 2) {
           if (selectedAddress.longitude !== undefined && selectedAddress.latitude !== undefined) {
@@ -455,7 +472,14 @@ export const getCart = async (req, res) => {
 
       merchantCarts.push({
         merchantId: merchantKey,
-        merchantDetails: { _id: merchant?._id, shopName: merchant?.shopName, isOnline: merchant?.isOnline, logo: merchant?.logo },
+        merchantDetails: {
+          _id: merchant?._id,
+          shopName: merchant?.shopName,
+          isOnline: isTestMerch ? true : merchant?.isOnline,
+          isActive: isTestMerch ? true : merchant?.isActive,
+          status: isTestMerch ? 'active' : merchant?.status,
+          logo: merchant?.logo
+        },
         items: enrichedItems,
         deliveryDetails: deliveryInfo,
         totals: mTotals,
@@ -470,7 +494,7 @@ export const getCart = async (req, res) => {
       items: allItems,
       deliveryDetails: allDeliveryDetails.length > 0 ? allDeliveryDetails : null,
       address: selectedAddress,
-      serviceable: !!(selectedAddress && serviceable),
+      serviceable: inTestMode ? true : !!(selectedAddress && serviceable),
     });
   } catch (err) {
     console.error("Get cart error:", err);

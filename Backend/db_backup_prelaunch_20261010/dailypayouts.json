@@ -1,0 +1,713 @@
+[
+  {
+    "_id": "6a53e00d9533cc7c00bd8f0d",
+    "riderId": "6a45776e80bbd764a88a440b",
+    "date": "2026-07-12T18:30:00.000Z",
+    "weeklyPayoutId": null,
+    "completedOrders": 2,
+    "cancelledOrders": 0,
+    "totalEarnings": 43,
+    "loginHours": 5.799999999999999,
+    "totalIncentive": 0,
+    "dailyIncentiveProcessed": true,
+    "loginWindows": [
+      {
+        "start": "2026-07-12T18:36:27.457Z",
+        "end": "2026-07-12T19:00:00.145Z",
+        "_id": "6a53e430e051997647899d34"
+      },
+      {
+        "start": "2026-07-12T19:35:28.545Z",
+        "end": "2026-07-12T19:44:00.162Z",
+        "_id": "6a53ee80874526e86725c3c8"
+      },
+      {
+        "start": "2026-07-12T19:46:24.030Z",
+        "end": "2026-07-12T19:54:00.201Z",
+        "_id": "6a53f0d8874526e86725c4cf"
+      },
+      {
+        "start": "2026-07-12T22:25:57.408Z",
+        "end": "2026-07-13T07:00:53.401Z",
+        "_id": "6a548d251db6c93ac7ea40c0"
+      },
+      {
+        "start": "2026-07-13T07:00:54.338Z",
+        "end": "2026-07-13T07:37:40.972Z",
+        "_id": "6a5495c51db6c93ac7ea477e"
+      },
+      {
+        "start": "2026-07-13T07:37:42.265Z",
+        "end": "2026-07-13T07:37:42.814Z",
+        "_id": "6a5495c61db6c93ac7ea478c"
+      },
+      {
+        "start": "2026-07-13T07:37:43.818Z",
+        "end": "2026-07-13T07:37:44.116Z",
+        "_id": "6a5495c81db6c93ac7ea479c"
+      },
+      {
+        "start": "2026-07-13T07:40:36.789Z",
+        "end": "2026-07-13T07:42:00.222Z",
+        "_id": "6a5496c81db6c93ac7ea49e8"
+      },
+      {
+        "start": "2026-07-13T07:42:01.366Z",
+        "end": "2026-07-13T07:42:37.236Z",
+        "_id": "6a5496ed1db6c93ac7ea4a20"
+      },
+      {
+        "start": "2026-07-13T07:42:38.824Z",
+        "end": "2026-07-13T07:44:57.270Z",
+        "_id": "6a5497791db6c93ac7ea4a71"
+      },
+      {
+        "start": "2026-07-13T07:44:58.468Z",
+        "end": "2026-07-13T07:46:48.410Z",
+        "_id": "6a5497e81db6c93ac7ea4c30"
+      },
+      {
+        "start": "2026-07-13T07:46:49.518Z",
+        "end": "2026-07-13T07:47:39.541Z",
+        "_id": "6a54981b1db6c93ac7ea4d58"
+      },
+      {
+        "start": "2026-07-13T07:47:40.449Z",
+        "end": "2026-07-13T07:48:42.333Z",
+        "_id": "6a54985a1db6c93ac7ea4edc"
+      },
+      {
+        "start": "2026-07-13T07:48:43.159Z",
+        "end": "2026-07-13T08:06:00.169Z",
+        "_id": "6a549c68a87c6637976235f5"
+      },
+      {
+        "start": "2026-07-13T10:38:24.902Z",
+        "end": "2026-07-13T10:38:29.256Z",
+        "_id": "6a54c0255b8697af95e7d2db"
+      },
+      {
+        "start": "2026-07-13T10:38:30.046Z",
+        "end": "2026-07-13T10:41:31.933Z",
+        "_id": "6a54c0db5b8697af95e7d58c"
+      },
+      {
+        "start": "2026-07-13T10:41:32.673Z",
+        "end": "2026-07-13T10:54:00.159Z",
+        "_id": "6a54c3c88fc5d267451d415f"
+      }
+    ],
+    "incentivesEarned": [],
+    "createdAt": "2026-07-12T18:42:21.505Z",
+    "updatedAt": "2026-07-13T19:00:00.036Z",
+    "__v": 0
+  },
+  {
+    "_id": "6a53e00d9533cc7c00bd8f11",
+    "riderId": "6a45776e80bbd764a88a440b",
+    "date": "2026-07-13T18:30:00.000Z",
+    "weeklyPayoutId": null,
+    "completedOrders": 2,
+    "cancelledOrders": 0,
+    "totalEarnings": 54,
+    "loginHours": 6,
+    "totalIncentive": 0,
+    "dailyIncentiveProcessed": true,
+    "loginWindows": [],
+    "incentivesEarned": [],
+    "createdAt": "2026-07-12T18:42:21.545Z",
+    "updatedAt": "2026-07-14T19:00:00.026Z",
+    "__v": 0
+  },
+  {
+    "_id": "6a58a5aaa9ffd8ee6cb76e6d",
+    "date": "2026-07-15T18:30:00.000Z",
+    "riderId": "6a45776e80bbd764a88a440b",
+    "__v": 0,
+    "cancelledOrders": 0,
+    "completedOrders": 2,
+    "createdAt": "2026-07-16T09:34:32.549Z",
+    "dailyIncentiveProcessed": true,
+    "incentivesEarned": [],
+    "loginHours": 0.91,
+    "loginWindows": [
+      {
+        "start": "2026-07-16T09:24:26.433Z",
+        "end": "2026-07-16T09:34:32.501Z",
+        "_id": "6a58a5a855e88a4c3de88d4e"
+      },
+      {
+        "start": "2026-07-16T09:34:34.680Z",
+        "end": "2026-07-16T09:40:00.228Z",
+        "_id": "6a58a6f02fdcd189bfef35b2"
+      },
+      {
+        "start": "2026-07-16T12:20:03.602Z",
+        "end": "2026-07-16T12:20:12.008Z",
+        "_id": "6a58cc7c388f6caac6297bef"
+      },
+      {
+        "start": "2026-07-16T12:20:40.150Z",
+        "end": "2026-07-16T12:23:59.394Z",
+        "_id": "6a58cd5f388f6caac6297c22"
+      },
+      {
+        "start": "2026-07-16T12:24:01.440Z",
+        "end": "2026-07-16T12:24:09.177Z",
+        "_id": "6a58cd69388f6caac6297c40"
+      },
+      {
+        "start": "2026-07-16T12:24:34.793Z",
+        "end": "2026-07-16T12:40:14.434Z",
+        "_id": "6a58d12e388f6caac6298259"
+      },
+      {
+        "start": "2026-07-16T12:40:16.208Z",
+        "end": "2026-07-16T12:46:00.020Z",
+        "_id": "6a58d2882fdcd189bfef3b8f"
+      },
+      {
+        "start": "2026-07-16T12:58:45.695Z",
+        "end": "2026-07-16T13:04:00.019Z",
+        "_id": "6a58d6c02fdcd189bfef3bb1"
+      },
+      {
+        "start": "2026-07-16T17:08:20.716Z",
+        "end": "2026-07-16T17:08:31.051Z",
+        "_id": "6a59100fa2b12270c20b82e3"
+      },
+      {
+        "start": "2026-07-16T17:09:02.190Z",
+        "end": "2026-07-16T17:09:03.705Z",
+        "_id": "6a59102fa2b12270c20b830f"
+      },
+      {
+        "start": "2026-07-16T17:09:40.445Z",
+        "end": "2026-07-16T17:18:00.019Z",
+        "_id": "6a5912482fdcd189bfef3d33"
+      }
+    ],
+    "totalEarnings": 30,
+    "totalIncentive": 0,
+    "updatedAt": "2026-07-16T19:00:00.049Z",
+    "weeklyPayoutId": null
+  },
+  {
+    "_id": "6a7d85b1a2e4e5d9bc75f21d",
+    "riderId": "6a45776e80bbd764a88a440b",
+    "date": "2026-08-12T18:30:00.000Z",
+    "__v": 0,
+    "cancelledOrders": 0,
+    "completedOrders": 1,
+    "createdAt": "2026-08-13T08:52:01.328Z",
+    "dailyIncentiveProcessed": true,
+    "incentivesEarned": [],
+    "loginHours": 0.67,
+    "loginWindows": [
+      {
+        "start": "2026-08-13T08:45:28.960Z",
+        "end": "2026-08-13T08:52:01.283Z",
+        "_id": "6a7d85b1327f230c9f3f5a32"
+      },
+      {
+        "start": "2026-08-13T08:52:02.265Z",
+        "end": "2026-08-13T08:58:00.022Z",
+        "_id": "6a7d87187779baaf28d0ba6f"
+      },
+      {
+        "start": "2026-08-13T09:10:34.416Z",
+        "end": "2026-08-13T09:10:50.248Z",
+        "_id": "6a7d8a1a0b9899a9fffeae42"
+      },
+      {
+        "start": "2026-08-13T09:10:53.112Z",
+        "end": "2026-08-13T09:18:00.022Z",
+        "_id": "6a7d8bc87779baaf28d0ba8a"
+      },
+      {
+        "start": "2026-08-13T10:43:50.915Z",
+        "end": "2026-08-13T10:50:00.021Z",
+        "_id": "6a7da1587779baaf28d0baef"
+      },
+      {
+        "start": "2026-08-13T11:09:26.839Z",
+        "end": "2026-08-13T11:24:00.019Z",
+        "_id": "6a7da9507779baaf28d0bb1b"
+      }
+    ],
+    "totalEarnings": 15,
+    "totalIncentive": 0,
+    "updatedAt": "2026-08-13T19:00:00.066Z",
+    "weeklyPayoutId": null
+  },
+  {
+    "_id": "6a825248a2e4e5d9bc77e90d",
+    "riderId": "6a45776e80bbd764a88a440b",
+    "date": "2026-08-16T18:30:00.000Z",
+    "__v": 0,
+    "cancelledOrders": 0,
+    "completedOrders": 0,
+    "createdAt": "2026-08-17T00:14:00.062Z",
+    "dailyIncentiveProcessed": true,
+    "incentivesEarned": [],
+    "loginHours": 0,
+    "loginWindows": [
+      {
+        "start": "2026-08-17T00:06:17.154Z",
+        "end": "2026-08-17T00:14:00.023Z",
+        "_id": "6a8252487779baaf28d0e3ab"
+      }
+    ],
+    "totalEarnings": 0,
+    "totalIncentive": 0,
+    "updatedAt": "2026-08-17T19:00:00.079Z",
+    "weeklyPayoutId": null
+  },
+  {
+    "_id": "6a9d355b6a31bdbf9c8bb1b3",
+    "date": "2026-09-05T18:30:00.000Z",
+    "riderId": "6a45776e80bbd764a88a440b",
+    "__v": 0,
+    "cancelledOrders": 0,
+    "completedOrders": 2,
+    "createdAt": "2026-09-06T09:41:47.105Z",
+    "dailyIncentiveProcessed": true,
+    "incentivesEarned": [],
+    "loginHours": 5.87,
+    "loginWindows": [
+      {
+        "start": "2026-09-06T09:40:43.352Z",
+        "end": "2026-09-06T09:41:47.065Z",
+        "_id": "6a9d355bbafc5096257e483b"
+      },
+      {
+        "start": "2026-09-06T09:41:56.087Z",
+        "end": "2026-09-06T09:45:26.008Z",
+        "_id": "6a9d3636bafc5096257e4a8c"
+      },
+      {
+        "start": "2026-09-06T09:45:26.970Z",
+        "end": "2026-09-06T10:00:00.040Z",
+        "_id": "6a9d39a07779baaf28d19064"
+      },
+      {
+        "start": "2026-09-06T11:15:50.018Z",
+        "end": "2026-09-06T11:22:00.016Z",
+        "_id": "6a9d4cd87779baaf28d190be"
+      },
+      {
+        "start": "2026-09-06T11:51:46.974Z",
+        "end": "2026-09-06T11:52:02.262Z",
+        "_id": "6a9d53e29febaff7cc458a66"
+      },
+      {
+        "start": "2026-09-06T11:52:03.603Z",
+        "end": "2026-09-06T12:06:00.016Z",
+        "_id": "6a9d57287779baaf28d190f3"
+      },
+      {
+        "start": "2026-09-06T12:16:36.521Z",
+        "end": "2026-09-06T12:18:20.020Z",
+        "_id": "6a9d5a0ce0e2e985db94d648"
+      },
+      {
+        "start": "2026-09-06T12:18:21.534Z",
+        "end": "2026-09-07T11:24:00.034Z",
+        "_id": "6a9e9ed07779baaf28d19dd5"
+      }
+    ],
+    "totalEarnings": 44,
+    "totalIncentive": 0,
+    "updatedAt": "2026-09-07T11:24:00.076Z",
+    "weeklyPayoutId": null
+  },
+  {
+    "_id": "6a9e9c646a31bdbf9c8bef0e",
+    "date": "2026-09-06T18:30:00.000Z",
+    "riderId": "6a45776e80bbd764a88a440b",
+    "__v": 0,
+    "cancelledOrders": 0,
+    "completedOrders": 7,
+    "createdAt": "2026-09-07T11:13:38.671Z",
+    "dailyIncentiveProcessed": true,
+    "incentivesEarned": [],
+    "loginHours": 1.3100000000000003,
+    "loginWindows": [
+      {
+        "start": "2026-09-07T11:43:11.124Z",
+        "end": "2026-09-07T12:24:00.018Z",
+        "_id": "6a9eace07779baaf28d19e2b"
+      },
+      {
+        "start": "2026-09-07T12:37:51.957Z",
+        "end": "2026-09-07T13:10:00.021Z",
+        "_id": "6a9eb7a87779baaf28d19e63"
+      },
+      {
+        "start": "2026-09-07T14:32:30.504Z",
+        "end": "2026-09-07T14:38:00.019Z",
+        "_id": "6a9ecc487779baaf28d19ec2"
+      }
+    ],
+    "totalEarnings": 164,
+    "totalIncentive": 0,
+    "updatedAt": "2026-09-07T19:00:00.064Z",
+    "weeklyPayoutId": "6a9e9c646a31bdbf9c8bef0d"
+  },
+  {
+    "_id": "6a9f44486a31bdbf9c8c0b17",
+    "date": "2026-09-07T18:30:00.000Z",
+    "riderId": "6a45776e80bbd764a88a440b",
+    "__v": 0,
+    "cancelledOrders": 0,
+    "completedOrders": 1,
+    "createdAt": "2026-09-07T23:10:00.026Z",
+    "dailyIncentiveProcessed": true,
+    "incentivesEarned": [],
+    "loginHours": 9.3,
+    "loginWindows": [
+      {
+        "start": "2026-09-07T23:03:16.293Z",
+        "end": "2026-09-07T23:10:00.017Z",
+        "_id": "6a9f44487779baaf28d1a19e"
+      },
+      {
+        "start": "2026-09-07T23:15:57.946Z",
+        "end": "2026-09-07T23:28:08.907Z",
+        "_id": "6a9f4888f0409137c775858e"
+      },
+      {
+        "start": "2026-09-08T00:13:50.432Z",
+        "end": "2026-09-08T11:48:00.017Z",
+        "_id": "6a9ff5f07779baaf28d1a7a8"
+      }
+    ],
+    "totalEarnings": 30,
+    "totalIncentive": 0,
+    "updatedAt": "2026-09-08T19:00:00.080Z",
+    "weeklyPayoutId": null
+  },
+  {
+    "_id": "6aa09126897ed38dd129df82",
+    "riderId": "6a45776e80bbd764a88a440b",
+    "date": "2026-09-08T18:30:00.000Z",
+    "__v": 0,
+    "cancelledOrders": 0,
+    "completedOrders": 4,
+    "createdAt": "2026-09-08T22:50:14.832Z",
+    "dailyIncentiveProcessed": true,
+    "incentivesEarned": [],
+    "loginHours": 0.8999999999999999,
+    "loginWindows": [
+      {
+        "start": "2026-09-08T22:32:42.764Z",
+        "end": "2026-09-08T22:58:00.126Z",
+        "_id": "6aa092f8d41b32d1927a112a"
+      },
+      {
+        "start": "2026-09-09T12:57:09.312Z",
+        "end": "2026-09-09T13:32:00.022Z",
+        "_id": "6aa15fd07779baaf28d1afba"
+      },
+      {
+        "start": "2026-09-09T17:10:49.500Z",
+        "end": "2026-09-09T17:58:00.034Z",
+        "_id": "6aa19e284f18a949e6b18b73"
+      }
+    ],
+    "totalEarnings": 82,
+    "totalIncentive": 0,
+    "updatedAt": "2026-09-09T19:00:00.034Z",
+    "weeklyPayoutId": "6a9e9c646a31bdbf9c8bef0d"
+  },
+  {
+    "_id": "6aa3fde7897ed38dd12a40e1",
+    "date": "2026-09-10T18:30:00.000Z",
+    "riderId": "6a45776e80bbd764a88a440b",
+    "__v": 0,
+    "cancelledOrders": 0,
+    "completedOrders": 1,
+    "createdAt": "2026-09-11T13:11:03.504Z",
+    "dailyIncentiveProcessed": true,
+    "incentivesEarned": [],
+    "loginHours": 2.13,
+    "loginWindows": [
+      {
+        "start": "2026-09-11T13:01:47.853Z",
+        "end": "2026-09-11T13:11:03.457Z",
+        "_id": "6aa3fde79fd86c7610bdb2b4"
+      },
+      {
+        "start": "2026-09-11T13:11:04.025Z",
+        "end": "2026-09-11T14:04:00.027Z",
+        "_id": "6aa40a504f18a949e6b1d953"
+      },
+      {
+        "start": "2026-09-11T14:40:43.980Z",
+        "end": "2026-09-11T15:24:00.025Z",
+        "_id": "6aa41d104f18a949e6b1da5d"
+      },
+      {
+        "start": "2026-09-11T16:52:04.218Z",
+        "end": "2026-09-11T16:52:05.698Z",
+        "_id": "6aa431b5ffb704272332ea27"
+      },
+      {
+        "start": "2026-09-11T17:07:21.439Z",
+        "end": "2026-09-11T17:43:07.229Z",
+        "_id": "6aa43dabffb704272332f592"
+      }
+    ],
+    "totalEarnings": 12,
+    "totalIncentive": 0,
+    "updatedAt": "2026-09-11T19:00:00.038Z",
+    "weeklyPayoutId": null
+  },
+  {
+    "_id": "6aa908f7897ed38dd12b005b",
+    "date": "2026-09-14T18:30:00.000Z",
+    "riderId": "6a45776e80bbd764a88a440b",
+    "__v": 0,
+    "cancelledOrders": 0,
+    "completedOrders": 1,
+    "createdAt": "2026-09-15T08:59:35.257Z",
+    "dailyIncentiveProcessed": true,
+    "incentivesEarned": [],
+    "loginHours": 1.23,
+    "loginWindows": [
+      {
+        "start": "2026-09-15T08:59:29.160Z",
+        "end": "2026-09-15T08:59:35.249Z",
+        "_id": "6aa908f7ffb7042723332a19"
+      },
+      {
+        "start": "2026-09-15T08:59:36.526Z",
+        "end": "2026-09-15T09:06:00.022Z",
+        "_id": "6aa90a78ffb7042723332a2f"
+      },
+      {
+        "start": "2026-09-15T10:05:12.150Z",
+        "end": "2026-09-15T10:36:00.020Z",
+        "_id": "6aa91f90ffb7042723332a94"
+      },
+      {
+        "start": "2026-09-15T16:09:10.045Z",
+        "end": "2026-09-15T16:46:00.019Z",
+        "_id": "6aa97648eeae6dae95213da9"
+      }
+    ],
+    "totalEarnings": 15,
+    "totalIncentive": 0,
+    "updatedAt": "2026-09-15T19:00:00.030Z",
+    "weeklyPayoutId": null
+  },
+  {
+    "_id": "6aa97a80897ed38dd12b150a",
+    "date": "2026-09-14T18:30:00.000Z",
+    "riderId": "6aa97523eeae6dae95213d88",
+    "__v": 0,
+    "cancelledOrders": 0,
+    "completedOrders": 0,
+    "createdAt": "2026-09-15T17:04:00.046Z",
+    "dailyIncentiveProcessed": true,
+    "incentivesEarned": [],
+    "loginHours": 0.3,
+    "loginWindows": [
+      {
+        "start": "2026-09-15T16:46:00.527Z",
+        "end": "2026-09-15T17:04:00.020Z",
+        "_id": "6aa97a80eeae6dae952140df"
+      }
+    ],
+    "totalEarnings": 0,
+    "totalIncentive": 0,
+    "updatedAt": "2026-09-15T19:00:00.059Z",
+    "weeklyPayoutId": null
+  },
+  {
+    "_id": "6aadc1ce897ed38dd12bb717",
+    "riderId": "6a45776e80bbd764a88a440b",
+    "date": "2026-09-18T18:30:00.000Z",
+    "__v": 0,
+    "cancelledOrders": 0,
+    "completedOrders": 2,
+    "createdAt": "2026-09-18T22:57:19.002Z",
+    "dailyIncentiveProcessed": true,
+    "incentivesEarned": [],
+    "loginHours": 7.43,
+    "loginWindows": [
+      {
+        "start": "2026-09-18T21:46:42.154Z",
+        "end": "2026-09-19T09:56:00.217Z",
+        "_id": "6aae5c304fefb9da44d71bcc"
+      }
+    ],
+    "totalEarnings": 78,
+    "totalIncentive": 0,
+    "updatedAt": "2026-09-19T19:00:00.064Z",
+    "weeklyPayoutId": "6aa91a21897ed38dd12b0437"
+  },
+  {
+    "_id": "6ab12528897ed38dd12c33cf",
+    "date": "2026-09-20T18:30:00.000Z",
+    "riderId": "6a45776e80bbd764a88a440b",
+    "__v": 0,
+    "cancelledOrders": 0,
+    "completedOrders": 1,
+    "createdAt": "2026-09-21T12:38:00.174Z",
+    "dailyIncentiveProcessed": true,
+    "incentivesEarned": [],
+    "loginHours": 0.74,
+    "loginWindows": [
+      {
+        "start": "2026-09-21T12:23:41.634Z",
+        "end": "2026-09-21T12:38:00.118Z",
+        "_id": "6ab125288f23b7327a220f26"
+      },
+      {
+        "start": "2026-09-21T14:55:44.268Z",
+        "end": "2026-09-21T15:26:00.021Z",
+        "_id": "6ab14c88966490317e23274c"
+      }
+    ],
+    "totalEarnings": 14,
+    "totalIncentive": 0,
+    "updatedAt": "2026-09-21T19:00:00.035Z",
+    "weeklyPayoutId": null
+  },
+  {
+    "_id": "6ab2c400897ed38dd12cbc06",
+    "date": "2026-09-21T18:30:00.000Z",
+    "riderId": "6a45776e80bbd764a88a440b",
+    "__v": 0,
+    "cancelledOrders": 0,
+    "completedOrders": 0,
+    "createdAt": "2026-09-22T18:08:00.062Z",
+    "dailyIncentiveProcessed": true,
+    "incentivesEarned": [],
+    "loginHours": 0,
+    "loginWindows": [
+      {
+        "start": "2026-09-22T18:01:39.886Z",
+        "end": "2026-09-22T18:08:00.022Z",
+        "_id": "6ab2c4007dc612397c5aeaa4"
+      },
+      {
+        "start": "2026-09-22T18:09:40.918Z",
+        "end": "2026-09-22T18:38:00.020Z",
+        "_id": "6ab2cb087dc612397c5aeff2"
+      }
+    ],
+    "totalEarnings": 0,
+    "totalIncentive": 0,
+    "updatedAt": "2026-09-22T19:00:00.036Z",
+    "weeklyPayoutId": null
+  },
+  {
+    "_id": "6ab7f768897ed38dd12ebb6a",
+    "date": "2026-09-25T18:30:00.000Z",
+    "riderId": "6a45776e80bbd764a88a440b",
+    "__v": 0,
+    "cancelledOrders": 0,
+    "completedOrders": 1,
+    "createdAt": "2026-09-26T16:48:40.306Z",
+    "dailyIncentiveProcessed": true,
+    "incentivesEarned": [],
+    "loginHours": 0.6,
+    "loginWindows": [
+      {
+        "start": "2026-09-26T16:42:16.046Z",
+        "end": "2026-09-26T16:48:40.268Z",
+        "_id": "6ab7f7687dc612397c5b707e"
+      },
+      {
+        "start": "2026-09-26T16:48:41.091Z",
+        "end": "2026-09-26T17:18:00.019Z",
+        "_id": "6ab7fe487dc612397c5b717d"
+      }
+    ],
+    "totalEarnings": 14,
+    "totalIncentive": 0,
+    "updatedAt": "2026-09-26T19:00:00.075Z",
+    "weeklyPayoutId": null
+  },
+  {
+    "_id": "6ab9b2b0897ed38dd12f38e2",
+    "date": "2026-09-27T18:30:00.000Z",
+    "riderId": "6a45776e80bbd764a88a440b",
+    "__v": 0,
+    "cancelledOrders": 0,
+    "completedOrders": 1,
+    "createdAt": "2026-09-28T00:20:00.070Z",
+    "dailyIncentiveProcessed": true,
+    "incentivesEarned": [],
+    "loginHours": 2.37,
+    "loginWindows": [
+      {
+        "start": "2026-09-28T00:01:37.689Z",
+        "end": "2026-09-28T00:20:00.029Z",
+        "_id": "6ab9b2b07dc612397c5b832b"
+      },
+      {
+        "start": "2026-09-28T11:47:32.158Z",
+        "end": "2026-09-28T14:10:00.027Z",
+        "_id": "6aba75387dc612397c5b8826"
+      }
+    ],
+    "totalEarnings": 118,
+    "totalIncentive": 0,
+    "updatedAt": "2026-09-28T19:00:00.045Z",
+    "weeklyPayoutId": null
+  },
+  {
+    "_id": "6abbf25072c3718695579589",
+    "date": "2026-09-28T18:30:00.000Z",
+    "riderId": "6a45776e80bbd764a88a440b",
+    "__v": 0,
+    "cancelledOrders": 0,
+    "completedOrders": 0,
+    "createdAt": "2026-09-29T17:16:00.035Z",
+    "dailyIncentiveProcessed": true,
+    "incentivesEarned": [],
+    "loginHours": 0.44,
+    "loginWindows": [
+      {
+        "start": "2026-09-29T16:49:38.144Z",
+        "end": "2026-09-29T17:16:00.026Z",
+        "_id": "6abbf2507b60d8ee8f838154"
+      }
+    ],
+    "totalEarnings": 0,
+    "totalIncentive": 0,
+    "updatedAt": "2026-09-29T19:00:00.036Z",
+    "weeklyPayoutId": null
+  },
+  {
+    "_id": "6ac96f985e5b16efe47b3996",
+    "date": "2026-10-09T18:30:00.000Z",
+    "riderId": "6a45776e80bbd764a88a440b",
+    "__v": 0,
+    "cancelledOrders": 0,
+    "completedOrders": 1,
+    "createdAt": "2026-10-09T22:50:00.070Z",
+    "dailyIncentiveProcessed": false,
+    "incentivesEarned": [],
+    "loginHours": 0,
+    "loginWindows": [
+      {
+        "start": "2026-10-09T22:02:16.024Z",
+        "end": "2026-10-09T22:50:00.037Z",
+        "_id": "6ac96f988d9a86165acb663c"
+      },
+      {
+        "start": "2026-10-09T22:02:16.024Z",
+        "end": "2026-10-09T22:50:00.133Z",
+        "_id": "6ac96f98414b0fa74eb77258"
+      }
+    ],
+    "totalEarnings": 29,
+    "totalIncentive": 0,
+    "updatedAt": "2026-10-09T22:58:46.947Z",
+    "weeklyPayoutId": null
+  }
+]

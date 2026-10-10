@@ -9,6 +9,7 @@ import { redis } from "../config/redisConfig.js";
 import { filterMerchantsByRoadDistance } from "../helperFns/geoHelpers.js";
 import AppConfig from "../models/appConfig.model.js";
 import Warehouse from "../models/warehouse.model.js";
+import { isBackendInTestMode, getTestMerchant } from "../helperFns/testModeHelper.js";
 
 const CACHE_TTL_SEC = 15 * 60; // 15 minutes
 const GEOHASH_PRECISION = 7;   // ~150m cells
@@ -43,6 +44,20 @@ function encodeGeohash(lat, lng, precision = 5) {
 /* ── Middleware ── */
 export const resolveNearbyMerchants = async (req, res, next) => {
   try {
+    // ── Testing Mode Override (Isolate to SB Fashion in warehouse & store) ──
+    const inTestMode = await isBackendInTestMode();
+    if (inTestMode) {
+      const testMerchant = await getTestMerchant();
+      if (testMerchant) {
+        req.nearbyMerchantIds = [new mongoose.Types.ObjectId(testMerchant._id)];
+        req.nearbyWarehouseIds = (testMerchant.assignedWarehouseIds || []).map(
+          id => new mongoose.Types.ObjectId(id)
+        );
+        req.isTestMode = true;
+        return next();
+      }
+    }
+
     // Read coords from query (GET) or body (POST)
     const lat = parseFloat(req.query.lat || req.body?.lat);
     const lng = parseFloat(req.query.lng || req.body?.lng);
@@ -88,6 +103,7 @@ export const resolveNearbyMerchants = async (req, res, next) => {
       const allMerchants = await Merchant.find({
         isActive: true,
         isVerified: true,
+        isStoreActive: { $ne: false },
         fulfillmentType: { $ne: 'warehouse' },
         "address.location.coordinates": { $exists: true },
       })
@@ -172,6 +188,7 @@ export const resolveNearbyMerchants = async (req, res, next) => {
         const allMerchants = await Merchant.find({
           isActive: true,
           isVerified: true,
+          isStoreActive: { $ne: false },
           fulfillmentType: { $ne: 'warehouse' },
           "address.location.coordinates": { $exists: true },
         }).select("_id address.location").lean();

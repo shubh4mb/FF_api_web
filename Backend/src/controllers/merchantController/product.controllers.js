@@ -7,6 +7,21 @@ import { storageService } from '../../services/storage.service.js';
 import ProductFlat from '../../models/productFlat.model.js';
 import crypto from 'crypto';
 import { analyzeProductImage } from '../../services/geminiProductAnalyzer.js';
+import { generateColorVariantId } from '../../utils/variantAdapter.js';
+import { resolveCategoryHierarchy } from '../../helperFns/categoryHelper.js';
+import { buildFlexibleSearchRegex } from '../../helperFns/searchHelper.js';
+
+const safeParse = (value) => {
+  if (!value) return value;
+  if (typeof value === "string") {
+    try {
+      return JSON.parse(value);
+    } catch {
+      return value;
+    }
+  }
+  return value;
+};
 
 const makeFlatPayload = (siblings, extraData = {}) => {
   if (!siblings || !siblings.length) return null;
@@ -55,15 +70,22 @@ export const addVariant = async (req, res) => {
     const finalImages = [];
     let fileIndex = 0;
     for (let img of parsedImages) {
-      if (img.url.startsWith("http")) {
+      if (img.url && img.url.startsWith("http")) {
         finalImages.push({ public_id: img.public_id, url: img.url });
-      } else if (img.url.startsWith("blob")) {
+      } else if (img.url && img.url.startsWith("blob")) {
         const file = req.files[fileIndex];
         if (file) {
           const result = await storageService.uploadSingle(file, "products");
           if (result) finalImages.push(result);
         }
         fileIndex++;
+      }
+    }
+
+    if (req.files && Array.isArray(req.files) && req.files.length > 0 && fileIndex === 0) {
+      for (const file of req.files) {
+        const result = await storageService.uploadSingle(file, "products");
+        if (result) finalImages.push(result);
       }
     }
 
@@ -159,22 +181,26 @@ export const updateVariant = async (req, res) => {
     const safePrice = safeNumber(price);
     const safeDiscount = safeNumber(discount);
 
-      const allFlatVariants = await ProductFlat.find({ styleGroupId: productId, merchantId: req.merchantId });
+      const parsedSizes = parseJSON(req.body.sizes);
+      const variantFilter = req.admin
+        ? { styleGroupId: productId }
+        : { styleGroupId: productId, merchantId: req.merchantId };
+      const allFlatVariants = await ProductFlat.find(variantFilter);
       const targetColorVariants = allFlatVariants.filter(
-        v => generateColorVariantId(productId, v.color.name) === variantId
+        v => generateColorVariantId(productId, v.color?.name || v.color) === variantId || v._id?.toString() === variantId
       );
       if (!targetColorVariants.length) {
         return res.status(404).json({ message: "Product or variant not found" });
       }
 
-      const merchant = await Merchant.findById(req.merchantId);
-      if (!merchant) return res.status(404).json({ success: false, message: "Merchant not found" });
+      const effectiveMerchantId = req.admin ? targetColorVariants[0].merchantId : req.merchantId;
+      const merchant = effectiveMerchantId ? await Merchant.findById(effectiveMerchantId) : null;
 
-      const cleanShop = merchant.shopName ? merchant.shopName.replace(/[^a-zA-Z]/g, '').slice(0, 4).toUpperCase() : "SH";
-      const last4 = merchant._id.toString().slice(-4).toUpperCase();
+      const cleanShop = merchant?.shopName ? merchant.shopName.replace(/[^a-zA-Z]/g, '').slice(0, 4).toUpperCase() : "SH";
+      const last4 = merchant?._id ? merchant._id.toString().slice(-4).toUpperCase() : "0000";
       const merchantPrefix = `${cleanShop}-${last4}`;
 
-      const oldColorName = targetColorVariants[0].color.name;
+      const oldColorName = targetColorVariants[0].color?.name || targetColorVariants[0].color;
       const oldImages = targetColorVariants[0].images || [];
 
       const incomingPublicIDs = parsedImages.map((img) => img.public_id);
@@ -205,36 +231,111 @@ export const updateVariant = async (req, res) => {
         }
       }
 
+      if (req.files && Array.isArray(req.files) && req.files.length > 0 && fileIndex === 0) {
+        for (const file of req.files) {
+          if (finalImages.length < MAX_IMAGES) {
+            const result = await storageService.uploadSingle(file, "products");
+            if (result) finalImages.push(result);
+          }
+        }
+      }
+
       for (const img of deletedImages) {
         if (img.public_id) {
           await storageService.deleteFile(img.public_id);
         }
       }
 
-      for (const variantDoc of targetColorVariants) {
-        const cleanSize = variantDoc.size.replace(/\s+/g, '').toUpperCase();
-        let newProductCode;
-        if (productSku) {
-          newProductCode = `${merchantPrefix}-${productSku.toUpperCase().replace(/\s+/g, '')}-${cleanSize}`;
-        } else {
-          const parentProductCode = variantDoc.productCode.split('-')[0] || variantDoc.productCode;
-          const cleanNewColor = (parsedColor?.name || 'Default').replace(/\s+/g, '').toUpperCase();
-          newProductCode = `${parentProductCode}-${cleanNewColor}-${cleanSize}`;
-        }
+      // If sizes array provided, sync sizes and stock
+      if (Array.isArray(parsedSizes) && parsedSizes.length > 0) {
+        const baseVariantDoc = targetColorVariants[0];
+        const incomingSizeNames = parsedSizes.map((s) => s.size);
 
-        await ProductFlat.updateOne(
-          { _id: variantDoc._id },
-          {
-            $set: {
+        for (const sizeObj of parsedSizes) {
+          if (!sizeObj.size || sizeObj.stock === undefined) continue;
+          const existingSizeDoc = targetColorVariants.find(v => v.size === sizeObj.size);
+
+          if (existingSizeDoc) {
+            const updateFields = {
+              stock: Number(sizeObj.stock) || 0,
+              color: parsedColor,
+              mrp: safeMrp,
+              price: safePrice,
+              discount: safeDiscount,
+              images: finalImages
+            };
+            if (sizeObj.merchantSizeCode !== undefined) {
+              updateFields.merchantSizeCode = sizeObj.merchantSizeCode;
+            }
+            await ProductFlat.updateOne({ _id: existingSizeDoc._id }, { $set: updateFields });
+          } else {
+            const base = baseVariantDoc.toObject();
+            delete base._id;
+            delete base.__v;
+            delete base.createdAt;
+            delete base.updatedAt;
+
+            const parentProductCode = base.productCode?.split('-')[0] || base.productCode || 'PRD';
+            const cleanColor = (parsedColor?.name || 'DEFAULT').replace(/\s+/g, '').toUpperCase();
+            const cleanSize = (sizeObj.size || '').replace(/\s+/g, '').toUpperCase();
+
+            let productCode;
+            if (sizeObj.merchantSizeCode) {
+              const mPrefix = base.productCode?.split('-').slice(0, 2).join('-') || merchantPrefix;
+              productCode = `${mPrefix}-${sizeObj.merchantSizeCode.toUpperCase().replace(/\s+/g, '')}-${cleanSize}`;
+            } else {
+              productCode = `${parentProductCode}-${cleanColor}-${cleanSize}-${Date.now().toString(36).toUpperCase()}`;
+            }
+
+            const newSizeDoc = new ProductFlat({
+              ...base,
               color: parsedColor,
               mrp: safeMrp,
               price: safePrice,
               discount: safeDiscount,
               images: finalImages,
-              productCode: newProductCode
-            }
+              size: sizeObj.size,
+              stock: Number(sizeObj.stock) || 0,
+              merchantSizeCode: sizeObj.merchantSizeCode,
+              productCode: productCode
+            });
+            await newSizeDoc.save();
           }
-        );
+        }
+
+        const deleteCondition = {
+          styleGroupId: productId,
+          "color.name": oldColorName,
+          size: { $nin: incomingSizeNames }
+        };
+        if (!req.admin) deleteCondition.merchantId = req.merchantId;
+        await ProductFlat.deleteMany(deleteCondition);
+      } else {
+        for (const variantDoc of targetColorVariants) {
+          const cleanSize = variantDoc.size.replace(/\s+/g, '').toUpperCase();
+          let newProductCode;
+          if (productSku) {
+            newProductCode = `${merchantPrefix}-${productSku.toUpperCase().replace(/\s+/g, '')}-${cleanSize}`;
+          } else {
+            const parentProductCode = variantDoc.productCode.split('-')[0] || variantDoc.productCode;
+            const cleanNewColor = (parsedColor?.name || 'Default').replace(/\s+/g, '').toUpperCase();
+            newProductCode = `${parentProductCode}-${cleanNewColor}-${cleanSize}`;
+          }
+
+          await ProductFlat.updateOne(
+            { _id: variantDoc._id },
+            {
+              $set: {
+                color: parsedColor,
+                mrp: safeMrp,
+                price: safePrice,
+                discount: safeDiscount,
+                images: finalImages,
+                productCode: newProductCode
+              }
+            }
+          );
+        }
       }
 
       const updatedSiblings = await ProductFlat.find({ styleGroupId: productId, isActive: true });
@@ -255,12 +356,14 @@ export const updateSize = async (req, res) => {
     const { size, stock } = req.body;
     const safeStock = isNaN(Number(stock)) ? 0 : Number(stock);
 
-    let updatedFlatDoc;
-    const merchant = await Merchant.findById(req.merchantId);
-    const isWarehouse = merchant && merchant.accountType === 'warehouse' && merchant.warehouseId;
-    const ownerCondition = isWarehouse
-      ? { warehouseId: merchant.warehouseId, source: 'warehouse' }
-      : { merchantId: req.merchantId };
+    let ownerCondition = {};
+    if (!req.admin) {
+      const merchant = await Merchant.findById(req.merchantId);
+      const isWarehouse = merchant && merchant.accountType === 'warehouse' && merchant.warehouseId;
+      ownerCondition = isWarehouse
+        ? { warehouseId: merchant.warehouseId, source: 'warehouse' }
+        : { merchantId: req.merchantId };
+    }
 
     if (sizeId) {
       const isObjId = mongoose.Types.ObjectId.isValid(sizeId);
@@ -326,8 +429,11 @@ export const updateSizeCount = async (req, res) => {
     }
     const safeStock = isNaN(Number(stock)) ? 0 : Number(stock);
 
+    const query = { _id: sizeId, styleGroupId: productId };
+    if (!req.admin) query.merchantId = req.merchantId;
+
     const updatedFlatDoc = await ProductFlat.findOneAndUpdate(
-      { _id: sizeId, styleGroupId: productId, merchantId: req.merchantId },
+      query,
       { $set: { stock: safeStock } },
       { new: true }
     );
@@ -354,17 +460,21 @@ export const updatePrice = async (req, res) => {
     const safePrice = isNaN(Number(price)) ? 0 : Number(price);
     const safeDiscount = isNaN(Number(discount)) ? 0 : Number(discount);
 
-    const allFlatVariants = await ProductFlat.find({ styleGroupId: productId, merchantId: req.merchantId });
+    const priceFilter = req.admin ? { styleGroupId: productId } : { styleGroupId: productId, merchantId: req.merchantId };
+    const allFlatVariants = await ProductFlat.find(priceFilter);
     const targetColorVariants = allFlatVariants.filter(
-      v => generateColorVariantId(productId, v.color.name) === variantId
+      v => generateColorVariantId(productId, v.color?.name || v.color) === variantId || v._id?.toString() === variantId
     );
     if (!targetColorVariants.length) {
       return res.status(404).json({ message: "Product or variant not found" });
     }
 
     const colorName = targetColorVariants[0].color.name;
+    const updateCondition = req.admin
+      ? { styleGroupId: productId, "color.name": colorName }
+      : { styleGroupId: productId, "color.name": colorName, merchantId: req.merchantId };
     await ProductFlat.updateMany(
-      { styleGroupId: productId, "color.name": colorName, merchantId: req.merchantId },
+      updateCondition,
       { $set: { mrp: safeMRP, price: safePrice, discount: safeDiscount } }
     );
 
@@ -381,9 +491,10 @@ export const updatePrice = async (req, res) => {
 
 export const deleteVariantSizes = async (req, res) => {
   try {
-    const { productId, variantId, sizeId } = req.params;
+    const deleteQuery = { _id: sizeId, styleGroupId: productId };
+    if (!req.admin) deleteQuery.merchantId = req.merchantId;
 
-    await ProductFlat.deleteOne({ _id: sizeId, styleGroupId: productId, merchantId: req.merchantId });
+    await ProductFlat.deleteOne(deleteQuery);
     const siblings = await ProductFlat.find({ styleGroupId: productId, isActive: true });
     return res.json({
       message: "Size deleted successfully",
@@ -674,6 +785,7 @@ export const getBaseProductById = async (req, res) => {
         .populate('brandId', 'name')
         .populate('categoryId', 'name')
         .populate('subCategoryId', 'name')
+        .populate('additionalCategoryIds', 'name parentId level')
         .populate('merchantId', 'name shopName email')
         .populate('attributes.attributeId', 'name slug inputType values');
     }
@@ -684,6 +796,7 @@ export const getBaseProductById = async (req, res) => {
         .populate('brandId', 'name')
         .populate('categoryId', 'name')
         .populate('subCategoryId', 'name')
+        .populate('additionalCategoryIds', 'name parentId level')
         .populate('merchantId', 'name shopName email')
         .populate('attributes.attributeId', 'name slug inputType values');
     }
@@ -709,6 +822,7 @@ export const getBaseProductById = async (req, res) => {
     }).populate('brandId', 'name')
       .populate('categoryId', 'name')
       .populate('subCategoryId', 'name')
+      .populate('additionalCategoryIds', 'name parentId level')
       .populate('merchantId', 'name shopName email')
       .populate('attributes.attributeId', 'name slug inputType values');
 
@@ -743,6 +857,32 @@ export const getBaseProductById = async (req, res) => {
       });
     });
 
+    let resolvedCatName = typeof doc.categoryId === 'object' && doc.categoryId ? doc.categoryId.name : (doc.category || "");
+    let resolvedCatId = typeof doc.categoryId === 'object' && doc.categoryId ? doc.categoryId._id?.toString() : (doc.categoryId ? doc.categoryId.toString() : "");
+
+    let resolvedSubCatName = typeof doc.subCategoryId === 'object' && doc.subCategoryId ? doc.subCategoryId.name : (doc.subCategory || "");
+    let resolvedSubCatId = typeof doc.subCategoryId === 'object' && doc.subCategoryId ? doc.subCategoryId._id?.toString() : (doc.subCategoryId ? doc.subCategoryId.toString() : "");
+
+    if (!resolvedCatId && resolvedCatName) {
+      const foundCat = await Category.findOne({ name: new RegExp(`^${resolvedCatName.trim()}$`, 'i'), level: 0 }).lean();
+      if (foundCat) resolvedCatId = foundCat._id.toString();
+    }
+    if (!resolvedSubCatId && resolvedSubCatName) {
+      const foundSub = await Category.findOne({ name: new RegExp(`^${resolvedSubCatName.trim()}$`, 'i'), level: 1 }).lean();
+      if (foundSub) {
+        resolvedSubCatId = foundSub._id.toString();
+        if (!resolvedCatId && foundSub.parentId) {
+          resolvedCatId = foundSub.parentId.toString();
+          const parentCat = await Category.findById(foundSub.parentId).lean();
+          if (parentCat) resolvedCatName = parentCat.name;
+        }
+      }
+    }
+
+    const rawAdditional = doc.additionalCategoryIds || [];
+    const additionalCategoryIds = rawAdditional.map(c => typeof c === 'object' && c ? c._id?.toString() : c?.toString() || "").filter(Boolean);
+    const additionalCategories = rawAdditional.map(c => typeof c === 'object' && c ? { _id: c._id?.toString(), name: c.name, parentId: c.parentId, level: c.level } : c).filter(Boolean);
+
     const productDetails = {
       _id: doc._id.toString(),
       styleGroupId: doc.styleGroupId,
@@ -758,10 +898,12 @@ export const getBaseProductById = async (req, res) => {
       } : null,
       soldBy: doc.soldBy || "",
       styleName: doc.styleName || "",
-      category: typeof doc.categoryId === 'object' && doc.categoryId ? doc.categoryId.name : (doc.category || ""),
-      categoryId: typeof doc.categoryId === 'object' && doc.categoryId ? doc.categoryId._id?.toString() : (doc.categoryId || ""),
-      subCategory: typeof doc.subCategoryId === 'object' && doc.subCategoryId ? doc.subCategoryId.name : (doc.subCategory || ""),
-      subCategoryId: typeof doc.subCategoryId === 'object' && doc.subCategoryId ? doc.subCategoryId._id?.toString() : (doc.subCategoryId || ""),
+      category: resolvedCatName,
+      categoryId: resolvedCatId,
+      subCategory: resolvedSubCatName,
+      subCategoryId: resolvedSubCatId,
+      additionalCategoryIds,
+      additionalCategories,
       gender: doc.gender,
       description: doc.description,
       tags: doc.tags,
@@ -857,14 +999,20 @@ export const getProductsByMerchantId = async (req, res) => {
             styleGroupId: p.styleGroupId || p._id.toString(),
             name: p.name,
             productCode: p.productCode,
+            merchantSizeCode: p.merchantSizeCode || null,
             styleName: p.styleName || "",
             source: 'warehouse',
             warehouseId: p.warehouseId,
             attributes: cleanAttributesHelper(p.attributes),
             features: p.features instanceof Map ? Object.fromEntries(p.features) : (p.features || {}),
             merchant: { id: p.merchantId?._id?.toString(), shopName: p.merchantId?.shopName || "", email: p.merchantId?.email || "" },
-            brand: p.brandId?.name || "", category: p.categoryId?.name || "", subCategory: p.subCategoryId?.name || "",
-            brandId: p.brandId?._id?.toString() || null, categoryId: p.categoryId?._id?.toString() || null, subCategoryId: p.subCategoryId?._id?.toString() || null,
+            brand: p.brandId?.name || p.brand || "",
+            category: p.categoryId?.name || p.category || "",
+            subCategory: p.subCategoryId?.name || p.subCategory || "",
+            brandId: p.brandId?._id?.toString() || p.brandId || null,
+            categoryId: p.categoryId?._id?.toString() || p.categoryId || null,
+            subCategoryId: p.subCategoryId?._id?.toString() || p.subCategoryId || null,
+            additionalCategoryIds: (p.additionalCategoryIds || []).map(c => typeof c === 'object' && c ? c._id?.toString() : c?.toString() || "").filter(Boolean),
             gender: p.gender, description: p.description, tags: p.tags, isTriable: p.isTriable,
             ratings: p.ratings, numReviews: p.numReviews, isActive: p.isActive,
             color: p.color, mrp: p.mrp, price: p.price, discount: p.discount, images: p.images,
@@ -885,7 +1033,8 @@ export const getProductsByMerchantId = async (req, res) => {
           _id: p._id.toString(),
           size: p.size,
           stock: p.stock,
-          productCode: p.productCode
+          productCode: p.productCode,
+          merchantSizeCode: p.merchantSizeCode || null
         };
         groups[key].sizes.push(szItem);
         groups[key].variants[0].sizes.push(szItem);
@@ -942,6 +1091,7 @@ export const getProductsByMerchantId = async (req, res) => {
           styleGroupId: p.styleGroupId || p._id.toString(),
           name: p.name,
           productCode: p.productCode,
+          merchantSizeCode: p.merchantSizeCode || null,
           source: p.source || 'shop',
           warehouseId: p.warehouseId || null,
           addedByOperator: p.addedByOperator || null,
@@ -950,12 +1100,13 @@ export const getProductsByMerchantId = async (req, res) => {
             shopName: p.merchantId?.shopName || "",
             email: p.merchantId?.email || "",
           },
-          brand: p.brandId?.name || "",
-          category: p.categoryId?.name || "",
-          subCategory: p.subCategoryId?.name || "",
-          brandId: p.brandId?._id?.toString() || null,
-          categoryId: p.categoryId?._id?.toString() || null,
-          subCategoryId: p.subCategoryId?._id?.toString() || null,
+          brand: p.brandId?.name || p.brand || "",
+          category: p.categoryId?.name || p.category || "",
+          subCategory: p.subCategoryId?.name || p.subCategory || "",
+          brandId: p.brandId?._id?.toString() || p.brandId || null,
+          categoryId: p.categoryId?._id?.toString() || p.categoryId || null,
+          subCategoryId: p.subCategoryId?._id?.toString() || p.subCategoryId || null,
+          additionalCategoryIds: (p.additionalCategoryIds || []).map(c => typeof c === 'object' && c ? c._id?.toString() : c?.toString() || "").filter(Boolean),
           gender: p.gender,
           styleName: p.styleName || "",
           description: p.description,
@@ -989,7 +1140,8 @@ export const getProductsByMerchantId = async (req, res) => {
         _id: p._id.toString(),
         size: p.size,
         stock: p.stock,
-        productCode: p.productCode
+        productCode: p.productCode,
+        merchantSizeCode: p.merchantSizeCode || null
       };
       groups[key].sizes.push(szItem);
       groups[key].variants[0].sizes.push(szItem);
@@ -1012,18 +1164,32 @@ export const uploadProductImage = async (req, res) => {
       return res.status(400).json({ message: "No images uploaded" });
     }
 
-    // Upload to cloudinary
+    // Upload to cloudinary / storage
     const results = await storageService.uploadMultiple(req.files || [], "products");
 
-    const product = await ProductFlat.findById(productId);
+    let product = null;
+    if (mongoose.Types.ObjectId.isValid(productId)) {
+      product = await ProductFlat.findById(productId);
+    }
+    if (!product) {
+      product = await ProductFlat.findOne({ styleGroupId: productId, isDeleted: { $ne: true } });
+    }
     if (!product) {
       return res.status(404).json({ message: "Product not found" });
     }
-    product.images.push(...results);
-    await product.save();
+
+    const targetColorName = product.color?.name;
+    const colorQuery = targetColorName ? { "color.name": targetColorName } : {};
+
+    await ProductFlat.updateMany(
+      { styleGroupId: product.styleGroupId, ...colorQuery, isDeleted: { $ne: true } },
+      { $push: { images: { $each: results } } }
+    );
+
+    const updated = await ProductFlat.findById(product._id);
     return res.status(200).json({
       message: "✅ Images uploaded successfully",
-      images: product.images
+      images: updated ? updated.images : results
     });
   } catch (err) {
     console.error("Error uploading images:", err);
@@ -1038,10 +1204,40 @@ export const deleteImage = async (req, res) => {
   try {
     const { imageId } = req.params;
 
-    const product = await ProductFlat.findOne({ 'images._id': imageId });
+    const isObjId = mongoose.Types.ObjectId.isValid(imageId);
+    const filter = isObjId 
+      ? { $or: [{ 'images._id': imageId }, { 'images.public_id': imageId }] }
+      : { 'images.public_id': imageId };
+
+    const product = await ProductFlat.findOne(filter);
     if (!product) return res.status(404).json({ error: 'Image not found' });
-    product.images = product.images.filter(img => img._id.toString() !== imageId);
-    await product.save();
+
+    const targetImage = product.images.find(img => img._id?.toString() === imageId || img.public_id === imageId);
+    if (targetImage?.public_id) {
+      try {
+        await storageService.deleteFile(targetImage.public_id);
+      } catch (storageErr) {
+        console.warn("Storage deletion warning:", storageErr.message);
+      }
+    }
+
+    const targetColorName = product.color?.name;
+    const colorQuery = targetColorName ? { "color.name": targetColorName } : {};
+
+    await ProductFlat.updateMany(
+      { styleGroupId: product.styleGroupId, ...colorQuery },
+      {
+        $pull: {
+          images: {
+            $or: [
+              ...(isObjId ? [{ _id: new mongoose.Types.ObjectId(imageId) }] : []),
+              { public_id: imageId }
+            ]
+          }
+        }
+      }
+    );
+
     return res.json({ message: 'Image deleted successfully' });
   } catch (err) {
     console.error(err);
@@ -1052,20 +1248,47 @@ export const deleteImage = async (req, res) => {
 export const deleteProduct = async (req, res) => {
   try {
     const { productId } = req.params;
-    const merchant = await Merchant.findById(req.merchantId);
-    const isWarehouse = merchant && merchant.accountType === 'warehouse' && merchant.warehouseId;
-    const ownerCondition = isWarehouse
-      ? { warehouseId: merchant.warehouseId, source: 'warehouse' }
-      : { merchantId: req.merchantId };
+    const isAdmin = Boolean(req.admin);
 
     const isObjId = mongoose.Types.ObjectId.isValid(productId);
-    const query = isObjId
-      ? { _id: productId, ...ownerCondition }
-      : { styleGroupId: productId, ...ownerCondition };
+
+    let ownerCondition = {};
+    if (!isAdmin) {
+      const merchant = await Merchant.findById(req.merchantId);
+      const isWarehouse = merchant && merchant.accountType === 'warehouse' && merchant.warehouseId;
+      ownerCondition = isWarehouse
+        ? { warehouseId: merchant.warehouseId, source: 'warehouse' }
+        : { merchantId: req.merchantId };
+    }
+
+    // Match by styleGroupId, _id, or productCode
+    const matchConditions = [
+      { styleGroupId: productId },
+      ...(isObjId ? [{ _id: new mongoose.Types.ObjectId(productId) }] : []),
+      { productCode: productId }
+    ];
+
+    const targetDoc = await ProductFlat.findOne({
+      $or: matchConditions,
+      ...ownerCondition
+    });
+
+    let deleteFilter;
+    if (targetDoc) {
+      deleteFilter = {
+        styleGroupId: targetDoc.styleGroupId,
+        ...ownerCondition
+      };
+    } else {
+      deleteFilter = {
+        $or: matchConditions,
+        ...ownerCondition
+      };
+    }
 
     const deleted = await ProductFlat.updateMany(
-      query,
-      { $set: { isDeleted: true } }
+      deleteFilter,
+      { $set: { isDeleted: true, isActive: false } }
     );
 
     if (!deleted || deleted.matchedCount === 0) {
@@ -1078,6 +1301,7 @@ export const deleteProduct = async (req, res) => {
     return res.json({
       success: true,
       message: "Product deleted successfully",
+      deletedCount: deleted.modifiedCount,
     });
   } catch (err) {
     console.error("Error deleting product:", err);
@@ -1092,18 +1316,34 @@ export const deleteProduct = async (req, res) => {
 export const deleteVariant = async (req, res) => {
   try {
     const { productId, variantId } = req.params;
+    const isAdmin = Boolean(req.admin);
 
-    const allFlatVariants = await ProductFlat.find({ styleGroupId: productId, merchantId: req.merchantId });
+    const isObjId = mongoose.Types.ObjectId.isValid(productId);
+    const ownerFilter = isAdmin ? {} : { merchantId: req.merchantId };
+
+    let targetStyleGroupId = productId;
+    if (isObjId) {
+      const parentDoc = await ProductFlat.findById(productId);
+      if (parentDoc) targetStyleGroupId = parentDoc.styleGroupId;
+    }
+
+    const filter = { styleGroupId: targetStyleGroupId, ...ownerFilter };
+    const allFlatVariants = await ProductFlat.find(filter);
     const targetColorVariants = allFlatVariants.filter(
-      v => generateColorVariantId(productId, v.color.name) === variantId
+      v => generateColorVariantId(targetStyleGroupId, v.color?.name || v.color) === variantId || v._id?.toString() === variantId
     );
 
     if (targetColorVariants.length > 0) {
-      const colorName = targetColorVariants[0].color.name;
-      await ProductFlat.deleteMany({ styleGroupId: productId, "color.name": colorName, merchantId: req.merchantId });
+      const colorName = targetColorVariants[0].color?.name || targetColorVariants[0].color;
+      const deleteCondition = {
+        styleGroupId: targetStyleGroupId,
+        "color.name": colorName,
+        ...ownerFilter
+      };
+      await ProductFlat.deleteMany(deleteCondition);
     }
 
-    const siblings = await ProductFlat.find({ styleGroupId: productId, isActive: true });
+    const siblings = await ProductFlat.find({ styleGroupId: targetStyleGroupId, isActive: true, isDeleted: { $ne: true } });
     return res.json({
       success: true,
       message: "Variant deleted successfully",
@@ -1126,15 +1366,16 @@ export const editProduct = async (req, res) => {
     console.log("editProduct id:", id);
     console.log("editProduct updateData keys:", Object.keys(updateData));
 
-    const restrictedFields = ['_id', 'createdAt', 'updatedAt', 'variants', 'soldBy'];
-    restrictedFields.forEach((field) => delete updateData[field]);
+    const isAdmin = Boolean(req.admin);
+    const merchantId = req.merchantId;
 
-    if (updateData.merchantId) {
-      const merchant = await Merchant.findById(updateData.merchantId);
-      if (merchant) {
-        updateData.soldBy = merchant.shopName || merchant.ownerName || "Default Store";
-      }
+    if (!isAdmin && !merchantId) {
+      return res.status(401).json({ success: false, message: 'Unauthorized' });
     }
+
+    // Strip only immutable system keys
+    const restrictedFields = ['_id', 'createdAt', 'updatedAt', 'variants'];
+    restrictedFields.forEach((field) => delete updateData[field]);
 
     // Locate product document by ObjectId, styleGroupId, or productCode
     let doc = null;
@@ -1154,8 +1395,67 @@ export const editProduct = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Product not found' });
     }
 
-    if (doc.source === 'warehouse' || doc.warehouseId || doc.addedByOperator) {
-      return res.status(403).json({ success: false, message: 'Products stored in central warehouses cannot be edited directly by merchants.' });
+    // Check ownership: Admin can edit any product; merchant must own it
+    if (!isAdmin && doc.merchantId && merchantId && doc.merchantId.toString() !== merchantId.toString()) {
+      return res.status(403).json({ success: false, message: 'Not authorized to edit this product' });
+    }
+
+    // Sanitize ObjectIds to prevent Mongoose CastErrors when changing or clearing
+    const sanitizeObjectId = (val) => {
+      if (!val || val === '' || val === 'null' || val === 'undefined') return null;
+      if (typeof val === 'object' && val._id) val = val._id;
+      const str = String(val).trim();
+      return mongoose.Types.ObjectId.isValid(str) ? new mongoose.Types.ObjectId(str) : null;
+    };
+
+    if ('categoryId' in updateData) {
+      updateData.categoryId = sanitizeObjectId(updateData.categoryId);
+    }
+    if ('subCategoryId' in updateData) {
+      updateData.subCategoryId = sanitizeObjectId(updateData.subCategoryId);
+    }
+    if ('subSubCategoryId' in updateData) {
+      updateData.subSubCategoryId = sanitizeObjectId(updateData.subSubCategoryId);
+    }
+    if ('brandId' in updateData) {
+      updateData.brandId = sanitizeObjectId(updateData.brandId);
+    }
+    if ('warehouseId' in updateData) {
+      updateData.warehouseId = sanitizeObjectId(updateData.warehouseId);
+    }
+    if ('additionalCategoryIds' in updateData) {
+      const parsedAdd = safeParse(updateData.additionalCategoryIds);
+      updateData.additionalCategoryIds = await resolveCategoryHierarchy(Array.isArray(parsedAdd) ? parsedAdd : (parsedAdd ? [parsedAdd] : []));
+    }
+
+    // Numbers sanitization
+    if ('price' in updateData) {
+      const p = Number(updateData.price);
+      updateData.price = isNaN(p) ? 0 : p;
+    }
+    if ('mrp' in updateData) {
+      const m = Number(updateData.mrp);
+      updateData.mrp = isNaN(m) ? (updateData.price ?? doc.price) : m;
+    }
+    if ('discount' in updateData) {
+      const d = Number(updateData.discount);
+      updateData.discount = isNaN(d) ? 0 : d;
+    }
+
+    // Gender sanitization
+    if ('gender' in updateData) {
+      let gArr = updateData.gender;
+      if (typeof gArr === 'string') {
+        try { gArr = JSON.parse(gArr); } catch { gArr = gArr.split(','); }
+      }
+      if (Array.isArray(gArr)) {
+        const cleanGenders = gArr
+          .map(g => String(g).trim().toUpperCase())
+          .filter(g => ['MEN', 'WOMEN', 'KIDS', 'BOYS', 'GIRLS'].includes(g));
+        if (cleanGenders.length > 0) {
+          updateData.gender = cleanGenders;
+        }
+      }
     }
 
     // Sanitize attributes if provided
@@ -1167,7 +1467,7 @@ export const editProduct = async (req, res) => {
           if (rawId && typeof rawId === 'object') {
             rawId = rawId._id || rawId.id;
           }
-          const idStr = rawId ? rawId.toString() : '';
+          const idStr = rawId ? String(rawId).trim() : '';
           return {
             attributeId: mongoose.Types.ObjectId.isValid(idStr) ? new mongoose.Types.ObjectId(idStr) : idStr,
             value: a.value
@@ -1176,10 +1476,26 @@ export const editProduct = async (req, res) => {
         .filter(a => a.attributeId);
     }
 
+    // Sanitize images if provided in editProduct
+    if (updateData.images && Array.isArray(updateData.images)) {
+      updateData.images = updateData.images
+        .filter(img => img && (img.url || typeof img === 'string'))
+        .map(img => {
+          if (typeof img === 'string') {
+            return { url: img, public_id: '' };
+          }
+          return {
+            url: img.url,
+            public_id: img.public_id || '',
+            ...(img._id && mongoose.Types.ObjectId.isValid(String(img._id)) ? { _id: new mongoose.Types.ObjectId(String(img._id)) } : {})
+          };
+        });
+    }
+
     const { sizes, ...sharedFields } = updateData;
 
-    const targetColorName = updateData.color?.name || doc.color?.name || 'Default';
-    const colorQuery = doc.color?.name ? { "color.name": doc.color.name } : {};
+    const targetColorName = updateData.color?.name || doc.color?.name;
+    const colorQuery = targetColorName ? { "color.name": targetColorName } : {};
 
     // 1. Manage sizes ONLY if sizes array is explicitly provided
     if (sizes && Array.isArray(sizes)) {
@@ -1246,9 +1562,9 @@ export const editProduct = async (req, res) => {
     // 2. Separate style-level and variant-level updates
     const styleFieldKeys = [
       'name', 'styleName', 'description', 'brandId', 'categoryId',
-      'subCategoryId', 'subSubCategoryId', 'gender', 'soldBy',
+      'subCategoryId', 'subSubCategoryId', 'additionalCategoryIds', 'gender', 'soldBy',
       'matchingProducts', 'features', 'attributes', 'tags',
-      'collectionIds', 'isTriable', 'isActive'
+      'collectionIds', 'isTriable', 'isActive', 'isVerified'
     ];
 
     const styleLevelFields = {};
@@ -1270,8 +1586,13 @@ export const editProduct = async (req, res) => {
     }
 
     if (Object.keys(variantLevelFields).length > 0) {
+      // If color is not specified or updateAllVariants is requested, update across entire style group
+      const variantUpdateQuery = (updateData.updateAllVariants || !updateData.color)
+        ? { styleGroupId: doc.styleGroupId, isDeleted: { $ne: true } }
+        : { styleGroupId: doc.styleGroupId, ...colorQuery, isDeleted: { $ne: true } };
+
       await ProductFlat.updateMany(
-        { styleGroupId: doc.styleGroupId, ...colorQuery, isDeleted: { $ne: true } },
+        variantUpdateQuery,
         { $set: variantLevelFields }
       );
     }
@@ -1289,21 +1610,21 @@ export const editProduct = async (req, res) => {
     console.error('Error updating product:', error);
     res.status(500).json({
       success: false,
-      message: 'Server error while updating product',
+      message: 'Server error while updating product: ' + error.message,
       error: error.message,
     });
   }
 };
 
+
 export const editVariant = async (req, res) => {
   try {
     const { productId, variantId } = req.params;
     const updateData = req.body;
-    console.log(updateData);
-    console.log(productId);
-    console.log(variantId);
+    const isAdmin = Boolean(req.admin);
 
-    const allFlatVariants = await ProductFlat.find({ styleGroupId: productId, merchantId: req.merchantId });
+    const filter = isAdmin ? { styleGroupId: productId } : { styleGroupId: productId, merchantId: req.merchantId };
+    const allFlatVariants = await ProductFlat.find(filter);
     const targetColorVariants = allFlatVariants.filter(
       v => generateColorVariantId(productId, v.color.name) === variantId
     );
@@ -1311,16 +1632,16 @@ export const editVariant = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Variant not found' });
     }
 
-    if (targetColorVariants[0].source === 'warehouse' || targetColorVariants[0].warehouseId || targetColorVariants[0].addedByOperator) {
-      return res.status(403).json({ success: false, message: 'Products stored in central warehouses cannot be edited directly by merchants.' });
-    }
-
     const colorName = targetColorVariants[0].color.name;
-    const restrictedFields = ['_id', 'createdAt', 'updatedAt', 'variants', 'soldBy'];
+    const restrictedFields = ['_id', 'createdAt', 'updatedAt', 'variants'];
     restrictedFields.forEach((field) => delete updateData[field]);
 
+    const updateCondition = isAdmin
+      ? { styleGroupId: productId, "color.name": colorName }
+      : { styleGroupId: productId, "color.name": colorName, merchantId: req.merchantId };
+
     await ProductFlat.updateMany(
-      { styleGroupId: productId, "color.name": colorName, merchantId: req.merchantId },
+      updateCondition,
       { $set: updateData }
     );
 
@@ -1344,28 +1665,26 @@ export const updateVariantSizeStock = async (req, res) => {
   try {
     const { productId, variantId, sizeName } = req.params;
     const { stock } = req.body;
+    const isAdmin = Boolean(req.admin);
 
     if (stock === undefined) {
       return res.status(400).json({ success: false, message: "Stock value is required" });
     }
 
-    const allFlatVariants = await ProductFlat.find({ styleGroupId: productId, merchantId: req.merchantId });
+    const filter = isAdmin ? { styleGroupId: productId } : { styleGroupId: productId, merchantId: req.merchantId };
+    const allFlatVariants = await ProductFlat.find(filter);
     let targetColorVariants = allFlatVariants.filter(
       v => generateColorVariantId(productId, v.color?.name) === variantId || v._id?.toString() === variantId
     );
 
-    if (targetColorVariants.length && (targetColorVariants[0].source === 'warehouse' || targetColorVariants[0].warehouseId || targetColorVariants[0].addedByOperator)) {
-      return res.status(403).json({ success: false, message: 'Products stored in central warehouses cannot be edited directly by merchants.' });
-    }
-
     const colorName = targetColorVariants.length ? targetColorVariants[0].color?.name : null;
-    const query = colorName
-      ? { styleGroupId: productId, "color.name": colorName, size: sizeName, merchantId: req.merchantId }
-      : { styleGroupId: productId, size: sizeName, merchantId: req.merchantId };
+    let query = { styleGroupId: productId, size: sizeName };
+    if (colorName) query["color.name"] = colorName;
+    if (!isAdmin) query.merchantId = req.merchantId;
 
     const updatedProduct = await ProductFlat.findOneAndUpdate(
       query,
-      { $set: { stock } },
+      { $set: { stock: Number(stock) || 0 } },
       { new: true }
     );
 
@@ -1393,21 +1712,19 @@ export const updateMultipleVariantSizes = async (req, res) => {
   try {
     const { productId, variantId } = req.params;
     const { sizes } = req.body;
+    const isAdmin = Boolean(req.admin);
 
     if (!Array.isArray(sizes) || sizes.length === 0) {
       return res.status(400).json({ success: false, message: "Sizes array is required" });
     }
 
-    const allFlatVariants = await ProductFlat.find({ styleGroupId: productId, merchantId: req.merchantId });
+    const filter = isAdmin ? { styleGroupId: productId } : { styleGroupId: productId, merchantId: req.merchantId };
+    const allFlatVariants = await ProductFlat.find(filter);
     const targetColorVariants = allFlatVariants.filter(
-      v => generateColorVariantId(productId, v.color.name) === variantId
+      v => generateColorVariantId(productId, v.color?.name) === variantId || v._id?.toString() === variantId
     );
     if (!targetColorVariants.length) {
       return res.status(404).json({ success: false, message: "Product or variant not found" });
-    }
-
-    if (targetColorVariants[0].source === 'warehouse' || targetColorVariants[0].warehouseId || targetColorVariants[0].addedByOperator) {
-      return res.status(403).json({ success: false, message: 'Products stored in central warehouses cannot be edited directly by merchants.' });
     }
 
     const baseVariantDoc = targetColorVariants[0];
@@ -1419,7 +1736,7 @@ export const updateMultipleVariantSizes = async (req, res) => {
 
       const existingSizeDoc = targetColorVariants.find(v => v.size === sizeObj.size);
       if (existingSizeDoc) {
-        const updateData = { stock: sizeObj.stock };
+        const updateData = { stock: Number(sizeObj.stock) || 0 };
         if (sizeObj.merchantSizeCode !== undefined) {
            updateData.merchantSizeCode = sizeObj.merchantSizeCode;
         }
@@ -1431,22 +1748,22 @@ export const updateMultipleVariantSizes = async (req, res) => {
         delete base.createdAt;
         delete base.updatedAt;
 
-        const parentProductCode = base.productCode.split('-')[0] || base.productCode;
-        const cleanColor = base.color.name.replace(/\s+/g, '').toUpperCase();
-        const cleanSize = sizeObj.size.replace(/\s+/g, '').toUpperCase();
+        const parentProductCode = base.productCode?.split('-')[0] || base.productCode || 'PRD';
+        const cleanColor = (base.color?.name || 'DEFAULT').replace(/\s+/g, '').toUpperCase();
+        const cleanSize = (sizeObj.size || '').replace(/\s+/g, '').toUpperCase();
 
         let productCode;
         if (sizeObj.merchantSizeCode) {
-           const merchantPrefix = base.productCode.split('-').slice(0, 2).join('-');
+           const merchantPrefix = base.productCode?.split('-').slice(0, 2).join('-') || 'PRD';
            productCode = `${merchantPrefix}-${sizeObj.merchantSizeCode.toUpperCase().replace(/\s+/g, '')}-${cleanSize}`;
         } else {
-           productCode = `${parentProductCode}-${cleanColor}-${cleanSize}`;
+           productCode = `${parentProductCode}-${cleanColor}-${cleanSize}-${Date.now().toString(36).toUpperCase()}`;
         }
 
         const newSizeDoc = new ProductFlat({
           ...base,
           size: sizeObj.size,
-          stock: sizeObj.stock,
+          stock: Number(sizeObj.stock) || 0,
           merchantSizeCode: sizeObj.merchantSizeCode,
           productCode: productCode
         });
@@ -1454,12 +1771,14 @@ export const updateMultipleVariantSizes = async (req, res) => {
       }
     }
 
-    await ProductFlat.deleteMany({
+    const deleteCondition = {
       styleGroupId: productId,
       "color.name": colorName,
-      size: { $nin: incomingSizeNames },
-      merchantId: req.merchantId
-    });
+      size: { $nin: incomingSizeNames }
+    };
+    if (!isAdmin) deleteCondition.merchantId = req.merchantId;
+
+    await ProductFlat.deleteMany(deleteCondition);
 
     const siblings = await ProductFlat.find({ styleGroupId: productId, isActive: true });
     return res.status(200).json({
@@ -1634,7 +1953,7 @@ export const createProductFull = async (req, res) => {
   try {
     let { 
       name, description, styleName, categoryId, subCategoryId, gender, 
-      attributes, tags, collectionIds, variants 
+      attributes, tags, collectionIds, variants, additionalCategoryIds 
     } = req.body;
 
     const safeParse = (value) => {
@@ -1679,6 +1998,7 @@ export const createProductFull = async (req, res) => {
 
     const validCategoryId = (categoryId && mongoose.Types.ObjectId.isValid(categoryId)) ? new mongoose.Types.ObjectId(categoryId) : undefined;
     const validSubCategoryId = (subCategoryId && mongoose.Types.ObjectId.isValid(subCategoryId)) ? new mongoose.Types.ObjectId(subCategoryId) : undefined;
+    const validAdditionalCategoryIds = await resolveCategoryHierarchy(safeParse(additionalCategoryIds));
 
     const merchantId = req.merchantId;
     const merchant = await Merchant.findById(merchantId);
@@ -1767,6 +2087,7 @@ export const createProductFull = async (req, res) => {
           styleName,
           categoryId: validCategoryId,
           subCategoryId: validSubCategoryId,
+          additionalCategoryIds: validAdditionalCategoryIds,
           brandId,
           merchantId,
           gender,
@@ -1914,6 +2235,23 @@ export const createProductAi = async (req, res) => {
     req.body.styleName = req.body.styleName ? String(req.body.styleName).trim() : aiMetadata.styleName;
     req.body.description = req.body.description ? String(req.body.description).trim() : aiMetadata.description;
     req.body.gender = req.body.gender ? safeParse(req.body.gender) : aiMetadata.gender;
+
+    // Constrain gender by creating merchant's registered genderCategory if configured
+    const targetMerchantId = req.merchantId || req.body.merchantId;
+    if (targetMerchantId) {
+      const merchantDoc = await Merchant.findById(targetMerchantId).select('genderCategory').lean();
+      if (merchantDoc && Array.isArray(merchantDoc.genderCategory) && merchantDoc.genderCategory.length > 0) {
+        const allowedUpper = merchantDoc.genderCategory.map(g => String(g).trim().toUpperCase());
+        let curGenders = Array.isArray(req.body.gender) ? req.body.gender : (req.body.gender ? [req.body.gender] : []);
+        const filteredGenders = curGenders.filter(g => allowedUpper.includes(String(g).toUpperCase()));
+        if (filteredGenders.length > 0) {
+          req.body.gender = filteredGenders;
+        } else {
+          req.body.gender = allowedUpper.filter(g => ['MEN', 'WOMEN', 'KIDS', 'BOYS', 'GIRLS'].includes(g));
+        }
+      }
+    }
+
     req.body.categoryId = String(aiMetadata.categoryId);
     req.body.subCategoryId = String(aiMetadata.subCategoryId);
     req.body.tags = req.body.tags ? safeParse(req.body.tags) : aiMetadata.tags;
@@ -1964,11 +2302,12 @@ export const searchBaseProducts = async (req, res) => {
       return res.status(200).json({ success: true, products: [] });
     }
 
+    const flexRegex = buildFlexibleSearchRegex(query);
     const match = { isDeleted: { $ne: true } };
     match.$or = [
-      { name: { $regex: query, $options: "i" } },
-      { styleName: { $regex: query, $options: "i" } },
-      { tags: { $in: [new RegExp(query, "i")] } }
+      { name: flexRegex },
+      { styleName: flexRegex },
+      { tags: { $in: [flexRegex] } }
     ];
 
     const products = await ProductFlat.aggregate([

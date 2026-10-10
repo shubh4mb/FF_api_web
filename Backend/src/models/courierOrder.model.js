@@ -130,6 +130,17 @@ const CourierOrderSchema = new mongoose.Schema({
     enum: ['unsettled', 'settled', 'failed'],
     default: 'unsettled'
   },
+  commissionRate: { type: Number, default: 4 }, // Category commission percentage
+  commissionAmount: { type: Number, default: 0 }, // Platform retained fee
+  merchantPayout: { type: Number, default: 0 }, // Net merchant earning
+  settlementBreakdown: {
+    grossAmount: { type: Number, default: 0 },
+    commissionRate: { type: Number, default: 4 },
+    commissionAmount: { type: Number, default: 0 },
+    merchantPayout: { type: Number, default: 0 },
+    merchantDiscount: { type: Number, default: 0 },
+    settledAt: { type: Date, default: null },
+  },
   deliveredAt: { type: Date, default: null },
 }, { timestamps: true });
 

@@ -97,6 +97,12 @@ const offerSchema = new mongoose.Schema({
     default: null,    // null for admin offers
     index: true,
   },
+  targetUserId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    default: null,
+    index: true,
+  },
 
   // ── Discount Definition ──
   discountType: {

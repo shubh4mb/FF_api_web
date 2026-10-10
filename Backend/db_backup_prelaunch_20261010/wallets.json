@@ -1,0 +1,286 @@
+[
+  {
+    "_id": "6a43d56a82687b01870d36c1",
+    "merchantId": "6a43ca6c7941b0b78dea6346",
+    "__v": 0,
+    "balance": 0,
+    "createdAt": "2026-06-30T14:40:41.266Z",
+    "ownerType": "merchant",
+    "transactions": [],
+    "updatedAt": "2026-06-30T14:49:43.115Z"
+  },
+  {
+    "_id": "6a45806726b6feb49348e603",
+    "deliveryRiderId": "6a45776e80bbd764a88a440b",
+    "__v": 0,
+    "balance": 0,
+    "createdAt": "2026-07-01T21:02:30.054Z",
+    "ownerType": "rider",
+    "transactions": [],
+    "updatedAt": "2026-07-16T17:08:53.941Z"
+  },
+  {
+    "_id": "6a491e5626b6feb4934b0b75",
+    "merchantId": "6a491850f0b1ac63ab6766e6",
+    "__v": 0,
+    "balance": 0,
+    "createdAt": "2026-07-04T14:53:10.678Z",
+    "ownerType": "merchant",
+    "transactions": [],
+    "updatedAt": "2026-07-17T15:20:11.487Z"
+  },
+  {
+    "_id": "6a4b592126b6feb4934baee7",
+    "merchantId": "6a4b52044ca9956e1cd6d7c6",
+    "__v": 0,
+    "balance": 0,
+    "createdAt": "2026-07-06T07:28:28.161Z",
+    "ownerType": "merchant",
+    "transactions": [],
+    "updatedAt": "2026-07-11T12:47:36.276Z"
+  },
+  {
+    "_id": "6a52c021a9ffd8ee6cb6c40d",
+    "userId": "6a4900efea78373da07b4c7d",
+    "__v": 0,
+    "balance": 311,
+    "createdAt": "2026-07-11T22:13:53.995Z",
+    "ownerType": "user",
+    "transactions": [
+      {
+        "type": "credit",
+        "amount": 37,
+        "description": "Refund: Order #277E9 cancelled by Admin",
+        "orderId": "6a52bf8ff5d225d81a3277e9",
+        "createdAt": "2026-07-11T22:13:53.994Z",
+        "_id": "6a52c021f5d225d81a32793d"
+      },
+      {
+        "type": "credit",
+        "amount": 12,
+        "description": "Refund: Order #9BC53 cancelled by Admin",
+        "orderId": "6a535ddcc46a7c32af09bc53",
+        "createdAt": "2026-07-12T10:43:35.656Z",
+        "_id": "6a536fd72923602a5e74288c"
+      },
+      {
+        "type": "credit",
+        "amount": 12,
+        "description": "Refund: Order #A48F5 cancelled by Admin",
+        "orderId": "6a54968e1db6c93ac7ea48f5",
+        "createdAt": "2026-07-13T07:45:58.006Z",
+        "_id": "6a5497b61db6c93ac7ea4ab9"
+      },
+      {
+        "type": "credit",
+        "amount": 12,
+        "description": "Refund: Order #A4C60 cancelled by Admin",
+        "orderId": "6a5497f11db6c93ac7ea4c60",
+        "createdAt": "2026-07-13T07:48:07.175Z",
+        "_id": "6a5498371db6c93ac7ea4dd1"
+      },
+      {
+        "type": "credit",
+        "amount": 12,
+        "description": "Refund: Order #A4DF8 cancelled by Admin",
+        "orderId": "6a54983b1db6c93ac7ea4df8",
+        "createdAt": "2026-07-13T10:27:29.393Z",
+        "_id": "6a54bd915b8697af95e7cce4"
+      },
+      {
+        "type": "credit",
+        "amount": 12,
+        "description": "Refund: Order #7CFEC cancelled by Admin",
+        "orderId": "6a54bdca5b8697af95e7cfec",
+        "createdAt": "2026-07-13T10:38:58.369Z",
+        "_id": "6a54c0425b8697af95e7d313"
+      },
+      {
+        "type": "credit",
+        "amount": 12,
+        "description": "Refund: Order #7D382 cancelled by Admin",
+        "orderId": "6a54c06b5b8697af95e7d382",
+        "createdAt": "2026-07-13T10:41:08.051Z",
+        "_id": "6a54c0c45b8697af95e7d46a"
+      },
+      {
+        "type": "credit",
+        "amount": 12,
+        "description": "Refund: Order #7D5BC cancelled by Admin",
+        "orderId": "6a54c0e65b8697af95e7d5bc",
+        "createdAt": "2026-07-13T14:06:19.203Z",
+        "_id": "6a54f0db7313546e5fa2ca1d"
+      },
+      {
+        "type": "credit",
+        "amount": 15,
+        "description": "Refund: Order #F58CB cancelled by Admin",
+        "orderId": "6a7d8561327f230c9f3f58cb",
+        "createdAt": "2026-08-13T10:41:42.882Z",
+        "_id": "6a7d9f660b9899a9fffeaf97"
+      },
+      {
+        "type": "credit",
+        "amount": 15,
+        "description": "Refund: Order #EB038 cancelled by Admin",
+        "orderId": "6a7d9f910b9899a9fffeb038",
+        "createdAt": "2026-08-13T11:10:17.450Z",
+        "_id": "6a7da61916fd4cefaea09f3a"
+      },
+      {
+        "type": "credit",
+        "amount": 12,
+        "description": "Refund: Merchant declined order #BF562",
+        "orderId": "6a8250fe439234d7d5bbf562",
+        "createdAt": "2026-08-17T00:09:23.003Z",
+        "_id": "6a825133439234d7d5bbf5e5"
+      },
+      {
+        "type": "credit",
+        "amount": 32,
+        "description": "Refund: Order #4D62D cancelled by Admin",
+        "orderId": "6a9d59bde0e2e985db94d62d",
+        "createdAt": "2026-09-07T11:18:06.813Z",
+        "_id": "6a9e9d6edd3acccb131a8207"
+      },
+      {
+        "type": "credit",
+        "amount": 12,
+        "description": "Refund: Order #287C3 cancelled by Admin",
+        "orderId": "6a9ea31cedcd2fa5b3a287c3",
+        "createdAt": "2026-09-07T12:15:49.150Z",
+        "_id": "6a9eaaf51bb8e331e2da1899"
+      },
+      {
+        "type": "credit",
+        "amount": 32,
+        "description": "Refund: Order #A1A47 cancelled by Admin",
+        "orderId": "6a9eab211bb8e331e2da1a47",
+        "createdAt": "2026-09-07T12:20:04.403Z",
+        "_id": "6a9eabf41bb8e331e2da1cf6"
+      },
+      {
+        "type": "credit",
+        "amount": 12,
+        "description": "Refund: Order #B1470 cancelled by Admin",
+        "orderId": "6a9eb128314b33cab4cb1470",
+        "createdAt": "2026-09-07T13:00:28.764Z",
+        "_id": "6a9eb56c9218f6e4cb6343b1"
+      },
+      {
+        "type": "credit",
+        "amount": 30,
+        "description": "Refund: Order #6B678 was cancelled (admin).",
+        "orderId": "6a9f459517b464f8ba36b678",
+        "createdAt": "2026-09-08T00:12:06.232Z",
+        "_id": "6a9f52d664f9cfea764e3f2e"
+      },
+      {
+        "type": "credit",
+        "amount": 30,
+        "description": "Refund: Order #E412B was cancelled (admin).",
+        "orderId": "6a9f535264f9cfea764e412b",
+        "createdAt": "2026-09-08T11:46:19.651Z",
+        "_id": "6a9ff58b4fdba873ba270855"
+      }
+    ],
+    "updatedAt": "2026-09-08T11:46:19.651Z"
+  },
+  {
+    "_id": "6a58a6f2a9ffd8ee6cb76e89",
+    "merchantId": "6a55077e2fdcd189bfeee3c1",
+    "__v": 0,
+    "balance": 0,
+    "createdAt": "2026-07-16T09:40:00.822Z",
+    "ownerType": "merchant",
+    "transactions": [],
+    "updatedAt": "2026-07-18T22:14:37.220Z"
+  },
+  {
+    "_id": "6a58e6a8875634b499f85bb6",
+    "merchantId": "6a52c077f5d225d81a327965",
+    "__v": 0,
+    "balance": 0,
+    "createdAt": "2026-07-16T14:11:51.337Z",
+    "ownerType": "merchant",
+    "transactions": [],
+    "updatedAt": "2026-10-09T23:00:50.554Z"
+  },
+  {
+    "_id": "6aa1992e897ed38dd12a0215",
+    "adminId": "6a426b319c61784780e31d61",
+    "__v": 0,
+    "balance": -370.8,
+    "createdAt": "2026-09-09T17:36:46.922Z",
+    "ownerType": "admin",
+    "transactions": [
+      {
+        "type": "debit",
+        "amount": 6,
+        "description": "Discount cost for order 6aa192f64f18a949e6b15b90",
+        "orderId": "6aa192f64f18a949e6b15b90",
+        "createdAt": "2026-09-09T17:36:46.922Z",
+        "_id": "6aa1992e4f18a949e6b186ce"
+      },
+      {
+        "type": "debit",
+        "amount": 54,
+        "description": "Discount cost for order 6aadb1b28173d1fd6833d496",
+        "orderId": "6aadb1b28173d1fd6833d496",
+        "createdAt": "2026-09-18T22:57:18.828Z",
+        "_id": "6aadc1ce32f816f374640a5f"
+      },
+      {
+        "type": "debit",
+        "amount": 12,
+        "description": "Discount cost for order 6aae569d4fefb9da44d71769",
+        "orderId": "6aae569d4fefb9da44d71769",
+        "createdAt": "2026-09-19T09:36:23.312Z",
+        "_id": "6aae57974fefb9da44d7191e"
+      },
+      {
+        "type": "debit",
+        "amount": 16,
+        "description": "Discount cost for order 6ab14576964a5cdeffc47f1d",
+        "orderId": "6ab14576964a5cdeffc47f1d",
+        "createdAt": "2026-09-21T14:57:59.651Z",
+        "_id": "6ab145f7964a5cdeffc48033"
+      },
+      {
+        "type": "debit",
+        "amount": 16,
+        "description": "Discount cost for order 6ab7f74b65f954301400099d",
+        "orderId": "6ab7f74b65f954301400099d",
+        "createdAt": "2026-09-26T16:56:04.501Z",
+        "_id": "6ab7f92465f9543014000c42"
+      },
+      {
+        "type": "debit",
+        "amount": 224,
+        "description": "Discount cost for order 6ab9b0ad3428d97b03724efd",
+        "orderId": "6ab9b0ad3428d97b03724efd",
+        "createdAt": "2026-09-28T13:40:54.993Z",
+        "_id": "6aba6e6660eed84bd77ab1b7"
+      },
+      {
+        "type": "debit",
+        "amount": 42.8,
+        "description": "Discount cost for order 6ac9639f414b0fa74eb7639e",
+        "orderId": "6ac9639f414b0fa74eb7639e",
+        "createdAt": "2026-10-09T22:58:46.778Z",
+        "_id": "6ac971a670146b3efd35a301"
+      }
+    ],
+    "updatedAt": "2026-10-09T22:58:46.779Z"
+  },
+  {
+    "_id": "6ac96e655e5b16efe47b3984",
+    "merchantId": "6ac3c2fb8b4f200d945d7912",
+    "__v": 0,
+    "balance": 0,
+    "createdAt": "2026-10-09T22:44:53.423Z",
+    "ownerType": "merchant",
+    "transactions": [],
+    "updatedAt": "2026-10-09T22:45:08.889Z"
+  }
+]

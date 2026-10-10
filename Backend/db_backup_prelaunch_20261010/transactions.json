@@ -1,0 +1,94 @@
+[
+  {
+    "_id": "6aba6e6760eed84bd77ab1ce",
+    "transactionId": "TXN-MULAPHJM-G6LT",
+    "type": "credit",
+    "category": "customer_payment",
+    "source": "system_razorpay",
+    "status": "completed",
+    "amount": 5,
+    "paymentMethod": "razorpay",
+    "referenceNumber": "pay_ThTcLh3iY0sb4M",
+    "recipientType": "user",
+    "recipientId": "6a4900efea78373da07b4c7d",
+    "recipientDetails": {
+      "name": "Shubham",
+      "phone": "8383823813",
+      "email": "",
+      "bankName": "",
+      "accountNumber": "",
+      "ifscCode": "",
+      "upiId": "",
+      "shopName": ""
+    },
+    "orderId": "6ab9b0ad3428d97b03724efd",
+    "weeklyPayoutId": null,
+    "receipt": {
+      "url": null,
+      "public_id": null
+    },
+    "notes": "Customer payment settled for order #724EFD",
+    "performedBy": {
+      "adminId": null,
+      "name": "System",
+      "email": ""
+    },
+    "createdAt": "2026-09-28T13:40:55.188Z",
+    "updatedAt": "2026-09-28T13:40:55.188Z",
+    "__v": 0
+  },
+  {
+    "_id": "6ac971a670146b3efd35a31a",
+    "transactionId": "TXN-MV1KH9W3-W4N4",
+    "type": "credit",
+    "category": "customer_payment",
+    "source": "system_razorpay",
+    "status": "completed",
+    "amount": 5,
+    "paymentMethod": "razorpay",
+    "referenceNumber": "pay_Tlyjom7UVUZZoF",
+    "recipientType": "user",
+    "recipientId": "6a4900efea78373da07b4c7d",
+    "recipientDetails": {
+      "name": "Shubham",
+      "phone": "8383823813",
+      "email": "",
+      "bankName": "",
+      "accountNumber": "",
+      "ifscCode": "",
+      "upiId": "",
+      "shopName": ""
+    },
+    "orderId": "6ac9639f414b0fa74eb7639e",
+    "orderModel": "Order",
+    "courierOrderId": null,
+    "warehouseOrderId": null,
+    "weeklyPayoutId": null,
+    "split": {
+      "grossAmount": 5,
+      "commissionRate": 4,
+      "commissionAmount": 0.2,
+      "merchantAmount": 4.8,
+      "merchantDiscount": 0,
+      "adminDiscount": 43,
+      "deliveryFee": 13,
+      "returnFee": 2,
+      "riderTip": 0,
+      "waitingCharge": 14,
+      "taxes": 0
+    },
+    "receipt": {
+      "url": null,
+      "public_id": null
+    },
+    "notes": "Customer payment settled for order #B7639E (Gross: ₹5, Comm 4%: ₹0.2, Net Merchant: ₹4.8)",
+    "performedBy": {
+      "adminId": null,
+      "name": "System",
+      "email": ""
+    },
+    "createdAt": "2026-10-09T22:58:46.998Z",
+    "updatedAt": "2026-10-09T22:58:46.998Z",
+    "__v": 0
+  }
+]

@@ -1,0 +1,1159 @@
+[
+  {
+    "_id": "6a52ce12f5d225d81a328521",
+    "name": "Oversized Cotton Shirt",
+    "merchantId": "6a52c077f5d225d81a327965",
+    "brandId": "6a52ce12f5d225d81a32851e",
+    "categoryId": "6a4a33c53670824cac2035ea",
+    "subCategoryId": "6a4a33c53670824cac2035f0",
+    "gender": [
+      "MEN",
+      "WOMEN"
+    ],
+    "soldBy": "SB Fashion",
+    "styleName": "ss",
+    "description": "oversizeddddd",
+    "features": {},
+    "attributes": [
+      {
+        "attributeId": "6a4a518b6bde4b49a965ab7d",
+        "value": "button",
+        "_id": "6a52ce12f5d225d81a328522"
+      },
+      {
+        "attributeId": "6a4a4e8b67beb5dbea07c197",
+        "value": "shirt-collar",
+        "_id": "6a52ce12f5d225d81a328523"
+      },
+      {
+        "attributeId": "6a4a4e8967beb5dbea07c10c",
+        "value": "full-sleeve",
+        "_id": "6a52ce12f5d225d81a328524"
+      },
+      {
+        "attributeId": "6a4a4e08ee9e6615f7e67246",
+        "value": "solid",
+        "_id": "6a52ce12f5d225d81a328525"
+      },
+      {
+        "attributeId": "6a4a4cec40e0d5976e810b94",
+        "value": "oversized",
+        "_id": "6a52ce12f5d225d81a328526"
+      }
+    ],
+    "tags": [
+      "baggy",
+      "oversized"
+    ],
+    "collectionIds": [],
+    "isTriable": true,
+    "ratings": 5,
+    "numReviews": 1,
+    "isActive": true,
+    "isDeleted": false,
+    "matchingProducts": [],
+    "variants": [
+      {
+        "color": {
+          "name": "Blue",
+          "hex": "#0000FF"
+        },
+        "sizes": [
+          {
+            "size": "S",
+            "stock": 443,
+            "_id": "6a52d11ac46a7c32af09b921"
+          },
+          {
+            "size": "M",
+            "stock": 432,
+            "_id": "6a52d11ac46a7c32af09b922"
+          },
+          {
+            "size": "L",
+            "stock": 23,
+            "_id": "6a52d11ac46a7c32af09b923"
+          }
+        ],
+        "mrp": 10,
+        "price": 5,
+        "images": [
+          {
+            "public_id": "products/hqdqfkbpawxr5wfkzqyc",
+            "url": "https://res.cloudinary.com/dpmliygpg/image/upload/v1783812376/products/hqdqfkbpawxr5wfkzqyc.jpg",
+            "_id": "6a52d11ac46a7c32af09b924"
+          }
+        ],
+        "discount": 50,
+        "_id": "6a52d11ac46a7c32af09b920"
+      }
+    ],
+    "createdAt": "2026-07-11T23:13:22.386Z",
+    "updatedAt": "2026-07-16T09:54:33.928Z",
+    "productCode": "PRD-074671F6",
+    "__v": 0,
+    "isVerified": true
+  },
+  {
+    "_id": "6a54d0a12fdcd189bfeed3d7",
+    "name": "Lavender Bloom Embroidered set",
+    "merchantId": "6a491850f0b1ac63ab6766e6",
+    "brandId": "6a54d0a12fdcd189bfeed3d4",
+    "categoryId": "6a4a33c63670824cac203620",
+    "subCategoryId": "6a4a33c63670824cac203626",
+    "gender": [
+      "WOMEN"
+    ],
+    "soldBy": "SUKI Design House",
+    "styleName": "Ethnic",
+    "description": "Elevate your ethnic wardrobe with this elegant Lavender Embroidered Kurta Set with Dupatta. Crafted from lightweight, breathable fabric, the set features delicate floral embroidery along the neckline, sleeves, and dupatta, adding a refined touch to its graceful silhouette. The flattering V-neck design, three-quarter sleeves, and coordinated straight pants create a timeless look that's perfect for festive celebrations, family gatherings, and special occasions. Pair it with statement earrings and heels for an effortlessly sophisticated ensemble.",
+    "features": {},
+    "attributes": [
+      {
+        "attributeId": "6a4a4e8b67beb5dbea07c197",
+        "value": "no_collar",
+        "_id": "6a54d0a12fdcd189bfeed3d8"
+      },
+      {
+        "attributeId": "6a4a4e8967beb5dbea07c10c",
+        "value": "three-quarter-sleeve",
+        "_id": "6a54d0a12fdcd189bfeed3d9"
+      },
+      {
+        "attributeId": "6a4a4e08ee9e6615f7e67246",
+        "value": "floral",
+        "_id": "6a54d0a12fdcd189bfeed3da"
+      }
+    ],
+    "tags": [
+      "kurta set",
+      "lavender"
+    ],
+    "collectionIds": [],
+    "isTriable": true,
+    "ratings": 0,
+    "numReviews": 0,
+    "isActive": true,
+    "isDeleted": false,
+    "matchingProducts": [],
+    "variants": [
+      {
+        "color": {
+          "name": "Amethyst",
+          "hex": "#9966CC"
+        },
+        "sizes": [
+          {
+            "size": "S",
+            "stock": 2,
+            "_id": "6a54d1382fdcd189bfeed3f8"
+          },
+          {
+            "size": "M",
+            "stock": 2,
+            "_id": "6a54d1382fdcd189bfeed3f9"
+          },
+          {
+            "size": "L",
+            "stock": 2,
+            "_id": "6a54d1382fdcd189bfeed3fa"
+          }
+        ],
+        "mrp": 1299,
+        "price": 999,
+        "images": [
+          {
+            "public_id": "products/zko7xnwvzc6hkacun896",
+            "url": "https://res.cloudinary.com/dpmliygpg/image/upload/v1783943479/products/zko7xnwvzc6hkacun896.jpg",
+            "_id": "6a54d1382fdcd189bfeed3fb"
+          }
+        ],
+        "discount": 23.09,
+        "_id": "6a54d1382fdcd189bfeed3f7"
+      }
+    ],
+    "createdAt": "2026-07-13T11:48:49.066Z",
+    "updatedAt": "2026-07-16T09:54:39.891Z",
+    "productCode": "PRD-779431D4",
+    "__v": 0,
+    "isVerified": true
+  },
+  {
+    "_id": "6a54d6f82fdcd189bfeed4c8",
+    "name": "Black Floral Maxi Dress",
+    "merchantId": "6a491850f0b1ac63ab6766e6",
+    "brandId": "6a54d0a12fdcd189bfeed3d4",
+    "categoryId": "6a4a33c63670824cac203616",
+    "subCategoryId": "6a4a33c63670824cac203618",
+    "gender": [
+      "WOMEN"
+    ],
+    "soldBy": "SUKI Design House",
+    "styleName": "Black Floral",
+    "description": "Turn heads with the elegant Midnight Bloom Floral Maxi Dress. Featuring a timeless black base with delicate floral prints, this sleeveless maxi dress is designed with a flattering fitted bodice and flowing silhouette. Perfect for brunches, vacations, evening outings, and casual occasions.",
+    "features": {},
+    "attributes": [
+      {
+        "attributeId": "6a4a4e8a67beb5dbea07c15b",
+        "value": "square-neck",
+        "_id": "6a54d6f82fdcd189bfeed4c9"
+      },
+      {
+        "attributeId": "6a4a4e8967beb5dbea07c10c",
+        "value": "sleeveless",
+        "_id": "6a54d6f82fdcd189bfeed4ca"
+      },
+      {
+        "attributeId": "6a4a4e08ee9e6615f7e67246",
+        "value": "floral",
+        "_id": "6a54d6f82fdcd189bfeed4cb"
+      }
+    ],
+    "tags": [
+      "floral",
+      "maxi dress"
+    ],
+    "collectionIds": [],
+    "isTriable": true,
+    "ratings": 0,
+    "numReviews": 0,
+    "isActive": true,
+    "isDeleted": false,
+    "matchingProducts": [],
+    "variants": [
+      {
+        "color": {
+          "name": "Black",
+          "hex": "#000000"
+        },
+        "sizes": [
+          {
+            "size": "S",
+            "stock": 2,
+            "_id": "6a54d7882fdcd189bfeed4f3"
+          },
+          {
+            "size": "M",
+            "stock": 2,
+            "_id": "6a54d7882fdcd189bfeed4f4"
+          },
+          {
+            "size": "L",
+            "stock": 1,
+            "_id": "6a54d7882fdcd189bfeed4f5"
+          }
+        ],
+        "mrp": 999,
+        "price": 920,
+        "images": [
+          {
+            "public_id": "products/y0lrpd4fbniczljaauah",
+            "url": "https://res.cloudinary.com/dpmliygpg/image/upload/v1783945094/products/y0lrpd4fbniczljaauah.jpg",
+            "_id": "6a54d7882fdcd189bfeed4f6"
+          }
+        ],
+        "discount": 7.91,
+        "_id": "6a54d7882fdcd189bfeed4f2"
+      }
+    ],
+    "createdAt": "2026-07-13T12:15:52.687Z",
+    "updatedAt": "2026-07-16T09:54:41.745Z",
+    "productCode": "PRD-637B12E8",
+    "__v": 0,
+    "isVerified": true
+  },
+  {
+    "_id": "6a5a42d62fdcd189bfef52dd",
+    "name": "Lime Bloom Embroidered Kurta Set",
+    "merchantId": "6a491850f0b1ac63ab6766e6",
+    "brandId": "6a54d0a12fdcd189bfeed3d4",
+    "categoryId": "6a4a33c63670824cac203620",
+    "subCategoryId": "6a4a33c63670824cac203626",
+    "gender": [
+      "WOMEN"
+    ],
+    "soldBy": "SUKI Design House",
+    "styleName": "ethnic",
+    "description": "Refresh your ethnic wardrobe with this elegant Lime Bloom Embroidered Kurta Set. Crafted from a soft, breathable fabric, this three-piece set features a straight-cut lime green kurta adorned with delicate floral embroidery on the front and hem. It is paired with matching straight pants and a lightweight embroidered dupatta that adds a graceful finishing touch. The band collar with a notch neckline and three-quarter sleeves create a refined silhouette, making it perfect for festive occasions, family gatherings, casual celebrations, and daytime events.",
+    "features": {},
+    "attributes": [
+      {
+        "attributeId": "6a4a4e8b67beb5dbea07c197",
+        "value": "mandarin-collar",
+        "_id": "6a5a42d62fdcd189bfef52de"
+      },
+      {
+        "attributeId": "6a4a4e8a67beb5dbea07c15b",
+        "value": "v-neck",
+        "_id": "6a5a42d62fdcd189bfef52df"
+      },
+      {
+        "attributeId": "6a4a4e8967beb5dbea07c10c",
+        "value": "three-quarter-sleeve",
+        "_id": "6a5a42d62fdcd189bfef52e0"
+      },
+      {
+        "attributeId": "6a4a4e08ee9e6615f7e67246",
+        "value": "floral",
+        "_id": "6a5a42d62fdcd189bfef52e1"
+      }
+    ],
+    "tags": [
+      "ethnic"
+    ],
+    "collectionIds": [],
+    "isTriable": true,
+    "ratings": 0,
+    "numReviews": 0,
+    "isActive": true,
+    "isDeleted": false,
+    "matchingProducts": [],
+    "variants": [
+      {
+        "color": {
+          "name": "Yellow",
+          "hex": "#FFFF00"
+        },
+        "sizes": [
+          {
+            "size": "S",
+            "stock": 3,
+            "_id": "6a5a43202fdcd189bfef5310"
+          },
+          {
+            "size": "M",
+            "stock": 3,
+            "_id": "6a5a43202fdcd189bfef5311"
+          },
+          {
+            "size": "L",
+            "stock": 3,
+            "_id": "6a5a43202fdcd189bfef5312"
+          }
+        ],
+        "mrp": 1299,
+        "price": 1199,
+        "images": [
+          {
+            "public_id": "products/mdvcxl6oh8hnqmdu5brj",
+            "url": "https://res.cloudinary.com/dpmliygpg/image/upload/v1784300319/products/mdvcxl6oh8hnqmdu5brj.jpg",
+            "_id": "6a5a43202fdcd189bfef5313"
+          }
+        ],
+        "discount": 7.7,
+        "_id": "6a5a43202fdcd189bfef530f"
+      }
+    ],
+    "createdAt": "2026-07-17T14:57:26.518Z",
+    "updatedAt": "2026-07-17T15:03:13.603Z",
+    "productCode": "PRD-978F8382",
+    "__v": 0,
+    "isVerified": true
+  },
+  {
+    "_id": "6a5a43cc2fdcd189bfef5406",
+    "name": "Ivory Bloom Floral Maxi Dress",
+    "merchantId": "6a491850f0b1ac63ab6766e6",
+    "brandId": "6a54d0a12fdcd189bfeed3d4",
+    "categoryId": "6a4a33c63670824cac203616",
+    "subCategoryId": "6a4a33c63670824cac203618",
+    "gender": [
+      "WOMEN"
+    ],
+    "soldBy": "SUKI Design House",
+    "styleName": "Floral ",
+    "description": "Step into effortless elegance with this Ivory Bloom Floral Maxi Dress. Designed with a flattering fit-and-flare silhouette, this full-length dress features an ivory white base adorned with elegant wine floral prints. The V-neckline, gathered waist, and full bishop sleeves create a feminine and graceful look, making it ideal for brunches, vacations, casual outings, parties, and evening events. Crafted from a lightweight, flowy fabric, it offers both comfort and sophistication.",
+    "features": {},
+    "attributes": [
+      {
+        "attributeId": "6a4a4e8a67beb5dbea07c15b",
+        "value": "v-neck",
+        "_id": "6a5a43cc2fdcd189bfef5407"
+      },
+      {
+        "attributeId": "6a4a4e8967beb5dbea07c10c",
+        "value": "full-sleeve",
+        "_id": "6a5a43cc2fdcd189bfef5408"
+      },
+      {
+        "attributeId": "6a4a4e08ee9e6615f7e67246",
+        "value": "abstract",
+        "_id": "6a5a43cc2fdcd189bfef5409"
+      }
+    ],
+    "tags": [
+      "dress"
+    ],
+    "collectionIds": [],
+    "isTriable": true,
+    "ratings": 0,
+    "numReviews": 0,
+    "isActive": true,
+    "isDeleted": false,
+    "matchingProducts": [],
+    "variants": [
+      {
+        "color": {
+          "name": "White",
+          "hex": "#FFFFFF"
+        },
+        "sizes": [
+          {
+            "size": "S",
+            "stock": 2,
+            "_id": "6a5a44002fdcd189bfef5482"
+          },
+          {
+            "size": "M",
+            "stock": 3,
+            "_id": "6a5a44002fdcd189bfef5483"
+          },
+          {
+            "size": "L",
+            "stock": 2,
+            "_id": "6a5a44002fdcd189bfef5484"
+          }
+        ],
+        "mrp": 1499,
+        "price": 1299,
+        "images": [
+          {
+            "public_id": "products/qngoom3kbcc4agyp34h3",
+            "url": "https://res.cloudinary.com/dpmliygpg/image/upload/v1784300542/products/qngoom3kbcc4agyp34h3.jpg",
+            "_id": "6a5a44002fdcd189bfef5485"
+          }
+        ],
+        "discount": 13.34,
+        "_id": "6a5a44002fdcd189bfef5481"
+      }
+    ],
+    "createdAt": "2026-07-17T15:01:32.737Z",
+    "updatedAt": "2026-07-17T15:03:20.189Z",
+    "productCode": "PRD-38DF2E1F",
+    "__v": 0,
+    "isVerified": true
+  },
+  {
+    "_id": "6a5a45a02fdcd189bfef558f",
+    "name": "Royal Plum Embroidered Kurta Palazzo Set",
+    "merchantId": "6a491850f0b1ac63ab6766e6",
+    "brandId": "6a54d0a12fdcd189bfeed3d4",
+    "categoryId": "6a4a33c63670824cac203620",
+    "subCategoryId": "6a4a33c63670824cac203626",
+    "gender": [
+      "WOMEN"
+    ],
+    "soldBy": "SUKI Design House",
+    "styleName": "kurta set",
+    "description": "Elevate your ethnic wardrobe with this elegant Royal Plum Embroidered Kurta Palazzo Set. This graceful three-piece ensemble features a straight-cut kurta adorned with intricate silver floral embroidery on the neckline, sleeves, and hem. Paired with matching embroidered palazzo pants and a lightweight embellished dupatta, it offers a sophisticated look for festive occasions, weddings, family gatherings, and celebrations. Crafted from a soft, flowy fabric, this set combines comfort with timeless elegance.",
+    "features": {},
+    "attributes": [
+      {
+        "attributeId": "6a4a4e08ee9e6615f7e67246",
+        "value": "printed",
+        "_id": "6a5a45a02fdcd189bfef5590"
+      },
+      {
+        "attributeId": "6a4a4e8a67beb5dbea07c15b",
+        "value": "round-neck",
+        "_id": "6a5a45a02fdcd189bfef5591"
+      },
+      {
+        "attributeId": "6a4a4e8b67beb5dbea07c197",
+        "value": "no_collar",
+        "_id": "6a5a45a02fdcd189bfef5592"
+      },
+      {
+        "attributeId": "6a4a4e8967beb5dbea07c10c",
+        "value": "full-sleeve",
+        "_id": "6a5a45a02fdcd189bfef5593"
+      }
+    ],
+    "tags": [],
+    "collectionIds": [],
+    "isTriable": true,
+    "ratings": 0,
+    "numReviews": 0,
+    "isActive": true,
+    "isDeleted": false,
+    "matchingProducts": [],
+    "variants": [
+      {
+        "color": {
+          "name": "Purple",
+          "hex": "#800080"
+        },
+        "sizes": [
+          {
+            "size": "S",
+            "stock": 2,
+            "_id": "6a5a45fa2fdcd189bfef55d3"
+          },
+          {
+            "size": "M",
+            "stock": 3,
+            "_id": "6a5a45fa2fdcd189bfef55d4"
+          },
+          {
+            "size": "L",
+            "stock": 3,
+            "_id": "6a5a45fa2fdcd189bfef55d5"
+          }
+        ],
+        "mrp": 4300,
+        "price": 4200,
+        "images": [
+          {
+            "public_id": "products/qzdnbgzv2umkobcdou5q",
+            "url": "https://res.cloudinary.com/dpmliygpg/image/upload/v1784301049/products/qzdnbgzv2umkobcdou5q.jpg",
+            "_id": "6a5a45fa2fdcd189bfef55d6"
+          }
+        ],
+        "discount": 2.33,
+        "_id": "6a5a45fa2fdcd189bfef55d2"
+      }
+    ],
+    "createdAt": "2026-07-17T15:09:20.551Z",
+    "updatedAt": "2026-07-17T15:11:05.435Z",
+    "productCode": "PRD-259A4718",
+    "__v": 0,
+    "isVerified": true
+  },
+  {
+    "_id": "6a5a47222fdcd189bfef56b2",
+    "name": "Sage Blossom Floral Empire Maxi Dress",
+    "merchantId": "6a491850f0b1ac63ab6766e6",
+    "brandId": "6a54d0a12fdcd189bfeed3d4",
+    "categoryId": "6a4a33c63670824cac203616",
+    "subCategoryId": "6a4a33c63670824cac203618",
+    "gender": [
+      "WOMEN"
+    ],
+    "soldBy": "SUKI Design House",
+    "styleName": "Maxi dress",
+    "description": "Exude timeless elegance with this Sage Blossom Floral Empire Maxi Dress. Designed with a graceful empire waist, this full-length dress features a soft sage green flowing skirt paired with a delicate floral-printed bodice in pastel shades. The flattering V-neckline and full sleeves add a refined touch, making it perfect for festive gatherings, brunches, evening events, and special occasions. Crafted from a lightweight, flowy fabric, it offers effortless comfort with sophisticated style.",
+    "features": {},
+    "attributes": [
+      {
+        "attributeId": "6a4a4e8967beb5dbea07c10c",
+        "value": "full-sleeve",
+        "_id": "6a5a47222fdcd189bfef56b3"
+      },
+      {
+        "attributeId": "6a4a4e8a67beb5dbea07c15b",
+        "value": "v-neck",
+        "_id": "6a5a47222fdcd189bfef56b4"
+      },
+      {
+        "attributeId": "6a4a4e08ee9e6615f7e67246",
+        "value": "floral",
+        "_id": "6a5a47222fdcd189bfef56b5"
+      }
+    ],
+    "tags": [],
+    "collectionIds": [],
+    "isTriable": true,
+    "ratings": 0,
+    "numReviews": 0,
+    "isActive": true,
+    "isDeleted": false,
+    "matchingProducts": [],
+    "variants": [
+      {
+        "color": {
+          "name": "Mint",
+          "hex": "#98FF98"
+        },
+        "sizes": [
+          {
+            "size": "S",
+            "stock": 3,
+            "_id": "6a5a47502fdcd189bfef56fb"
+          },
+          {
+            "size": "M",
+            "stock": 3,
+            "_id": "6a5a47502fdcd189bfef56fc"
+          },
+          {
+            "size": "L",
+            "stock": 3,
+            "_id": "6a5a47502fdcd189bfef56fd"
+          }
+        ],
+        "mrp": 1800,
+        "price": 1699,
+        "images": [
+          {
+            "public_id": "products/zmr7igfsyxcfxzq7vscg",
+            "url": "https://res.cloudinary.com/dpmliygpg/image/upload/v1784301391/products/zmr7igfsyxcfxzq7vscg.jpg",
+            "_id": "6a5a47502fdcd189bfef56fe"
+          }
+        ],
+        "discount": 5.61,
+        "_id": "6a5a47502fdcd189bfef56fa"
+      }
+    ],
+    "createdAt": "2026-07-17T15:15:46.562Z",
+    "updatedAt": "2026-07-17T15:16:45.544Z",
+    "productCode": "PRD-8139791C",
+    "__v": 0,
+    "isVerified": true
+  },
+  {
+    "_id": "6a5a48062fdcd189bfef57d4",
+    "name": "Ivory Prism Panel Maxi Dress",
+    "merchantId": "6a491850f0b1ac63ab6766e6",
+    "brandId": "6a54d0a12fdcd189bfeed3d4",
+    "categoryId": "6a4a33c63670824cac203616",
+    "subCategoryId": "6a4a33c63670824cac203618",
+    "gender": [
+      "WOMEN"
+    ],
+    "soldBy": "SUKI Design House",
+    "styleName": "Maxi dress",
+    "description": "Make a graceful statement with this Ivory Prism Panel Maxi Dress. Designed with a clean, minimal silhouette, this full-length dress features a soft ivory bodice with elegant vertical pintucks and flowing pastel-colored panel inserts at the hem. The round neckline and full sleeves create a timeless, sophisticated look, while the lightweight fabric drapes beautifully with every step. Perfect for brunches, evening gatherings, festive occasions, and contemporary celebrations.",
+    "features": {},
+    "attributes": [
+      {
+        "attributeId": "6a4a4e8a67beb5dbea07c15b",
+        "value": "round-neck",
+        "_id": "6a5a48062fdcd189bfef57d5"
+      },
+      {
+        "attributeId": "6a4a4e8967beb5dbea07c10c",
+        "value": "full-sleeve",
+        "_id": "6a5a48062fdcd189bfef57d6"
+      },
+      {
+        "attributeId": "6a4a4e08ee9e6615f7e67246",
+        "value": "solid",
+        "_id": "6a5a48062fdcd189bfef57d7"
+      }
+    ],
+    "tags": [],
+    "collectionIds": [],
+    "isTriable": true,
+    "ratings": 0,
+    "numReviews": 0,
+    "isActive": true,
+    "isDeleted": false,
+    "matchingProducts": [],
+    "variants": [
+      {
+        "color": {
+          "name": "Ivory",
+          "hex": "#FFFFF0"
+        },
+        "sizes": [
+          {
+            "size": "S",
+            "stock": 3,
+            "_id": "6a5a48252fdcd189bfef5825"
+          },
+          {
+            "size": "M",
+            "stock": 3,
+            "_id": "6a5a48252fdcd189bfef5826"
+          },
+          {
+            "size": "L",
+            "stock": 3,
+            "_id": "6a5a48252fdcd189bfef5827"
+          }
+        ],
+        "mrp": 2000,
+        "price": 1800,
+        "images": [
+          {
+            "public_id": "products/wvi4llr6rrylhcu93f2s",
+            "url": "https://res.cloudinary.com/dpmliygpg/image/upload/v1784301604/products/wvi4llr6rrylhcu93f2s.jpg",
+            "_id": "6a5a48252fdcd189bfef5828"
+          }
+        ],
+        "discount": 10,
+        "_id": "6a5a48252fdcd189bfef5824"
+      }
+    ],
+    "createdAt": "2026-07-17T15:19:34.224Z",
+    "updatedAt": "2026-07-20T16:23:01.191Z",
+    "productCode": "PRD-0CA47255",
+    "__v": 0,
+    "isVerified": true
+  },
+  {
+    "_id": "6a5bf9ec2fdcd189bfef7093",
+    "name": "Girls White Textured Fringe Sweater Top",
+    "merchantId": "6a55077e2fdcd189bfeee3c1",
+    "brandId": "6a5bf9ec2fdcd189bfef7090",
+    "categoryId": "6a4a33c53670824cac2035ea",
+    "subCategoryId": "6a4a33c53670824cac2035f8",
+    "gender": [
+      "KIDS"
+    ],
+    "soldBy": "E_kid",
+    "styleName": "Snow Fluff",
+    "description": "A soft white textured sweater designed for girls, featuring an elegant fringe knit pattern and a comfortable regular fit. Made from a warm, lightweight fabric that is perfect for casual outings, family gatherings, and cooler weather. Pairs effortlessly with jeans, leggings, or skirts for a stylish everyday look.",
+    "features": {},
+    "attributes": [
+      {
+        "attributeId": "6a4a4e8a67beb5dbea07c15b",
+        "value": "round-neck",
+        "_id": "6a5bf9ec2fdcd189bfef7094"
+      },
+      {
+        "attributeId": "6a4a4e8967beb5dbea07c10c",
+        "value": "full-sleeve",
+        "_id": "6a5bf9ec2fdcd189bfef7095"
+      },
+      {
+        "attributeId": "6a4a4cec40e0d5976e810b94",
+        "value": "relaxed",
+        "_id": "6a5bf9ec2fdcd189bfef7096"
+      }
+    ],
+    "tags": [
+      "girls sweater",
+      "kids topwear",
+      "white sweater",
+      "girls winter top",
+      "textured sweater",
+      "fringe sweater",
+      "full sleeve top",
+      "girls casual wear",
+      "kids fashion",
+      "girls clothing",
+      "winter wear",
+      "knit top"
+    ],
+    "collectionIds": [],
+    "isTriable": true,
+    "ratings": 0,
+    "numReviews": 0,
+    "isActive": true,
+    "isDeleted": false,
+    "matchingProducts": [],
+    "variants": [
+      {
+        "color": {
+          "name": "Silver",
+          "hex": "#C0C0C0"
+        },
+        "sizes": [
+          {
+            "size": "S",
+            "stock": 1,
+            "_id": "6a5bfaad2fdcd189bfef70bc"
+          },
+          {
+            "size": "M",
+            "stock": 1,
+            "_id": "6a5bfaad2fdcd189bfef70bd"
+          },
+          {
+            "size": "L",
+            "stock": 1,
+            "_id": "6a5bfaad2fdcd189bfef70be"
+          }
+        ],
+        "mrp": 800,
+        "price": 500,
+        "images": [
+          {
+            "public_id": "products/lgwrxkaow0hvddlzrnrj",
+            "url": "https://res.cloudinary.com/dpmliygpg/image/upload/v1784412843/products/lgwrxkaow0hvddlzrnrj.jpg",
+            "_id": "6a5bfaad2fdcd189bfef70bf"
+          }
+        ],
+        "discount": 37.5,
+        "_id": "6a5bfaad2fdcd189bfef70bb"
+      }
+    ],
+    "createdAt": "2026-07-18T22:10:52.871Z",
+    "updatedAt": "2026-07-20T16:23:07.336Z",
+    "productCode": "PRD-DD6DCF7A",
+    "__v": 0,
+    "isVerified": true
+  },
+  {
+    "_id": "6a5bfd8d2fdcd189bfef71aa",
+    "name": "Girls Sky Blue Sleeveless Lace Hem Peplum Top",
+    "merchantId": "6a55077e2fdcd189bfeee3c1",
+    "brandId": "6a5bf9ec2fdcd189bfef7090",
+    "categoryId": "6a4a33c53670824cac2035ea",
+    "subCategoryId": "6a4a33c53670824cac2035f2",
+    "gender": [
+      "KIDS"
+    ],
+    "soldBy": "E_kid",
+    "styleName": "Sky Blossom",
+    "description": "A charming sky blue sleeveless peplum top designed for girls, featuring a soft woven bodice with a delicate lace-trimmed mesh hem. The lightweight fabric and relaxed silhouette offer all-day comfort, making it perfect for casual outings, celebrations, birthdays, and summer occasions. Easily pairs with leggings, jeans, shorts, or skirts for a stylish and elegant look.",
+    "features": {},
+    "attributes": [
+      {
+        "attributeId": "6a4a4e8a67beb5dbea07c15b",
+        "value": "boat-neck",
+        "_id": "6a5bfd8d2fdcd189bfef71ab"
+      },
+      {
+        "attributeId": "6a4a4e8967beb5dbea07c10c",
+        "value": "sleeveless",
+        "_id": "6a5bfd8d2fdcd189bfef71ac"
+      },
+      {
+        "attributeId": "6a4a4e08ee9e6615f7e67246",
+        "value": "self-design",
+        "_id": "6a5bfd8d2fdcd189bfef71ad"
+      },
+      {
+        "attributeId": "6a4a4cec40e0d5976e810b94",
+        "value": "relaxed",
+        "_id": "6a5bfd8d2fdcd189bfef71ae"
+      }
+    ],
+    "tags": [
+      "girls top",
+      "girls sleeveless top",
+      "blue peplum top",
+      "lace hem top",
+      "kids topwear",
+      "girls casual wear",
+      "summer top",
+      "girls fashion",
+      "kids clothing",
+      "blue tunic",
+      "girls party top",
+      "stylish kids top"
+    ],
+    "collectionIds": [],
+    "isTriable": true,
+    "ratings": 0,
+    "numReviews": 0,
+    "isActive": true,
+    "isDeleted": false,
+    "matchingProducts": [],
+    "variants": [
+      {
+        "color": {
+          "name": "Blue",
+          "hex": "#0000FF"
+        },
+        "sizes": [
+          {
+            "size": "S",
+            "stock": 2,
+            "_id": "6a5c02b72fdcd189bfef72d0"
+          },
+          {
+            "size": "M",
+            "stock": 3,
+            "_id": "6a5c02b72fdcd189bfef72d1"
+          },
+          {
+            "size": "L",
+            "stock": 1,
+            "_id": "6a5c02b72fdcd189bfef72d2"
+          }
+        ],
+        "mrp": 800,
+        "price": 500,
+        "images": [
+          {
+            "public_id": "products/oowfqfkgkmafwz5ty05h",
+            "url": "https://res.cloudinary.com/dpmliygpg/image/upload/v1784414902/products/oowfqfkgkmafwz5ty05h.jpg",
+            "_id": "6a5c02b72fdcd189bfef72d3"
+          }
+        ],
+        "discount": 37.5,
+        "_id": "6a5c02b72fdcd189bfef72cf"
+      }
+    ],
+    "createdAt": "2026-07-18T22:26:21.970Z",
+    "updatedAt": "2026-07-20T16:23:12.195Z",
+    "productCode": "PRD-33D83718",
+    "__v": 0,
+    "isVerified": true
+  },
+  {
+    "_id": "6a5c00422fdcd189bfef7266",
+    "name": "Girls Sky Blue Floral Embroidered Cotton Shirt",
+    "merchantId": "6a55077e2fdcd189bfeee3c1",
+    "brandId": "6a5bf9ec2fdcd189bfef7090",
+    "categoryId": "6a4a33c53670824cac2035ea",
+    "subCategoryId": "6a4a33c53670824cac2035f0",
+    "gender": [
+      "KIDS"
+    ],
+    "soldBy": "E_kid",
+    "styleName": "Blue Blossom",
+    "description": "A stylish sky blue cotton shirt for girls featuring elegant floral embroidery on the front. Designed with a classic shirt collar, full sleeves, and a regular fit, this versatile top is perfect for casual outings, family gatherings, and semi-formal occasions. The breathable cotton fabric ensures all-day comfort while the floral embroidery adds a premium touch",
+    "features": {},
+    "attributes": [
+      {
+        "attributeId": "6a4a518b6bde4b49a965ab7d",
+        "value": "button",
+        "_id": "6a5c00422fdcd189bfef7267"
+      },
+      {
+        "attributeId": "6a4a4e8b67beb5dbea07c197",
+        "value": "shirt-collar",
+        "_id": "6a5c00422fdcd189bfef7268"
+      },
+      {
+        "attributeId": "6a4a4e8967beb5dbea07c10c",
+        "value": "full-sleeve",
+        "_id": "6a5c00422fdcd189bfef7269"
+      },
+      {
+        "attributeId": "6a4a4e08ee9e6615f7e67246",
+        "value": "embroidered",
+        "_id": "6a5c00422fdcd189bfef726a"
+      },
+      {
+        "attributeId": "6a4a4cec40e0d5976e810b94",
+        "value": "relaxed",
+        "_id": "6a5c00422fdcd189bfef726b"
+      }
+    ],
+    "tags": [
+      "girls shirt",
+      "embroidered shirt",
+      "floral shirt",
+      "blue shirt",
+      "kids shirt",
+      "girls topwear",
+      "cotton shirt",
+      "full sleeve shirt",
+      "girls casual wear",
+      "embroidered top",
+      "kids fashion",
+      "party shirt"
+    ],
+    "collectionIds": [],
+    "isTriable": true,
+    "ratings": 0,
+    "numReviews": 0,
+    "isActive": false,
+    "isDeleted": false,
+    "matchingProducts": [],
+    "variants": [
+      {
+        "color": {
+          "name": "Blue",
+          "hex": "#0000FF"
+        },
+        "sizes": [
+          {
+            "size": "S",
+            "stock": 3,
+            "_id": "6a5c033e2fdcd189bfef7326"
+          },
+          {
+            "size": "M",
+            "stock": 3,
+            "_id": "6a5c033e2fdcd189bfef7327"
+          },
+          {
+            "size": "L",
+            "stock": 1,
+            "_id": "6a5c033e2fdcd189bfef7328"
+          }
+        ],
+        "mrp": 1000,
+        "price": 799,
+        "images": [
+          {
+            "public_id": "products/cvvxfvcz98vcy5p4gzfj",
+            "url": "https://res.cloudinary.com/dpmliygpg/image/upload/v1784415037/products/cvvxfvcz98vcy5p4gzfj.jpg",
+            "_id": "6a5c033e2fdcd189bfef7329"
+          }
+        ],
+        "discount": 20.1,
+        "_id": "6a5c033e2fdcd189bfef7325"
+      }
+    ],
+    "createdAt": "2026-07-18T22:37:54.431Z",
+    "updatedAt": "2026-07-18T22:50:38.231Z",
+    "productCode": "PRD-CDB9F9FD",
+    "__v": 0
+  },
+  {
+    "_id": "6a5f1e7400916329dd05eac2",
+    "name": "Oversized Cotton Tshirt",
+    "merchantId": "6a52c077f5d225d81a327965",
+    "source": "warehouse",
+    "warehouseId": "6a5e4d630906bf3164ab4db5",
+    "commissionRate": null,
+    "brandId": "6a52ce12f5d225d81a32851e",
+    "categoryId": "6a4a33c53670824cac2035ea",
+    "subCategoryId": "6a4a33c53670824cac2035ec",
+    "gender": [
+      "MEN",
+      "WOMEN"
+    ],
+    "styleName": "",
+    "description": "jsadfs",
+    "features": {},
+    "attributes": [
+      {
+        "attributeId": "6a4a4e8a67beb5dbea07c15b",
+        "value": "round-neck",
+        "_id": "6a5f1e7400916329dd05eac3"
+      },
+      {
+        "attributeId": "6a4a4e8967beb5dbea07c10c",
+        "value": "half-sleeve",
+        "_id": "6a5f1e7400916329dd05eac4"
+      },
+      {
+        "attributeId": "6a4a4cec40e0d5976e810b94",
+        "value": "regular",
+        "_id": "6a5f1e7400916329dd05eac5"
+      },
+      {
+        "attributeId": "6a4a4e08ee9e6615f7e67246",
+        "value": "solid",
+        "_id": "6a5f1e7400916329dd05eac6"
+      }
+    ],
+    "tags": [],
+    "collectionIds": [],
+    "variants": [
+      {
+        "color": {
+          "name": "White",
+          "hex": "#FFFFFF"
+        },
+        "sizes": [
+          {
+            "size": "S",
+            "stock": 44,
+            "reservedStock": 0,
+            "_id": "6a5f1e7400916329dd05eac8"
+          },
+          {
+            "size": "M",
+            "stock": 44,
+            "reservedStock": 0,
+            "_id": "6a5f1e7400916329dd05eac9"
+          },
+          {
+            "size": "L",
+            "stock": 43,
+            "reservedStock": 0,
+            "_id": "6a5f1e7400916329dd05eaca"
+          }
+        ],
+        "mrp": 500,
+        "price": 400,
+        "images": [
+          {
+            "public_id": "warehouse-products/wqkj1oocdv2jdz7j3wtq",
+            "url": "https://res.cloudinary.com/dpmliygpg/image/upload/v1784618612/warehouse-products/wqkj1oocdv2jdz7j3wtq.jpg",
+            "_id": "6a5f1e7400916329dd05eacb"
+          }
+        ],
+        "discount": 20,
+        "_id": "6a5f1e7400916329dd05eac7"
+      }
+    ],
+    "isTriable": true,
+    "ratings": 0,
+    "numReviews": 0,
+    "isActive": true,
+    "isVerified": true,
+    "isDeleted": false,
+    "matchingProducts": [],
+    "createdAt": "2026-07-21T07:23:32.744Z",
+    "updatedAt": "2026-07-21T07:23:32.744Z",
+    "productCode": "PRD-11DFED8F",
+    "__v": 0
+  },
+  {
+    "_id": "6a5f5f2576055ea046fd72c3",
+    "name": "Test Cotton Blend Tshirt",
+    "merchantId": "6a52c077f5d225d81a327965",
+    "source": "warehouse",
+    "warehouseId": "6a5e4d630906bf3164ab4db5",
+    "commissionRate": null,
+    "brandId": "6a52ce12f5d225d81a32851e",
+    "categoryId": "6a4a33c53670824cac2035ea",
+    "subCategoryId": "6a4a33c53670824cac2035ec",
+    "gender": [
+      "MEN",
+      "WOMEN"
+    ],
+    "styleName": "",
+    "description": "asdasd",
+    "features": {},
+    "attributes": [
+      {
+        "attributeId": "6a4a4e8a67beb5dbea07c15b",
+        "value": "turtle-neck",
+        "_id": "6a5f5f2576055ea046fd72c4"
+      },
+      {
+        "attributeId": "6a4a4cec40e0d5976e810b94",
+        "value": "straight",
+        "_id": "6a5f5f2576055ea046fd72c5"
+      },
+      {
+        "attributeId": "6a4a4e08ee9e6615f7e67246",
+        "value": "embroidered",
+        "_id": "6a5f5f2576055ea046fd72c6"
+      }
+    ],
+    "tags": [],
+    "collectionIds": [],
+    "variants": [
+      {
+        "color": {
+          "name": "White",
+          "hex": "#FFFFFF"
+        },
+        "sizes": [
+          {
+            "size": "S",
+            "stock": 346,
+            "reservedStock": 0,
+            "_id": "6a5f5f2576055ea046fd72c8"
+          },
+          {
+            "size": "M",
+            "stock": 34,
+            "reservedStock": 0,
+            "_id": "6a5f5f2576055ea046fd72c9"
+          },
+          {
+            "size": "L",
+            "stock": 34,
+            "reservedStock": 0,
+            "_id": "6a5f5f2576055ea046fd72ca"
+          }
+        ],
+        "mrp": 500,
+        "price": 405,
+        "images": [
+          {
+            "public_id": "warehouse-products/mwmu6y5uwcweetczmugp",
+            "url": "https://res.cloudinary.com/dpmliygpg/image/upload/v1784635173/warehouse-products/mwmu6y5uwcweetczmugp.jpg",
+            "_id": "6a5f5f2576055ea046fd72cb"
+          }
+        ],
+        "discount": 19,
+        "_id": "6a5f5f2576055ea046fd72c7"
+      }
+    ],
+    "isTriable": true,
+    "ratings": 0,
+    "numReviews": 0,
+    "isActive": true,
+    "isVerified": true,
+    "isDeleted": false,
+    "matchingProducts": [],
+    "createdAt": "2026-07-21T11:59:33.228Z",
+    "updatedAt": "2026-07-21T12:16:15.854Z",
+    "productCode": "PRD-A22CFCF2",
+    "__v": 0
+  }
+]

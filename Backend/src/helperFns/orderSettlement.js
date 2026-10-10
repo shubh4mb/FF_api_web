@@ -27,6 +27,7 @@ export const settleOrder = async (order, providedSession = null) => {
     }
 
     try {
+        let totalGrossSales = 0;
         let totalCommission = 0;
         let totalMerchantPayout = 0;
         let adminDiscount = 0;
@@ -38,23 +39,23 @@ export const settleOrder = async (order, providedSession = null) => {
         );
 
         for (const item of acceptedItems) {
-            let product = await ProductFlat.findById(item.productId).select("categoryId subCategoryId").session(session);
+            let product = await ProductFlat.findById(item.productId || item.variantId).select("categoryId subCategoryId").session(session);
 
-            let commissionPercentage = 0;
+            let commissionPercentage = 4; // Default launch baseline is 4%
             if (product?.subCategoryId) {
                 const category = await Category.findById(product.subCategoryId).select("commissionPercentage").session(session);
-                if (category && category.commissionPercentage) {
+                if (category && typeof category.commissionPercentage === "number" && category.commissionPercentage > 0) {
                     commissionPercentage = category.commissionPercentage;
                 }
-            }
-            if (commissionPercentage === 0 && product?.categoryId) {
+            } else if (product?.categoryId) {
                 const category = await Category.findById(product.categoryId).select("commissionPercentage").session(session);
-                if (category && category.commissionPercentage) {
+                if (category && typeof category.commissionPercentage === "number" && category.commissionPercentage > 0) {
                     commissionPercentage = category.commissionPercentage;
                 }
             }
 
             const itemTotal = item.price * (item.quantity || 1);
+            totalGrossSales += itemTotal;
             const commissionAmount = (itemTotal * commissionPercentage) / 100;
             const merchantAmount = itemTotal - commissionAmount;
 
@@ -126,27 +127,51 @@ export const settleOrder = async (order, providedSession = null) => {
         // 4. Final Payout Calculations
         const finalMerchantPayout = Math.max(0, totalMerchantPayout - merchantDiscount);
         const finalAdminPayout = totalCommission - adminDiscount;
+        const isWarehouse = Boolean(order.warehouseId || order.fulfillmentType);
+
+        // Store settlement breakdown directly on order document for immutable financial auditing
+        order.commissionRate = 4;
+        order.commissionAmount = totalCommission;
+        order.merchantPayout = finalMerchantPayout;
+        order.settlementBreakdown = {
+            grossAmount: totalGrossSales,
+            commissionRate: 4,
+            commissionAmount: totalCommission,
+            merchantPayout: finalMerchantPayout,
+            merchantDiscount: merchantDiscount,
+            adminDiscount: adminDiscount,
+            deliveryFee: deliveryFee,
+            returnFee: returnFee,
+            riderPayout: riderPayout,
+            settledAt: new Date(),
+        };
 
         // 5. Execute Transactions
 
         // ── Merchant: goes into Weekly Payout ledger ──
-        if (finalMerchantPayout !== 0 && order.merchantId) {
+        const effectiveMerchantId = order.merchantId || order.sourceMerchantId;
+        if (finalMerchantPayout !== 0 && effectiveMerchantId) {
             await addToWeeklyPayout({
                 ownerType: "merchant",
-                ownerId: order.merchantId,
+                ownerId: effectiveMerchantId,
                 orderId: order._id,
+                orderModel: isWarehouse ? "WarehouseOrder" : "Order",
                 amount: Math.abs(finalMerchantPayout),
+                grossAmount: totalGrossSales,
+                commissionRate: 4,
+                commissionAmount: totalCommission,
+                merchantDiscount: merchantDiscount,
                 type: finalMerchantPayout > 0 ? "credit" : "debit",
                 description: finalMerchantPayout > 0
-                    ? `Payout for order ${order._id} (${acceptedItems.length} item${acceptedItems.length === 1 ? '' : 's'} purchased)`
-                    : `Discount cost for order ${order._id}`,
+                    ? `Payout for order #${order._id.toString().slice(-6).toUpperCase()} (${acceptedItems.length} item${acceptedItems.length === 1 ? '' : 's'} purchased)`
+                    : `Discount cost for order #${order._id.toString().slice(-6).toUpperCase()}`,
                 session,
             });
 
             // Update merchant's pending earnings balance
             const Merchant = (await import("../models/merchant.model.js")).default;
             await Merchant.findByIdAndUpdate(
-                order.merchantId,
+                effectiveMerchantId,
                 { $inc: { 'earnings.pendingBalance': finalMerchantPayout } },
                 { session }
             );
@@ -219,7 +244,7 @@ export const settleOrder = async (order, providedSession = null) => {
             });
         }
 
-        // ── Auto-record Inflow in Unified Transaction Ledger ──
+        // ── Auto-record Inflow in Unified Transaction Ledger with full split breakdown ──
         try {
             const { recordTransaction } = await import("./transactionHelper.js");
             const paymentAmount = order.finalBilling?.totalPayable ?? order.totalAmount ?? 0;
@@ -239,7 +264,22 @@ export const settleOrder = async (order, providedSession = null) => {
                         phone: order.deliveryLocation?.phone || "",
                     },
                     orderId: order._id,
-                    notes: `Customer payment settled for order #${order._id.toString().slice(-6).toUpperCase()}`,
+                    orderModel: isWarehouse ? "WarehouseOrder" : "Order",
+                    warehouseOrderId: isWarehouse ? order._id : null,
+                    split: {
+                        grossAmount: totalGrossSales,
+                        commissionRate: 4,
+                        commissionAmount: totalCommission,
+                        merchantAmount: finalMerchantPayout,
+                        merchantDiscount: merchantDiscount,
+                        adminDiscount: adminDiscount,
+                        deliveryFee: deliveryFee,
+                        returnFee: returnFee,
+                        riderTip: tipAmount,
+                        waitingCharge: waitingTimeCharge,
+                        taxes: (order.finalBilling?.gst || 0) + (order.finalBilling?.serviceGST || 0),
+                    },
+                    notes: `Customer payment settled for ${isWarehouse ? 'Warehouse ' : ''}order #${order._id.toString().slice(-6).toUpperCase()} (Gross: ₹${totalGrossSales}, Comm 4%: ₹${totalCommission}, Net Merchant: ₹${finalMerchantPayout})`,
                 }, session);
             }
 
@@ -263,7 +303,9 @@ export const settleOrder = async (order, providedSession = null) => {
                         phone: order.deliveryLocation?.phone || "",
                     },
                     orderId: order._id,
-                    notes: `Delivery fee recovery collected (${order.deliveryFeeRecovery.status}) for order #${order._id.toString().slice(-6).toUpperCase()}`,
+                    orderModel: isWarehouse ? "WarehouseOrder" : "Order",
+                    warehouseOrderId: isWarehouse ? order._id : null,
+                    notes: `Delivery fee recovery collected (${order.deliveryFeeRecovery.status}) for ${isWarehouse ? 'Warehouse ' : ''}order #${order._id.toString().slice(-6).toUpperCase()}`,
                 }, session);
             }
         } catch (ledgerErr) {

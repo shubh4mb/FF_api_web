@@ -1,0 +1,713 @@
+[
+  {
+    "_id": "6a491850f0b1ac63ab6766e6",
+    "isOnline": true,
+    "rejectionReason": "",
+    "email": "sukidesignhouse@gmail.com",
+    "category": [],
+    "genderCategory": [
+      "Men",
+      "Women",
+      "Kids"
+    ],
+    "address": {
+      "street": "Pipeline road",
+      "city": "Ernakulam",
+      "state": "Kerala",
+      "postalCode": "682039",
+      "landmark": "Kennadimukku",
+      "note": "SUKI Design House , 1st floor .",
+      "latitude": 10.0196536,
+      "longitude": 76.3186536,
+      "location": {
+        "type": "Point",
+        "coordinates": [
+          76.3186536,
+          10.0196536
+        ]
+      }
+    },
+    "earnings": {
+      "pendingBalance": 0,
+      "paidBalance": 0
+    },
+    "bankDetails": {
+      "accountHolderName": "Anjali",
+      "accountNumber": "1111",
+      "ifscCode": "Gg1",
+      "bankName": "Dfsc",
+      "upiId": "anjali@upi",
+      "isBankVerified": false
+    },
+    "kyc": {
+      "pan": {
+        "verified": true,
+        "image": {
+          "url": "https://res.cloudinary.com/dpmliygpg/image/upload/v1783176082/merchant/6a491850f0b1ac63ab6766e6/kyc/pan/rjuodgsdfycaohmugupa.jpg",
+          "public_id": "merchant/6a491850f0b1ac63ab6766e6/kyc/pan/rjuodgsdfycaohmugupa"
+        },
+        "number": "BOKPA1352L"
+      },
+      "gst": {
+        "verified": false
+      },
+      "businessProof": {
+        "verified": false
+      },
+      "bankProof": {
+        "verified": false
+      },
+      "isKycVerified": false
+    },
+    "enableCourierDelivery": true,
+    "acceptsReturns": true,
+    "isVerified": true,
+    "isActive": true,
+    "status": "active",
+    "isRegistrationFeePaid": true,
+    "razorpayOrderId": "order_T9Stog8A0rpzYi",
+    "operatingHours": {
+      "daysOpen": [
+        "Monday",
+        "Tuesday",
+        "Wednesday",
+        "Thursday",
+        "Friday",
+        "Saturday",
+        "Sunday"
+      ]
+    },
+    "rating": 0,
+    "reviewCount": 0,
+    "stats": {
+      "totalProducts": 0,
+      "totalOrders": 0,
+      "totalReturns": 0
+    },
+    "isZoneLive": true,
+    "expoPushTokens": [],
+    "createdAt": "2026-07-04T14:27:28.280Z",
+    "password": "$2b$10$b06N.aebgAPkxAtPcL1/iu/M.tt1Coyv0u/AWcqFlooQ6HevSWRdK",
+    "phoneNumber": "8848741790",
+    "updatedAt": "2026-07-17T15:12:12.921Z",
+    "__v": 0,
+    "shopName": "SUKI Design House",
+    "backgroundImage": {
+      "public_id": "merchant_backgrounds/qig0m47oerz1gi3sfsu9",
+      "url": "https://res.cloudinary.com/dpmliygpg/image/upload/v1783175843/merchant_backgrounds/qig0m47oerz1gi3sfsu9.jpg"
+    },
+    "logo": {
+      "public_id": "merchant_logos/ybtyyl8r23wjdmwxxyji",
+      "url": "https://res.cloudinary.com/dpmliygpg/image/upload/v1783175842/merchant_logos/ybtyyl8r23wjdmwxxyji.jpg"
+    },
+    "managerEmail": "",
+    "managerName": "Anjali",
+    "managerPhoneNumber": "8848741790",
+    "ownerName": "Anjali",
+    "pickupContactNumber": "8848741790",
+    "shipsWithinHours": 24,
+    "shopDescription": "",
+    "storeMobileNumber": "8848741790",
+    "zoneId": "6a4905dd98dde72e554dddc7",
+    "zoneName": "Edapally-Kakkanad-Vytilla"
+  },
+  {
+    "_id": "6a52c077f5d225d81a327965",
+    "isOnline": true,
+    "rejectionReason": "Store suspended by admin.",
+    "email": "shubhamhome@gmail.com",
+    "category": [],
+    "genderCategory": [
+      "Men",
+      "Women",
+      "Kids",
+      "Boys",
+      "Girls"
+    ],
+    "address": {
+      "street": "Elamakkara",
+      "city": "Ernakulam",
+      "state": "Kerala",
+      "postalCode": "682026",
+      "landmark": "Bavy smakara road",
+      "note": "ss",
+      "latitude": 10.007004,
+      "longitude": 76.289097,
+      "location": {
+        "type": "Point",
+        "coordinates": [
+          76.289097,
+          10.007004
+        ]
+      }
+    },
+    "earnings": {
+      "pendingBalance": 4.8,
+      "paidBalance": 0
+    },
+    "bankDetails": {
+      "accountHolderName": "Shubham",
+      "accountNumber": "123123123123",
+      "ifscCode": "FD123123",
+      "bankName": "Federal",
+      "upiId": "shubham@okaxis",
+      "isBankVerified": true
+    },
+    "kyc": {
+      "pan": {
+        "verified": true,
+        "image": {
+          "url": "https://res.cloudinary.com/dpmliygpg/image/upload/v1786883694/merchant/6a52c077f5d225d81a327965/kyc/pan/mc8or2cmocnacheo5jwq.jpg",
+          "public_id": "merchant/6a52c077f5d225d81a327965/kyc/pan/mc8or2cmocnacheo5jwq"
+        },
+        "number": "123123123"
+      },
+      "gst": {
+        "verified": false
+      },
+      "businessProof": {
+        "verified": false
+      },
+      "bankProof": {
+        "verified": false
+      },
+      "isKycVerified": false
+    },
+    "enableCourierDelivery": true,
+    "acceptsReturns": true,
+    "isVerified": true,
+    "isActive": false,
+    "status": "suspended",
+    "isRegistrationFeePaid": true,
+    "razorpayOrderId": null,
+    "operatingHours": {
+      "daysOpen": [
+        "Monday",
+        "Wednesday",
+        "Tuesday",
+        "Thursday",
+        "Friday",
+        "Saturday",
+        "Sunday"
+      ]
+    },
+    "rating": 5,
+    "reviewCount": 6,
+    "stats": {
+      "totalProducts": 0,
+      "totalOrders": 0,
+      "totalReturns": 0
+    },
+    "isZoneLive": true,
+    "expoPushTokens": [
+      "ExponentPushToken[zvp17fGTntz-fpeTnd3Vw1]",
+      "ExponentPushToken[5a3rOLG-YQZG-cVf8z506w]",
+      "ExponentPushToken[6CazWMCCHeK4k5HNdspHfx]"
+    ],
+    "createdAt": "2026-07-11T22:15:19.672Z",
+    "password": "$2b$10$V4flbmqxuBVYwVPonZ3Gme1CqK5tfygBJtX6FJPFMNJO2FIdQAtBy",
+    "phoneNumber": "8383823813",
+    "updatedAt": "2026-10-09T22:58:46.692Z",
+    "__v": 3,
+    "shopName": "SB Fashion",
+    "backgroundImage": {
+      "public_id": "merchant_backgrounds/ojnhokk6zcry18yls20s",
+      "url": "https://res.cloudinary.com/dpmliygpg/image/upload/v1783809099/merchant_backgrounds/ojnhokk6zcry18yls20s.jpg"
+    },
+    "logo": {
+      "public_id": "merchant_logos/nv0q8t7vka20new8zpow",
+      "url": "https://res.cloudinary.com/dpmliygpg/image/upload/v1783809097/merchant_logos/nv0q8t7vka20new8zpow.jpg"
+    },
+    "managerEmail": "",
+    "managerName": "Shubham",
+    "managerPhoneNumber": "8383823813",
+    "ownerName": "Shubham Biswas",
+    "pickupContactNumber": "8383823813",
+    "shipsWithinHours": 24,
+    "shopDescription": "",
+    "storeMobileNumber": "8383823813",
+    "zoneId": "6a4398c4567d471ffedbad91",
+    "zoneName": "Ernakulam North",
+    "accountType": "merchant",
+    "warehouseStatus": "approved",
+    "assignedWarehouseIds": [
+      "6a5e4d630906bf3164ab4db5"
+    ],
+    "fulfillmentType": "store",
+    "damageDisputeCount": 0,
+    "rejectedDisputeCount": 0,
+    "isStoreActive": false,
+    "warehouseAssignments": [
+      {
+        "warehouseId": "6a5e4d630906bf3164ab4db5",
+        "isActive": false,
+        "deactivatedAt": "2026-10-09T15:03:28.910Z",
+        "reason": ""
+      }
+    ],
+    "blockedReason": "Store suspended by admin."
+  },
+  {
+    "_id": "6a55077e2fdcd189bfeee3c1",
+    "isOnline": false,
+    "rejectionReason": "",
+    "email": "ekidkid13@gmail.com",
+    "category": [],
+    "genderCategory": [
+      "Kids"
+    ],
+    "address": {
+      "street": "Banerji Road",
+      "city": "Ernakulam",
+      "state": "Kerala",
+      "postalCode": "682017",
+      "landmark": "Metro piller 559",
+      "note": "E_kid ground floor",
+      "latitude": 9.9994085,
+      "longitude": 76.2975109,
+      "location": {
+        "type": "Point",
+        "coordinates": [
+          76.2975109,
+          9.9994085
+        ]
+      }
+    },
+    "earnings": {
+      "pendingBalance": 0,
+      "paidBalance": 0
+    },
+    "bankDetails": {
+      "isBankVerified": false
+    },
+    "kyc": {
+      "pan": {
+        "verified": false
+      },
+      "gst": {
+        "verified": false
+      },
+      "businessProof": {
+        "verified": false
+      },
+      "bankProof": {
+        "verified": false
+      },
+      "isKycVerified": false
+    },
+    "enableCourierDelivery": true,
+    "acceptsReturns": true,
+    "isVerified": true,
+    "isActive": true,
+    "status": "active",
+    "isRegistrationFeePaid": true,
+    "razorpayOrderId": null,
+    "operatingHours": {
+      "daysOpen": [
+        "Monday",
+        "Tuesday",
+        "Wednesday",
+        "Thursday",
+        "Friday",
+        "Saturday",
+        "Sunday"
+      ]
+    },
+    "rating": 0,
+    "reviewCount": 0,
+    "stats": {
+      "totalProducts": 0,
+      "totalOrders": 0,
+      "totalReturns": 0
+    },
+    "isZoneLive": true,
+    "expoPushTokens": [],
+    "createdAt": "2026-07-13T15:42:54.348Z",
+    "password": "$2b$10$k6JrYd7imtf7Q5frmlEaaucN4PZ5iJtYWF/hs4E6Qbk/kun2hUHqW",
+    "phoneNumber": "7760859499",
+    "updatedAt": "2026-07-15T19:32:41.393Z",
+    "__v": 0,
+    "shopName": "E_kid",
+    "backgroundImage": {
+      "public_id": "merchant_backgrounds/yau5jpbtirnnxotkcax5",
+      "url": "https://res.cloudinary.com/dpmliygpg/image/upload/v1783957768/merchant_backgrounds/yau5jpbtirnnxotkcax5.jpg"
+    },
+    "logo": {
+      "public_id": "merchant_logos/mqs7erh7kvscz37lbalw",
+      "url": "https://res.cloudinary.com/dpmliygpg/image/upload/v1783957765/merchant_logos/mqs7erh7kvscz37lbalw.jpg"
+    },
+    "managerEmail": "",
+    "managerName": "Ilyaz",
+    "managerPhoneNumber": "8086028085",
+    "ownerName": "Nizam",
+    "pickupContactNumber": "7760859499",
+    "shipsWithinHours": 24,
+    "shopDescription": "",
+    "storeMobileNumber": "7760859499",
+    "zoneId": "6a4398c4567d471ffedbad91",
+    "zoneName": "Ernakulam North"
+  },
+  {
+    "_id": "6a5b52df2fdcd189bfef67c1",
+    "isOnline": true,
+    "rejectionReason": "",
+    "email": "dorisfashion07@gmail.com",
+    "category": [],
+    "genderCategory": [
+      "Men",
+      "Women"
+    ],
+    "address": {
+      "street": "Banerji Road",
+      "city": "Ernakulam",
+      "state": "Kerala",
+      "postalCode": "682017",
+      "landmark": "",
+      "note": "",
+      "latitude": 9.9992111,
+      "longitude": 76.2973564,
+      "location": {
+        "type": "Point",
+        "coordinates": [
+          76.2973564,
+          9.9992111
+        ]
+      }
+    },
+    "earnings": {
+      "pendingBalance": 0,
+      "paidBalance": 0
+    },
+    "bankDetails": {
+      "isBankVerified": false
+    },
+    "kyc": {
+      "pan": {
+        "verified": false
+      },
+      "gst": {
+        "verified": false
+      },
+      "businessProof": {
+        "verified": false
+      },
+      "bankProof": {
+        "verified": false
+      },
+      "isKycVerified": false
+    },
+    "enableCourierDelivery": true,
+    "acceptsReturns": true,
+    "isVerified": true,
+    "isActive": true,
+    "status": "active",
+    "isRegistrationFeePaid": false,
+    "razorpayOrderId": null,
+    "operatingHours": {
+      "daysOpen": [
+        "Monday",
+        "Tuesday",
+        "Wednesday",
+        "Thursday",
+        "Friday",
+        "Saturday",
+        "Sunday"
+      ]
+    },
+    "rating": 0,
+    "reviewCount": 0,
+    "stats": {
+      "totalProducts": 0,
+      "totalOrders": 0,
+      "totalReturns": 0
+    },
+    "isZoneLive": true,
+    "expoPushTokens": [],
+    "createdAt": "2026-07-18T10:18:07.069Z",
+    "password": "$2b$10$Nuqtyh.5VriIAOoFEVSfa.mZCxAUYpJzSIvPoy9/P.BVomXOB7d9S",
+    "phoneNumber": "9656614919",
+    "updatedAt": "2026-09-29T13:19:18.598Z",
+    "__v": 1,
+    "shopName": "Doris",
+    "backgroundImage": {
+      "public_id": "merchant_backgrounds/rb3oqktfhvdgxiqdj0h6",
+      "url": "https://res.cloudinary.com/dpmliygpg/image/upload/v1790687878/merchant_backgrounds/rb3oqktfhvdgxiqdj0h6.jpg"
+    },
+    "logo": {
+      "public_id": "merchant_logos/b98m7s2rqqon9mpy0dt1",
+      "url": "https://res.cloudinary.com/dpmliygpg/image/upload/v1790687402/merchant_logos/b98m7s2rqqon9mpy0dt1.jpg"
+    },
+    "managerEmail": "",
+    "managerName": "Zaid",
+    "managerPhoneNumber": "9567226996",
+    "ownerName": "Ali",
+    "pickupContactNumber": "7558020300",
+    "shipsWithinHours": 24,
+    "shopDescription": "",
+    "storeMobileNumber": "7558020300",
+    "zoneId": "6a4398c4567d471ffedbad91",
+    "zoneName": "Ernakulam North",
+    "accountType": "merchant",
+    "assignedWarehouseIds": [],
+    "damageDisputeCount": 0,
+    "fulfillmentType": "store",
+    "rejectedDisputeCount": 0,
+    "warehouseStatus": "none"
+  },
+  {
+    "_id": "6a5e4ffd0906bf3164ab4df9",
+    "shopName": "Flashfits Kaloor",
+    "isOnline": false,
+    "phoneNumber": "08383823813",
+    "rejectionReason": "",
+    "ownerName": "Shubham Biswas",
+    "email": "shubhamwarehouse@gmail.com",
+    "password": "$2b$10$fNSOy6H36AsNCR/B8P1N8uDZfjZWacKM0.ibTN8MuyA44RZh2Lvqa",
+    "category": [],
+    "genderCategory": [],
+    "zoneId": "6a4398c4567d471ffedbad91",
+    "address": {
+      "location": {
+        "type": "Point"
+      }
+    },
+    "earnings": {
+      "pendingBalance": 0,
+      "paidBalance": 0
+    },
+    "bankDetails": {
+      "isBankVerified": false
+    },
+    "kyc": {
+      "pan": {
+        "verified": false
+      },
+      "gst": {
+        "verified": false
+      },
+      "businessProof": {
+        "verified": false
+      },
+      "bankProof": {
+        "verified": false
+      },
+      "isKycVerified": false
+    },
+    "enableCourierDelivery": false,
+    "acceptsReturns": false,
+    "isVerified": true,
+    "isActive": true,
+    "status": "active",
+    "isRegistrationFeePaid": true,
+    "razorpayOrderId": null,
+    "operatingHours": {
+      "daysOpen": []
+    },
+    "rating": 0,
+    "reviewCount": 0,
+    "stats": {
+      "totalProducts": 0,
+      "totalOrders": 0,
+      "totalReturns": 0
+    },
+    "isZoneLive": false,
+    "accountType": "warehouse",
+    "warehouseId": "6a5e4d630906bf3164ab4db5",
+    "expoPushTokens": [],
+    "createdAt": "2026-07-20T16:42:37.720Z",
+    "updatedAt": "2026-07-20T16:42:37.720Z",
+    "__v": 0
+  },
+  {
+    "_id": "6aa17e8fdbaf8b6cf8cf75a8",
+    "isOnline": false,
+    "rejectionReason": "",
+    "email": "calsioclub@gmail.com",
+    "category": [],
+    "genderCategory": [
+      "Men",
+      "Women"
+    ],
+    "address": {
+      "street": "Elamakkara",
+      "city": "Ernakulam",
+      "state": "Kerala",
+      "postalCode": "682026",
+      "landmark": "Baby Smaraka Road , Opposite Dr. John House",
+      "note": "72/1533 , Flashfits Warehouse",
+      "latitude": 10.007082,
+      "longitude": 76.28924800000001,
+      "location": {
+        "type": "Point",
+        "coordinates": [
+          76.28924800000001,
+          10.007082
+        ]
+      }
+    },
+    "earnings": {
+      "pendingBalance": 0,
+      "paidBalance": 0
+    },
+    "bankDetails": {
+      "isBankVerified": false
+    },
+    "kyc": {
+      "pan": {
+        "verified": false
+      },
+      "gst": {
+        "verified": false
+      },
+      "businessProof": {
+        "verified": false
+      },
+      "bankProof": {
+        "verified": false
+      },
+      "isKycVerified": false
+    },
+    "enableCourierDelivery": true,
+    "acceptsReturns": true,
+    "isVerified": true,
+    "isActive": true,
+    "status": "active",
+    "isRegistrationFeePaid": false,
+    "razorpayOrderId": null,
+    "operatingHours": {
+      "daysOpen": [
+        "Monday",
+        "Tuesday",
+        "Wednesday",
+        "Thursday",
+        "Friday",
+        "Saturday",
+        "Sunday"
+      ]
+    },
+    "rating": 0,
+    "reviewCount": 0,
+    "stats": {
+      "totalProducts": 0,
+      "totalOrders": 0,
+      "totalReturns": 0
+    },
+    "isZoneLive": true,
+    "accountType": "merchant",
+    "warehouseId": null,
+    "warehouseStatus": "approved",
+    "assignedWarehouseIds": [
+      "6a5e4d630906bf3164ab4db5"
+    ],
+    "expoPushTokens": [],
+    "createdAt": "2026-09-09T15:43:11.890Z",
+    "password": "$2b$10$lx4xTrD7XIsscb5/B7FQ0OaZm3W4SVszeMHn.sT4M5kqX2kSGBJRW",
+    "phoneNumber": "8383823813",
+    "updatedAt": "2026-09-19T22:03:51.276Z",
+    "__v": 0,
+    "shopName": "Calsio Club",
+    "backgroundImage": {
+      "public_id": "merchant_backgrounds/s5g2dwxjifjzvgqn9nwn",
+      "url": "https://res.cloudinary.com/dpmliygpg/image/upload/v1788969397/merchant_backgrounds/s5g2dwxjifjzvgqn9nwn.jpg"
+    },
+    "logo": {
+      "public_id": "merchant_logos/ocmbdle8bizs7rbh5fx5",
+      "url": "https://res.cloudinary.com/dpmliygpg/image/upload/v1788969395/merchant_logos/ocmbdle8bizs7rbh5fx5.jpg"
+    },
+    "managerEmail": "",
+    "managerName": "Shubham",
+    "managerPhoneNumber": "83838823813",
+    "ownerName": "Minthang",
+    "pickupContactNumber": "8383823813",
+    "shipsWithinHours": 24,
+    "shopDescription": "",
+    "storeMobileNumber": "8383823813",
+    "zoneId": "6a4398c4567d471ffedbad91",
+    "zoneName": "Ernakulam North",
+    "fulfillmentType": "warehouse"
+  },
+  {
+    "_id": "6ac3c2fb8b4f200d945d7912",
+    "isOnline": true,
+    "rejectionReason": "",
+    "email": "dorisclothing2@gmail.com",
+    "category": [],
+    "genderCategory": [
+      "Women"
+    ],
+    "address": "{\"street\":\"Banerji Road\",\"city\":\"Ernakulam\",\"state\":\"Kerala\",\"postalCode\":\"682017\",\"landmark\":\"Opposite Metro pillar 559\",\"note\":\"Doris Women\",\"latitude\":9.999176629270963,\"longitude\":76.29720213424828,\"location\":{\"type\":\"Point\",\"coordinates\":[76.29720213424828,9.999176629270963]}}",
+    "earnings": {
+      "pendingBalance": 0,
+      "paidBalance": 0
+    },
+    "bankDetails": {
+      "isBankVerified": false
+    },
+    "kyc": {
+      "pan": {
+        "verified": false
+      },
+      "gst": {
+        "verified": false
+      },
+      "businessProof": {
+        "verified": false
+      },
+      "bankProof": {
+        "verified": false
+      },
+      "isKycVerified": false
+    },
+    "enableCourierDelivery": true,
+    "acceptsReturns": true,
+    "isVerified": true,
+    "isActive": true,
+    "status": "active",
+    "blockedReason": null,
+    "blockedAt": null,
+    "damageDisputeCount": 0,
+    "rejectedDisputeCount": 0,
+    "isRegistrationFeePaid": false,
+    "razorpayOrderId": null,
+    "operatingHours": "{\"openTime\":\"09:00\",\"closeTime\":\"21:00\",\"daysOpen\":[\"Monday\",\"Tuesday\",\"Wednesday\",\"Friday\",\"Thursday\",\"Saturday\",\"Sunday\"]}",
+    "rating": 0,
+    "reviewCount": 0,
+    "stats": {
+      "totalProducts": 0,
+      "totalOrders": 0,
+      "totalReturns": 0
+    },
+    "isZoneLive": true,
+    "fulfillmentType": "store",
+    "accountType": "merchant",
+    "warehouseId": null,
+    "warehouseStatus": "none",
+    "assignedWarehouseIds": [],
+    "expoPushTokens": [],
+    "createdAt": "2026-10-05T15:32:11.995Z",
+    "password": "$2b$10$SPUYMhxZcUdffiCUcJvhVO/mlb30QEf0HTisz6FQ3y4b0LgyTDnqW",
+    "phoneNumber": "8075201982",
+    "updatedAt": "2026-10-09T16:03:20.122Z",
+    "__v": 0,
+    "shopName": "Doris Women",
+    "backgroundImage": {
+      "public_id": "merchant_backgrounds/v0tdxeqcnfmxtpfotojn",
+      "url": "https://res.cloudinary.com/dpmliygpg/image/upload/v1791220609/merchant_backgrounds/v0tdxeqcnfmxtpfotojn.jpg"
+    },
+    "logo": {
+      "public_id": "merchant/logo/dpge5duobm3wpkjsamk9",
+      "url": "https://res.cloudinary.com/dpmliygpg/image/upload/v1791541138/merchant/logo/dpge5duobm3wpkjsamk9.jpg"
+    },
+    "managerEmail": "",
+    "managerName": "Sabith",
+    "managerPhoneNumber": "8075201982",
+    "ownerName": "Sabith",
+    "pickupContactNumber": "8075201982",
+    "shipsWithinHours": 24,
+    "shopDescription": "",
+    "storeMobileNumber": "8075201982",
+    "zoneId": "6a4398c4567d471ffedbad91",
+    "zoneName": "Ernakulam North",
+    "businessType": "Individual"
+  }
+]

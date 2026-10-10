@@ -83,6 +83,10 @@ const userSchema = new mongoose.Schema({
     ref: 'User',
     default: null,
   },
+  referralRewardIssued: {
+    type: Boolean,
+    default: false,
+  },
 
   // Penalty tracking: incremented when customer doesn't pay delivery fee after try phase
   deliveryFeePenalties: {

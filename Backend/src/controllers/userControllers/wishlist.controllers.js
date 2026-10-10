@@ -144,7 +144,7 @@ export const getMyWishlist = asyncHandler(async (req, res) => {
     const siblings = await ProductFlat.find({ styleGroupId, isDeleted: { $ne: true } })
       .populate('brandId', 'name logo')
       .populate('categoryId', 'name')
-      .populate('merchantId', 'shopName isOnline isZoneLive fulfillmentType')
+      .populate('merchantId', 'shopName isOnline isZoneLive fulfillmentType isActive status isVerified')
       .lean();
 
     if (siblings.length > 0) {
@@ -157,15 +157,25 @@ export const getMyWishlist = asyncHandler(async (req, res) => {
       const merchantIdVal = merchantObj?._id || matched.merchantId;
 
       const isWh = matched.source === 'warehouse' || !!matched.warehouseId || merchantObj?.fulfillmentType === 'warehouse';
-      const isWhNearby = matched.warehouseId ? nearbyWhSet.has(matched.warehouseId.toString()) : (isWh && nearbyWhSet.size > 0);
+
+      // Check active state for both merchant and product
+      const isMerchantActive = isWh ? true : (merchantObj ? (merchantObj.isActive !== false && merchantObj.status !== 'suspended' && merchantObj.status !== 'rejected') : true);
+      const isProductActive = matched.isActive !== false && matched.isVerified !== false;
+      const isStoreInactive = !isMerchantActive;
+      const isAvailable = isMerchantActive && isProductActive;
+
+      const whIdStr = (matched.warehouseId?._id || matched.warehouseId)?.toString();
+      const isWhNearby = whIdStr ? nearbyWhSet.has(whIdStr) : (isWh && nearbyWhSet.size > 0);
 
       const isMerchantNearby = merchantIdVal ? nearbySet.has(merchantIdVal.toString()) : false;
       const isNearby = isWh ? isWhNearby : isMerchantNearby;
       const isOnline = isWh ? true : (merchantObj?.isOnline !== undefined ? merchantObj.isOnline : true);
       const isZoneLive = isWh ? true : (merchantObj?.isZoneLive !== undefined ? merchantObj.isZoneLive : true);
-      const isInstantBuyable = isWh ? isWhNearby : (isNearby && isOnline && isZoneLive);
+      const isInstantBuyable = isAvailable && (isWh ? isWhNearby : (isNearby && isOnline && isZoneLive));
 
-      const totalStock = siblings.reduce((sum, s) => sum + Math.max(0, (s.stock || 0) - (s.reservedStock || 0)), 0);
+      const totalStock = isAvailable
+        ? siblings.reduce((sum, s) => sum + Math.max(0, (s.stock || 0) - (s.reservedStock || 0)), 0)
+        : 0;
 
       const canonicalVariantId = generateColorVariantId(styleGroupId, matched.color?.name || 'Default');
 
@@ -179,10 +189,12 @@ export const getMyWishlist = asyncHandler(async (req, res) => {
           isInstantBuyable,
           isWarehouseListing: isWh,
           source: isWh ? 'warehouse' : (matched.source || 'shop'),
-          isOnline,
+          isOnline: isAvailable ? isOnline : false,
+          isStoreInactive,
+          isAvailable,
           stock: totalStock,
           totalStock,
-          inStock: totalStock > 0,
+          inStock: isAvailable && totalStock > 0,
         },
         addedAt: item.createdAt,
       });

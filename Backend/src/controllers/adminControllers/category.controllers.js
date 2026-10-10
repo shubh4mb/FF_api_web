@@ -119,7 +119,7 @@ export const addCategory = asyncHandler(async (req, res) => {
     sortOrder,
     isActive: isActive !== undefined ? (isActive === 'true' || isActive === true) : true,
     isTriable: isTriable === 'true' || isTriable === true,
-    ...(level == 1 && commissionPercentage !== undefined && { commissionPercentage }),
+    commissionPercentage: commissionPercentage !== undefined ? Number(commissionPercentage) : 4,
     ...(imageDetails && { image: imageDetails }),
     ...(logoDetails && { logo: logoDetails }),
     ...(req.body.logos && { logos: req.body.logos }),
