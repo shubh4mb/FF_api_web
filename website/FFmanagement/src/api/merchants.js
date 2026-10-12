@@ -77,3 +77,49 @@ export const updateWarehouseStatus = async (id, warehouseStatus, warehouseId = n
         throw error.response ? error.response.data : new Error('Network Error');
     }
 }
+
+export const toggleMerchantWarehouseStatus = async (merchantId, warehouseId, isActive, reason = '') => {
+    try {
+        const response = await axiosInstance.patch(`/admin/merchant/${merchantId}/warehouse/${warehouseId}/toggle-status`, {
+            isActive,
+            reason
+        });
+        return response.data;
+    } catch (error) {
+        console.log(error);
+        throw error.response ? error.response.data : new Error('Network Error');
+    }
+};
+
+export const assignWarehouseToMerchant = async (merchantId, warehouseId) => {
+    try {
+        const response = await axiosInstance.post(`/admin/merchant/${merchantId}/warehouse/assign`, {
+            warehouseId
+        });
+        return response.data;
+    } catch (error) {
+        console.log(error);
+        throw error.response ? error.response.data : new Error('Network Error');
+    }
+};
+
+export const removeWarehouseFromMerchant = async (merchantId, warehouseId) => {
+    try {
+        const response = await axiosInstance.delete(`/admin/merchant/${merchantId}/warehouse/${warehouseId}`);
+        return response.data;
+    } catch (error) {
+        console.log(error);
+        throw error.response ? error.response.data : new Error('Network Error');
+    }
+};
+
+export const toggleMerchantStoreStatus = async (merchantId, isStoreActive) => {
+    try {
+        const payload = isStoreActive !== undefined ? { isStoreActive } : {};
+        const response = await axiosInstance.patch(`/admin/merchant/${merchantId}/toggle-store-status`, payload);
+        return response.data;
+    } catch (error) {
+        console.log(error);
+        throw error.response ? error.response.data : new Error('Network Error');
+    }
+};

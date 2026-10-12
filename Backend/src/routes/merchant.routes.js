@@ -1,6 +1,6 @@
 import express from 'express'
 import upload, { handleMulterError } from '../middleware/multer.js'
-import { addBaseProduct, addVariant, getBaseProducts, getVariants, updateVariant, updateSize, deleteVariantSizes, updateSizeCount, createProductFull, createProductAi, searchBaseProducts } from '../controllers/merchantController/product.controllers.js';
+import { addBaseProduct, addVariant, getBaseProducts, getVariants, updateVariant, updateSize, deleteVariantSizes, updateSizeCount, updateStockBatch, createProductFull, createProductAi, analyzeProductAi, searchBaseProducts } from '../controllers/merchantController/product.controllers.js';
 import { deleteVariant, addBrand, getBrands, getBaseProductById, getProductsByMerchantId, uploadProductImage, deleteImage, deleteProduct, updatePrice, editProduct, editVariant, updateVariantSizeStock, updateMultipleVariantSizes, getAllBrands, bulkUploadProducts, updateMatchingProducts } from '../controllers/merchantController/product.controllers.js';
 
 import { addMerchant } from '../controllers/merchantController/merchant.controller.js';
@@ -205,8 +205,9 @@ router.post('/addVariant/:productId', authMiddlewareMerchant, upload.array('imag
 router.delete('/deleteVariant/:productId/:variantId', authMiddlewareMerchant, deleteVariant);
 router.delete("/deleteSizes/:productId/:variantId/:sizeId", authMiddlewareMerchant, deleteVariantSizes);
 router.patch("/updateVariant/:productId/:variantId", authMiddlewareMerchant, upload.array("images"), handleMulterError, updateVariant);
+router.put("/updateStockBatch", authMiddlewareMerchant, updateStockBatch);
+router.post("/updateStockBatch", authMiddlewareMerchant, updateStockBatch);
 router.put("/updateStock/:productId/:variantId/:sizeId", authMiddlewareMerchant, updateSize);
-router.put("/updateStock/:productId/:variantId/:sizeId", authMiddlewareMerchant, updateSizeCount);
 router.put("/updateStock/:productId/:variantId", authMiddlewareMerchant, updateSize);
 router.put("/updatePrice/:productId/:variantId", authMiddlewareMerchant, updatePrice);
 
@@ -217,6 +218,8 @@ router.patch('/updateMultipleVariantSizes/:productId/:variantId', authMiddleware
 router.post('/createProductFull', authMiddlewareMerchant, upload.any(), handleMulterError, createProductFull);
 router.post('/createProductAi', authMiddlewareMerchant, upload.any(), handleMulterError, createProductAi);
 router.post('/products/ai-create', authMiddlewareMerchant, upload.any(), handleMulterError, createProductAi);
+router.post('/products/ai-analyze', authMiddlewareMerchant, upload.any(), handleMulterError, analyzeProductAi);
+router.post('/analyzeProductAi', authMiddlewareMerchant, upload.any(), handleMulterError, analyzeProductAi);
 router.get('/searchBaseProducts', authMiddlewareMerchant, searchBaseProducts);
 router.put('/updateMatchingProducts/:productId', authMiddlewareMerchant, updateMatchingProducts);
 

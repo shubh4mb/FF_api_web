@@ -41,9 +41,12 @@ import {
   ZoomOut,
   X,
   Save,
-  Package
+  Package,
+  Plus,
+  Trash2,
 } from 'lucide-react';
-import { getMerchantById, updateMerchantById, verifyMerchant } from '../../api/merchants';
+import { getMerchantById, updateMerchantById, verifyMerchant, toggleMerchantWarehouseStatus, assignWarehouseToMerchant, removeWarehouseFromMerchant, toggleMerchantStoreStatus } from '../../api/merchants';
+import { getAllWarehouses } from '../../api/warehouse';
 import CropperModal from '../../components/CropperModal';
 import toast from 'react-hot-toast';
 
@@ -88,18 +91,33 @@ const EditMerchant = () => {
     backgroundImage: null,
     isVerified: false,
     isActive: false,
+    isStoreActive: true,
     status: 'incomplete',
     isRegistrationFeePaid: false,
     rejectionReason: '',
     zoneName: '',
     fulfillmentType: 'store',
+    warehouseAssignments: [],
+    assignedWarehouseIds: [],
     createdAt: null,
-    stats: { totalProducts: 0, totalOrders: 0, totalReturns: 0 }
+    stats: { totalProducts: 0, totalStock: 0, totalOrders: 0, totalReturns: 0 }
   });
 
   const [loading, setLoading] = useState(true);
   const [isUpdating, setIsUpdating] = useState(false);
   const [copiedKey, setCopiedKey] = useState(null);
+
+  // Warehouse Hub Assignment States
+  const [allWarehouses, setAllWarehouses] = useState([]);
+  const [showAssignModal, setShowAssignModal] = useState(false);
+  const [selectedWarehouseToAssign, setSelectedWarehouseToAssign] = useState('');
+  const [deactivateHubModal, setDeactivateHubModal] = useState({
+    isOpen: false,
+    warehouseId: '',
+    warehouseName: '',
+    reason: ''
+  });
+  const [isTogglingWarehouse, setIsTogglingWarehouse] = useState(false);
 
   // Image Cropper State
   const [showCropper, setShowCropper] = useState(false);
@@ -139,7 +157,17 @@ const EditMerchant = () => {
 
   useEffect(() => {
     fetchMerchantDetails();
+    fetchWarehousesList();
   }, [merchantId]);
+
+  const fetchWarehousesList = async () => {
+    try {
+      const res = await getAllWarehouses({ isActive: true });
+      setAllWarehouses(res.warehouses || res.data?.warehouses || res || []);
+    } catch (err) {
+      console.warn("Could not fetch warehouses list:", err.message);
+    }
+  };
 
   const fetchMerchantDetails = async () => {
     try {
@@ -150,12 +178,21 @@ const EditMerchant = () => {
         toast.error('Merchant not found');
         return;
       }
+      const rawAddress = typeof m.address === 'string'
+        ? (() => { try { return JSON.parse(m.address); } catch { return {}; } })()
+        : (m.address || {});
+      const rawHours = typeof m.operatingHours === 'string'
+        ? (() => { try { return JSON.parse(m.operatingHours); } catch { return {}; } })()
+        : (m.operatingHours || {});
+
       setForm({
         ...m,
-        address: m.address || {},
+        address: rawAddress,
         bankDetails: m.bankDetails || { isBankVerified: false },
         category: m.category || [],
         genderCategory: m.genderCategory || [],
+        warehouseAssignments: m.warehouseAssignments || [],
+        assignedWarehouseIds: m.assignedWarehouseIds || [],
         kyc: {
           pan: m.kyc?.pan || { verified: false },
           gst: m.kyc?.gst || { verified: false },
@@ -164,18 +201,95 @@ const EditMerchant = () => {
           isKycVerified: m.kyc?.isKycVerified || false,
         },
         operatingHours: {
-          openTime: m.operatingHours?.open || m.operatingHours?.openTime || '09:00',
-          closeTime: m.operatingHours?.close || m.operatingHours?.closeTime || '21:00',
-          daysOpen: m.operatingHours?.daysOpen?.length ? m.operatingHours.daysOpen : DAYS_OF_WEEK,
+          openTime: rawHours.open || rawHours.openTime || '09:00',
+          closeTime: rawHours.close || rawHours.closeTime || '21:00',
+          daysOpen: rawHours.daysOpen?.length ? rawHours.daysOpen : DAYS_OF_WEEK,
         },
         fulfillmentType: m.fulfillmentType || 'store',
-        stats: m.stats || { totalProducts: 0, totalOrders: 0, totalReturns: 0 }
+        isStoreActive: m.isStoreActive !== false,
+        stats: m.stats || { totalProducts: 0, totalStock: 0, totalOrders: 0, totalReturns: 0 }
       });
     } catch (err) {
       console.error('Failed to fetch merchant:', err);
       toast.error('Failed to load merchant details');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleToggleWarehouseStatus = async (warehouseId, currentActive, warehouseName) => {
+    if (currentActive) {
+      setDeactivateHubModal({
+        isOpen: true,
+        warehouseId,
+        warehouseName,
+        reason: ''
+      });
+    } else {
+      try {
+        setIsTogglingWarehouse(true);
+        const res = await toggleMerchantWarehouseStatus(merchantId, warehouseId, true);
+        toast.success(res.message || `Activated in ${warehouseName}`);
+        fetchMerchantDetails();
+      } catch (err) {
+        toast.error(err.message || 'Failed to update warehouse status');
+      } finally {
+        setIsTogglingWarehouse(false);
+      }
+    }
+  };
+
+  const confirmDeactivateHub = async () => {
+    try {
+      setIsTogglingWarehouse(true);
+      const res = await toggleMerchantWarehouseStatus(
+        merchantId,
+        deactivateHubModal.warehouseId,
+        false,
+        deactivateHubModal.reason
+      );
+      toast.success(res.message || `Deactivated in ${deactivateHubModal.warehouseName}`);
+      setDeactivateHubModal({ isOpen: false, warehouseId: '', warehouseName: '', reason: '' });
+      fetchMerchantDetails();
+    } catch (err) {
+      toast.error(err.message || 'Failed to deactivate in warehouse');
+    } finally {
+      setIsTogglingWarehouse(false);
+    }
+  };
+
+  const handleAssignWarehouse = async () => {
+    if (!selectedWarehouseToAssign) {
+      toast.error('Please select a warehouse');
+      return;
+    }
+    try {
+      setIsTogglingWarehouse(true);
+      const res = await assignWarehouseToMerchant(merchantId, selectedWarehouseToAssign);
+      toast.success(res.message || 'Warehouse assigned successfully');
+      setShowAssignModal(false);
+      setSelectedWarehouseToAssign('');
+      fetchMerchantDetails();
+    } catch (err) {
+      toast.error(err.message || 'Failed to assign warehouse');
+    } finally {
+      setIsTogglingWarehouse(false);
+    }
+  };
+
+  const handleRemoveWarehouse = async (warehouseId, warehouseName) => {
+    if (!window.confirm(`Are you sure you want to remove ${warehouseName} from this brand's assigned hubs? All products stocked in this warehouse for this brand will be paused.`)) {
+      return;
+    }
+    try {
+      setIsTogglingWarehouse(true);
+      const res = await removeWarehouseFromMerchant(merchantId, warehouseId);
+      toast.success(res.message || 'Warehouse assignment removed');
+      fetchMerchantDetails();
+    } catch (err) {
+      toast.error(err.message || 'Failed to remove warehouse');
+    } finally {
+      setIsTogglingWarehouse(false);
     }
   };
 
@@ -1665,6 +1779,182 @@ const EditMerchant = () => {
               </div>
             </div>
 
+            {/* Physical Storefront Channel Visibility */}
+            <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-xs">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <div className={`w-10 h-10 rounded-2xl flex items-center justify-center ${
+                    form.isStoreActive !== false ? 'bg-emerald-50 border border-emerald-100 text-emerald-600' : 'bg-amber-50 border border-amber-100 text-amber-600'
+                  }`}>
+                    <Store className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-lg font-bold text-slate-900">Physical Storefront Visibility</h3>
+                      <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${
+                        form.isStoreActive !== false
+                          ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                          : 'bg-amber-100 text-amber-800 border border-amber-200'
+                      }`}>
+                        {form.isStoreActive !== false ? 'STORE LIVE' : 'STORE HIDDEN'}
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-500 mt-0.5 max-w-xl">
+                      Control whether this merchant's physical boutique appears in the Customer App "Stores" tab and nearby Try & Buy discovery.
+                      <strong className="text-slate-700"> Hiding the physical storefront will NOT hide or deactivate consigned brand inventory stocked in FlashFits warehouse hubs.</strong>
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  disabled={isUpdating}
+                  onClick={async () => {
+                    const currentActive = form.isStoreActive !== false;
+                    const confirmMsg = currentActive
+                      ? 'Hide physical storefront for this merchant? The store will disappear from the Customer "Stores" tab, but its warehouse brand & consigned stock in FlashFits hubs will stay live.'
+                      : 'Unhide physical storefront? The store will become live again on the Customer "Stores" tab.';
+                    if (!window.confirm(confirmMsg)) return;
+
+                    try {
+                      setIsUpdating(true);
+                      const res = await toggleMerchantStoreStatus(merchantId, !currentActive);
+                      setForm(prev => ({ ...prev, isStoreActive: !currentActive }));
+                      toast.success(res.message || 'Store status updated');
+                    } catch (err) {
+                      toast.error(err.message || 'Failed to update store status');
+                    } finally {
+                      setIsUpdating(false);
+                    }
+                  }}
+                  className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all shrink-0 ${
+                    form.isStoreActive !== false
+                      ? 'bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200'
+                      : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs'
+                  }`}
+                >
+                  {form.isStoreActive !== false ? 'Hide Physical Storefront' : 'Make Storefront Live'}
+                </button>
+              </div>
+            </div>
+
+            {/* Warehouse Hub Consignment & Per-Hub Status */}
+            <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-xs">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-2xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600">
+                    <Building2 className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                      Warehouse Hub Consignment & Per-Hub Status
+                    </h3>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      Control consignment active status per warehouse hub. You can pause this brand in a specific hub (e.g., Kaloor) while keeping it active in others (e.g., Edapally).
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowAssignModal(true)}
+                  className="inline-flex items-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs shrink-0"
+                >
+                  <Plus className="w-4 h-4" />
+                  Assign Warehouse Hub
+                </button>
+              </div>
+
+              {(!form.warehouseAssignments || form.warehouseAssignments.length === 0) ? (
+                <div className="p-8 text-center rounded-2xl bg-slate-50 border border-dashed border-slate-200">
+                  <Building2 className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+                  <p className="text-sm font-bold text-slate-700">No Warehouse Hubs Assigned</p>
+                  <p className="text-xs text-slate-400 mt-1 max-w-md mx-auto">
+                    This brand does not currently have inventory stocked in any FlashFits warehouse hubs. Click "Assign Warehouse Hub" above to link a hub.
+                  </p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {form.warehouseAssignments.map((assignment) => {
+                    const wh = assignment.warehouseId || {};
+                    const whId = wh._id || wh;
+                    const whName = wh.name || 'Warehouse Hub';
+                    const whCode = wh.code || '';
+                    const whCity = wh.address?.city || wh.address?.area || 'Hub';
+                    const isHubActive = assignment.isActive !== false;
+
+                    return (
+                      <div
+                        key={whId}
+                        className={`p-5 rounded-2xl border transition-all ${
+                          isHubActive
+                            ? 'bg-slate-50/60 border-slate-200 hover:border-slate-300'
+                            : 'bg-rose-50/40 border-rose-200'
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <h4 className="text-sm font-black text-slate-900">{whName}</h4>
+                              {whCode && (
+                                <span className="px-2 py-0.5 rounded-md bg-slate-200 text-slate-700 font-mono text-[10px] font-bold">
+                                  {whCode}
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-xs text-slate-500 mt-1 flex items-center gap-1">
+                              <MapPin className="w-3.5 h-3.5 text-slate-400" />
+                              {whCity}
+                            </p>
+                          </div>
+
+                          <span
+                            className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${
+                              isHubActive
+                                ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                                : 'bg-rose-100 text-rose-800 border border-rose-200'
+                            }`}
+                          >
+                            {isHubActive ? 'Live in Hub' : 'Paused in Hub'}
+                          </span>
+                        </div>
+
+                        {!isHubActive && assignment.reason && (
+                          <div className="mt-3 p-2.5 rounded-xl bg-white/90 border border-rose-100 text-[11px] text-rose-700">
+                            <span className="font-bold">Pause Reason:</span> {assignment.reason}
+                          </div>
+                        )}
+
+                        <div className="mt-4 pt-3 border-t border-slate-200/70 flex items-center justify-between">
+                          <button
+                            type="button"
+                            disabled={isTogglingWarehouse}
+                            onClick={() => handleToggleWarehouseStatus(whId, isHubActive, whName)}
+                            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+                              isHubActive
+                                ? 'bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200'
+                                : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs'
+                            }`}
+                          >
+                            {isHubActive ? 'Deactivate in this Hub' : 'Re-activate in this Hub'}
+                          </button>
+
+                          <button
+                            type="button"
+                            disabled={isTogglingWarehouse}
+                            onClick={() => handleRemoveWarehouse(whId, whName)}
+                            className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                            title="Remove warehouse assignment"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
             {/* Save Button */}
             <div className="flex justify-end gap-3 pt-4">
               <button
@@ -1693,6 +1983,10 @@ const EditMerchant = () => {
                   <div>
                     <span className="text-xs text-slate-400 font-semibold uppercase">Total Listed Products</span>
                     <p className="text-2xl font-black text-slate-900">{form.stats?.totalProducts || 0}</p>
+                  </div>
+                  <div className="border-l border-slate-200 pl-6">
+                    <span className="text-xs text-slate-400 font-semibold uppercase">Total Stock Units</span>
+                    <p className="text-2xl font-black text-slate-900">{form.stats?.totalStock || 0}</p>
                   </div>
                   <div className="border-l border-slate-200 pl-6">
                     <span className="text-xs text-slate-400 font-semibold uppercase">Lifetime Orders</span>
@@ -1935,6 +2229,145 @@ const EditMerchant = () => {
               <button
                 type="button"
                 onClick={() => setRejectModal(prev => ({ ...prev, isOpen: false }))}
+                className="px-5 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs uppercase tracking-wider rounded-xl transition-all"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Assign Warehouse Hub Modal */}
+      {showAssignModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 backdrop-blur-xs p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-100 space-y-5">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600">
+                  <Building2 className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-slate-900 text-base">Assign Warehouse Hub</h3>
+                  <p className="text-xs text-slate-500">Enable consignment fulfillment from a hub</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowAssignModal(false);
+                  setSelectedWarehouseToAssign('');
+                }}
+                className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-700 uppercase mb-2">
+                Select Warehouse Hub
+              </label>
+              <select
+                value={selectedWarehouseToAssign}
+                onChange={(e) => setSelectedWarehouseToAssign(e.target.value)}
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-semibold text-slate-800 focus:bg-white focus:border-indigo-600 outline-hidden transition-all"
+              >
+                <option value="">-- Choose a Warehouse Hub --</option>
+                {allWarehouses
+                  .filter((w) => {
+                    const assignedIds = (form.warehouseAssignments || []).map(
+                      (a) => (a.warehouseId?._id || a.warehouseId)?.toString()
+                    );
+                    return !assignedIds.includes(w._id?.toString());
+                  })
+                  .map((w) => (
+                    <option key={w._id} value={w._id}>
+                      {w.name} ({w.code || w.address?.city || 'Hub'})
+                    </option>
+                  ))}
+              </select>
+              <p className="text-xs text-slate-500 mt-2">
+                Once assigned, this brand will be live in this hub. Warehouse operators can stock and fulfill orders from this location.
+              </p>
+            </div>
+
+            <div className="flex gap-3 pt-2">
+              <button
+                type="button"
+                disabled={isTogglingWarehouse || !selectedWarehouseToAssign}
+                onClick={handleAssignWarehouse}
+                className="flex-1 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs uppercase tracking-wider rounded-xl shadow-xs transition-all disabled:opacity-50"
+              >
+                {isTogglingWarehouse ? 'Assigning...' : 'Assign & Enable Hub'}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowAssignModal(false);
+                  setSelectedWarehouseToAssign('');
+                }}
+                className="px-5 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs uppercase tracking-wider rounded-xl transition-all"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Deactivate Hub Confirmation Modal */}
+      {deactivateHubModal.isOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 backdrop-blur-xs p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-100 space-y-5">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-rose-50 border border-rose-100 flex items-center justify-center text-rose-600">
+                  <AlertTriangle className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-slate-900 text-base">Deactivate in Hub</h3>
+                  <p className="text-xs text-slate-500">{deactivateHubModal.warehouseName}</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setDeactivateHubModal({ isOpen: false, warehouseId: '', warehouseName: '', reason: '' })}
+                className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <p className="text-xs text-slate-600 leading-relaxed">
+              Are you sure you want to pause <strong>{form.shopName}</strong> in <strong>{deactivateHubModal.warehouseName}</strong>? All product variants stocked in this warehouse will be temporarily paused from customer orders in this hub. Other hubs and the physical store will remain unaffected.
+            </p>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-700 uppercase mb-2">
+                Reason for Pausing (Optional)
+              </label>
+              <textarea
+                value={deactivateHubModal.reason}
+                onChange={(e) => setDeactivateHubModal(prev => ({ ...prev, reason: e.target.value }))}
+                rows={2}
+                placeholder="e.g. Rack agreement expired, stock audit, temporary pause..."
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs focus:bg-white focus:border-rose-500 focus:ring-2 focus:ring-rose-200 outline-hidden"
+              />
+            </div>
+
+            <div className="flex gap-3 pt-2">
+              <button
+                type="button"
+                disabled={isTogglingWarehouse}
+                onClick={confirmDeactivateHub}
+                className="flex-1 py-3 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs uppercase tracking-wider rounded-xl shadow-xs transition-all disabled:opacity-50"
+              >
+                {isTogglingWarehouse ? 'Pausing...' : 'Confirm Deactivation'}
+              </button>
+              <button
+                type="button"
+                onClick={() => setDeactivateHubModal({ isOpen: false, warehouseId: '', warehouseName: '', reason: '' })}
                 className="px-5 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs uppercase tracking-wider rounded-xl transition-all"
               >
                 Cancel

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { getMerchants, verifyMerchant, updateWarehouseStatus } from '@/api/merchants';
+import { getMerchants, verifyMerchant, updateWarehouseStatus, toggleMerchantStoreStatus } from '@/api/merchants';
 import { getAllWarehouses } from '@/api/warehouse';
 import { useNavigate } from 'react-router-dom';
 import ReusableAdminTable from '@/components/admin/Table';
@@ -46,6 +46,20 @@ const Merchants = () => {
           {value ? "VERIFIED" : "PENDING"}
         </span>
       ),
+    },
+    {
+      header: "Store Status",
+      accessor: "isStoreActive",
+      render: (value, row) => {
+        const isLive = value !== false && row.fulfillmentType !== 'warehouse';
+        return (
+          <span className={`px-2 py-1 rounded text-xs font-bold ${
+            isLive ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-500"
+          }`}>
+            {isLive ? "STORE LIVE" : "STORE HIDDEN"}
+          </span>
+        );
+      },
     },
     {
       header: "Warehouse Status",
@@ -99,6 +113,24 @@ const Merchants = () => {
         }
       },
       className: (row) => row.isVerified ? "text-orange-600 hover:underline text-sm font-bold" : "text-green-600 hover:underline text-sm font-bold",
+    },
+    {
+      label: (row) => row.isStoreActive !== false ? "Hide Store" : "Unhide Store",
+      onClick: async (row) => {
+        const willHide = row.isStoreActive !== false;
+        const confirmMsg = willHide
+          ? `Hide physical storefront for "${row.shopName}"? The store will disappear from the Customer "Stores" tab, but its warehouse brand & consigned stock will remain live in FlashMart.`
+          : `Unhide physical storefront for "${row.shopName}"? The store will become live again on the Customer "Stores" tab.`;
+        if (!window.confirm(confirmMsg)) return;
+
+        try {
+          await toggleMerchantStoreStatus(row._id, !willHide);
+          setMerchants(prev => prev.map(m => m._id === row._id ? { ...m, isStoreActive: !willHide } : m));
+        } catch (err) {
+          alert("Error updating store status: " + err.message);
+        }
+      },
+      className: (row) => row.isStoreActive !== false ? "text-amber-600 hover:underline text-sm font-semibold" : "text-emerald-600 hover:underline text-sm font-bold",
     },
     {
       label: (row) => row.warehouseStatus === "approved" ? "Revoke Warehouse" : "Approve Warehouse",

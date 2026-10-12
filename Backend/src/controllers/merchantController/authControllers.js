@@ -224,26 +224,39 @@ export const updateMerchantShopDetails = async (req, res) => {
       }
     }
 
-    // Parse address (string or form-data)
+    // Parse address (string or form-data or object)
     let addressObj = {};
     if (req.body.address) {
-      try {
-        addressObj = JSON.parse(req.body.address);
-      } catch {
-        addressObj = {
-          street: req.body["address[street]"] || "",
-          city: req.body["address[city]"] || "",
-          state: req.body["address[state]"] || "",
-          postalCode: req.body["address[postalCode]"] || "",
-          landmark: req.body["address[landmark]"] || "",
-          note: req.body["address[note]"] || "",
-        };
+      if (typeof req.body.address === 'string') {
+        try {
+          addressObj = JSON.parse(req.body.address);
+        } catch {
+          addressObj = {
+            street: req.body["address[street]"] || "",
+            city: req.body["address[city]"] || "",
+            state: req.body["address[state]"] || "",
+            postalCode: req.body["address[postalCode]"] || "",
+            landmark: req.body["address[landmark]"] || "",
+            note: req.body["address[note]"] || "",
+          };
+        }
+      } else if (typeof req.body.address === 'object' && req.body.address !== null) {
+        addressObj = req.body.address;
       }
+    } else {
+      addressObj = {
+        street: req.body["address[street]"] || "",
+        city: req.body["address[city]"] || "",
+        state: req.body["address[state]"] || "",
+        postalCode: req.body["address[postalCode]"] || "",
+        landmark: req.body["address[landmark]"] || "",
+        note: req.body["address[note]"] || "",
+      };
     }
 
     // Extract coordinates
-    const lat = latitude || addressObj.latitude || req.body["address[latitude]"];
-    const lng = longitude || addressObj.longitude || req.body["address[longitude]"];
+    const lat = latitude || addressObj.latitude || addressObj.location?.coordinates?.[1] || req.body["address[latitude]"];
+    const lng = longitude || addressObj.longitude || addressObj.location?.coordinates?.[0] || req.body["address[longitude]"];
 
     if (!lat || !lng) {
       return res.status(400).json({
@@ -435,9 +448,22 @@ export const updateMerchantBankDetails = async (req, res) => {
 export const updateMerchantOperatingHours = async (req, res) => {
   try {
     const { merchantId } = req.params;
+    let hours = req.body;
+    if (typeof hours === 'string') {
+      try {
+        hours = JSON.parse(hours);
+      } catch (e) {
+        console.error("Failed to parse operatingHours in updateMerchantOperatingHours:", e);
+      }
+    }
+    const sanitizedHours = {
+      open: hours?.open || hours?.openTime || "09:00",
+      close: hours?.close || hours?.closeTime || "21:00",
+      daysOpen: Array.isArray(hours?.daysOpen) ? hours.daysOpen : [],
+    };
     const merchant = await Merchant.findByIdAndUpdate(
       merchantId,
-      { $set: { operatingHours: req.body } },
+      { $set: { operatingHours: sanitizedHours } },
       { new: true }
     );
     res.json({ success: true, merchant });

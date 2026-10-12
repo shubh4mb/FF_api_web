@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { getCategories } from '@/api/categories';
-import { getMerchants } from '@/api/merchants';
+import { getMerchants, toggleMerchantWarehouseStatus } from '@/api/merchants';
 import { getBrands } from '@/api/brand';
 import {
   getAllWarehouses,
@@ -109,6 +109,37 @@ const WarehouseProducts = () => {
     const whId = e.target.value;
     setSelectedWarehouseId(whId);
     fetchProducts(whId);
+  };
+
+  const uniqueMerchantsInHub = useMemo(() => {
+    const map = new Map();
+    products.forEach((p) => {
+      const mId = (p.merchantId?._id || p.merchantId)?.toString();
+      if (mId && !map.has(mId)) {
+        const matchingProds = products.filter(
+          (prod) => (prod.merchantId?._id || prod.merchantId)?.toString() === mId
+        );
+        map.set(mId, {
+          merchantId: mId,
+          shopName: p.merchantId?.shopName || 'Consigned Merchant',
+          hasActiveProducts: matchingProds.some((prod) => prod.isActive !== false),
+          count: matchingProds.length
+        });
+      }
+    });
+    return Array.from(map.values());
+  }, [products]);
+
+  const handleToggleBrandInHub = async (mId, currentActive, shopName) => {
+    if (!selectedWarehouseId) return;
+    const newStatus = !currentActive;
+    try {
+      await toggleMerchantWarehouseStatus(mId, selectedWarehouseId, newStatus);
+      toast.success(`${shopName} ${newStatus ? 'activated' : 'paused'} in this warehouse`);
+      fetchProducts(selectedWarehouseId);
+    } catch (err) {
+      toast.error(err.message || 'Failed to update brand status in warehouse');
+    }
   };
 
   const handleAddProduct = async (e) => {
@@ -222,6 +253,50 @@ const WarehouseProducts = () => {
           </button>
         </div>
       </div>
+
+      {/* Brands Stocked in this Warehouse Quick Control */}
+      {!loading && uniqueMerchantsInHub.length > 0 && (
+        <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-xs space-y-2.5">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+            <span className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-indigo-500"></span>
+              Brands Stocked in this Warehouse
+            </span>
+            <span className="text-[11px] text-slate-400">
+              Toggle to pause/resume a brand's products in this warehouse only
+            </span>
+          </div>
+          <div className="flex flex-wrap gap-2.5">
+            {uniqueMerchantsInHub.map((bm) => (
+              <div
+                key={bm.merchantId}
+                className={`inline-flex items-center gap-2.5 px-3 py-1.5 rounded-xl border text-xs transition-all ${
+                  bm.hasActiveProducts
+                    ? 'bg-slate-50 border-slate-200 text-slate-800'
+                    : 'bg-rose-50/50 border-rose-200 text-rose-700'
+                }`}
+              >
+                <span className="font-bold">{bm.shopName}</span>
+                <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-white border border-slate-200 text-slate-500 font-mono">
+                  {bm.count} items
+                </span>
+                <button
+                  type="button"
+                  onClick={() => handleToggleBrandInHub(bm.merchantId, bm.hasActiveProducts, bm.shopName)}
+                  className={`px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider transition-all ${
+                    bm.hasActiveProducts
+                      ? 'bg-emerald-100 hover:bg-emerald-200 text-emerald-800 border border-emerald-200'
+                      : 'bg-rose-100 hover:bg-rose-200 text-rose-800 border border-rose-200'
+                  }`}
+                  title={bm.hasActiveProducts ? 'Click to Pause in this Hub' : 'Click to Activate in this Hub'}
+                >
+                  {bm.hasActiveProducts ? '● Live in Hub' : '○ Paused in Hub'}
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Main product view */}
       {loading ? (

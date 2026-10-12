@@ -120,3 +120,23 @@ export const toggleProductVerification = async (productId) => {
         throw error.response ? error.response.data : new Error('Network Error');
     }
 }
+
+export const editProduct = async (productId, data) => {
+    try {
+        const response = await axiosInstance.patch(`admin/editProduct/${productId}`, data);
+        return response.data;
+    } catch (error) {
+        console.log(error);
+        throw error.response ? error.response.data : new Error('Network Error');
+    }
+}
+
+export const deleteProduct = async (productId) => {
+    try {
+        const response = await axiosInstance.delete(`admin/deleteProduct/${productId}`);
+        return response.data;
+    } catch (error) {
+        console.log(error);
+        throw error.response ? error.response.data : new Error('Network Error');
+    }
+}

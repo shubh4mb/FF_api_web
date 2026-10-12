@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { getAppConfig, updateAppConfig } from "../../api/appConfig";
-import { Save, Loader2, AlertCircle, Power, CheckCircle2, ShieldAlert } from "lucide-react";
+import { Save, Loader2, AlertCircle, Power, CheckCircle2, ShieldAlert, Sparkles, Store, Megaphone, Plus, Trash2, Tag, Gift, ExternalLink } from "lucide-react";
 import { Navigate } from "react-router-dom";
 
 const Settings = () => {
@@ -11,6 +11,7 @@ const Settings = () => {
 
     const [config, setConfig] = useState({
         isOrderPlacementEnabled: false,
+        isTestingMode: false,
         maintenanceTitle: "Maintenance in Progress",
         maintenanceMessage: "We are currently gearing up for launch! Live ordering is temporarily paused. Please check back soon.",
         deliveryPerKmRate: 12,
@@ -20,6 +21,30 @@ const Settings = () => {
         tryAndBuyRadius: 7,
         merchantRegistrationFee: 1000,
     });
+    const [promoAnnouncements, setPromoAnnouncements] = useState([
+        {
+            id: "promo_free_delivery",
+            badge: "2 FREE DELIVERIES",
+            title: "2 Free Deliveries on your first 2 orders!",
+            subtitle: "Auto-applied at checkout • Zero delivery fee",
+            highlightText: "2 Free Deliveries",
+            actionUrl: "",
+            icon: "flash",
+            isActive: true,
+            order: 0,
+        },
+        {
+            id: "promo_refer_earn",
+            badge: "REFER & EARN",
+            title: "Refer a friend & get a free delivery coupon!",
+            subtitle: "Tap to share your invite code with friends",
+            highlightText: "+1 Free Delivery",
+            actionUrl: "/(app)/refer-earn",
+            icon: "gift",
+            isActive: true,
+            order: 1,
+        },
+    ]);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState(null);
@@ -37,6 +62,7 @@ const Settings = () => {
             if (data?.config) {
                 setConfig({
                     isOrderPlacementEnabled: data.config.isOrderPlacementEnabled ?? false,
+                    isTestingMode: data.config.isTestingMode ?? false,
                     maintenanceTitle: data.config.maintenanceTitle || "Maintenance in Progress",
                     maintenanceMessage: data.config.maintenanceMessage || "We are currently gearing up for launch! Live ordering is temporarily paused. Please check back soon.",
                     deliveryPerKmRate: data.config.deliveryPerKmRate ?? 12,
@@ -46,6 +72,9 @@ const Settings = () => {
                     tryAndBuyRadius: data.config.tryAndBuyRadius ?? 7,
                     merchantRegistrationFee: data.config.merchantRegistrationFee ?? 1000,
                 });
+                if (data.config.promoAnnouncements && data.config.promoAnnouncements.length > 0) {
+                    setPromoAnnouncements(data.config.promoAnnouncements);
+                }
             }
         } catch (err) {
             console.error(err);
@@ -70,6 +99,50 @@ const Settings = () => {
         }));
     };
 
+    const handleToggleTestingMode = () => {
+        setConfig((prev) => ({
+            ...prev,
+            isTestingMode: !prev.isTestingMode,
+        }));
+    };
+
+    const handleAddPromo = () => {
+        setPromoAnnouncements((prev) => [
+            ...prev,
+            {
+                id: `promo_${Date.now()}`,
+                badge: "OFFER",
+                title: "New Promotional Announcement",
+                subtitle: "",
+                highlightText: "",
+                actionUrl: "",
+                icon: "sparkles",
+                isActive: true,
+                order: prev.length,
+            },
+        ]);
+    };
+
+    const handleUpdatePromo = (index, field, value) => {
+        setPromoAnnouncements((prev) => {
+            const next = [...prev];
+            next[index] = { ...next[index], [field]: value };
+            return next;
+        });
+    };
+
+    const handleDeletePromo = (index) => {
+        setPromoAnnouncements((prev) => prev.filter((_, i) => i !== index));
+    };
+
+    const handleTogglePromo = (index) => {
+        setPromoAnnouncements((prev) => {
+            const next = [...prev];
+            next[index] = { ...next[index], isActive: !next[index].isActive };
+            return next;
+        });
+    };
+
     const handleSubmit = async (e) => {
         e.preventDefault();
         try {
@@ -77,7 +150,7 @@ const Settings = () => {
             setError(null);
             setSuccessMsg("");
 
-            await updateAppConfig(config);
+            await updateAppConfig({ ...config, promoAnnouncements });
 
             setSuccessMsg("Configuration updated successfully!");
             setTimeout(() => setSuccessMsg(""), 3000);
@@ -234,6 +307,61 @@ const Settings = () => {
                 </div>
             </div>
 
+            {/* Section 2: Order Testing Mode (SB Fashion Isolation) */}
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+                <div className="p-6 border-b border-gray-100 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                        <div className={`p-2.5 rounded-xl ${config.isTestingMode ? 'bg-violet-50 text-violet-600' : 'bg-gray-100 text-gray-500'}`}>
+                            <Sparkles size={22} />
+                        </div>
+                        <div>
+                            <h2 className="text-lg font-semibold text-gray-900">Order Testing Mode (SB Fashion Only)</h2>
+                            <p className="text-sm text-gray-500">Isolate customer app strictly to SB Fashion for test orders in both Warehouse & Store</p>
+                        </div>
+                    </div>
+                    <div>
+                        {config.isTestingMode ? (
+                            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold bg-violet-100 text-violet-800 border border-violet-200">
+                                <span className="w-2 h-2 rounded-full bg-violet-500 animate-pulse" />
+                                TESTING MODE ACTIVE • SB FASHION ONLY
+                            </span>
+                        ) : (
+                            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold bg-gray-100 text-gray-600 border border-gray-200">
+                                STANDARD CATALOG (ALL MERCHANTS)
+                            </span>
+                        )}
+                    </div>
+                </div>
+
+                <div className="p-6 space-y-4">
+                    <div className="flex items-center justify-between p-4 rounded-xl bg-gray-50 border border-gray-100">
+                        <div className="space-y-0.5 max-w-xl">
+                            <label className="text-sm font-bold text-gray-900 cursor-pointer" onClick={handleToggleTestingMode}>
+                                Enable SB Fashion Test Isolation
+                            </label>
+                            <p className="text-xs text-gray-500">
+                                When <strong>ON</strong>, the customer mobile app shows <strong>only SB Fashion</strong> across both the <strong>Stores tab</strong> and <strong>FlashMart (Kaloor warehouse)</strong>. Geofencing radius and pre-launch blocks are bypassed for SB Fashion so you can test end-to-end order placement from any location.
+                            </p>
+                        </div>
+                        <button
+                            type="button"
+                            role="switch"
+                            aria-checked={config.isTestingMode}
+                            onClick={handleToggleTestingMode}
+                            className={`relative inline-flex h-7 w-12 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-violet-500 focus:ring-offset-2 ${
+                                config.isTestingMode ? 'bg-violet-600' : 'bg-gray-300'
+                            }`}
+                        >
+                            <span
+                                className={`pointer-events-none inline-block h-6 w-6 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                                    config.isTestingMode ? 'translate-x-5' : 'translate-x-0'
+                                }`}
+                            />
+                        </button>
+                    </div>
+                </div>
+            </div>
+
             {/* Section 2: Delivery Configuration */}
             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
                 <div className="p-6 border-b border-gray-100">
@@ -371,6 +499,116 @@ const Settings = () => {
                             )}
                         </button>
                     </div>
+                </div>
+            </div>
+
+            {/* Section 4: Promotional Ticker & Marquee Announcements */}
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+                <div className="p-6 border-b border-gray-100 flex items-center justify-between flex-wrap gap-4">
+                    <div className="flex items-center gap-3">
+                        <div className="p-2.5 rounded-xl bg-sky-50 text-sky-600">
+                            <Megaphone size={22} />
+                        </div>
+                        <div>
+                            <h2 className="text-lg font-semibold text-gray-900">Promotional Ticker & Marquee Carousel</h2>
+                            <p className="text-sm text-gray-500">Configure promotional messages and referral banners that cycle at the top of mobile app screens</p>
+                        </div>
+                    </div>
+                    <button
+                        type="button"
+                        onClick={handleAddPromo}
+                        className="flex items-center gap-2 px-4 py-2 bg-sky-600 hover:bg-sky-700 text-white rounded-xl text-sm font-medium transition-colors shadow-sm"
+                    >
+                        <Plus size={16} /> Add Promotion
+                    </button>
+                </div>
+
+                <div className="p-6 space-y-4">
+                    {promoAnnouncements.length === 0 ? (
+                        <div className="text-center py-8 bg-gray-50 rounded-xl border border-dashed border-gray-200">
+                            <Megaphone className="mx-auto text-gray-400 mb-2" size={32} />
+                            <p className="text-sm text-gray-600 font-medium">No promotional announcements yet</p>
+                            <p className="text-xs text-gray-400 mt-1">Click "Add Promotion" to configure promotions like 2 Free Deliveries or Refer & Earn</p>
+                        </div>
+                    ) : (
+                        promoAnnouncements.map((promo, idx) => (
+                            <div key={promo.id || idx} className="p-4 rounded-xl border border-gray-200 bg-gray-50/50 space-y-3">
+                                <div className="flex items-center justify-between flex-wrap gap-2 pb-2 border-b border-gray-200">
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-slate-900 text-white tracking-wide">
+                                            {promo.badge || "PROMO"}
+                                        </span>
+                                        <span className="text-xs text-gray-500 font-medium">#{idx + 1}</span>
+                                    </div>
+                                    <div className="flex items-center gap-3">
+                                        <label className="flex items-center gap-2 cursor-pointer text-xs font-medium text-gray-700">
+                                            <input
+                                                type="checkbox"
+                                                checked={promo.isActive !== false}
+                                                onChange={() => handleTogglePromo(idx)}
+                                                className="w-4 h-4 text-indigo-600 rounded border-gray-300 focus:ring-indigo-500"
+                                            />
+                                            {promo.isActive !== false ? "Active" : "Disabled"}
+                                        </label>
+                                        <button
+                                            type="button"
+                                            onClick={() => handleDeletePromo(idx)}
+                                            className="text-gray-400 hover:text-red-600 transition-colors p-1"
+                                            title="Delete promotion"
+                                        >
+                                            <Trash2 size={16} />
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                    <div>
+                                        <label className="text-xs font-medium text-gray-700 block mb-1">Badge Text</label>
+                                        <input
+                                            type="text"
+                                            value={promo.badge || ""}
+                                            onChange={(e) => handleUpdatePromo(idx, "badge", e.target.value)}
+                                            placeholder="e.g. 2 FREE DELIVERIES or REFER & EARN"
+                                            className="w-full px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-500 bg-white"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="text-xs font-medium text-gray-700 block mb-1">Headline Message</label>
+                                        <input
+                                            type="text"
+                                            value={promo.title || ""}
+                                            onChange={(e) => handleUpdatePromo(idx, "title", e.target.value)}
+                                            placeholder="e.g. 2 Free Deliveries on your first 2 orders!"
+                                            className="w-full px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-500 bg-white"
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                    <div>
+                                        <label className="text-xs font-medium text-gray-700 block mb-1">Subtitle / Details (Optional)</label>
+                                        <input
+                                            type="text"
+                                            value={promo.subtitle || ""}
+                                            onChange={(e) => handleUpdatePromo(idx, "subtitle", e.target.value)}
+                                            placeholder="e.g. Auto-applied at checkout • Zero delivery fee"
+                                            className="w-full px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-500 bg-white"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="text-xs font-medium text-gray-700 block mb-1">Action URL / App Route (Optional)</label>
+                                        <input
+                                            type="text"
+                                            value={promo.actionUrl || ""}
+                                            onChange={(e) => handleUpdatePromo(idx, "actionUrl", e.target.value)}
+                                            placeholder="e.g. /(app)/refer-earn or /(app)/(tabs)/flashmart"
+                                            className="w-full px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-500 bg-white"
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+                        ))
+                    )}
                 </div>
             </div>
         </form>

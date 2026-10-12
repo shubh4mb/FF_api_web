@@ -243,17 +243,86 @@ export const updateMerchantById = asyncHandler(async (req, res) => {
     if (bgImageDetails) req.body.backgroundImage = bgImageDetails;
   }
 
-  // Sanitize genderCategory: handle array or comma-separated string
-  if (req.body.genderCategory) {
-    if (typeof req.body.genderCategory === 'string') {
-      req.body.genderCategory = req.body.genderCategory.split(',').map(item => item.trim());
-    } else if (!Array.isArray(req.body.genderCategory)) {
-      req.body.genderCategory = [req.body.genderCategory];
+  let updateData = { ...req.body };
+
+  // Sanitize genderCategory: handle array or JSON/comma-separated string
+  if (updateData.genderCategory) {
+    if (typeof updateData.genderCategory === 'string') {
+      try {
+        const parsed = JSON.parse(updateData.genderCategory);
+        updateData.genderCategory = Array.isArray(parsed) ? parsed : [parsed];
+      } catch {
+        updateData.genderCategory = updateData.genderCategory.split(',').map(item => item.trim());
+      }
+    } else if (!Array.isArray(updateData.genderCategory)) {
+      updateData.genderCategory = [updateData.genderCategory];
+    }
+  }
+
+  // Sanitize category: handle array or JSON/comma-separated string
+  if (updateData.category || updateData['category[]']) {
+    let cat = updateData.category || updateData['category[]'];
+    if (typeof cat === 'string') {
+      try {
+        const parsed = JSON.parse(cat);
+        cat = Array.isArray(parsed) ? parsed : [parsed];
+      } catch {
+        cat = cat.split(',').map(item => item.trim());
+      }
+    } else if (!Array.isArray(cat)) {
+      cat = [cat];
+    }
+    updateData.category = cat;
+    delete updateData['category[]'];
+  }
+
+  // Sanitize address: parse if JSON string and guarantee GeoJSON Point
+  if (updateData.address) {
+    let addressObj = updateData.address;
+    if (typeof addressObj === 'string') {
+      try {
+        addressObj = JSON.parse(addressObj);
+      } catch (err) {
+        console.error("Failed to parse address in updateMerchantById:", err);
+      }
+    }
+    if (typeof addressObj === 'object' && addressObj !== null) {
+      const lat = addressObj.latitude ?? addressObj.location?.coordinates?.[1];
+      const lng = addressObj.longitude ?? addressObj.location?.coordinates?.[0];
+      const latNum = parseFloat(lat);
+      const lngNum = parseFloat(lng);
+      if (!isNaN(latNum) && !isNaN(lngNum)) {
+        addressObj.latitude = latNum;
+        addressObj.longitude = lngNum;
+        addressObj.location = {
+          type: "Point",
+          coordinates: [lngNum, latNum], // [lng, lat] GeoJSON standard
+        };
+      }
+      updateData.address = addressObj;
+    }
+  }
+
+  // Sanitize operatingHours: parse if JSON string and map open/close
+  if (updateData.operatingHours) {
+    let hoursObj = updateData.operatingHours;
+    if (typeof hoursObj === 'string') {
+      try {
+        hoursObj = JSON.parse(hoursObj);
+      } catch (err) {
+        console.error("Failed to parse operatingHours in updateMerchantById:", err);
+      }
+    }
+    if (typeof hoursObj === 'object' && hoursObj !== null) {
+      updateData.operatingHours = {
+        open: hoursObj.open || hoursObj.openTime || "09:00",
+        close: hoursObj.close || hoursObj.closeTime || "21:00",
+        daysOpen: Array.isArray(hoursObj.daysOpen) ? hoursObj.daysOpen : [],
+      };
     }
   }
 
   // Handle warehouse assignment
-  let updateData = { ...req.body };
   let updateOperation = { $set: updateData };
 
   if (req.body.warehouseId) {

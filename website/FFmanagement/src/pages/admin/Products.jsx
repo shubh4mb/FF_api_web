@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react'
-import { getBaseProducts, toggleProductStatus, toggleProductVerification } from '@/api/products'
+import { getBaseProducts, toggleProductStatus, toggleProductVerification, deleteProduct } from '@/api/products'
 import { getMerchants } from '@/api/merchants'
 import { getZones } from '@/api/zone'
 import ReusableAdminTable from '@/components/admin/Table'
 import ProductDetailsModal from '@/components/admin/ProductDetailsModal'
+import EditProductModal from '@/components/admin/EditProductModal'
 import useTableFeatures from '@/hooks/useTableFeatures'
 import { useNavigate } from 'react-router-dom'
 import { Package, Eye } from 'lucide-react'
@@ -16,6 +17,8 @@ const Products = () => {
   const [zonesList, setZonesList] = useState([]);
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [viewModalOpen, setViewModalOpen] = useState(false);
+  const [editingProduct, setEditingProduct] = useState(null);
+  const [editModalOpen, setEditModalOpen] = useState(false);
 
   // --- Filter definitions ---
   const filterDefs = [
@@ -198,7 +201,10 @@ const Products = () => {
     },
     {
       label: "Edit",
-      onClick: (row) => console.log("Edit", row),
+      onClick: (row) => {
+        setEditingProduct(row);
+        setEditModalOpen(true);
+      },
     },
     {
       label: "Variants",
@@ -242,7 +248,17 @@ const Products = () => {
     },
     {
       label: "Delete",
-      onClick: (row) => console.log("Delete", row),
+      onClick: async (row) => {
+        if (window.confirm(`Are you sure you want to delete "${row.name}"? This will deactivate the product.`)) {
+          try {
+            await deleteProduct(row._id);
+            setProducts((prev) => prev.filter((p) => p._id !== row._id));
+          } catch (err) {
+            console.error(err);
+            alert("Failed to delete product: " + (err.message || err));
+          }
+        }
+      },
     },
   ];
 
@@ -340,6 +356,21 @@ const Products = () => {
           await toggleProductVerification(id);
           setProducts((prev) =>
             prev.map((p) => (p._id === id ? { ...p, isVerified: !p.isVerified } : p))
+          );
+        }}
+      />
+
+      {/* Product Edit Modal */}
+      <EditProductModal
+        isOpen={editModalOpen}
+        onClose={() => {
+          setEditModalOpen(false);
+          setEditingProduct(null);
+        }}
+        product={editingProduct}
+        onSuccess={(updated) => {
+          setProducts((prev) =>
+            prev.map((p) => (p._id === updated._id ? { ...p, ...updated } : p))
           );
         }}
       />

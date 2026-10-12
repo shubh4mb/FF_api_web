@@ -121,11 +121,20 @@ function resolveAndValidateProduct(product, categoryOptions) {
   // 1. Match category
   let category = level0Categories.find((c) => matchName(c.name, product.category));
 
+  // 1b. Substring or inclusion match for category
+  if (!category && product.category) {
+    const normP = normalizeString(product.category);
+    category = level0Categories.find((c) => {
+      const normC = normalizeString(c.name);
+      return normC.includes(normP) || normP.includes(normC);
+    });
+  }
+
   // 2. Match subcategory under identified category
   let subCategory = null;
   if (category) {
     subCategory = level1Categories.find(
-      (c) => c.parentId === category.id && matchName(c.name, product.subCategory)
+      (c) => String(c.parentId) === String(category.id) && matchName(c.name, product.subCategory)
     );
   }
 
@@ -133,10 +142,41 @@ function resolveAndValidateProduct(product, categoryOptions) {
   if (!subCategory && product.subCategory) {
     subCategory = level1Categories.find((c) => matchName(c.name, product.subCategory));
     if (subCategory && subCategory.parentId) {
-      const parent = level0Categories.find((c) => c.id === subCategory.parentId);
+      const parent = level0Categories.find((c) => String(c.id) === String(subCategory.parentId));
       if (parent) {
         category = parent;
       }
+    }
+  }
+
+  // 3b. Partial/substring match for subcategory globally
+  if (!subCategory && product.subCategory) {
+    const normSub = normalizeString(product.subCategory);
+    subCategory = level1Categories.find((c) => {
+      const normC = normalizeString(c.name);
+      return normC.includes(normSub) || normSub.includes(normC);
+    });
+    if (subCategory && subCategory.parentId) {
+      const parent = level0Categories.find((c) => String(c.id) === String(subCategory.parentId));
+      if (parent) {
+        category = parent;
+      }
+    }
+  }
+
+  // 4. Safe fallback if still not matched
+  if (!category && level0Categories.length > 0) {
+    category = level0Categories[0];
+  }
+
+  if ((!subCategory || !subCategory.id) && category) {
+    const defaultSub = level1Categories.find((c) => String(c.parentId) === String(category.id));
+    if (defaultSub) {
+      subCategory = defaultSub;
+    } else if (level1Categories.length > 0) {
+      subCategory = level1Categories[0];
+      const parent = level0Categories.find((c) => String(c.id) === String(subCategory.parentId));
+      if (parent) category = parent;
     }
   }
 

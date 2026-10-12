@@ -354,7 +354,7 @@ export const updateSize = async (req, res) => {
   try {
     const { productId, variantId, sizeId } = req.params;
     const { size, stock } = req.body;
-    const safeStock = isNaN(Number(stock)) ? 0 : Number(stock);
+    const safeStock = isNaN(Number(stock)) ? 0 : Math.max(0, Number(stock));
 
     let ownerCondition = {};
     if (!req.admin) {
@@ -365,17 +365,39 @@ export const updateSize = async (req, res) => {
         : { merchantId: req.merchantId };
     }
 
+    let updatedFlatDoc = null;
+
     if (sizeId) {
       const isObjId = mongoose.Types.ObjectId.isValid(sizeId);
       const query = isObjId
         ? { _id: sizeId, ...ownerCondition }
-        : { styleGroupId: productId, size: sizeId, ...ownerCondition };
+        : {
+            $or: [{ styleGroupId: productId }, { _id: productId }],
+            size: new RegExp(`^${String(sizeId).trim()}$`, 'i'),
+            ...ownerCondition
+          };
 
       updatedFlatDoc = await ProductFlat.findOneAndUpdate(
         query,
         { $set: { stock: safeStock } },
         { new: true }
       );
+
+      // Fallback: if isObjId was true but not found by _id, try finding by size name or styleGroupId
+      if (!updatedFlatDoc) {
+        const fallbackQuery = {
+          $or: [
+            { styleGroupId: productId, size: size ? new RegExp(`^${String(size).trim()}$`, 'i') : new RegExp(`^${String(sizeId).trim()}$`, 'i') },
+            { _id: productId, size: size ? new RegExp(`^${String(size).trim()}$`, 'i') : new RegExp(`^${String(sizeId).trim()}$`, 'i') }
+          ],
+          ...ownerCondition
+        };
+        updatedFlatDoc = await ProductFlat.findOneAndUpdate(
+          fallbackQuery,
+          { $set: { stock: safeStock } },
+          { new: true }
+        );
+      }
     } else {
       const allFlatVariants = await ProductFlat.find({ styleGroupId: productId, ...ownerCondition });
       const targetColorVariants = allFlatVariants.filter(
@@ -408,14 +430,73 @@ export const updateSize = async (req, res) => {
       return res.status(404).json({ message: "Product or size not found" });
     }
 
-    const siblings = await ProductFlat.find({ styleGroupId: productId, isActive: true });
+    const targetStyleGroupId = updatedFlatDoc.styleGroupId || productId;
+    const siblings = await ProductFlat.find({ styleGroupId: targetStyleGroupId, isDeleted: { $ne: true } });
     return res.json({
+      success: true,
       message: sizeId ? "Stock updated successfully" : "New size added",
       product: makeFlatPayload(siblings)
     });
   } catch (err) {
     console.error("Error updating stock:", err);
     res.status(500).json({ message: "Internal Server Error", error: err.message });
+  }
+};
+
+export const updateStockBatch = async (req, res) => {
+  try {
+    const rawUpdates = req.body.updates || req.body.sizes || [];
+    if (!Array.isArray(rawUpdates) || rawUpdates.length === 0) {
+      return res.status(400).json({ success: false, message: "Updates array is required" });
+    }
+
+    let ownerCondition = {};
+    if (!req.admin) {
+      const merchant = await Merchant.findById(req.merchantId);
+      const isWarehouse = merchant && merchant.accountType === 'warehouse' && merchant.warehouseId;
+      ownerCondition = isWarehouse
+        ? { warehouseId: merchant.warehouseId, source: 'warehouse' }
+        : { merchantId: req.merchantId };
+    }
+
+    const bulkOps = [];
+    for (const item of rawUpdates) {
+      const sizeId = item.sizeId || item._id || item.size;
+      const safeStock = isNaN(Number(item.stock)) ? 0 : Math.max(0, Number(item.stock));
+      const productId = item.productId || item.styleGroupId;
+
+      if (!sizeId) continue;
+
+      const isObjId = mongoose.Types.ObjectId.isValid(sizeId);
+      const filter = isObjId
+        ? { _id: sizeId, ...ownerCondition }
+        : {
+            $or: [{ styleGroupId: productId }, { _id: productId }],
+            size: new RegExp(`^${String(sizeId).trim()}$`, 'i'),
+            ...ownerCondition
+          };
+
+      bulkOps.push({
+        updateOne: {
+          filter,
+          update: { $set: { stock: safeStock } }
+        }
+      });
+    }
+
+    if (bulkOps.length === 0) {
+      return res.status(400).json({ success: false, message: "No valid stock updates to apply" });
+    }
+
+    const result = await ProductFlat.bulkWrite(bulkOps);
+    return res.status(200).json({
+      success: true,
+      message: `Stock updated successfully for ${result.modifiedCount || bulkOps.length} size(s)`,
+      modifiedCount: result.modifiedCount
+    });
+  } catch (err) {
+    console.error("Error in updateStockBatch:", err);
+    res.status(500).json({ success: false, message: "Internal Server Error", error: err.message });
   }
 };
 
@@ -427,10 +508,18 @@ export const updateSizeCount = async (req, res) => {
     if (!sizeId) {
       return res.status(400).json({ message: "Size ID is required for stock updates" });
     }
-    const safeStock = isNaN(Number(stock)) ? 0 : Number(stock);
+    const safeStock = isNaN(Number(stock)) ? 0 : Math.max(0, Number(stock));
 
-    const query = { _id: sizeId, styleGroupId: productId };
-    if (!req.admin) query.merchantId = req.merchantId;
+    let ownerCondition = {};
+    if (!req.admin) {
+      const merchant = await Merchant.findById(req.merchantId);
+      const isWarehouse = merchant && merchant.accountType === 'warehouse' && merchant.warehouseId;
+      ownerCondition = isWarehouse
+        ? { warehouseId: merchant.warehouseId, source: 'warehouse' }
+        : { merchantId: req.merchantId };
+    }
+
+    const query = { _id: sizeId, ...ownerCondition };
 
     const updatedFlatDoc = await ProductFlat.findOneAndUpdate(
       query,
@@ -441,8 +530,10 @@ export const updateSizeCount = async (req, res) => {
       return res.status(404).json({ message: "Product, variant, or size not found" });
     }
 
-    const siblings = await ProductFlat.find({ styleGroupId: productId, isActive: true });
+    const targetStyleGroupId = updatedFlatDoc.styleGroupId || productId;
+    const siblings = await ProductFlat.find({ styleGroupId: targetStyleGroupId, isDeleted: { $ne: true } });
     return res.json({
+      success: true,
       message: "Stock updated successfully",
       product: makeFlatPayload(siblings)
     });
@@ -1529,32 +1620,55 @@ export const editProduct = async (req, res) => {
             { $set: setFields }
           );
         } else {
-          const base = doc.toObject();
-          delete base._id;
-          delete base.__v;
-          delete base.createdAt;
-          delete base.updatedAt;
-
-          const parentProductCode = base.productCode?.split('-')[0] || base.productCode || 'PRD';
-          const cleanColor = (base.color?.name || 'DEFAULT').replace(/\s+/g, '').toUpperCase();
-
-          let productCode;
-          if (sizeObj.merchantSizeCode) {
-             const merchantPrefix = base.productCode?.split('-').slice(0, 2).join('-') || 'PRD';
-             productCode = `${merchantPrefix}-${sizeObj.merchantSizeCode.toUpperCase().replace(/\s+/g, '')}-${cleanSize}`;
-          } else {
-             productCode = `${parentProductCode}-${cleanColor}-${cleanSize}-${Date.now().toString(36).toUpperCase()}`;
-          }
-
-          const newSizeDoc = new ProductFlat({
-            ...base,
-            ...sharedFields,
-            size: sizeObj.size,
-            stock: Number(sizeObj.stock) || 0,
-            merchantSizeCode: sizeObj.merchantSizeCode,
-            productCode: productCode
+          // Check if an existing document with this size already exists (including soft-deleted)
+          const existingSameSize = await ProductFlat.findOne({
+            styleGroupId: doc.styleGroupId,
+            ...colorQuery,
+            size: cleanSize
           });
-          await newSizeDoc.save();
+
+          if (existingSameSize) {
+            const setFields = {
+              ...sharedFields,
+              size: sizeObj.size,
+              stock: Number(sizeObj.stock) || 0,
+              isDeleted: false
+            };
+            if (sizeObj.merchantSizeCode !== undefined) {
+              setFields.merchantSizeCode = sizeObj.merchantSizeCode;
+            }
+            await ProductFlat.updateOne(
+              { _id: existingSameSize._id },
+              { $set: setFields }
+            );
+          } else {
+            const base = doc.toObject();
+            delete base._id;
+            delete base.__v;
+            delete base.createdAt;
+            delete base.updatedAt;
+
+            const parentProductCode = base.productCode?.split('-')[0] || base.productCode || 'PRD';
+            const cleanColor = (base.color?.name || 'DEFAULT').replace(/\s+/g, '').toUpperCase();
+
+            let productCode;
+            if (sizeObj.merchantSizeCode) {
+               const merchantPrefix = base.productCode?.split('-').slice(0, 2).join('-') || 'PRD';
+               productCode = `${merchantPrefix}-${sizeObj.merchantSizeCode.toUpperCase().replace(/\s+/g, '')}-${cleanSize}`;
+            } else {
+               productCode = `${parentProductCode}-${cleanColor}-${cleanSize}-${Date.now().toString(36).toUpperCase()}`;
+            }
+
+            const newSizeDoc = new ProductFlat({
+              ...base,
+              ...sharedFields,
+              size: sizeObj.size,
+              stock: Number(sizeObj.stock) || 0,
+              merchantSizeCode: sizeObj.merchantSizeCode,
+              productCode: productCode
+            });
+            await newSizeDoc.save();
+          }
         }
       }
     }
@@ -1571,6 +1685,7 @@ export const editProduct = async (req, res) => {
     const variantLevelFields = {};
 
     Object.keys(sharedFields).forEach(key => {
+      if (key === 'stock') return; // Do not overwrite per-size stocks with global stock
       if (styleFieldKeys.includes(key)) {
         styleLevelFields[key] = sharedFields[key];
       } else {
@@ -2120,6 +2235,93 @@ export const createProductFull = async (req, res) => {
   } catch (err) {
     console.error("Create product full error:", err);
     res.status(500).json({ success: false, message: "Server error" });
+  }
+};
+
+/**
+ * AI-assisted product analysis controller.
+ * Analyzes an uploaded product image using Gemini and returns extracted metadata
+ * (name, styleName, description, gender, category, categoryId, subCategory, subCategoryId, tags, color, isTriable)
+ * so merchant web and mobile apps can auto-fill form fields with beautiful UI/UX.
+ */
+export const analyzeProductAi = async (req, res) => {
+  try {
+    console.log('🤖 [AI Product Analysis] Incoming request for merchant:', req.merchantId || req.body?.merchantId || 'Unknown');
+    const files = req.files || [];
+    let imageFile = null;
+
+    if (Array.isArray(files) && files.length > 0) {
+      imageFile = files.find(f => ['image', 'productImage', 'aiImage', 'file', 'photo'].includes(f.fieldname)) || files[0];
+    } else if (req.file) {
+      imageFile = req.file;
+    }
+
+    let imageInput = null;
+    let mimeType = 'image/jpeg';
+
+    if (Array.isArray(files) && files.length > 0) {
+      const buffers = files.filter(f => f.buffer).map(f => ({ buffer: f.buffer, mimetype: f.mimetype }));
+      if (buffers.length > 1) {
+        imageInput = buffers;
+      } else if (buffers.length === 1) {
+        imageInput = buffers[0].buffer;
+        mimeType = buffers[0].mimetype || 'image/jpeg';
+      }
+    } else if (imageFile && imageFile.buffer) {
+      imageInput = imageFile.buffer;
+      mimeType = imageFile.mimetype || 'image/jpeg';
+    } else if (req.body.image && typeof req.body.image === 'string') {
+      imageInput = req.body.image;
+      if (req.body.mimeType) mimeType = req.body.mimeType;
+    }
+
+    if (!imageInput) {
+      return res.status(400).json({
+        success: false,
+        message: "A product image is required for AI analysis. Upload an image file (e.g. 'image') or provide a base64 string in 'image'."
+      });
+    }
+
+    let aiMetadata;
+    try {
+      aiMetadata = await analyzeProductImage(imageInput, mimeType);
+    } catch (aiErr) {
+      console.error("AI product image analysis error:", aiErr);
+      return res.status(422).json({
+        success: false,
+        message: `AI product analysis failed: ${aiErr.message}`
+      });
+    }
+
+    // Optional merchant gender filtering if configured
+    const targetMerchantId = req.merchantId || req.body?.merchantId;
+    if (targetMerchantId) {
+      try {
+        const merchantDoc = await Merchant.findById(targetMerchantId).select('genderCategory').lean();
+        if (merchantDoc && Array.isArray(merchantDoc.genderCategory) && merchantDoc.genderCategory.length > 0) {
+          const allowedUpper = merchantDoc.genderCategory.map(g => String(g).trim().toUpperCase());
+          let curGenders = Array.isArray(aiMetadata.gender) ? aiMetadata.gender : (aiMetadata.gender ? [aiMetadata.gender] : []);
+          const filteredGenders = curGenders.filter(g => allowedUpper.includes(String(g).toUpperCase()));
+          if (filteredGenders.length > 0) {
+            aiMetadata.gender = filteredGenders;
+          }
+        }
+      } catch (err) {
+        // non-blocking
+      }
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Product image analyzed successfully with Gemini AI",
+      data: aiMetadata
+    });
+  } catch (error) {
+    console.error("Unexpected error in analyzeProductAi:", error);
+    return res.status(500).json({
+      success: false,
+      message: error.message || "Failed to analyze product image with AI"
+    });
   }
 };
 
