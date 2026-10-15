@@ -180,6 +180,14 @@ function resolveAndValidateProduct(product, categoryOptions) {
     }
   }
 
+  if (!category && level0Categories.length > 0) {
+    category = level0Categories[0];
+  }
+
+  if (!subCategory && level1Categories.length > 0) {
+    subCategory = level1Categories[0];
+  }
+
   if (!category) {
     throw new Error(`Invalid or unrecognized category returned by AI: "${product.category}"`);
   }
@@ -321,8 +329,7 @@ DO NOT generate:
     },
   }));
 
-  const response = await ai.models.generateContent({
-    model: "gemini-3.5-flash-lite",
+  const requestPayload = {
     contents: [
       ...imageParts,
       {
@@ -379,7 +386,24 @@ DO NOT generate:
         ],
       },
     },
-  });
+  };
+
+  let response;
+  const primaryModel = process.env.GEMINI_MODEL || "gemini-3.8-flash";
+  const fallbackModel = "gemini-3.5-flash-lite";
+
+  try {
+    response = await ai.models.generateContent({
+      model: primaryModel,
+      ...requestPayload,
+    });
+  } catch (err) {
+    console.warn(`[Gemini AI] Model ${primaryModel} failed (${err.message}). Retrying with ${fallbackModel}...`);
+    response = await ai.models.generateContent({
+      model: fallbackModel,
+      ...requestPayload,
+    });
+  }
 
   let parsed;
   const rawText = (response.text || "").trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "");

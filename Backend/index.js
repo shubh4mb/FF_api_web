@@ -17,6 +17,7 @@ import { registerOrderSockets } from './src/sockets/order.socket.js';
 import { registerUserSockets } from './src/sockets/user.socket.js';
 import { registerDeliveryRiderSockets } from './src/sockets/deliveryRider.socket.js';
 import { registerWarehouseOrderSockets } from './src/sockets/warehouseOrder.socket.js';
+import { registerAdminSockets } from './src/sockets/admin.socket.js';
 
 const PORT = process.env.PORT || 5000;
 
@@ -67,20 +68,26 @@ io.on('connection', (socket) => {
   const role = socket.handshake.query.role;
   console.log(`🔌 Socket connected: ${socket.id}, role: ${role}`);
 
-  if (role === "merchant") {
+  if (role === "admin") {
+    registerAdminSockets(io, socket);
+    registerWarehouseOrderSockets(io, socket);
+  } else if (role === "merchant") {
     registerMerchantSockets(io, socket);
-  } else if (role === "warehouse" || role === "admin") {
+  } else if (role === "warehouse") {
     registerWarehouseOrderSockets(io, socket);
   } else if (role === "user") {
     registerUserSockets(io, socket);
   } else if (role === "deliveryRider") {
     registerDeliveryRiderSockets(io, socket);
   } else {
-    // Default: register warehouse and merchant sockets
+    // Default: register warehouse, merchant, and admin sockets
     registerWarehouseOrderSockets(io, socket);
     registerMerchantSockets(io, socket);
+    registerAdminSockets(io, socket);
   }
 
+  // Always register admin socket listener in case client role was not set in handshake query
+  registerAdminSockets(io, socket);
   registerOrderSockets(io, socket);
 
   socket.on('disconnect', () => {

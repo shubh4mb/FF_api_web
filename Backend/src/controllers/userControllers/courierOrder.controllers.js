@@ -97,9 +97,13 @@ export const initiateCourierOrder = async (req, res) => {
       if (availableStock < item.quantity) {
         return res.status(400).json({
           success: false,
+          code: 'OUT_OF_STOCK',
+          itemName: flatDoc.name,
+          size: item.size,
+          availableStock,
           message: availableStock > 0
-            ? `Only ${availableStock} left in stock for "${flatDoc.name}" (${item.size}). Please adjust your cart.`
-            : `"${flatDoc.name}" (${item.size}) is currently out of stock. Please remove it to proceed.`
+            ? `Only ${availableStock} left in stock for "${flatDoc.name}" (Size: ${item.size}). Another customer may have reserved the rest.`
+            : `Sorry, "${flatDoc.name}" (Size: ${item.size}) just went out of stock because another customer placed an order. Please remove it from your bag to proceed.`
         });
       }
 

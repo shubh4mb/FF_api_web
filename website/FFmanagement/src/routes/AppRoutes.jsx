@@ -46,6 +46,7 @@ import WarehouseManagement from '../pages/admin/WarehouseManagement';
 import WarehouseProducts from '../pages/admin/WarehouseProducts';
 import WarehouseOrders from '../pages/admin/WarehouseOrders';
 import Transactions from '../pages/admin/Transactions';
+import LiveOrders from '../pages/admin/LiveOrders';
 
 
 
@@ -62,6 +63,8 @@ const AppRoutes = () => {
         <Route path="/admin" element={<ProtectedAdminRoute />}>
           <Route element={<AdminLayout />}>
             <Route index element={<AdminDashboard />} />
+            <Route path="live-orders" element={<LiveOrders />} />
+            <Route path="orders" element={<Navigate to="/admin/live-orders" replace />} />
             <Route path="leads" element={<SalesLeads />} />
             <Route path="leads/map" element={<LeadsMap />} />
             <Route path="leads/dashboard" element={<LeadsDashboard />} />

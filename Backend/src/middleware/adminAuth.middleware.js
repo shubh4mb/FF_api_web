@@ -13,14 +13,16 @@ export const verifyAdmin = asyncHandler(async (req, res, next) => {
 
         const decodedToken = jwt.verify(token, process.env.JWT_SECRET);
 
-        // Uses adminId defined in token payload
-        const admin = await Admin.findById(decodedToken.adminId).select("-password");
+        // Uses adminId or id defined in token payload
+        const targetAdminId = decodedToken.adminId || decodedToken.id || decodedToken._id;
+        const admin = await Admin.findById(targetAdminId).select("-password");
 
         if (!admin) {
             throw new ApiError(401, "Invalid Access Token or Admin not found");
         }
 
         req.admin = admin; // Injecting explicitly as req.admin
+        req.adminId = admin._id;
         next();
     } catch (error) {
         throw new ApiError(401, error?.message || "Invalid access token");

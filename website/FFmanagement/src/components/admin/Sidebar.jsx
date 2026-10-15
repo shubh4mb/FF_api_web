@@ -8,6 +8,7 @@ function Sidebar({ isOpen, onClose }) {
   // Navigation items definition
   const menuItems = [
     { to: '/admin', label: 'Dashboard', end: true, roles: ['superadmin'] },
+    { to: '/admin/live-orders', label: 'Live Orders', roles: ['superadmin'], isLive: true },
     { to: '/admin/leads', label: 'Sales Leads', roles: ['superadmin', 'sales'] },
     { to: '/admin/category', label: 'Category', roles: ['superadmin'] },
     { to: '/admin/merchants', label: 'Merchants', roles: ['superadmin'] },
@@ -81,13 +82,19 @@ function Sidebar({ isOpen, onClose }) {
                   end={item.end}
                   onClick={onClose}
                   className={({ isActive }) =>
-                    `block px-4 py-2.5 rounded-lg transition-colors text-sm ${isActive
+                    `flex items-center justify-between px-4 py-2.5 rounded-lg transition-colors text-sm ${isActive
                       ? 'bg-sky-400 text-slate-800 font-semibold'
                       : 'hover:bg-slate-700 hover:text-sky-400'
                     }`
                   }
                 >
-                  {item.label}
+                  <span className="truncate">{item.label}</span>
+                  {item.isLive && (
+                    <span className="flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-black bg-rose-500/20 text-rose-300 border border-rose-500/30 animate-pulse">
+                      <span className="w-1.5 h-1.5 rounded-full bg-rose-400"></span>
+                      LIVE
+                    </span>
+                  )}
                 </NavLink>
               </li>
             ))}

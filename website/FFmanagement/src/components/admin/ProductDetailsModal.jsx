@@ -2,12 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { 
   X, Check, Copy, ExternalLink, Package, Tag, Layers, 
   Store, ShieldCheck, ShieldAlert, Sparkles, AlertCircle,
-  Eye, CheckCircle2, XCircle, ArrowUpRight, Barcode
+  Eye, CheckCircle2, XCircle, ArrowUpRight, Barcode, Trash2
 } from 'lucide-react';
 import { getBaseProductById } from '@/api/products';
 import { useNavigate } from 'react-router-dom';
 
-export default function ProductDetailsModal({ isOpen, onClose, product, onToggleStatus, onToggleVerification }) {
+export default function ProductDetailsModal({ isOpen, onClose, product, onToggleStatus, onToggleVerification, onDelete }) {
   const navigate = useNavigate();
   const [details, setDetails] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -431,6 +431,17 @@ export default function ProductDetailsModal({ isOpen, onClose, product, onToggle
               <Sparkles className="w-3.5 h-3.5 text-amber-500" />
               Matching Products
             </button>
+            {onDelete && (
+              <button
+                onClick={() => {
+                  onDelete(currentData);
+                }}
+                className="px-3.5 py-2 text-xs font-semibold text-rose-600 bg-rose-50 border border-rose-200 hover:bg-rose-100 rounded-xl transition-all flex items-center gap-1.5"
+              >
+                <Trash2 className="w-3.5 h-3.5 text-rose-500" />
+                Delete
+              </button>
+            )}
           </div>
 
           <button

@@ -134,7 +134,10 @@ export const addToCart = async (req, res) => {
 
       if (existingItem) {
         if ((existingItem.quantity + quantity) > sizeObjStock) {
-          return res.status(400).json({ message: `Only ${sizeObjStock} items left in stock` });
+          const itemText = sizeObjStock === 1 ? '1 item' : `${sizeObjStock} items`;
+          return res.status(400).json({ 
+            message: `Only ${itemText} available for size ${size}, and you already have ${existingItem.quantity} in your bag.` 
+          });
         }
         existingItem.quantity += quantity;
         existingItem.stockQuantity = sizeObjStock;

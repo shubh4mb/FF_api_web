@@ -3,8 +3,8 @@ import { addCategory, getCategories, updateCategory, getCategoryById } from '../
 import { addMerchant, getMerchants, getMerchantById, updateMerchantById, verifyMerchant, toggleMerchantWarehouseStatus, assignWarehouseToMerchant, removeWarehouseFromMerchant, toggleMerchantStoreStatus } from '../controllers/adminControllers/merchant.controllers.js';
 import { addBrand, getBrands } from '../controllers/adminControllers/brand.controllers.js';
 import upload, { handleMulterError } from '../middleware/multer.js';
-import { getBaseProducts, getVariants, getBaseProductById, addVariant, getProductsByMerchantId, updateMatchingProducts, toggleProductStatus, toggleProductVerification } from '../controllers/adminControllers/product.controllers.js';
-import { editProduct, deleteProduct, updatePrice, updateVariant, deleteVariant } from '../controllers/merchantController/product.controllers.js';
+import { getBaseProducts, getVariants, getBaseProductById, addVariant, getProductsByMerchantId, updateMatchingProducts, toggleProductStatus, toggleProductVerification, deleteProduct } from '../controllers/adminControllers/product.controllers.js';
+import { editProduct, updatePrice, updateVariant, deleteVariant } from '../controllers/merchantController/product.controllers.js';
 import { addTitleBanner } from '../controllers/adminControllers/titleBanner.controllers.js';
 import { addCart, getCart } from '../controllers/adminControllers/cart.controllers.js';
 import { addZone, getAllZones, checkZoneOverlap, updateZone, deleteZone } from '../controllers/adminControllers/zone.controllers.js';
@@ -28,7 +28,7 @@ import {
 } from '../controllers/adminControllers/collection.controllers.js';
 import { createIncentive, getAllIncentives, updateIncentive, toggleIncentive, deleteIncentive } from '../controllers/adminControllers/incentive.controllers.js';
 import { getPayouts, triggerPayout, getPayoutById, getPendingPayouts, markPayoutPaid } from '../controllers/adminControllers/payout.controllers.js';
-import { getCancellationRequests, adminCancelOrder, getUnresponsiveRiderReports, resolveUnresponsiveRider } from '../controllers/adminControllers/order.controllers.js';
+import { getCancellationRequests, adminCancelOrder, getUnresponsiveRiderReports, resolveUnresponsiveRider, getAllAdminOrders, getAdminOrderDetail } from '../controllers/adminControllers/order.controllers.js';
 import { getAuditLogs } from '../controllers/adminControllers/auditLog.controllers.js';
 import { sendBroadcastNotification } from '../controllers/adminControllers/notification.controllers.js';
 import {
@@ -303,6 +303,10 @@ router.get('/support/stats', verifyAdmin, async (req, res) => {
     return res.status(500).json({ message: "Failed to fetch stats" });
   }
 });
+
+// ── Live Orders / Master Order Radar ──
+router.get('/orders', verifyAdmin, getAllAdminOrders);
+router.get('/orders/:orderId', verifyAdmin, getAdminOrderDetail);
 
 // ── Order Cancellations ──
 router.get('/orders/cancellation-requests', verifyAdmin, getCancellationRequests);

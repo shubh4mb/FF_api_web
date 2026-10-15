@@ -98,6 +98,10 @@ export const emitOrderUpdate = async (io, orderId, order) => {
     io.to(dbId).emit("orderUpdate", payload);
   }
 
+  // Always emit to admin room
+  io.to("admin:orders").emit("orderUpdate", payload);
+  io.to("admin").emit("orderUpdate", payload);
+
   console.log(`[Socket] Emitted orderUpdate for order ${cleanId} (status: ${order.orderStatus}, riderStatus: ${order.deliveryRiderStatus})`);
 };
 

@@ -93,15 +93,22 @@ export const createRazorpayOrder = async (req, res) => {
     // === VALIDATE REAL-TIME STOCK FOR ALL ORDER ITEMS ===
     for (const item of merchantItems) {
       if (!item.productId) {
-        return res.status(400).json({ message: "One or more items in your cart are no longer available." });
+        return res.status(400).json({ 
+          code: 'OUT_OF_STOCK',
+          message: "One or more items in your cart are no longer available." 
+        });
       }
       const availableStock = Math.max(0, (item.productId.stock || 0) - (item.productId.reservedStock || 0));
       if (availableStock < item.quantity) {
         const itemName = item.productId.name || "Item";
         return res.status(400).json({
+          code: 'OUT_OF_STOCK',
+          itemName,
+          size: item.size,
+          availableStock,
           message: availableStock > 0
-            ? `Only ${availableStock} left in stock for "${itemName}" (${item.size}). Please adjust your cart.`
-            : `"${itemName}" (${item.size}) is currently out of stock. Please remove it from your cart to proceed.`
+            ? `Only ${availableStock} left in stock for "${itemName}" (Size: ${item.size}). Another customer may have reserved the rest.`
+            : `Sorry, "${itemName}" (Size: ${item.size}) just went out of stock because another customer placed an order. Please remove it from your bag to proceed.`
         });
       }
     }

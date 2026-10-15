@@ -296,7 +296,7 @@ export default function ReusableAdminTable({
                           </button>
 
                           {openActionRow === rowIndex && (
-                            <div className="absolute right-0 top-full mt-1 bg-white rounded-xl shadow-xl border border-slate-200 py-1.5 z-50 min-w-[180px]">
+                            <div className={`absolute right-0 ${rowIndex >= data.length - 2 && data.length > 2 ? 'bottom-full mb-1' : 'top-full mt-1'} bg-white rounded-xl shadow-xl border border-slate-200 py-1.5 z-50 min-w-[180px]`}>
                               {actions.map((action, actionIndex) => {
                                 const label = typeof action.label === 'function' ? action.label(row) : action.label;
                                 // Determine if this is a "destructive" action

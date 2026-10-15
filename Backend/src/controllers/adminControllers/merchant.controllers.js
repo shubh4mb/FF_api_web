@@ -214,7 +214,7 @@ export const getMerchantById = asyncHandler(async (req, res) => {
     // Fallback if ORS fails or is skipped
     if (roadDistanceKm === null) {
       roadDistanceKm = displacementKm;
-      durationMins = Math.ceil(20 + (displacementKm * 4));
+      durationMins = Math.ceil(5 + (displacementKm * 2.5));
     }
     
     const config = await AppConfig.getConfig();

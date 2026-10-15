@@ -2,6 +2,8 @@ import Order from "../../models/order.model.js";
 import WarehouseOrder from "../../models/warehouseOrder.model.js";
 import DeliveryRider from "../../models/deliveryRider.model.js";
 import PendingOrder from "../../models/pendingOrders.model.js";
+import Merchant from "../../models/merchant.model.js";
+import User from "../../models/user.model.js";
 import { getIO } from "../../config/socket.js";
 import { emitOrderUpdate } from "../../sockets/order.socket.js";
 import { emitWarehouseOrderUpdate } from "../../sockets/warehouseOrder.socket.js";
@@ -220,3 +222,153 @@ export const resolveUnresponsiveRider = async (req, res) => {
     return res.status(500).json({ success: false, message: "Server error" });
   }
 };
+
+/**
+ * GET /admin/orders
+ * Master query for all orders across all merchants with socket-synced stats.
+ * Supports filtering by merchantId, status, date, search, pagination.
+ */
+export const getAllAdminOrders = async (req, res) => {
+  try {
+    const { merchantId, status, search, page = 1, limit = 50, date } = req.query;
+
+    const query = {};
+    if (merchantId && merchantId !== 'all') {
+      query.merchantId = merchantId;
+    }
+    if (status && status !== 'all') {
+      if (status.includes(',')) {
+        query.orderStatus = { $in: status.split(',').map(s => s.trim()) };
+      } else {
+        query.orderStatus = status;
+      }
+    }
+
+    if (date) {
+      const startOfDay = new Date(date);
+      startOfDay.setHours(0, 0, 0, 0);
+      const endOfDay = new Date(date);
+      endOfDay.setHours(23, 59, 59, 999);
+      query.createdAt = { $gte: startOfDay, $lte: endOfDay };
+    }
+
+    const limitNum = Math.min(Math.max(parseInt(limit) || 50, 1), 200);
+
+    const [orders, warehouseOrders] = await Promise.all([
+      Order.find(query)
+        .populate('merchantId', 'shopName phoneNumber address logo fulfillmentType isOnline')
+        .populate('userId', 'name phoneNumber email')
+        .populate('deliveryRiderId', 'name phone currentStatus')
+        .sort({ createdAt: -1 })
+        .limit(limitNum)
+        .lean(),
+      WarehouseOrder.find(query)
+        .populate('warehouseId', 'name code address phone')
+        .populate('sourceMerchantId', 'shopName phoneNumber address logo')
+        .populate('userId', 'name phoneNumber email')
+        .populate('deliveryRiderId', 'name phone currentStatus')
+        .sort({ createdAt: -1 })
+        .limit(limitNum)
+        .lean(),
+    ]);
+
+    const formattedWarehouseOrders = warehouseOrders.map(wo => ({
+      ...wo,
+      isWarehouseOrder: true,
+      merchantId: wo.sourceMerchantId || {
+        _id: wo.warehouseId?._id,
+        shopName: wo.warehouseId?.name || 'Warehouse Hub',
+        phoneNumber: wo.warehouseId?.phone,
+        address: wo.warehouseId?.address,
+      },
+      merchantDetails: wo.merchantDetails?.name ? wo.merchantDetails : {
+        name: wo.warehouseId?.name || wo.sourceMerchantId?.shopName || 'Warehouse Hub',
+        phone: wo.warehouseId?.phone || wo.sourceMerchantId?.phoneNumber,
+      }
+    }));
+
+    let combined = [...orders, ...formattedWarehouseOrders].sort(
+      (a, b) => new Date(b.createdAt) - new Date(a.createdAt)
+    );
+
+    if (search && search.trim()) {
+      const s = search.trim().toLowerCase();
+      combined = combined.filter(o => {
+        const idStr = String(o._id || '').toLowerCase();
+        const shortId = idStr.slice(-5);
+        const custName = (o.userId?.name || o.deliveryLocation?.name || '').toLowerCase();
+        const custPhone = (o.userId?.phoneNumber || o.deliveryLocation?.phone || '').toLowerCase();
+        const merchName = (o.merchantId?.shopName || o.merchantDetails?.name || '').toLowerCase();
+        const itemNames = (o.items || []).map(i => (i.name || '').toLowerCase()).join(' ');
+        return idStr.includes(s) || shortId.includes(s) || custName.includes(s) || custPhone.includes(s) || merchName.includes(s) || itemNames.includes(s);
+      });
+    }
+
+    const finalOrders = combined.slice(0, limitNum);
+
+    // Compute live stats for today
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const [todayCount, placedCount, preparingCount, inTransitCount, completedTodayCount] = await Promise.all([
+      Order.countDocuments({ createdAt: { $gte: today } }),
+      Order.countDocuments({ orderStatus: 'placed' }),
+      Order.countDocuments({ orderStatus: { $in: ['accepted', 'packed'] } }),
+      Order.countDocuments({ orderStatus: { $in: ['in_transit', 'try_phase'] } }),
+      Order.countDocuments({ orderStatus: 'completed', createdAt: { $gte: today } }),
+    ]);
+
+    return res.status(200).json({
+      success: true,
+      orders: finalOrders,
+      total: finalOrders.length,
+      summary: {
+        todayOrders: todayCount,
+        placedOrders: placedCount,
+        preparingOrders: preparingCount,
+        inTransitOrders: inTransitCount,
+        completedToday: completedTodayCount,
+      }
+    });
+  } catch (error) {
+    console.error("Get All Admin Orders Error:", error);
+    return res.status(500).json({ success: false, message: "Server error" });
+  }
+};
+
+/**
+ * GET /admin/orders/:orderId
+ * Get comprehensive order detail by ID (from Order or WarehouseOrder)
+ */
+export const getAdminOrderDetail = async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    let order = await Order.findById(orderId)
+      .populate('merchantId', 'shopName phoneNumber address logo fulfillmentType isOnline')
+      .populate('userId', 'name phoneNumber email')
+      .populate('deliveryRiderId', 'name phone currentStatus')
+      .lean();
+
+    if (!order) {
+      order = await WarehouseOrder.findById(orderId)
+        .populate('warehouseId', 'name code address phone')
+        .populate('sourceMerchantId', 'shopName phoneNumber address logo')
+        .populate('userId', 'name phoneNumber email')
+        .populate('deliveryRiderId', 'name phone currentStatus')
+        .lean();
+      if (order) {
+        order.isWarehouseOrder = true;
+      }
+    }
+
+    if (!order) {
+      return res.status(404).json({ success: false, message: "Order not found" });
+    }
+
+    return res.status(200).json({ success: true, order });
+  } catch (error) {
+    console.error("Get Admin Order Detail Error:", error);
+    return res.status(500).json({ success: false, message: "Server error" });
+  }
+};
+

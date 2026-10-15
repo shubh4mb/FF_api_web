@@ -64,6 +64,11 @@ export const notifyWarehouse = async (io, warehouseId, orderData) => {
     io.to(mRoom).emit("newWarehouseOrder", orderData);
     console.log(`📩 [Socket] Also emitted order to merchant room ${mRoom}`);
   }
+
+  // Broadcast to Admin live monitor
+  io.to("admin:orders").emit("newOrder", orderData);
+  io.to("admin").emit("newOrder", orderData);
+  console.log(`📩 [Socket] Emitted warehouse newOrder to room admin:orders`);
 };
 
 /**
@@ -118,4 +123,8 @@ export const emitWarehouseOrderUpdate = async (io, warehouseId, orderId, order) 
     io.to(`user:${cleanUserId}`).emit("orderUpdate", payload);
     io.to(`user:${cleanUserId}`).emit("warehouseOrderUpdate", payload);
   }
+
+  // Always emit to admin room
+  io.to("admin:orders").emit("orderUpdate", payload);
+  io.to("admin").emit("orderUpdate", payload);
 };

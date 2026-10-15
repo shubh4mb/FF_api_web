@@ -167,11 +167,11 @@ const appConfigSchema = new mongoose.Schema(
             },
             mandatoryTitle: {
                 type: String,
-                default: "Mandatory Update Required",
+                default: "App Update Required",
             },
             mandatoryMessage: {
                 type: String,
-                default: "A critical new version of FlashFits is required to continue shopping and tracking orders. Please update now.",
+                default: "Please update FlashFits to the latest version to continue enjoying a seamless shopping and delivery experience.",
             },
             optionalTitle: {
                 type: String,

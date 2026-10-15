@@ -1,6 +1,6 @@
 import express from 'express';
 import { googleLogin, signup } from '../controllers/userControllers/authControllers.js';
-import { newArrivals, productsDetails, getFilteredProducts, getRelatedProducts, getSearchSuggestions, getProductsByMerchantId, getYouMayLikeProducts, getProductsBatch, trendingProducts, recommendedProducts, getCourierProducts, getCollectionProductsByMerchant } from '../controllers/userControllers/product.controllers.js';
+import { newArrivals, productsDetails, getFilteredProducts, getRelatedProducts, getSearchSuggestions, getAvailableSizes, getProductsByMerchantId, getYouMayLikeProducts, getProductsBatch, trendingProducts, recommendedProducts, getCourierProducts, getCollectionProductsByMerchant } from '../controllers/userControllers/product.controllers.js';
 import { phoneLogin, addPushToken } from '../controllers/userControllers/authControllers.js';
 import { addToCart, getCart, clearCart, updateCartQuantity, deleteCartItem, getCartCount, moveToCourier, selectOffer, deselectOffer } from '../controllers/userControllers/cart.controllers.js';
 import { addToCourierCart, getCourierCart, clearCourierCart, updateCourierCartQuantity, deleteCourierCartItem, getCourierCartCount, selectOfferCourier, deselectOfferCourier } from '../controllers/userControllers/courierCart.controllers.js';
@@ -389,6 +389,7 @@ router.get('/products/courier', resolveNearbyMerchants, getCourierProducts);
  */
 router.get('/products/recommended', authMiddlewareOptional, resolveNearbyMerchants, recommendedProducts); // works for both authenticated & guest users
 router.get('/products/search-suggestions', getSearchSuggestions);
+router.get('/products/sizes', getAvailableSizes);
 router.post('/products/filtered', resolveNearbyMerchants, getFilteredProducts)
 router.get('/products/getYouMayLikeProducts', resolveNearbyMerchants, getYouMayLikeProducts);
 

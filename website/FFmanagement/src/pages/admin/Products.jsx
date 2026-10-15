@@ -7,7 +7,8 @@ import ProductDetailsModal from '@/components/admin/ProductDetailsModal'
 import EditProductModal from '@/components/admin/EditProductModal'
 import useTableFeatures from '@/hooks/useTableFeatures'
 import { useNavigate } from 'react-router-dom'
-import { Package, Eye } from 'lucide-react'
+import { Package, Eye, Edit, Trash2, AlertTriangle, Loader2 } from 'lucide-react'
+import toast from 'react-hot-toast'
 
 const Products = () => {
   const navigate = useNavigate();
@@ -19,6 +20,8 @@ const Products = () => {
   const [viewModalOpen, setViewModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState(null);
   const [editModalOpen, setEditModalOpen] = useState(false);
+  const [productToDelete, setProductToDelete] = useState(null);
+  const [deleting, setDeleting] = useState(false);
 
   // --- Filter definitions ---
   const filterDefs = [
@@ -94,7 +97,7 @@ const Products = () => {
     {
       header: "Product",
       accessor: "name",
-      width: "35%",
+      width: "30%",
       sortKey: "name",
       render: (_, row) => {
         const imageUrl = row.variants?.[0]?.images?.[0]?.url || "https://placehold.co/100x100?text=No+Image";
@@ -127,7 +130,7 @@ const Products = () => {
     {
       header: "Category",
       accessor: "categoryId",
-      width: "20%",
+      width: "18%",
       sortKey: "categoryId.name",
       render: (_, row) => {
         const top = row.categoryId?.name;
@@ -153,7 +156,7 @@ const Products = () => {
     {
       header: "Status",
       accessor: "isActive",
-      width: "140px",
+      width: "130px",
       sortKey: false,
       render: (_, row) => (
         <div className="flex flex-col gap-1.5">
@@ -178,6 +181,43 @@ const Products = () => {
         </div>
       ),
     },
+    {
+      header: "Actions",
+      accessor: "_quickActions",
+      width: "110px",
+      sortKey: false,
+      render: (_, row) => (
+        <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+          <button
+            onClick={() => {
+              setSelectedProduct(row);
+              setViewModalOpen(true);
+            }}
+            className="p-1.5 text-slate-400 hover:text-sky-600 hover:bg-sky-50 rounded-lg transition-colors"
+            title="View Details"
+          >
+            <Eye className="w-4 h-4" />
+          </button>
+          <button
+            onClick={() => {
+              setEditingProduct(row);
+              setEditModalOpen(true);
+            }}
+            className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+            title="Edit Product"
+          >
+            <Edit className="w-4 h-4" />
+          </button>
+          <button
+            onClick={() => setProductToDelete(row)}
+            className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+            title="Delete Product"
+          >
+            <Trash2 className="w-4 h-4" />
+          </button>
+        </div>
+      ),
+    },
   ];
 
   // --- Default hidden columns (none hidden by default) ---
@@ -188,6 +228,30 @@ const Products = () => {
       next.has(accessor) ? next.delete(accessor) : next.add(accessor);
       return next;
     });
+  };
+
+  // --- Delete confirmation handler ---
+  const handleConfirmDelete = async () => {
+    if (!productToDelete) return;
+    const targetId = productToDelete._id || productToDelete.styleGroupId;
+    const targetName = productToDelete.name;
+
+    try {
+      setDeleting(true);
+      await deleteProduct(targetId);
+      setProducts((prev) => prev.filter((p) => p._id !== targetId && p.styleGroupId !== targetId));
+      toast.success(`"${targetName}" deleted successfully`);
+      setProductToDelete(null);
+      if (selectedProduct && (selectedProduct._id === targetId || selectedProduct.styleGroupId === targetId)) {
+        setViewModalOpen(false);
+        setSelectedProduct(null);
+      }
+    } catch (err) {
+      console.error("Delete product error:", err);
+      toast.error(err.message || "Failed to delete product");
+    } finally {
+      setDeleting(false);
+    }
   };
 
   // --- Actions ---
@@ -224,9 +288,10 @@ const Products = () => {
               p._id === row._id ? { ...p, isActive: !p.isActive } : p
             )
           );
+          toast.success(`Status updated for "${row.name}"`);
         } catch (err) {
           console.error(err);
-          alert("Failed to toggle product status.");
+          toast.error(err.message || "Failed to toggle product status.");
         }
       },
     },
@@ -240,24 +305,17 @@ const Products = () => {
               p._id === row._id ? { ...p, isVerified: !p.isVerified } : p
             )
           );
+          toast.success(`Verification updated for "${row.name}"`);
         } catch (err) {
           console.error(err);
-          alert("Failed to toggle verification status.");
+          toast.error(err.message || "Failed to toggle verification status.");
         }
       },
     },
     {
       label: "Delete",
-      onClick: async (row) => {
-        if (window.confirm(`Are you sure you want to delete "${row.name}"? This will deactivate the product.`)) {
-          try {
-            await deleteProduct(row._id);
-            setProducts((prev) => prev.filter((p) => p._id !== row._id));
-          } catch (err) {
-            console.error(err);
-            alert("Failed to delete product: " + (err.message || err));
-          }
-        }
+      onClick: (row) => {
+        setProductToDelete(row);
       },
     },
   ];
@@ -358,6 +416,11 @@ const Products = () => {
             prev.map((p) => (p._id === id ? { ...p, isVerified: !p.isVerified } : p))
           );
         }}
+        onDelete={(prod) => {
+          setViewModalOpen(false);
+          setSelectedProduct(null);
+          setProductToDelete(prod);
+        }}
       />
 
       {/* Product Edit Modal */}
@@ -374,6 +437,66 @@ const Products = () => {
           );
         }}
       />
+
+      {/* Delete Confirmation Modal */}
+      {productToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div 
+            className="relative w-full max-w-md bg-white rounded-2xl shadow-2xl p-6 border border-slate-100 space-y-5"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start gap-4">
+              <div className="w-12 h-12 rounded-xl bg-rose-50 border border-rose-100 flex items-center justify-center text-rose-600 shrink-0">
+                <Trash2 className="w-6 h-6" />
+              </div>
+              <div className="space-y-1 min-w-0">
+                <h3 className="text-lg font-bold text-slate-900">Delete Product</h3>
+                <p className="text-xs text-slate-500">
+                  Are you sure you want to delete <span className="font-semibold text-slate-800">"{productToDelete.name}"</span>?
+                </p>
+              </div>
+            </div>
+
+            <div className="p-3.5 bg-rose-50/50 border border-rose-100 rounded-xl text-xs text-rose-700 space-y-1">
+              <p className="font-semibold flex items-center gap-1.5">
+                <AlertTriangle className="w-3.5 h-3.5 shrink-0" /> Notice
+              </p>
+              <p className="text-rose-600/90 leading-relaxed">
+                This will deactivate the product and remove all its variants from active listings and catalog searches.
+              </p>
+            </div>
+
+            <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setProductToDelete(null)}
+                disabled={deleting}
+                className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition-all"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDelete}
+                disabled={deleting}
+                className="px-5 py-2 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 disabled:opacity-50 rounded-xl shadow-sm transition-all flex items-center gap-2"
+              >
+                {deleting ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    Deleting...
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-3.5 h-3.5" />
+                    Delete Product
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

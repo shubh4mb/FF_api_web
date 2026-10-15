@@ -61,13 +61,14 @@ export async function calculateDeliveryCharge({
   const rCharge = finalizedRoadDistance * returnPerKmRate;
   const returnCharge = Math.ceil(rCharge);
 
-  // Estimated Time Calculation
-  const riderToPickupTime = 15;
+  // Estimated Time Calculation (3m merchant prep + 10m rider pickup + road duration)
+  const merchantPrepTime = 3;
+  const riderToPickupTime = 10;
   const deliveryLegTime = roadDurationMins 
     ? roadDurationMins 
-    : Math.ceil(20 + (finalizedRoadDistance * 4));
+    : Math.ceil(5 + (finalizedRoadDistance * 2.5));
     
-  const estimatedTime = riderToPickupTime + deliveryLegTime;
+  const estimatedTime = merchantPrepTime + riderToPickupTime + deliveryLegTime;
 
   return {
     displacementKm,      // Use this for "is within 7km"

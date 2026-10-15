@@ -67,6 +67,32 @@ export const notifyMerchant = async (io, merchantId, orderData) => {
   io.to(room).emit("newWarehouseOrder", orderData);
   console.log(`📩 [Socket] Emitted newOrder & newWarehouseOrder to room ${room}`);
 
+  // Broadcast to Admin live monitor across all merchants
+  try {
+    let adminPayload = orderData;
+    if (typeof orderData === 'object' && orderData !== null) {
+      if (!orderData.merchantId?.shopName && !orderData.merchantDetails?.name && mId) {
+        const merchantDoc = await Merchant.findById(mId).select('shopName phoneNumber address logo fulfillmentType').lean();
+        if (merchantDoc) {
+          adminPayload = {
+            ...orderData,
+            merchantId: merchantDoc,
+            merchantDetails: {
+              name: merchantDoc.shopName,
+              phone: merchantDoc.phoneNumber,
+            }
+          };
+        }
+      }
+    }
+    io.to("admin:orders").emit("newOrder", adminPayload);
+    io.to("admin").emit("newOrder", adminPayload);
+    console.log(`📩 [Socket] Emitted newOrder to room admin:orders for merchant ${mId}`);
+  } catch (adminEmitErr) {
+    io.to("admin:orders").emit("newOrder", orderData);
+    console.warn("Error enriching adminPayload for newOrder:", adminEmitErr);
+  }
+
   // Send Push Notification
   try {
     let title = "New Notification 🔔";

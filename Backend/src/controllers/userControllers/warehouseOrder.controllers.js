@@ -177,7 +177,9 @@ export const createWarehouseTBOrder = asyncHandler(async (req, res) => {
     if (available < cartItem.quantity) {
       throw new ApiError(
         400,
-        `Insufficient stock for ${whProduct.name} (Size: ${cartItem.size}). Available: ${available}`
+        available > 0
+          ? `Only ${available} unit(s) available for "${whProduct.name}" (Size: ${cartItem.size}). Another customer may have reserved the rest.`
+          : `Sorry, "${whProduct.name}" (Size: ${cartItem.size}) just went out of stock because another customer placed an order. Please remove it from your bag to proceed.`
       );
     }
 

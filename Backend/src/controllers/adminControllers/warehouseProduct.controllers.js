@@ -1,3 +1,4 @@
+import mongoose from 'mongoose';
 import Warehouse from '../../models/warehouse.model.js';
 import Merchant from '../../models/merchant.model.js';
 import ProductFlat from '../../models/productFlat.model.js';
@@ -164,12 +165,29 @@ export const toggleWarehouseProductVerification = asyncHandler(async (req, res) 
  * Soft-delete all variants in the styleGroup
  */
 export const deleteWarehouseProduct = asyncHandler(async (req, res) => {
+  const targetId = req.params.warehouseProductId;
+  const isObjId = mongoose.Types.ObjectId.isValid(targetId);
+
+  // Try to find the document first to get its styleGroupId
+  const targetDoc = await ProductFlat.findOne({
+    $or: [
+      { styleGroupId: targetId },
+      ...(isObjId ? [{ _id: new mongoose.Types.ObjectId(targetId) }] : []),
+      { productCode: targetId }
+    ],
+    source: 'warehouse'
+  });
+
+  const filter = targetDoc?.styleGroupId
+    ? { styleGroupId: targetDoc.styleGroupId, source: 'warehouse' }
+    : { styleGroupId: targetId, source: 'warehouse' };
+
   const result = await ProductFlat.updateMany(
-    { styleGroupId: req.params.warehouseProductId, source: 'warehouse' },
+    filter,
     { $set: { isDeleted: true, isActive: false } }
   );
 
   if (result.matchedCount === 0) throw new ApiError(404, 'Warehouse product not found');
 
-  return res.status(200).json(new ApiResponse(200, {}, 'Warehouse product removed'));
+  return res.status(200).json(new ApiResponse(200, { deletedCount: result.modifiedCount }, 'Warehouse product removed'));
 });

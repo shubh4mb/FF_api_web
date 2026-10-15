@@ -860,6 +860,7 @@ export const getFilteredProducts = async (req, res) => {
       subCategoryIds = [],
       selectedColors = [],
       selectedStores = [],
+      selectedSizes = [],
       sortBy = 'newest',
       collectionId,
     } = req.body;
@@ -1053,6 +1054,17 @@ export const getFilteredProducts = async (req, res) => {
       colorOr.push({ 'color.name': { $in: selectedColors } });
 
       andConditions.push({ $or: colorOr });
+    }
+
+    // Size filter
+    if (Array.isArray(selectedSizes) && selectedSizes.length > 0) {
+      const cleanSizes = selectedSizes
+        .filter(s => typeof s === 'string' && s.trim().length > 0)
+        .map(s => s.trim());
+      if (cleanSizes.length > 0) {
+        const sizeRegexes = cleanSizes.map(s => new RegExp(`^${s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i'));
+        andConditions.push({ size: { $in: sizeRegexes } });
+      }
     }
 
     const flatMatch = andConditions.length > 1 ? { $and: andConditions } : andConditions[0];
@@ -1747,6 +1759,22 @@ export const getCollectionProductsByMerchant = async (req, res) => {
     res.status(500).json({ success: false, message: 'Server error' });
   }
 };
+
+export const getAvailableSizes = async (req, res) => {
+  try {
+    const sizes = await ProductFlat.distinct('size', {
+      isActive: true,
+      isDeleted: { $ne: true },
+      stock: { $gt: 0 },
+    });
+    const validSizes = (sizes || []).filter(s => typeof s === 'string' && s.trim().length > 0);
+    return res.status(200).json({ success: true, sizes: validSizes });
+  } catch (error) {
+    console.error('[User] Get available sizes error:', error);
+    return res.status(500).json({ success: false, message: 'Server error' });
+  }
+};
+
 
 
 

@@ -1,3 +1,4 @@
+import mongoose from 'mongoose';
 import { storageService } from '../../services/storage.service.js';
 import { asyncHandler } from '../../utils/asyncHandler.js';
 import { ApiError } from '../../utils/ApiError.js';
@@ -288,4 +289,34 @@ export const toggleProductVerification = asyncHandler(async (req, res) => {
   );
 
   return res.status(200).json(new ApiResponse(200, { isVerified: newStatus }, "Product verification updated successfully"));
+});
+
+export const deleteProduct = asyncHandler(async (req, res) => {
+  const { productId } = req.params;
+  const isObjId = mongoose.Types.ObjectId.isValid(productId);
+
+  const matchConditions = [
+    { styleGroupId: productId },
+    ...(isObjId ? [{ _id: new mongoose.Types.ObjectId(productId) }] : []),
+    { productCode: productId }
+  ];
+
+  const targetDoc = await ProductFlat.findOne({ $or: matchConditions });
+
+  if (!targetDoc) {
+    throw new ApiError(404, "Product not found");
+  }
+
+  const deleteFilter = targetDoc.styleGroupId
+    ? { styleGroupId: targetDoc.styleGroupId }
+    : { _id: targetDoc._id };
+
+  const deleted = await ProductFlat.updateMany(
+    deleteFilter,
+    { $set: { isDeleted: true, isActive: false } }
+  );
+
+  return res.status(200).json(
+    new ApiResponse(200, { deletedCount: deleted.modifiedCount }, "Product deleted successfully")
+  );
 });

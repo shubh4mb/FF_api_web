@@ -134,9 +134,10 @@ export const editProduct = async (productId, data) => {
 export const deleteProduct = async (productId) => {
     try {
         const response = await axiosInstance.delete(`admin/deleteProduct/${productId}`);
-        return response.data;
+        return response?.data || response;
     } catch (error) {
-        console.log(error);
-        throw error.response ? error.response.data : new Error('Network Error');
+        console.error("Delete product API error:", error);
+        const errMsg = error.response?.data?.message || error.response?.data?.error || error.message || 'Network Error';
+        throw new Error(errMsg);
     }
 }
