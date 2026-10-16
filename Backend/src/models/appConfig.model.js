@@ -135,11 +135,11 @@ const appConfigSchema = new mongoose.Schema(
         customerAppVersion: {
             minVersion: {
                 type: String,
-                default: "1.0.0",
+                default: "1.1.2",
             },
             latestVersion: {
                 type: String,
-                default: "1.1.0",
+                default: "1.1.2",
             },
             storeUrl: {
                 type: String,
@@ -151,11 +151,11 @@ const appConfigSchema = new mongoose.Schema(
             },
             minVersionIos: {
                 type: String,
-                default: "1.0.0",
+                default: "1.1.2",
             },
             latestVersionIos: {
                 type: String,
-                default: "1.1.0",
+                default: "1.1.2",
             },
             storeUrlIos: {
                 type: String,

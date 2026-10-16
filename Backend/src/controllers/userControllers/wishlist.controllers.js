@@ -237,3 +237,79 @@ export const getMyWishlistIds = asyncHandler(async (req, res) => {
     wishlistIds: result,
   }, "Wishlist IDs retrieved"));
 });
+
+// @desc    Sync batch of guest wishlist items to user's database wishlist on login
+// @route   POST /api/user/wishlist/sync
+// @access  Private
+export const syncWishlistBatch = asyncHandler(async (req, res) => {
+  const { items } = req.body; // Array of { productId, variantId }
+  const userId = req.user.userId;
+
+  if (!Array.isArray(items) || items.length === 0) {
+    return res.status(200).json(new ApiResponse(200, [], "No items to sync"));
+  }
+
+  const addedItems = [];
+
+  for (const item of items) {
+    const { productId, variantId } = item;
+    if (!productId || !variantId) continue;
+
+    try {
+      const matchingFlatVariants = await ProductFlat.find({
+        $or: [
+          { styleGroupId: productId },
+          ...(mongoose.Types.ObjectId.isValid(productId) ? [{ _id: productId }] : []),
+          ...(mongoose.Types.ObjectId.isValid(variantId) ? [{ _id: variantId }] : []),
+        ],
+        isDeleted: { $ne: true }
+      });
+
+      const matchedDocs = matchingFlatVariants.filter(v => 
+        v._id.toString() === variantId.toString() || 
+        generateColorVariantId(v.styleGroupId || productId, v.color?.name) === variantId.toString()
+      );
+
+      if (!matchedDocs.length && matchingFlatVariants.length > 0) {
+        matchedDocs.push(matchingFlatVariants[0]);
+      }
+
+      if (!matchedDocs.length) continue;
+
+      const baseDoc = matchedDocs[0];
+      const canonicalProductId = baseDoc.styleGroupId ? baseDoc.styleGroupId.toString() : productId.toString();
+      const canonicalVariantId = generateColorVariantId(canonicalProductId, baseDoc.color?.name || 'Default');
+
+      const exists = await Wishlist.findOne({
+        userId,
+        $or: [
+          { productId: canonicalProductId },
+          { variantId: canonicalVariantId },
+          { variantId: variantId.toString() },
+          ...(mongoose.Types.ObjectId.isValid(baseDoc._id) ? [{ variantId: baseDoc._id }] : [])
+        ]
+      });
+
+      if (!exists) {
+        const wishlistItem = await Wishlist.create({
+          userId,
+          productId: canonicalProductId,
+          variantId: canonicalVariantId,
+          variantSnapshot: {
+            color: baseDoc.color,
+            size: baseDoc.size,
+            price: baseDoc.price,
+            mrp: baseDoc.mrp,
+            discount: baseDoc.discount,
+            image: baseDoc.images?.[0]?.url || '',
+          },
+        });
+        addedItems.push(wishlistItem);
+      }
+    } catch (err) {
+      console.warn(`Failed to sync item ${productId} to wishlist:`, err);
+    }
+  }
+
+  return res.status(200).json(new ApiResponse(200, addedItems, "Guest wishlist synced successfully"));
+});

@@ -13,6 +13,7 @@ import {
   removeFromWishlist,
   getMyWishlist,
   getMyWishlistIds,
+  syncWishlistBatch,
 } from '../controllers/userControllers/wishlist.controllers.js';
 import { addToRecentlyViewed, getMyRecentlyViewed } from '../controllers/userControllers/recentlyViewed.controllers.js';
 import { getNearbyMerchants } from '../controllers/userControllers/merchant.controllers.js';
@@ -521,6 +522,7 @@ router.delete('/wishlist/delete/:wishlistItemId', authMiddleware, removeFromWish
 router.get('/wishlist/my', authMiddleware, resolveNearbyMerchants, getMyWishlist);
 
 router.get('/wishlist/ids', authMiddleware, getMyWishlistIds);
+router.post('/wishlist/sync', authMiddleware, syncWishlistBatch);
 
 // router.post('/order/create', authMiddleware, createOrder);
 router.post('/order/create', authMiddleware, createRazorpayOrder);
