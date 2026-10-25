@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import AdminLayout from '../layouts/AdminLayout';
 import MerchantLayout from '../layouts/MerchantLayout';
 import Merchants from '../pages/admin/Merchants';
+import MerchantStatus from '../pages/admin/MerchantStatus';
 import AdminDashboard from '../pages/admin/Dashboard';
 import AddCategory from '../pages/admin/AddCategory';
 import Category from '../pages/admin/Category';
@@ -73,6 +74,7 @@ const AppRoutes = () => {
             <Route path="leads/:id" element={<LeadDetails />} />
             <Route path="category" element={<Category />} />
             <Route path="merchants" element={<Merchants />} />
+            <Route path="merchant-status" element={<MerchantStatus />} />
             <Route path="settings" element={<Settings />} />
             <Route path="add-category" element={<AddCategory />} />
             <Route path="edit-category/:categoryId" element={<EditCategory />} />

@@ -1,6 +1,6 @@
 import express from 'express';
 import { addCategory, getCategories, updateCategory, getCategoryById } from '../controllers/adminControllers/category.controllers.js';
-import { addMerchant, getMerchants, getMerchantById, updateMerchantById, verifyMerchant, toggleMerchantWarehouseStatus, assignWarehouseToMerchant, removeWarehouseFromMerchant, toggleMerchantStoreStatus } from '../controllers/adminControllers/merchant.controllers.js';
+import { addMerchant, getMerchants, getMerchantById, updateMerchantById, verifyMerchant, toggleMerchantWarehouseStatus, assignWarehouseToMerchant, removeWarehouseFromMerchant, toggleMerchantStoreStatus, getMerchantStatusOverview, toggleMerchantOnlineStatusAdmin, bulkToggleMerchantOnlineStatusAdmin } from '../controllers/adminControllers/merchant.controllers.js';
 import { addBrand, getBrands } from '../controllers/adminControllers/brand.controllers.js';
 import upload, { handleMulterError } from '../middleware/multer.js';
 import { getBaseProducts, getVariants, getBaseProductById, addVariant, getProductsByMerchantId, updateMatchingProducts, toggleProductStatus, toggleProductVerification, deleteProduct } from '../controllers/adminControllers/product.controllers.js';
@@ -37,12 +37,56 @@ import {
   getRecipients,
   getTransactionById,
 } from '../controllers/adminControllers/transaction.controllers.js';
+import { getWhatsAppStatus, sendWhatsAppMessage, formatOrderAlertMessage } from '../services/whatsapp.service.js';
 
 const router = express.Router();
 
 router.use('/banners', adminBannerRoutes);
 
+// ── WhatsApp Alerts (Admin) ──
+router.get('/whatsapp/status', verifyAdmin, (req, res) => {
+  return res.status(200).json({ success: true, ...getWhatsAppStatus() });
+});
+
+router.post('/whatsapp/test', verifyAdmin, async (req, res) => {
+  const status = getWhatsAppStatus();
+  if (!status.isConnected) {
+    return res.status(400).json({ success: false, message: "WhatsApp client is not connected yet" });
+  }
+
+  const sampleOrder = {
+    _id: "671600000000000000000123",
+    fulfillmentType: "try_and_buy",
+    merchantDetails: { name: "Zara - Mall of India" },
+    deliveryLocation: {
+      name: "FlashFits Admin Test",
+      phone: "8383823813",
+      addressLine1: "Sector 62",
+      city: "Noida",
+      pincode: "201301",
+    },
+    items: [
+      { name: "Oversized Cotton Tee", size: "L", quantity: 1, price: 999 },
+    ],
+    totalAmount: 999,
+    deliveryCharge: 0,
+    totalPayable: 999,
+    paymentMethod: "online",
+    paymentStatus: "delivery_fee_paid",
+  };
+
+  const msg = formatOrderAlertMessage({ order: sampleOrder, type: "store" });
+  const results = [];
+  for (const jid of status.recipients) {
+    const outcome = await sendWhatsAppMessage(jid, msg);
+    results.push({ recipient: jid, outcome });
+  }
+
+  return res.status(200).json({ success: true, message: "Test alert dispatched", results });
+});
+
 // ── Dashboard Stats ──
+
 router.get('/dashboard/stats', verifyAdmin, getDashboardStats);
 
 // ── Dummy Receipt ──
@@ -86,9 +130,12 @@ router.post('/collection/:id/bulk-add-products', verifyAdmin, bulkAddProducts);
 // ── Merchants ──
 router.post('/addMerchant', verifyAdmin, upload.fields([{ name: 'logo', maxCount: 1 }, { name: 'backgroundImage', maxCount: 1 }]), handleMulterError, addMerchant);
 router.get('/getMerchants', getMerchants);
+router.get('/merchant-status-overview', verifyAdmin, getMerchantStatusOverview);
 router.get('/getMerchant/:id', getMerchantById);
 router.patch('/updateMerchant/:id', verifyAdmin, upload.fields([{ name: 'logo', maxCount: 1 }, { name: 'backgroundImage', maxCount: 1 }]), handleMulterError, updateMerchantById);
 router.patch('/updateMerchant/:id/verify', verifyAdmin, verifyMerchant);
+router.patch('/merchant/:id/toggle-online', verifyAdmin, toggleMerchantOnlineStatusAdmin);
+router.patch('/merchants/bulk-toggle-online', verifyAdmin, bulkToggleMerchantOnlineStatusAdmin);
 router.patch('/merchant/:id/toggle-store-status', verifyAdmin, toggleMerchantStoreStatus);
 router.patch('/merchant/:id/warehouse/:warehouseId/toggle-status', verifyAdmin, toggleMerchantWarehouseStatus);
 router.post('/merchant/:id/warehouse/assign', verifyAdmin, assignWarehouseToMerchant);
@@ -306,7 +353,6 @@ router.get('/support/stats', verifyAdmin, async (req, res) => {
 
 // ── Live Orders / Master Order Radar ──
 router.get('/orders', verifyAdmin, getAllAdminOrders);
-router.get('/orders/:orderId', verifyAdmin, getAdminOrderDetail);
 
 // ── Order Cancellations ──
 router.get('/orders/cancellation-requests', verifyAdmin, getCancellationRequests);
@@ -315,6 +361,9 @@ router.patch('/orders/:orderId/cancel', verifyAdmin, adminCancelOrder);
 // ── Unresponsive Rider Reports ──
 router.get('/orders/unresponsive-rider-reports', verifyAdmin, getUnresponsiveRiderReports);
 router.patch('/orders/:orderId/resolve-unresponsive-rider', verifyAdmin, resolveUnresponsiveRider);
+
+// ── Admin Order Detail (parameterized route must come after specific /orders routes) ──
+router.get('/orders/:orderId', verifyAdmin, getAdminOrderDetail);
 
 // ── Zip Covers ──
 import zipCoverRoutes from './adminRoutes/zipCover.routes.js';

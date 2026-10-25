@@ -1,6 +1,8 @@
 import mongoose from "mongoose";
 import Merchant from "../../models/merchant.model.js";
 import Zone from "../../models/zone.model.js";
+import Order from "../../models/order.model.js";
+import WarehouseOrder from "../../models/warehouseOrder.model.js";
 import { storageService } from "../../services/storage.service.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { ApiError } from "../../utils/ApiError.js";
@@ -55,7 +57,7 @@ export const getMerchants = asyncHandler(async (req, res) => {
   const query = status ? { status } : {};
 
   const merchants = await Merchant.find(query)
-    .select('shopName phoneNumber email isActive status logo rating reviewCount address operatingHours genderCategory zoneName zoneId stats isOnline isVerified fulfillmentType')
+    .select('shopName phoneNumber email isActive status logo rating reviewCount address operatingHours genderCategory zoneName zoneId stats isOnline isVerified fulfillmentType warehouseStatus isStoreActive createdAt updatedAt')
     .lean();
   return res.status(200).json(new ApiResponse(200, { merchants }, "Merchants retrieved successfully"));
 });
@@ -621,4 +623,251 @@ export const toggleMerchantStoreStatus = asyncHandler(async (req, res) => {
     isStoreActive: newStoreStatus,
     productsAffected: updateResult.modifiedCount
   }, `Physical store has been ${newStoreStatus ? 'activated (Live)' : 'hidden from customer app'}`));
+});
+
+/**
+ * GET /admin/merchant-status-overview
+ * Retrieve comprehensive merchant online/offline statuses, socket connectivity, and stats
+ */
+export const getMerchantStatusOverview = asyncHandler(async (req, res) => {
+  const activeOrderStatuses = [
+    'placed',
+    'accepted',
+    'packed',
+    'in_transit',
+    'try_phase',
+    'selection_made',
+    'return_in_progress'
+  ];
+
+  const [merchants, activeOrders, activeWarehouseOrders] = await Promise.all([
+    Merchant.find({})
+      .select('shopName phoneNumber email logo address zoneName zoneId isOnline isVerified isActive status operatingHours fulfillmentType warehouseStatus isStoreActive createdAt updatedAt')
+      .sort({ isOnline: -1, shopName: 1 })
+      .lean(),
+    Order.find({ orderStatus: { $in: activeOrderStatuses } })
+      .select('_id merchantId orderStatus totalAmount items createdAt userId deliveryRiderId customerDeliveryStatus deliveryMode')
+      .populate('userId', 'name phoneNumber')
+      .populate('deliveryRiderId', 'name phone')
+      .sort({ createdAt: -1 })
+      .lean(),
+    WarehouseOrder.find({ orderStatus: { $in: activeOrderStatuses } })
+      .select('_id sourceMerchantId warehouseId orderStatus totalAmount items createdAt userId deliveryRiderId fulfillmentType')
+      .populate('userId', 'name phoneNumber')
+      .populate('deliveryRiderId', 'name phone')
+      .sort({ createdAt: -1 })
+      .lean(),
+  ]);
+
+  // Group active orders by merchant
+  const ordersByMerchant = new Map();
+
+  const pushOrder = (mIdStr, orderData) => {
+    if (!mIdStr) return;
+    if (!ordersByMerchant.has(mIdStr)) {
+      ordersByMerchant.set(mIdStr, []);
+    }
+    ordersByMerchant.get(mIdStr).push(orderData);
+  };
+
+  activeOrders.forEach(o => {
+    const mIdStr = o.merchantId?.toString();
+    pushOrder(mIdStr, {
+      _id: o._id,
+      orderCode: `#${o._id.toString().slice(-5).toUpperCase()}`,
+      orderStatus: o.orderStatus,
+      totalAmount: o.totalAmount,
+      itemCount: o.items?.length || 0,
+      customerName: o.userId?.name || 'Customer',
+      customerPhone: o.userId?.phoneNumber || null,
+      riderName: o.deliveryRiderId?.name || null,
+      riderPhone: o.deliveryRiderId?.phone || null,
+      deliveryMode: o.deliveryMode,
+      createdAt: o.createdAt,
+      isWarehouse: false
+    });
+  });
+
+  activeWarehouseOrders.forEach(wo => {
+    const mIdStr = wo.sourceMerchantId?.toString() || wo.warehouseId?.toString();
+    pushOrder(mIdStr, {
+      _id: wo._id,
+      orderCode: `#${wo._id.toString().slice(-5).toUpperCase()}`,
+      orderStatus: wo.orderStatus,
+      totalAmount: wo.totalAmount,
+      itemCount: wo.items?.length || 0,
+      customerName: wo.userId?.name || 'Customer',
+      customerPhone: wo.userId?.phoneNumber || null,
+      riderName: wo.deliveryRiderId?.name || null,
+      riderPhone: wo.deliveryRiderId?.phone || null,
+      fulfillmentType: wo.fulfillmentType,
+      createdAt: wo.createdAt,
+      isWarehouse: true
+    });
+  });
+
+  let io = null;
+  try {
+    const { getIO } = await import("../../config/socket.js");
+    io = getIO();
+  } catch {}
+
+  const enrichedMerchants = await Promise.all(
+    merchants.map(async (m) => {
+      const mId = m._id.toString();
+      let isSocketConnected = false;
+      if (io && io.sockets?.adapter?.rooms) {
+        const room = io.sockets.adapter.rooms.get(`merchant:${mId}`);
+        isSocketConnected = !!(room && room.size > 0);
+      }
+
+      let lastSeenAt = null;
+      try {
+        const { getMerchantMeta } = await import("../../helperFns/merchantFns.js");
+        const meta = await getMerchantMeta(mId);
+        if (meta?.lastSeenAt) lastSeenAt = meta.lastSeenAt;
+      } catch {}
+
+      const merchantOrders = ordersByMerchant.get(mId) || [];
+
+      return {
+        ...m,
+        isSocketConnected,
+        lastSeenAt,
+        activeOrdersCount: merchantOrders.length,
+        currentOrders: merchantOrders
+      };
+    })
+  );
+
+  const totalMerchants = enrichedMerchants.length;
+  const onlineCount = enrichedMerchants.filter(m => m.isOnline).length;
+  const offlineCount = totalMerchants - onlineCount;
+  const socketConnectedCount = enrichedMerchants.filter(m => m.isSocketConnected).length;
+  const totalActiveOrders = activeOrders.length + activeWarehouseOrders.length;
+  const merchantsWithOrdersCount = enrichedMerchants.filter(m => m.activeOrdersCount > 0).length;
+
+  return res.status(200).json(new ApiResponse(200, {
+    merchants: enrichedMerchants,
+    stats: {
+      totalMerchants,
+      onlineCount,
+      offlineCount,
+      socketConnectedCount,
+      totalActiveOrders,
+      merchantsWithOrdersCount
+    }
+  }, "Merchant status overview retrieved successfully"));
+});
+
+/**
+ * PATCH /admin/merchant/:id/toggle-online
+ * Toggle a merchant's online/offline status, update Redis, and emit real-time socket updates
+ */
+export const toggleMerchantOnlineStatusAdmin = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const { isOnline } = req.body;
+
+  const merchant = await Merchant.findById(id);
+  if (!merchant) {
+    throw new ApiError(404, "Merchant not found");
+  }
+
+  const newStatus = isOnline !== undefined ? !!isOnline : !merchant.isOnline;
+  merchant.isOnline = newStatus;
+  await merchant.save();
+
+  // Sync to Redis
+  try {
+    const { setMerchantMeta } = await import("../../helperFns/merchantFns.js");
+    await setMerchantMeta(id, { isOnline: String(newStatus), lastSeenAt: Date.now() });
+  } catch (redisErr) {
+    console.error("Failed to sync toggle to Redis in admin:", redisErr);
+  }
+
+  // Real-time socket broadcast
+  try {
+    const { getIO } = await import("../../config/socket.js");
+    const io = getIO();
+    if (io) {
+      // Notify the specific merchant mobile app
+      io.to(`merchant:${id}`).emit("onlineStatusUpdated", {
+        isOnline: newStatus,
+        merchantId: id
+      });
+
+      // Broadcast to admin dashboard listeners
+      const statusPayload = {
+        merchantId: id,
+        shopName: merchant.shopName,
+        isOnline: newStatus,
+        updatedAt: new Date().toISOString()
+      };
+      io.to("admin").emit("admin:merchantStatusChanged", statusPayload);
+      io.to("admin:orders").emit("admin:merchantStatusChanged", statusPayload);
+    }
+  } catch (sockErr) {
+    console.warn("Socket notification skipped in toggleMerchantOnlineStatusAdmin:", sockErr?.message);
+  }
+
+  return res.status(200).json(new ApiResponse(200, {
+    merchant: {
+      _id: merchant._id,
+      shopName: merchant.shopName,
+      isOnline: merchant.isOnline,
+      zoneName: merchant.zoneName,
+      updatedAt: merchant.updatedAt
+    }
+  }, `Merchant "${merchant.shopName}" is now ${newStatus ? 'ONLINE' : 'OFFLINE'}`));
+});
+
+/**
+ * PATCH /admin/merchants/bulk-toggle-online
+ * Bulk toggle online/offline status for multiple merchants
+ */
+export const bulkToggleMerchantOnlineStatusAdmin = asyncHandler(async (req, res) => {
+  const { merchantIds, isOnline } = req.body;
+
+  if (!Array.isArray(merchantIds) || merchantIds.length === 0) {
+    throw new ApiError(400, "merchantIds array is required");
+  }
+
+  const targetStatus = !!isOnline;
+  const result = await Merchant.updateMany(
+    { _id: { $in: merchantIds } },
+    { $set: { isOnline: targetStatus } }
+  );
+
+  // Sync to Redis and sockets
+  try {
+    const { setMerchantMeta } = await import("../../helperFns/merchantFns.js");
+    const { getIO } = await import("../../config/socket.js");
+    let io = null;
+    try { io = getIO(); } catch {}
+
+    for (const mId of merchantIds) {
+      await setMerchantMeta(mId, { isOnline: String(targetStatus), lastSeenAt: Date.now() }).catch(() => {});
+      if (io) {
+        io.to(`merchant:${mId}`).emit("onlineStatusUpdated", { isOnline: targetStatus, merchantId: mId });
+      }
+    }
+
+    if (io) {
+      const bulkPayload = {
+        merchantIds,
+        isOnline: targetStatus,
+        count: result.modifiedCount,
+        updatedAt: new Date().toISOString()
+      };
+      io.to("admin").emit("admin:bulkMerchantStatusChanged", bulkPayload);
+      io.to("admin:orders").emit("admin:bulkMerchantStatusChanged", bulkPayload);
+    }
+  } catch (err) {
+    console.error("Bulk sync error:", err);
+  }
+
+  return res.status(200).json(new ApiResponse(200, {
+    modifiedCount: result.modifiedCount,
+    isOnline: targetStatus
+  }, `Successfully updated ${result.modifiedCount} merchants to ${targetStatus ? 'ONLINE' : 'OFFLINE'}`));
 });

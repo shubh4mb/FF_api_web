@@ -32,6 +32,11 @@ initPayoutCron();
 import { initTelegramBot } from './src/services/telegramBot.service.js';
 initTelegramBot();
 
+// Initialize WhatsApp Order Alerts
+import { initWhatsAppClient } from './src/services/whatsapp.service.js';
+initWhatsAppClient();
+
+
 // Create HTTP server
 const server = createServer(app);
 
@@ -79,15 +84,9 @@ io.on('connection', (socket) => {
     registerUserSockets(io, socket);
   } else if (role === "deliveryRider") {
     registerDeliveryRiderSockets(io, socket);
-  } else {
-    // Default: register warehouse, merchant, and admin sockets
-    registerWarehouseOrderSockets(io, socket);
-    registerMerchantSockets(io, socket);
-    registerAdminSockets(io, socket);
   }
 
-  // Always register admin socket listener in case client role was not set in handshake query
-  registerAdminSockets(io, socket);
+  // Generic order room handlers (joinOrderRoom, leaveOrderRoom) for all clients
   registerOrderSockets(io, socket);
 
   socket.on('disconnect', () => {

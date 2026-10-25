@@ -8,7 +8,7 @@ import { API_URL } from '../utils/axios.config';
  * Automatically connects to backend socket server, joins the 'admin:orders' room,
  * and streams newOrder and orderUpdate events across all merchants.
  */
-export const useAdminOrderSocket = ({ onNewOrder, onOrderUpdate } = {}) => {
+export const useAdminOrderSocket = ({ onNewOrder, onOrderUpdate, onMerchantStatusChanged } = {}) => {
   const [isConnected, setIsConnected] = useState(false);
   const [isConnecting, setIsConnecting] = useState(true);
   const [lastEventTime, setLastEventTime] = useState(null);
@@ -18,6 +18,7 @@ export const useAdminOrderSocket = ({ onNewOrder, onOrderUpdate } = {}) => {
   // Keep callback refs stable to prevent reconnect churn
   const onNewOrderRef = useRef(onNewOrder);
   const onOrderUpdateRef = useRef(onOrderUpdate);
+  const onMerchantStatusChangedRef = useRef(onMerchantStatusChanged);
 
   useEffect(() => {
     onNewOrderRef.current = onNewOrder;
@@ -26,6 +27,10 @@ export const useAdminOrderSocket = ({ onNewOrder, onOrderUpdate } = {}) => {
   useEffect(() => {
     onOrderUpdateRef.current = onOrderUpdate;
   }, [onOrderUpdate]);
+
+  useEffect(() => {
+    onMerchantStatusChangedRef.current = onMerchantStatusChanged;
+  }, [onMerchantStatusChanged]);
 
   const connectSocket = useCallback(() => {
     // Derive raw socket host by stripping /api/ from baseURL
@@ -96,6 +101,18 @@ export const useAdminOrderSocket = ({ onNewOrder, onOrderUpdate } = {}) => {
 
     socket.on('orderUpdate', handleOrderUpdate);
     socket.on('warehouseOrderUpdate', handleOrderUpdate);
+
+    // Handle merchant online/offline status changes across network
+    const handleMerchantStatus = (statusPayload) => {
+      console.log('⚡ [AdminSocket] merchantStatusChanged received:', statusPayload);
+      setLastEventTime(new Date());
+      if (onMerchantStatusChangedRef.current) {
+        onMerchantStatusChangedRef.current(statusPayload);
+      }
+    };
+
+    socket.on('admin:merchantStatusChanged', handleMerchantStatus);
+    socket.on('admin:bulkMerchantStatusChanged', handleMerchantStatus);
 
     return socket;
   }, []);

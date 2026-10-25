@@ -1,5 +1,6 @@
 // src/sockets/merchant.socket.js
 import Merchant from "../models/merchant.model.js";
+import Notification from "../models/notification.model.js";
 import { setMerchantMeta, getMerchantMeta } from "../helperFns/merchantFns.js";
 import { sendPushNotifications } from "../helperFns/notificationHelper.js";
 
@@ -17,24 +18,36 @@ export const registerMerchantSockets = (io, socket) => {
     socket.join(`merchant:${mId}`);
     socket.data.merchantId = mId;
 
+    let isStoreOnline = false;
     try {
       const merchant = await Merchant.findById(mId);
       if (merchant) {
-        const whId = merchant.warehouseId || merchant.assignedWarehouse;
-        if (whId) {
-          socket.join(`warehouse:${whId}`);
-          socket.data.warehouseId = String(whId);
-          console.log(`✅ Merchant ${mId} also joined warehouse room warehouse:${whId}`);
+        isStoreOnline = Boolean(merchant.isOnline);
+        if (merchant.accountType === 'warehouse') {
+          const whId = merchant.warehouseId || merchant.assignedWarehouse;
+          if (whId) {
+            socket.join(`warehouse:${whId}`);
+            socket.data.warehouseId = String(whId);
+            console.log(`✅ Warehouse operator ${mId} also joined warehouse room warehouse:${whId}`);
+          }
         }
       }
     } catch (err) {
       console.warn("Error resolving merchant warehouse rooms:", err);
     }
 
-    // Update Redis State — mark merchant ONLINE so emitOrderUpdate delivers events
-    await setMerchantMeta(mId, { lastSeenAt: Date.now(), isOnline: true }).catch(() => {});
+    // Update Redis State with merchant's actual online status from DB
+    await setMerchantMeta(mId, { lastSeenAt: Date.now(), isOnline: isStoreOnline }).catch(() => {});
 
     console.log(`✅ Merchant ${mId} registered socket ${socket.id} to room merchant:${mId}`);
+  });
+
+  socket.on("registerWarehouse", async (warehouseId) => {
+    if (!warehouseId) return;
+    const whId = String(warehouseId);
+    socket.join(`warehouse:${whId}`);
+    socket.data.warehouseId = whId;
+    console.log(`✅ Merchant socket ${socket.id} joined warehouse room warehouse:${whId}`);
   });
 
   socket.on("disconnect", async () => {
@@ -93,17 +106,38 @@ export const notifyMerchant = async (io, merchantId, orderData) => {
     console.warn("Error enriching adminPayload for newOrder:", adminEmitErr);
   }
 
-  // Send Push Notification
+  // Send Push Notification & Save Notification in DB
   try {
     let title = "New Notification 🔔";
     let body = typeof orderData === 'string' ? orderData : "You have a new update.";
     let data = {};
+    const orderId = (typeof orderData === 'object' && orderData !== null) ? (orderData._id ? String(orderData._id) : null) : null;
 
-    if (typeof orderData === 'object' && orderData !== null) {
+    if (orderId) {
       title = "New Order Received! 🛍️";
-      const shortId = orderData._id ? String(orderData._id).slice(-5).toUpperCase() : "";
+      const shortId = orderId.slice(-6).toUpperCase();
       body = `Order #${shortId} has been placed. Prepare items.`;
-      data = { orderId: orderData._id };
+      data = { orderId, order: orderData };
+
+      // Emit notification event to merchant room
+      io.to(room).emit("notification", {
+        type: "new_order_placed",
+        title,
+        body,
+        orderId,
+        data: { orderId, order: orderData },
+        createdAt: new Date().toISOString(),
+      });
+
+      // Save notification to DB for notification center
+      Notification.create({
+        merchantId: mId,
+        orderId,
+        type: "new_order_placed",
+        title,
+        body,
+        data: { orderId },
+      }).catch(dbErr => console.error("Error creating merchant DB notification:", dbErr.message));
     } else if (typeof orderData === 'string') {
       if (orderData.toLowerCase().includes("cancel")) {
         title = "Order Cancelled 🛑";

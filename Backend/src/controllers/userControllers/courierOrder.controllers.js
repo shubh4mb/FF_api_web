@@ -12,6 +12,10 @@ import { v2 as cloudinary } from 'cloudinary';
 import { logAuditEvent } from "../../utils/auditLogger.js";
 import AppConfig from "../../models/appConfig.model.js";
 import { isBackendInTestMode } from "../../helperFns/testModeHelper.js";
+import { sendOrderAlertToWhatsApp } from "../../services/whatsapp.service.js";
+import { getIO } from "../../config/socket.js";
+import { notifyMerchant } from "../../sockets/merchant.socket.js";
+
 
 const COURIER_DELIVERY_CHARGE = 40;
 
@@ -652,7 +656,19 @@ export const initiateCourierCheckout = async (req, res) => {
         order.paymentStatus = 'paid';
         order.orderStatus = 'confirmed';
         await order.save();
+
+        try {
+          const io = getIO();
+          notifyMerchant(io, order.merchantId, order.toObject ? order.toObject() : order);
+        } catch (socketErr) {
+          console.error('[Socket] Error notifying merchant on free courier order:', socketErr);
+        }
+
+        sendOrderAlertToWhatsApp({ orderDoc: order, orderType: 'courier' }).catch((err) =>
+          console.error('[WhatsApp Alert] Free courier order error:', err.message)
+        );
       }
+
 
       // Clear courier cart
       const cartDoc = await CourierCart.findOne({ userId });
@@ -798,6 +814,21 @@ export const verifyCourierOrderPayment = async (req, res) => {
 
     await session.commitTransaction();
     session.endSession();
+
+    // 📱 WhatsApp Admin Alert & Merchant Real-Time Alert
+    for (const order of orders) {
+      try {
+        const io = getIO();
+        notifyMerchant(io, order.merchantId, order.toObject ? order.toObject() : order);
+      } catch (socketErr) {
+        console.error('[Socket] Error notifying merchant on verified courier order:', socketErr);
+      }
+
+      sendOrderAlertToWhatsApp({ orderDoc: order, orderType: 'courier' }).catch((err) =>
+        console.error('[WhatsApp Alert] Courier verified order error:', err.message)
+      );
+    }
+
 
     // Log payment success for each order
     for (const order of orders) {

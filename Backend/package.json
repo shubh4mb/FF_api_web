@@ -8,7 +8,8 @@
     "test:stress": "node load-tests/node-stress-runner.js",
     "test:k6": "k6 run load-tests/flashfits-load-test.js",
     "test:k6:dashboard": "k6 run --out web-dashboard load-tests/flashfits-load-test.js",
-    "test:redis": "node scripts/test_redis_full_suite.js"
+    "test:redis": "node scripts/test_redis_full_suite.js",
+    "whatsapp:connect": "node scripts/test_whatsapp.js"
   },
   "type": "module",
   "keywords": [],
@@ -20,6 +21,7 @@
     "@socket.io/redis-adapter": "^8.3.0",
     "@turf/turf": "^7.3.1",
     "@upstash/redis": "^1.35.6",
+    "@whiskeysockets/baileys": "^6.7.24",
     "bcrypt": "^6.0.0",
     "bcryptjs": "^3.0.2",
     "cloudinary": "^2.6.1",
@@ -42,6 +44,9 @@
     "nodemon": "^3.1.10",
     "otp-generator": "^4.0.1",
     "pdfkit": "^0.19.1",
+    "pino": "^10.4.0",
+    "qrcode": "^1.5.4",
+    "qrcode-terminal": "^0.12.0",
     "razorpay": "^2.9.6",
     "redis": "^5.0.0",
     "resend": "^6.16.0",

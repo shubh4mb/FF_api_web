@@ -12,6 +12,7 @@ function Sidebar({ isOpen, onClose }) {
     { to: '/admin/leads', label: 'Sales Leads', roles: ['superadmin', 'sales'] },
     { to: '/admin/category', label: 'Category', roles: ['superadmin'] },
     { to: '/admin/merchants', label: 'Merchants', roles: ['superadmin'] },
+    { to: '/admin/merchant-status', label: 'Merchant Status', roles: ['superadmin'], isLive: true },
     { to: '/admin/products', label: 'Products', roles: ['superadmin'] },
     { to: '/admin/banners', label: 'Banners', roles: ['superadmin'] },
     { to: '/admin/attributes', label: 'Attributes', roles: ['superadmin'] },

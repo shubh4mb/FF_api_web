@@ -57,12 +57,26 @@ export const notifyWarehouse = async (io, warehouseId, orderData) => {
   io.to(room).emit("newWarehouseOrder", orderData);
   console.log(`📩 [Socket] Emitted newOrder & newWarehouseOrder to room ${room}`);
 
-  // If order also belongs to a merchant (e.g. consigned store), notify them too
-  if (orderData?.merchantId) {
-    const mRoom = `merchant:${String(orderData.merchantId)}`;
+  // Also notify the merchant room (consignment merchant or source merchant)
+  const mId = orderData?.sourceMerchantId || orderData?.merchantId;
+  if (mId) {
+    const mRoom = `merchant:${String(mId)}`;
     io.to(mRoom).emit("newOrder", orderData);
     io.to(mRoom).emit("newWarehouseOrder", orderData);
     console.log(`📩 [Socket] Also emitted order to merchant room ${mRoom}`);
+
+    // Send push notification to merchant
+    try {
+      const orderId = orderData?._id ? String(orderData._id) : "";
+      const shortId = orderId ? orderId.slice(-6).toUpperCase() : "";
+      const title = "New Order Received! 🛍️";
+      const body = `Warehouse order #${shortId} has been placed.`;
+      sendPushNotifications(null, null, title, body, { orderId: orderData._id }, String(mId)).catch(err => {
+        console.error("Error sending push notification to merchant for warehouse order:", err);
+      });
+    } catch (pushErr) {
+      console.error("Failed to queue merchant push notification:", pushErr);
+    }
   }
 
   // Broadcast to Admin live monitor

@@ -16,6 +16,8 @@ import { ApiError } from '../../utils/ApiError.js';
 import { getIO } from '../../config/socket.js';
 import { notifyWarehouse } from '../../sockets/warehouseOrder.socket.js';
 import { isBackendInTestMode } from '../../helperFns/testModeHelper.js';
+import { sendOrderAlertToWhatsApp } from '../../services/whatsapp.service.js';
+
 
 /**
  * Helper: resolve the effective commission rate for a warehouse order.
@@ -308,6 +310,12 @@ export const createWarehouseTBOrder = asyncHandler(async (req, res) => {
     console.error("Failed to notify warehouse via socket:", err);
   }
 
+  // 📱 WhatsApp Admin Alert
+  sendOrderAlertToWhatsApp({ orderDoc: pendingOrder, orderType: 'warehouse' }).catch((err) =>
+    console.error('[WhatsApp Alert] Warehouse TB error:', err.message)
+  );
+
+
   return res.status(201).json({
     success: true,
     orderId: pendingOrder._id,
@@ -534,7 +542,13 @@ export const createWarehouseCourierOrder = asyncHandler(async (req, res) => {
     } catch (err) {
       console.error("Failed to notify warehouse via socket:", err);
     }
+
+    // 📱 WhatsApp Admin Alert
+    sendOrderAlertToWhatsApp({ orderDoc: order, orderType: 'warehouse_courier' }).catch((err) =>
+      console.error('[WhatsApp Alert] Warehouse courier error:', err.message)
+    );
   }
+
 
   return res.status(201).json({
     success: true,
@@ -612,6 +626,15 @@ export const verifyWarehousePayment = asyncHandler(async (req, res) => {
   } catch (err) {
     console.error("Failed to notify warehouse via socket:", err);
   }
+
+  // 📱 WhatsApp Admin Alert
+  sendOrderAlertToWhatsApp({
+    orderDoc: order,
+    orderType: order.fulfillmentType === 'courier' ? 'warehouse_courier' : 'warehouse',
+  }).catch((err) =>
+    console.error('[WhatsApp Alert] Warehouse payment verify error:', err.message)
+  );
+
 
   return res.status(200).json({ success: true, orderId: order._id, orderStatus: order.orderStatus });
 });

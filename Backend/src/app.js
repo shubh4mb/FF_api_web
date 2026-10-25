@@ -14,6 +14,7 @@ import merchantRoutes from './routes/merchant.routes.js';
 import deliveryRiderRoutes from './routes/deliveryRider.routes.js';
 import courierOrderRoutes from './routes/courierOrder.routes.js';
 import cronRoutes from './routes/cron.routes.js';
+import mapRoutes from './routes/map.routes.js';
 import { razorpayWebhook } from './controllers/userControllers/order.controllers.js';
 import { allowedOrigins } from './config/cors.js';
 import { getIO } from './config/socket.js';
@@ -72,12 +73,12 @@ app.use(cors({
 }));
 
 app.use(express.json({ 
-  limit: "10mb",
+  limit: "50mb",
   verify: (req, res, buf) => {
     req.rawBody = buf.toString(); // Save raw string for webhook signature verification
   }
 }));
-app.use(express.urlencoded({ extended: true, limit: "10mb" }));
+app.use(express.urlencoded({ extended: true, limit: "50mb" }));
 app.use(cookieParser());
 
 // ---- Attach io to req (SAFE) ----
@@ -165,6 +166,7 @@ app.use('/api/merchant', merchantRoutes);
 app.use('/api/deliveryRider', deliveryRiderRoutes);
 app.use('/api/courier', courierOrderRoutes);
 app.use('/api/cron', cronRoutes);
+app.use('/api/map', mapRoutes);
 
 
 app.get('/', (req, res) => {

@@ -141,6 +141,14 @@ const appConfigSchema = new mongoose.Schema(
                 type: String,
                 default: "1.1.2",
             },
+            minVersionAndroid: {
+                type: String,
+                default: "1.1.2",
+            },
+            latestVersionAndroid: {
+                type: String,
+                default: "1.1.2",
+            },
             storeUrl: {
                 type: String,
                 default: "market://details?id=com.flashfits.app",

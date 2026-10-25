@@ -188,7 +188,7 @@ export const orderRequestForMerchant = async (req, res) => {
 
       io.in(`merchant:${merchant._id}`).socketsJoin(orderId);
       io.to(`merchant:${merchant._id}`).emit("orderUpdate", emitPayload);
-      if (order.warehouseId) {
+      if (isWarehouseOrder && order.warehouseId) {
         io.to(`warehouse:${order.warehouseId}`).emit("orderUpdate", emitPayload);
       }
       io.to(orderId).emit("orderUpdate", emitPayload);

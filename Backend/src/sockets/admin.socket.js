@@ -5,10 +5,13 @@
  * when any order is placed or updated for any merchant.
  */
 export const registerAdminSockets = (io, socket) => {
-  // Automatically join admin orders room
-  socket.join("admin:orders");
-  socket.join("admin");
-  console.log(`🔌 [Socket] Admin socket ${socket.id} auto-joined 'admin:orders' room`);
+  const role = socket.handshake?.query?.role;
+  if (role === "admin") {
+    // Automatically join admin orders room
+    socket.join("admin:orders");
+    socket.join("admin");
+    console.log(`🔌 [Socket] Admin socket ${socket.id} auto-joined 'admin:orders' room`);
+  }
 
   socket.on("joinAdminOrders", () => {
     socket.join("admin:orders");

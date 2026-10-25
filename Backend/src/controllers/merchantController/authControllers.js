@@ -172,8 +172,28 @@ export const toggleMerchantOnlineStatus = async (req, res) => {
       console.error("Failed to sync toggle to Redis:", redisErr);
     }
 
-    if (!merchant) {
-      return res.status(404).json({ success: false, message: "Merchant not found" });
+    // Real-time socket broadcast to merchant clients (website & mobile app) and admin
+    try {
+      const { getIO } = await import("../../config/socket.js");
+      const io = getIO();
+      if (io) {
+        io.to(`merchant:${merchantId}`).emit("onlineStatusUpdated", {
+          merchantId,
+          isOnline: merchant.isOnline,
+        });
+
+        const statusPayload = {
+          merchantId,
+          shopName: merchant.shopName,
+          isOnline: merchant.isOnline,
+          updatedAt: new Date().toISOString(),
+        };
+        io.to("admin").emit("admin:merchantStatusChanged", statusPayload);
+        io.to("admin:orders").emit("admin:merchantStatusChanged", statusPayload);
+        console.log(`📡 Broadcasted onlineStatusUpdated for merchant ${merchantId}: isOnline = ${merchant.isOnline}`);
+      }
+    } catch (socketErr) {
+      console.warn("Socket notification skipped in toggleMerchantOnlineStatus:", socketErr?.message);
     }
 
     res.status(200).json({
@@ -772,6 +792,10 @@ export const addPushToken = async (req, res) => {
 
     const merchant = await Merchant.findById(req.merchantId);
     if (!merchant) return res.status(404).json({ message: "Merchant not found" });
+
+    if (!merchant.expoPushTokens) {
+      merchant.expoPushTokens = [];
+    }
 
     if (!merchant.expoPushTokens.includes(tokenStr)) {
       merchant.expoPushTokens.push(tokenStr);

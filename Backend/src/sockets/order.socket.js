@@ -74,7 +74,8 @@ export const emitOrderUpdate = async (io, orderId, order) => {
 
   // Always emit to warehouse room if warehouse order
   const warehouseId = order.warehouseId?._id ? order.warehouseId._id.toString() : order.warehouseId?.toString();
-  if (warehouseId) {
+  const isWarehouseOrder = !!(order.fulfillmentType === 'warehouse' || order.source === 'warehouse' || (!order.merchantId && warehouseId));
+  if (warehouseId && isWarehouseOrder) {
     io.to(`warehouse:${warehouseId}`).emit("orderUpdate", payload);
     io.to(`warehouse:${warehouseId}`).emit("warehouseOrderUpdate", payload);
   }

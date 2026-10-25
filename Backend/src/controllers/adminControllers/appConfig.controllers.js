@@ -117,13 +117,19 @@ export const getAppVersionPolicy = async (req, res) => {
                 : "https://apps.apple.com/app/com.flashfits.app");
 
         // Resolve platform-specific versions with backwards-compatible defaults
+        const defaultAndroidMinVersion = app === "customer" ? "1.1.2" : "1.0.0";
+        const defaultAndroidLatestVersion = app === "customer" ? "1.1.2" : "1.0.0";
+
         const minVersion = isIos
             ? (versionPolicy.minVersionIos || versionPolicy.minVersion || "1.0.0")
-            : (versionPolicy.minVersion || "1.0.0");
+            : (versionPolicy.minVersionAndroid || versionPolicy.minVersion || defaultAndroidMinVersion);
 
         const latestVersion = isIos
             ? (versionPolicy.latestVersionIos || versionPolicy.latestVersion || "1.1.0")
-            : (versionPolicy.latestVersion || "1.1.0");
+            : (versionPolicy.latestVersionAndroid || versionPolicy.latestVersion || defaultAndroidLatestVersion);
+
+        const minVersionAndroid = versionPolicy.minVersionAndroid || versionPolicy.minVersion || defaultAndroidMinVersion;
+        const latestVersionAndroid = versionPolicy.latestVersionAndroid || versionPolicy.latestVersion || defaultAndroidLatestVersion;
 
         const storeUrl = isIos
             ? (versionPolicy.storeUrlIos || (versionPolicy.storeUrl?.startsWith("market://") ? defaultIosStoreUrl : versionPolicy.storeUrl) || defaultIosStoreUrl)
@@ -139,6 +145,8 @@ export const getAppVersionPolicy = async (req, res) => {
             ...versionPolicy,
             minVersion,
             latestVersion,
+            minVersionAndroid,
+            latestVersionAndroid,
             storeUrl,
             webUrl,
             isOrderPlacementEnabled: inTestMode ? true : (config.isOrderPlacementEnabled ?? false),

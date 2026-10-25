@@ -3,6 +3,7 @@ import WarehouseOrder from "../../models/warehouseOrder.model.js";
 import DeliveryRider from "../../models/deliveryRider.model.js";
 import PendingOrder from "../../models/pendingOrders.model.js";
 import Merchant from "../../models/merchant.model.js";
+import Warehouse from "../../models/warehouse.model.js";
 import User from "../../models/user.model.js";
 import { getIO } from "../../config/socket.js";
 import { emitOrderUpdate } from "../../sockets/order.socket.js";

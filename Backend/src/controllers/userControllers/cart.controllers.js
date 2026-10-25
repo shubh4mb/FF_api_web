@@ -12,6 +12,21 @@ import { generateColorVariantId } from '../../utils/variantAdapter.js';
 import Warehouse from '../../models/warehouse.model.js';
 import { isBackendInTestMode, isTestMerchant } from '../../helperFns/testModeHelper.js';
 
+const SIZE_ORDER = ['XXS', 'XS', 'S', 'M', 'L', 'XL', 'XXL', '2XL', '3XL', '4XL', '5XL', 'FREE', 'ONESIZE'];
+const sortSizesHelper = (a, b) => {
+  const sizeA = String(a.size || a).toUpperCase().trim();
+  const sizeB = String(b.size || b).toUpperCase().trim();
+  const numA = parseFloat(sizeA);
+  const numB = parseFloat(sizeB);
+  if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
+  const idxA = SIZE_ORDER.indexOf(sizeA);
+  const idxB = SIZE_ORDER.indexOf(sizeB);
+  if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+  if (idxA !== -1) return -1;
+  if (idxB !== -1) return 1;
+  return sizeA.localeCompare(sizeB);
+};
+
 export const addToCart = async (req, res) => {
   const userId = req.user.userId;
   const { productId, variantId, size, quantity, merchantId, image, source } = req.body;
@@ -256,11 +271,38 @@ export const getCart = async (req, res) => {
           item.stockQuantity = available;
           item.isOutOfStock = available <= 0 || available < item.quantity;
           item.merchantId = whProduct.merchantId;
+
+          const whVariants = await ProductFlat.find({
+            $or: [
+              { styleGroupId: whProduct.styleGroupId },
+              ...(mongoose.Types.ObjectId.isValid(whProduct.styleGroupId) ? [{ _id: whProduct.styleGroupId }] : [])
+            ],
+            source: 'warehouse',
+            isDeleted: { $ne: true },
+            isActive: { $ne: false }
+          }).select('_id size stock reservedStock price mrp color images').lean();
+
+          const colorMatched = whProduct.color?.name
+            ? whVariants.filter(v => v.color?.name === whProduct.color.name)
+            : whVariants;
+          const finalWhList = colorMatched.length > 0 ? colorMatched : whVariants;
+
+          item.availableSizes = finalWhList.map(v => ({
+            variantId: v._id.toString(),
+            size: v.size,
+            stock: Math.max(0, (v.stock || 0) - (v.reservedStock || 0)),
+            price: v.price || whProduct.price,
+            mrp: v.mrp || whProduct.mrp,
+            color: v.color,
+            image: v.images?.[0]?.url || (typeof item.image === 'string' ? item.image : item.image?.url),
+            isCurrentSize: v.size === item.size,
+          })).sort(sortSizesHelper);
         } else {
           item.price = 0;
           item.mrp = 0;
           item.stockQuantity = 0;
           item.isOutOfStock = true;
+          item.availableSizes = [];
         }
         continue;
       }
@@ -292,12 +334,45 @@ export const getCart = async (req, res) => {
         item.mrp = matched.mrp || 0;
         item.stockQuantity = available;
         item.isOutOfStock = available <= 0 || available < item.quantity;
+
+        const allSizesQuery = {
+          $or: [
+            { styleGroupId: matched.styleGroupId || styleGroupId },
+            ...(mongoose.Types.ObjectId.isValid(styleGroupId) ? [{ _id: styleGroupId }] : [])
+          ],
+          isDeleted: { $ne: true },
+          isActive: { $ne: false }
+        };
+        if (matched.merchantId) {
+          allSizesQuery.merchantId = matched.merchantId;
+        }
+
+        const allVariants = await ProductFlat.find(allSizesQuery)
+          .select('_id size stock reservedStock price mrp color images')
+          .lean();
+
+        const colorMatched = matched.color?.name
+          ? allVariants.filter(v => v.color?.name === matched.color.name)
+          : allVariants;
+        const finalList = colorMatched.length > 0 ? colorMatched : allVariants;
+
+        item.availableSizes = finalList.map(v => ({
+          variantId: v._id.toString(),
+          size: v.size,
+          stock: Math.max(0, (v.stock || 0) - (v.reservedStock || 0)),
+          price: v.price || matched.price,
+          mrp: v.mrp || matched.mrp,
+          color: v.color,
+          image: v.images?.[0]?.url || (typeof item.image === 'string' ? item.image : item.image?.url),
+          isCurrentSize: v.size === item.size,
+        })).sort(sortSizesHelper);
       } else {
         item.productId = null;
         item.price = 0;
         item.mrp = 0;
         item.stockQuantity = 0;
         item.isOutOfStock = true;
+        item.availableSizes = [];
       }
     }
 

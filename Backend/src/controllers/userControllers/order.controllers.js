@@ -30,6 +30,8 @@ import { generateReceiptPDF } from "../../utils/pdfGenerator.js";
 import { sendMerchantPaymentReceiptEmail } from "../../services/mail.service.js";
 import { createWarehouseTBOrder } from "./warehouseOrder.controllers.js";
 import { cancelAndCleanupOrder } from "../../helperFns/orderCancellationHelper.js";
+import { sendOrderAlertToWhatsApp } from "../../services/whatsapp.service.js";
+
 
 export const createRazorpayOrder = async (req, res) => {
   try {
@@ -395,7 +397,13 @@ export const createRazorpayOrder = async (req, res) => {
     } catch (socketErr) {
       console.error("Socket notify error (free):", socketErr);
     }
+
+    // 📱 WhatsApp Admin Alert
+    sendOrderAlertToWhatsApp({ orderDoc: pendingOrder, orderType: 'try_and_buy' }).catch((err) =>
+      console.error('[WhatsApp Alert] Error on free order:', err.message)
+    );
   }
+
 
   // Log audit event
   await logAuditEvent({
@@ -584,6 +592,12 @@ export const verifyPayment = async (req, res) => {
       orderId: order._id,
     });
 
+    // 📱 WhatsApp Admin Alert
+    sendOrderAlertToWhatsApp({ orderDoc: order, orderType: isWarehouseOrder ? 'warehouse' : 'try_and_buy' }).catch((err) =>
+      console.error('[WhatsApp Alert] Error on payment verification:', err.message)
+    );
+
+
     return res.status(200).json({
       success: true,
       message: "Payment verified. Order placed — awaiting acceptance.",
@@ -666,6 +680,9 @@ export const razorpayWebhook = async (req, res) => {
         // This is the Upfront Payment
         order.paymentStatus = "delivery_fee_paid";
         order.orderStatus = "placed";
+        sendOrderAlertToWhatsApp({ orderDoc: order, orderType: 'try_and_buy' }).catch((err) =>
+          console.error('[WhatsApp Alert] Webhook error:', err.message)
+        );
       }
 
       await order.save();
@@ -701,6 +718,11 @@ export const razorpayWebhook = async (req, res) => {
       courierOrder.razorpayPaymentId = payment.id;
       courierOrder.orderStatus = 'confirmed';
       await courierOrder.save();
+
+      sendOrderAlertToWhatsApp({ orderDoc: courierOrder, orderType: 'courier' }).catch((err) =>
+        console.error('[WhatsApp Alert] Courier webhook error:', err.message)
+      );
+
       
       await logAuditEvent({
         action: "COURIER_PAYMENT_SUCCESS",

@@ -26,13 +26,18 @@ export const staticAllowedOrigins = [
   "https://merchant-module-nine.vercel.app",
   "https://ff-admin-7mp8gqw6i-shubhambiswas9899-gmailcoms-projects.vercel.app",
   "https://ff-admin-smoky.vercel.app",
-  "https://merchant.theflashfits.com"
+  "https://merchant.theflashfits.com",
+  "https://theflashfits.com",
+  "https://www.theflashfits.com"
 ];
 
 export const allowedOrigins = (origin, callback) => {
   if (!origin) return callback(null, true);
   if (
     staticAllowedOrigins.includes(origin) ||
+    origin === "https://theflashfits.com" ||
+    origin.endsWith(".theflashfits.com") ||
+    origin.endsWith(".vercel.app") ||
     origin.endsWith(".ngrok-free.app") ||
     origin.endsWith(".ngrok.io") ||
     /^http:\/\/192\.168\.\d{1,3}\.\d{1,3}(:\d+)?$/.test(origin) ||

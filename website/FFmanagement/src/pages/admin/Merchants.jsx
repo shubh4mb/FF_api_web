@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { getMerchants, verifyMerchant, updateWarehouseStatus, toggleMerchantStoreStatus } from '@/api/merchants';
+import { getMerchants, verifyMerchant, updateWarehouseStatus, toggleMerchantStoreStatus, toggleMerchantOnlineAdmin } from '@/api/merchants';
 import { getAllWarehouses } from '@/api/warehouse';
 import { useNavigate } from 'react-router-dom';
 import ReusableAdminTable from '@/components/admin/Table';
@@ -46,6 +46,21 @@ const Merchants = () => {
           {value ? "VERIFIED" : "PENDING"}
         </span>
       ),
+    },
+    {
+      header: "Online Status",
+      accessor: "isOnline",
+      render: (value) => {
+        const isOnline = !!value;
+        return (
+          <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold ${
+            isOnline ? "bg-emerald-100 text-emerald-700 border border-emerald-200" : "bg-slate-100 text-slate-500 border border-slate-200"
+          }`}>
+            <span className={`w-2 h-2 rounded-full ${isOnline ? "bg-emerald-500 animate-pulse" : "bg-slate-400"}`}></span>
+            {isOnline ? "ONLINE" : "OFFLINE"}
+          </span>
+        );
+      },
     },
     {
       header: "Store Status",
@@ -113,6 +128,24 @@ const Merchants = () => {
         }
       },
       className: (row) => row.isVerified ? "text-orange-600 hover:underline text-sm font-bold" : "text-green-600 hover:underline text-sm font-bold",
+    },
+    {
+      label: (row) => row.isOnline ? "Set Offline" : "Set Online",
+      onClick: async (row) => {
+        const willBeOnline = !row.isOnline;
+        const confirmMsg = willBeOnline
+          ? `Set merchant "${row.shopName}" to ONLINE? The merchant will be open to accept incoming orders.`
+          : `Set merchant "${row.shopName}" to OFFLINE? The merchant will be paused from accepting orders.`;
+        if (!window.confirm(confirmMsg)) return;
+
+        try {
+          await toggleMerchantOnlineAdmin(row._id, willBeOnline);
+          setMerchants(prev => prev.map(m => m._id === row._id ? { ...m, isOnline: willBeOnline } : m));
+        } catch (err) {
+          alert("Error updating online status: " + (err.response?.data?.message || err.message));
+        }
+      },
+      className: (row) => row.isOnline ? "text-amber-600 hover:underline text-sm font-bold" : "text-emerald-600 hover:underline text-sm font-bold",
     },
     {
       label: (row) => row.isStoreActive !== false ? "Hide Store" : "Unhide Store",

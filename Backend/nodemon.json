@@ -1,0 +1,10 @@
+{
+  "watch": ["src", "index.js"],
+  "ext": "js,mjs,cjs,json",
+  "ignore": [
+    "whatsapp-auth/**",
+    "whatsapp_qr.png",
+    "node_modules/**",
+    "*.log"
+  ]
+}

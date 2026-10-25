@@ -123,3 +123,37 @@ export const toggleMerchantStoreStatus = async (merchantId, isStoreActive) => {
         throw error.response ? error.response.data : new Error('Network Error');
     }
 };
+
+export const getMerchantStatusOverview = async () => {
+    try {
+        const response = await axiosInstance.get('/admin/merchant-status-overview');
+        return response.data;
+    } catch (error) {
+        console.error(error);
+        throw error.response ? error.response.data : new Error('Network Error');
+    }
+};
+
+export const toggleMerchantOnlineAdmin = async (merchantId, isOnline) => {
+    try {
+        const payload = isOnline !== undefined ? { isOnline } : {};
+        const response = await axiosInstance.patch(`/admin/merchant/${merchantId}/toggle-online`, payload);
+        return response.data;
+    } catch (error) {
+        console.error(error);
+        throw error.response ? error.response.data : new Error('Network Error');
+    }
+};
+
+export const bulkToggleMerchantOnlineAdmin = async (merchantIds, isOnline) => {
+    try {
+        const response = await axiosInstance.patch('/admin/merchants/bulk-toggle-online', {
+            merchantIds,
+            isOnline
+        });
+        return response.data;
+    } catch (error) {
+        console.error(error);
+        throw error.response ? error.response.data : new Error('Network Error');
+    }
+};
