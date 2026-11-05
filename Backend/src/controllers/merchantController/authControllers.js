@@ -447,6 +447,16 @@ export const updateMerchantBankDetails = async (req, res) => {
       return res.status(404).json({ message: "Merchant not found" });
     }
 
+    // Security: Once bank details are verified, merchants cannot change them.
+    // They must contact support to update verified bank details.
+    if (merchant.bankDetails?.isBankVerified === true) {
+      return res.status(403).json({
+        success: false,
+        message: "Your bank details are verified and locked. Please contact FlashFits support to request a change.",
+        code: "BANK_VERIFIED_LOCKED",
+      });
+    }
+
     merchant.bankDetails = {
       ...merchant.bankDetails,
       ...req.body,
@@ -678,6 +688,82 @@ export const updateMerchantKYC = async (req, res) => {
     if (!merchant.kyc.gst) merchant.kyc.gst = { verified: false };
     if (!merchant.kyc.businessProof) merchant.kyc.businessProof = { verified: false };
     if (!merchant.kyc.bankProof) merchant.kyc.bankProof = { verified: false };
+
+    // RULE 1: Block modification of already verified documents
+    if (merchant.kyc.pan.verified && (panNumber || req.files?.panImage)) {
+      return res.status(403).json({
+        success: false,
+        message: "Your PAN Card details are verified and locked. Please contact support to request a change.",
+        code: "PAN_VERIFIED_LOCKED",
+      });
+    }
+
+    if (merchant.kyc.gst.verified && (gstNumber || req.files?.gstImage)) {
+      return res.status(403).json({
+        success: false,
+        message: "Your GST Certificate details are verified and locked. Please contact support to request a change.",
+        code: "GST_VERIFIED_LOCKED",
+      });
+    }
+
+    if (merchant.kyc.businessProof.verified && (businessProofType || req.files?.businessProofImage)) {
+      return res.status(403).json({
+        success: false,
+        message: "Your Business Proof is verified and locked. Please contact support to request a change.",
+        code: "BUSINESS_PROOF_VERIFIED_LOCKED",
+      });
+    }
+
+    if (merchant.kyc.bankProof.verified && req.files?.bankProofImage) {
+      return res.status(403).json({
+        success: false,
+        message: "Your Bank Proof is verified and locked. Please contact support to request a change.",
+        code: "BANK_PROOF_VERIFIED_LOCKED",
+      });
+    }
+
+    // RULE 2: Under-Review Lock
+    // If the merchant is NOT in 'rejected' status, already-submitted documents cannot be altered.
+    // Only unsubmitted documents (first-time fill) or flagged/rejected documents can be updated.
+    const isRejected = merchant.status === 'rejected';
+
+    if (!isRejected) {
+      const hasPanSubmitted = !!(merchant.kyc.pan.number || merchant.kyc.pan.image?.url);
+      if (hasPanSubmitted && (panNumber || req.files?.panImage)) {
+        return res.status(403).json({
+          success: false,
+          message: "PAN Card is currently under review by admin and cannot be edited.",
+          code: "PAN_UNDER_REVIEW_LOCKED",
+        });
+      }
+
+      const hasGstSubmitted = !!(merchant.kyc.gst.number || merchant.kyc.gst.image?.url);
+      if (hasGstSubmitted && (gstNumber || req.files?.gstImage)) {
+        return res.status(403).json({
+          success: false,
+          message: "GST Certificate is currently under review by admin and cannot be edited.",
+          code: "GST_UNDER_REVIEW_LOCKED",
+        });
+      }
+
+      const hasBusinessProofSubmitted = !!(merchant.kyc.businessProof.proofType || merchant.kyc.businessProof.image?.url);
+      if (hasBusinessProofSubmitted && (businessProofType || req.files?.businessProofImage)) {
+        return res.status(403).json({
+          success: false,
+          message: "Business Proof is currently under review by admin and cannot be edited.",
+          code: "BUSINESS_PROOF_UNDER_REVIEW_LOCKED",
+        });
+      }
+
+      const hasBankProofSubmitted = !!merchant.kyc.bankProof.image?.url;
+      if (hasBankProofSubmitted && req.files?.bankProofImage) {
+        return res.status(403).json({
+          success: false,
+          message: "Bank Proof is currently under review by admin and cannot be edited.",
+          code: "BANK_PROOF_UNDER_REVIEW_LOCKED",
+        });
+      }
+    }
 
     if (panNumber) merchant.kyc.pan.number = panNumber;
     if (gstNumber) merchant.kyc.gst.number = gstNumber;
