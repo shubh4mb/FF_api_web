@@ -295,14 +295,15 @@ Analyze the supplied ${imageCountDesc} and return ONLY valid JSON.
 Synthesize all visible angles (front view, back view, fabric details, cuts, trims) to produce an accurate catalog listing.
 
 Identify:
-- product name
-- style name
-- product description (incorporate back/neckline/sleeve/fabric design details visible across angles)
-- gender
-- category
-- subcategory
-- useful search tags
-- primary color
+- product name (name): concise, appealing e-commerce title
+- style name (styleName): specific garment style / cut / pattern
+- product description (description): concise highlight of back/neckline/sleeve/fabric design details visible across angles
+- gender (gender): array containing one or more of: MEN, WOMEN, KIDS, BOYS, GIRLS, UNISEX
+- category (category): MUST be strictly selected from the top-level categories below
+- subcategory (subCategory): MUST be strictly selected from the allowed subcategories under that category
+- tags (tags): array of 4-8 useful search tags (fabric, style, sleeve type, pattern, occasion)
+- primary color (color): object with "name" (e.g. "Navy Blue", "Olive Green", "Black") and "hex" (valid 6-character hex code starting with #)
+- attributes: MUST always be []
 
 ALLOWED CATEGORIES & SUBCATEGORIES:
 ${categoryPromptText}
@@ -316,8 +317,24 @@ GENDER RULES:
 Use only: MEN, WOMEN, KIDS, BOYS, GIRLS, UNISEX.
 
 DO NOT generate:
-- categoryId, subCategoryId, productCode, brand, price, stock, sizes, attributes.
+- categoryId, subCategoryId, productCode, brand, price, stock, sizes.
 "attributes" MUST always be [].
+
+OUTPUT FORMAT (JSON ONLY, NO MARKDOWN, NO OTHER TEXT):
+{
+  "name": "Product Name",
+  "styleName": "Style Name",
+  "description": "Product Description",
+  "gender": ["MEN"],
+  "category": "Topwear",
+  "subCategory": "T-Shirt",
+  "tags": ["tag1", "tag2"],
+  "color": {
+    "name": "Black",
+    "hex": "#000000"
+  },
+  "attributes": []
+}
 `;
 
   const ai = getAiClient();
@@ -338,71 +355,62 @@ DO NOT generate:
     ],
     config: {
       responseMimeType: "application/json",
-      responseSchema: {
-        type: "object",
-        properties: {
-          name: { type: "string" },
-          styleName: { type: "string" },
-          description: { type: "string" },
-          gender: {
-            type: "array",
-            items: {
-              type: "string",
-              enum: ["MEN", "WOMEN", "KIDS", "BOYS", "GIRLS", "UNISEX"],
-            },
-          },
-          category: {
-            type: "string",
-            enum: Object.keys(categoryTree),
-          },
-          subCategory: { type: "string" },
-          tags: {
-            type: "array",
-            items: { type: "string" },
-          },
-          color: {
-            type: "object",
-            properties: {
-              name: { type: "string" },
-              hex: { type: "string" },
-            },
-            required: ["name", "hex"],
-          },
-          attributes: {
-            type: "array",
-            items: { type: "object" },
-          },
-        },
-        required: [
-          "name",
-          "styleName",
-          "description",
-          "gender",
-          "category",
-          "subCategory",
-          "tags",
-          "color",
-          "attributes",
-        ],
-      },
     },
   };
 
-  let response;
-  const primaryModel = process.env.GEMINI_MODEL || "gemini-3.8-flash";
-  const fallbackModel = "gemini-3.5-flash-lite";
+  const candidateModels = [
+    process.env.GEMINI_MODEL,
+    "gemini-flash-lite-latest",
+    "gemini-3.5-flash-lite",
+    "gemini-3.1-flash-lite",
+    "gemini-3.5-flash",
+    "gemini-3.8-flash",
+  ].filter(Boolean);
 
-  try {
-    response = await ai.models.generateContent({
-      model: primaryModel,
-      ...requestPayload,
-    });
-  } catch (err) {
-    console.warn(`[Gemini AI] Model ${primaryModel} failed (${err.message}). Retrying with ${fallbackModel}...`);
-    response = await ai.models.generateContent({
-      model: fallbackModel,
-      ...requestPayload,
-    });
+  const modelPool = [...new Set(candidateModels)];
+
+  let response = null;
+  let lastError = null;
+
+  for (let i = 0; i < modelPool.length; i++) {
+    const model = modelPool[i];
+    try {
+      // 12-second per-model attempt timeout to prevent UI hanging
+      const attemptPromise = ai.models.generateContent({
+        model,
+        ...requestPayload,
+      });
+
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error(`Timeout: ${model} took longer than 12000ms`)), 12000);
+      });
+
+      response = await Promise.race([attemptPromise, timeoutPromise]);
+      if (response && response.text) {
+        break;
+      }
+    } catch (err) {
+      lastError = err;
+      const isTransient =
+        err.message?.includes("503") ||
+        err.message?.includes("UNAVAILABLE") ||
+        err.message?.includes("429") ||
+        err.message?.includes("RESOURCE_EXHAUSTED") ||
+        err.message?.includes("high demand") ||
+        err.message?.includes("Timeout");
+
+      console.warn(`[Gemini AI] Model ${model} failed (${err.message}). ${i < modelPool.length - 1 ? `Retrying with ${modelPool[i + 1]}...` : "No more fallback models."}`);
+
+      if (isTransient && i < modelPool.length - 1) {
+        const delay = 400 + Math.floor(Math.random() * 400);
+        await new Promise((resolve) => setTimeout(resolve, delay));
+      }
+    }
+  }
+
+  if (!response || !response.text) {
+    const errorDetails = lastError?.message || "All Gemini models unavailable";
+    throw new Error(`AI product analysis is currently experiencing high demand. Please try again in a few moments. (${errorDetails})`);
   }
 
   let parsed;
