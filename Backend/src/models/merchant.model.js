@@ -136,6 +136,19 @@ const merchantSchema = new mongoose.Schema(
       default: 'store',
       index: true,
     },
+    // ── Store Type ──
+    // 'single_brand' = Dedicated single-brand boutique
+    // 'multi_brand' = Retail store stocking multiple brands
+    // 'warehouse' = Dark store hub (e.g. Flashfits Kaloor)
+    storeType: {
+      type: String,
+      enum: ['single_brand', 'multi_brand', 'warehouse'],
+      default: 'single_brand',
+    },
+    isMultiBrand: {
+      type: Boolean,
+      default: false,
+    },
     // ── Warehouse Operator Support ──
     // 'merchant' = standard shop owner (default)
     // 'warehouse' = FlashFits warehouse operator (created by admin)

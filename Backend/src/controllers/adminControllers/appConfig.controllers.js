@@ -117,8 +117,8 @@ export const getAppVersionPolicy = async (req, res) => {
                 : "https://apps.apple.com/app/com.flashfits.app");
 
         // Resolve platform-specific versions with backwards-compatible defaults
-        const defaultAndroidMinVersion = app === "customer" ? "1.1.2" : "1.0.0";
-        const defaultAndroidLatestVersion = app === "customer" ? "1.1.2" : "1.0.0";
+        const defaultAndroidMinVersion = app === "customer" ? "1.1.3" : "1.0.0";
+        const defaultAndroidLatestVersion = app === "customer" ? "1.1.3" : "1.0.0";
 
         const minVersion = isIos
             ? (versionPolicy.minVersionIos || versionPolicy.minVersion || "1.0.0")

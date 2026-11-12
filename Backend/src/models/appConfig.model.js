@@ -135,19 +135,19 @@ const appConfigSchema = new mongoose.Schema(
         customerAppVersion: {
             minVersion: {
                 type: String,
-                default: "1.1.2",
+                default: "1.1.3",
             },
             latestVersion: {
                 type: String,
-                default: "1.1.2",
+                default: "1.1.3",
             },
             minVersionAndroid: {
                 type: String,
-                default: "1.1.2",
+                default: "1.1.3",
             },
             latestVersionAndroid: {
                 type: String,
-                default: "1.1.2",
+                default: "1.1.3",
             },
             storeUrl: {
                 type: String,
@@ -242,13 +242,21 @@ const appConfigSchema = new mongoose.Schema(
                 type: String,
                 default: "1.0.0",
             },
+            minVersionAndroid: {
+                type: String,
+                default: "1.0.0",
+            },
+            latestVersionAndroid: {
+                type: String,
+                default: "1.0.0",
+            },
             storeUrl: {
                 type: String,
-                default: "market://details?id=com.flashfits.merchant",
+                default: "https://github.com/shubh4mb/MerchantApp/releases/latest/download/merchant.apk",
             },
             webUrl: {
                 type: String,
-                default: "https://play.google.com/store/apps/details?id=com.flashfits.merchant",
+                default: "https://github.com/shubh4mb/MerchantApp/releases/latest/download/merchant.apk",
             },
             minVersionIos: {
                 type: String,
@@ -265,6 +273,30 @@ const appConfigSchema = new mongoose.Schema(
             webUrlIos: {
                 type: String,
                 default: "https://apps.apple.com/app/com.flashfits.merchant",
+            },
+            mandatoryTitle: {
+                type: String,
+                default: "Merchant App Update Required",
+            },
+            mandatoryMessage: {
+                type: String,
+                default: "Please update your FlashFits Merchant app to continue managing orders and products.",
+            },
+            optionalTitle: {
+                type: String,
+                default: "New Version Available",
+            },
+            optionalMessage: {
+                type: String,
+                default: "A newer version of FlashFits Merchant is available with improvements and bug fixes.",
+            },
+            releaseNotes: {
+                type: [String],
+                default: [
+                    "Performance improvements & smoother operations",
+                    "Fixed bottom navigation layout",
+                    "Bug fixes & order enhancements",
+                ],
             },
         },
     },

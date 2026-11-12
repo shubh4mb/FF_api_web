@@ -67,7 +67,7 @@ export const getNearbyMerchants = async (req, res) => {
     }
 
     const merchants = await Merchant.find(filter)
-      .select('shopName logo genderCategory shipsWithinHours isOnline zoneId isZoneLive address backgroundImage rating stats fulfillmentType')
+      .select('shopName logo genderCategory shipsWithinHours isOnline zoneId isZoneLive address backgroundImage rating stats fulfillmentType storeType isMultiBrand')
       .lean();
 
     const ProductFlat = (await import("../../models/productFlat.model.js")).default;
@@ -122,6 +122,8 @@ export const getNearbyMerchants = async (req, res) => {
             isZoneLive: true,
             isNearby: true,
             isWarehouse: true,
+            isMultiBrand: true,
+            storeType: 'warehouse',
             rating: 4.9,
             address: wh.address || { city: 'FlashFits Hub' },
             stats: { totalProducts: whCount > 0 ? whCount : totalWarehouseProducts }
@@ -139,6 +141,8 @@ export const getNearbyMerchants = async (req, res) => {
           isZoneLive: true,
           isNearby: true,
           isWarehouse: true,
+          isMultiBrand: true,
+          storeType: 'warehouse',
           rating: 4.9,
           address: { city: 'FlashFits Hub' },
           stats: { totalProducts: totalWarehouseProducts }
