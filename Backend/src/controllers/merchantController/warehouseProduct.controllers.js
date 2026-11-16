@@ -298,12 +298,25 @@ export const updateMyWarehouseProduct = asyncHandler(async (req, res) => {
   const allowedFields = [
     'name', 'description', 'brandId', 'categoryId', 'merchantId', 'subCategoryId',
     'subSubCategoryId', 'additionalCategoryIds', 'gender', 'tags', 'features', 'attributes',
-    'isTriable', 'commissionRate'
+    'isTriable', 'commissionRate', 'price', 'mrp', 'discount'
   ];
 
   const updates = {};
   for (const field of allowedFields) {
     if (req.body[field] !== undefined) updates[field] = req.body[field];
+  }
+
+  if (updates.price !== undefined) {
+    const p = Number(updates.price);
+    updates.price = isNaN(p) ? 0 : p;
+  }
+  if (updates.mrp !== undefined) {
+    const m = Number(updates.mrp);
+    updates.mrp = isNaN(m) ? 0 : m;
+  }
+  if (updates.discount !== undefined) {
+    const d = Number(updates.discount);
+    updates.discount = isNaN(d) ? 0 : d;
   }
 
   if (updates.additionalCategoryIds !== undefined) {

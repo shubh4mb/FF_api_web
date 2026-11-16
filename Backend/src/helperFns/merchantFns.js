@@ -14,11 +14,19 @@ export async function setMerchantMeta(merchantId, obj) {
 }
 
 export async function getMerchantMeta(merchantId) {
-    console.log(`[Redis] Reading meta for merchant:${merchantId}:meta`);
-    const rawMeta = await redis.hGetAll(`merchant:${merchantId}:meta`);
-    console.log(`[Redis] Raw meta for merchant:${merchantId}:meta result:`, rawMeta);
-    const meta = { ...rawMeta };
-    if (meta.isOnline !== undefined) meta.isOnline = meta.isOnline === 'true';
-    if (meta.lastSeenAt !== undefined) meta.lastSeenAt = parseInt(meta.lastSeenAt, 10) || Date.now();
-    return meta;
+    try {
+        const timeoutPromise = new Promise((_, reject) =>
+            setTimeout(() => reject(new Error('Redis timeout')), 400)
+        );
+        const rawMeta = await Promise.race([
+            redis.hGetAll(`merchant:${merchantId}:meta`),
+            timeoutPromise
+        ]);
+        const meta = { ...rawMeta };
+        if (meta.isOnline !== undefined) meta.isOnline = meta.isOnline === 'true';
+        if (meta.lastSeenAt !== undefined) meta.lastSeenAt = parseInt(meta.lastSeenAt, 10) || Date.now();
+        return meta;
+    } catch (err) {
+        return {};
+    }
 }

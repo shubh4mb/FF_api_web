@@ -615,7 +615,19 @@ export const verifyMerchantReturnOtp= async (req, res) => {
       } catch (sessionErr) {
         console.error("Session order association error (non-fatal):", sessionErr);
       }
-    }    // 📱 Rider notification: "Return verified, you're done!"
+    }
+
+    // Safety net: ensure order is settled if not yet settled (e.g., all items returned)
+    if (order.settlementStatus !== "settled") {
+      try {
+        const { settleOrder } = await import("../../helperFns/orderSettlement.js");
+        settleOrder(order).catch(err => console.error("Settlement error in verifyMerchantReturnOtp:", err));
+      } catch (settleErr) {
+        console.error("Error importing settleOrder in verifyMerchantReturnOtp:", settleErr);
+      }
+    }
+
+    // 📱 Rider notification: "Return verified, you're done!"
     notifyOrderEvent("rider", "return_complete", {
       riderId: req.riderId,
       orderId: order._id,

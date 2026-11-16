@@ -12,6 +12,7 @@ import { getAppConfig, updateAppConfig, generateDummyReceipt } from '../controll
 import { getDashboardStats } from '../controllers/adminControllers/dashboard.controllers.js';
 import { verifyAdmin } from '../middleware/adminAuth.middleware.js';
 import adminBannerRoutes from './adminBanner.routes.js';
+import adminFinanceRoutes from './adminFinance.routes.js';
 import { createAttribute, getAttributes, updateAttribute, deleteAttribute } from '../controllers/adminControllers/attribute.controllers.js';
 import { addHub, getAllHubs, updateHub, deleteHub } from '../controllers/adminControllers/hub.controllers.js';
 import { createOffer, getAllOffers, getOfferById, updateOffer, toggleOffer, deleteOffer, getAllOffersOverview } from '../controllers/adminControllers/offer.controllers.js';
@@ -42,6 +43,7 @@ import { getWhatsAppStatus, sendWhatsAppMessage, formatOrderAlertMessage } from 
 const router = express.Router();
 
 router.use('/banners', adminBannerRoutes);
+router.use('/finance', adminFinanceRoutes);
 
 // ── WhatsApp Alerts (Admin) ──
 router.get('/whatsapp/status', verifyAdmin, (req, res) => {

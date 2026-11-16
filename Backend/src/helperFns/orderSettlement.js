@@ -38,21 +38,25 @@ export const settleOrder = async (order, providedSession = null) => {
             item => item.status !== "out_of_stock" && (item.tryStatus === "accepted" || item.tryStatus === "keep" || item.tryStatus === "not-triable")
         );
 
+        let defaultCommissionRate = 4;
+
         for (const item of acceptedItems) {
             let product = await ProductFlat.findById(item.productId || item.variantId).select("categoryId subCategoryId").session(session);
 
             let commissionPercentage = 4; // Default launch baseline is 4%
             if (product?.subCategoryId) {
-                const category = await Category.findById(product.subCategoryId).select("commissionPercentage").session(session);
-                if (category && typeof category.commissionPercentage === "number" && category.commissionPercentage > 0) {
-                    commissionPercentage = category.commissionPercentage;
+                const subCategory = await Category.findById(product.subCategoryId).select("commissionPercentage").session(session);
+                if (subCategory && typeof subCategory.commissionPercentage === "number" && subCategory.commissionPercentage >= 0) {
+                    commissionPercentage = subCategory.commissionPercentage;
                 }
             } else if (product?.categoryId) {
                 const category = await Category.findById(product.categoryId).select("commissionPercentage").session(session);
-                if (category && typeof category.commissionPercentage === "number" && category.commissionPercentage > 0) {
+                if (category && typeof category.commissionPercentage === "number" && category.commissionPercentage >= 0) {
                     commissionPercentage = category.commissionPercentage;
                 }
             }
+
+            defaultCommissionRate = commissionPercentage;
 
             const itemTotal = item.price * (item.quantity || 1);
             totalGrossSales += itemTotal;
@@ -62,6 +66,27 @@ export const settleOrder = async (order, providedSession = null) => {
             totalCommission += commissionAmount;
             totalMerchantPayout += merchantAmount;
         }
+
+        // If no accepted items, inspect subCategory of first item for rate snapshot
+        if (acceptedItems.length === 0 && order.items && order.items.length > 0) {
+            const firstItem = order.items[0];
+            const product = await ProductFlat.findById(firstItem.productId || firstItem.variantId).select("categoryId subCategoryId").session(session);
+            if (product?.subCategoryId) {
+                const subCategory = await Category.findById(product.subCategoryId).select("commissionPercentage").session(session);
+                if (subCategory && typeof subCategory.commissionPercentage === "number" && subCategory.commissionPercentage >= 0) {
+                    defaultCommissionRate = subCategory.commissionPercentage;
+                }
+            } else if (product?.categoryId) {
+                const category = await Category.findById(product.categoryId).select("commissionPercentage").session(session);
+                if (category && typeof category.commissionPercentage === "number" && category.commissionPercentage >= 0) {
+                    defaultCommissionRate = category.commissionPercentage;
+                }
+            }
+        }
+
+        const effectiveCommissionRate = totalGrossSales > 0
+            ? Number(((totalCommission / totalGrossSales) * 100).toFixed(2))
+            : defaultCommissionRate;
 
         // 2. Process Applied Coupons/Discounts
         for (const offer of (order.appliedOffers || [])) {
@@ -91,7 +116,8 @@ export const settleOrder = async (order, providedSession = null) => {
         }
 
         const deliveryFee = order.originalDeliveryCharge || order.deliveryCharge || 0;
-        const returnFee = order.originalReturnCharge || order.returnCharge || 0;
+        // If there are NO returns, rider does NOT make a return trip -> return fee is 0 (do not add ₹40 from platform fund)
+        const returnFee = hasReturns ? (order.originalReturnCharge || order.returnCharge || 0) : 0;
         const riderPayout = deliveryFee + returnFee + tipAmount + waitingTimeCharge;
 
         if (riderPayout > 0) {
@@ -107,12 +133,12 @@ export const settleOrder = async (order, providedSession = null) => {
             
             if (freeDeliveryOffer && !deliveryFeeRecovered) {
                 if (freeDeliveryOffer.scope === "merchant") {
-                    // Merchant only covers the delivery fee (and return fee if explicitly free return), NOT rider tip or overtime waiting charge
-                    const merchantDeliveryDiscount = (freeDeliveryOffer.freeReturn ? (deliveryFee + returnFee) : deliveryFee);
+                    // Merchant only covers the delivery fee (and return fee if explicitly free return AND has returns), NOT rider tip or overtime waiting charge
+                    const merchantDeliveryDiscount = (freeDeliveryOffer.freeReturn && hasReturns ? (deliveryFee + returnFee) : deliveryFee);
                     merchantDiscount += merchantDeliveryDiscount;
                     merchantDiscount = Math.min(merchantDiscount, totalMerchantPayout);
                 } else if (freeDeliveryOffer.scope === "admin") {
-                    adminDiscount += riderPayout;
+                    adminDiscount += (deliveryFee + returnFee);
                 }
             }
         }
@@ -130,12 +156,12 @@ export const settleOrder = async (order, providedSession = null) => {
         const isWarehouse = Boolean(order.warehouseId || order.fulfillmentType);
 
         // Store settlement breakdown directly on order document for immutable financial auditing
-        order.commissionRate = 4;
+        order.commissionRate = effectiveCommissionRate;
         order.commissionAmount = totalCommission;
         order.merchantPayout = finalMerchantPayout;
         order.settlementBreakdown = {
             grossAmount: totalGrossSales,
-            commissionRate: 4,
+            commissionRate: effectiveCommissionRate,
             commissionAmount: totalCommission,
             merchantPayout: finalMerchantPayout,
             merchantDiscount: merchantDiscount,
@@ -158,7 +184,7 @@ export const settleOrder = async (order, providedSession = null) => {
                 orderModel: isWarehouse ? "WarehouseOrder" : "Order",
                 amount: Math.abs(finalMerchantPayout),
                 grossAmount: totalGrossSales,
-                commissionRate: 4,
+                commissionRate: effectiveCommissionRate,
                 commissionAmount: totalCommission,
                 merchantDiscount: merchantDiscount,
                 type: finalMerchantPayout > 0 ? "credit" : "debit",
@@ -268,7 +294,7 @@ export const settleOrder = async (order, providedSession = null) => {
                     warehouseOrderId: isWarehouse ? order._id : null,
                     split: {
                         grossAmount: totalGrossSales,
-                        commissionRate: 4,
+                        commissionRate: effectiveCommissionRate,
                         commissionAmount: totalCommission,
                         merchantAmount: finalMerchantPayout,
                         merchantDiscount: merchantDiscount,
@@ -279,7 +305,7 @@ export const settleOrder = async (order, providedSession = null) => {
                         waitingCharge: waitingTimeCharge,
                         taxes: (order.finalBilling?.gst || 0) + (order.finalBilling?.serviceGST || 0),
                     },
-                    notes: `Customer payment settled for ${isWarehouse ? 'Warehouse ' : ''}order #${order._id.toString().slice(-6).toUpperCase()} (Gross: ₹${totalGrossSales}, Comm 4%: ₹${totalCommission}, Net Merchant: ₹${finalMerchantPayout})`,
+                    notes: `Customer payment settled for ${isWarehouse ? 'Warehouse ' : ''}order #${order._id.toString().slice(-6).toUpperCase()} (Gross: ₹${totalGrossSales}, Comm ${effectiveCommissionRate}%: ₹${totalCommission}, Net Merchant: ₹${finalMerchantPayout})`,
                 }, session);
             }
 

@@ -309,9 +309,11 @@ export const markPayoutPaid = async (req, res) => {
                         ifscCode: merchant.bankDetails?.ifscCode,
                         upiId: merchant.bankDetails?.upiId,
                     };
+                    const totalDeductionForCycle = (deductionAmount || 0) + (payout.adminDeduction?.amount || 0);
+                    const totalPendingToClear = Math.max(0, payout.finalAmount + totalDeductionForCycle);
                     merchant.earnings = merchant.earnings || { pendingBalance: 0, paidBalance: 0 };
                     merchant.earnings.paidBalance = (merchant.earnings.paidBalance || 0) + Math.max(0, payout.finalAmount);
-                    merchant.earnings.pendingBalance = Math.max(0, (merchant.earnings.pendingBalance || 0) - Math.max(0, payout.finalAmount));
+                    merchant.earnings.pendingBalance = Math.max(0, (merchant.earnings.pendingBalance || 0) - totalPendingToClear);
                     merchant.earnings.lastPayoutDate = new Date();
                     await merchant.save();
                 }

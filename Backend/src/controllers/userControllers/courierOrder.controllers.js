@@ -987,25 +987,32 @@ export const updateCourierOrderStatus = async (req, res) => {
           const Category = (await import('../../models/category.model.js')).default;
 
           let totalCommission = 0;
+          let defaultCommissionRate = 4;
           for (const item of (order.items || [])) {
             let commissionPercentage = 4; // Launch baseline 4%
             if (item.productId) {
               const product = await ProductFlat.findById(item.productId).select("categoryId subCategoryId");
               if (product?.subCategoryId) {
                 const category = await Category.findById(product.subCategoryId).select("commissionPercentage");
-                if (category && typeof category.commissionPercentage === "number" && category.commissionPercentage > 0) {
+                if (category && typeof category.commissionPercentage === "number" && category.commissionPercentage >= 0) {
                   commissionPercentage = category.commissionPercentage;
                 }
               } else if (product?.categoryId) {
                 const category = await Category.findById(product.categoryId).select("commissionPercentage");
-                if (category && typeof category.commissionPercentage === "number" && category.commissionPercentage > 0) {
+                if (category && typeof category.commissionPercentage === "number" && category.commissionPercentage >= 0) {
                   commissionPercentage = category.commissionPercentage;
                 }
               }
             }
+            defaultCommissionRate = commissionPercentage;
             const itemTotal = (item.price || 0) * (item.quantity || 1);
             totalCommission += (itemTotal * commissionPercentage) / 100;
           }
+
+          const grossAmount = order.totalAmount || 0;
+          const effectiveCommissionRate = grossAmount > 0
+            ? Number(((totalCommission / grossAmount) * 100).toFixed(2))
+            : defaultCommissionRate;
 
           let merchantDiscount = 0;
           for (const offer of (order.appliedOffers || [])) {
@@ -1013,14 +1020,14 @@ export const updateCourierOrderStatus = async (req, res) => {
               merchantDiscount += (offer.discountApplied || 0);
             }
           }
-          const payoutAmount = Math.max(0, (order.totalAmount || 0) - totalCommission - merchantDiscount);
+          const payoutAmount = Math.max(0, grossAmount - totalCommission - merchantDiscount);
 
-          order.commissionRate = 4;
+          order.commissionRate = effectiveCommissionRate;
           order.commissionAmount = totalCommission;
           order.merchantPayout = payoutAmount;
           order.settlementBreakdown = {
-            grossAmount: order.totalAmount || 0,
-            commissionRate: 4,
+            grossAmount: grossAmount,
+            commissionRate: effectiveCommissionRate,
             commissionAmount: totalCommission,
             merchantPayout: payoutAmount,
             merchantDiscount: merchantDiscount,
@@ -1034,8 +1041,8 @@ export const updateCourierOrderStatus = async (req, res) => {
               orderId: order._id,
               orderModel: 'CourierOrder',
               amount: payoutAmount,
-              grossAmount: order.totalAmount || 0,
-              commissionRate: 4,
+              grossAmount: grossAmount,
+              commissionRate: effectiveCommissionRate,
               commissionAmount: totalCommission,
               merchantDiscount: merchantDiscount,
               type: 'credit',

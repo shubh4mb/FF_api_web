@@ -1587,9 +1587,35 @@ export const createFinalPaymentRazorpayOrder = async (req, res) => {
     // If nothing is payable (e.g. ₹0 due), complete directly without Razorpay
     if (billing.totalPayable === 0) {
       order.paymentStatus = "paid";
+      if (!order.razorpayPaymentId) {
+        order.razorpayPaymentId = `zero_due_${Date.now()}`;
+      }
       order.orderStatus = acceptedItems.length > 0 ? "completed" : "return_in_progress";
       order.customerDeliveryStatus = "completed";
       order.deliveryRiderStatus = acceptedItems.length > 0 ? "completed" : "returning";
+
+      // Deduct stock for accepted items if customer kept items
+      for (const item of acceptedItems) {
+        try {
+          let targetDoc = null;
+          if (item.variantId) {
+            targetDoc = await ProductFlat.findById(item.variantId);
+          }
+          if (!targetDoc && item.productId) {
+            const docs = await ProductFlat.find({ styleGroupId: item.productId, size: item.size });
+            targetDoc = docs.find(d => generateColorVariantId(item.productId.toString(), d.color?.name) === item.variantId?.toString()) || docs[0];
+          }
+          if (targetDoc) {
+            await ProductFlat.updateOne(
+              { _id: targetDoc._id },
+              { $inc: { stock: -item.quantity, reservedStock: -item.quantity } }
+            );
+          }
+        } catch (stockErr) {
+          console.error("Stock deduction error in 0 totalPayable (non-fatal):", stockErr);
+        }
+      }
+
       await order.save();
 
       // Free rider if no returns
@@ -1603,6 +1629,14 @@ export const createFinalPaymentRazorpayOrder = async (req, res) => {
         } catch (e) {
           console.error("Rider free cleanup error (non-fatal):", e);
         }
+      }
+
+      // Settle wallets & weekly payouts for rider, merchant, admin
+      try {
+        const { settleOrder } = await import("../../helperFns/orderSettlement.js");
+        settleOrder(order).catch(err => console.error("Settlement failed asynchronously (0 due):", err));
+      } catch (settleImportErr) {
+        console.error("Failed to import settleOrder (0 due):", settleImportErr);
       }
 
       const io = getIO();
