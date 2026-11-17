@@ -375,14 +375,14 @@ OUTPUT FORMAT (JSON ONLY, NO MARKDOWN, NO OTHER TEXT):
   for (let i = 0; i < modelPool.length; i++) {
     const model = modelPool[i];
     try {
-      // 12-second per-model attempt timeout to prevent UI hanging
+      // 25-second per-model attempt timeout to accommodate mobile network transfers and vision processing
       const attemptPromise = ai.models.generateContent({
         model,
         ...requestPayload,
       });
 
       const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error(`Timeout: ${model} took longer than 12000ms`)), 12000);
+        setTimeout(() => reject(new Error(`Timeout: ${model} took longer than 25000ms`)), 25000);
       });
 
       response = await Promise.race([attemptPromise, timeoutPromise]);

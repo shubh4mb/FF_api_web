@@ -159,11 +159,11 @@ const appConfigSchema = new mongoose.Schema(
             },
             minVersionIos: {
                 type: String,
-                default: "1.1.2",
+                default: "1.1.3",
             },
             latestVersionIos: {
                 type: String,
-                default: "1.1.2",
+                default: "1.1.3",
             },
             storeUrlIos: {
                 type: String,

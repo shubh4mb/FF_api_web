@@ -2382,7 +2382,24 @@ export const createProductFull = async (req, res) => {
       const variantDiscount = isNaN(Number(variant.discount)) ? 0 : Number(variant.discount);
       
       const finalImages = [];
-      if (variant.imageFields && Array.isArray(variant.imageFields)) {
+      const pushNormalizedImage = (img) => {
+        if (!img) return;
+        if (typeof img === 'string') {
+          finalImages.push({ url: img, public_id: '' });
+        } else if (img.url) {
+          finalImages.push({ url: img.url, public_id: img.public_id || '' });
+        }
+      };
+
+      // 1. Existing images (e.g. from catalog product or already uploaded image URLs)
+      if (variant.existingImages && Array.isArray(variant.existingImages)) {
+        variant.existingImages.forEach(pushNormalizedImage);
+      } else if (variant.images && Array.isArray(variant.images)) {
+        variant.images.forEach(pushNormalizedImage);
+      }
+
+      // 2. Newly uploaded image files via multipart/form-data
+      if (variant.imageFields && Array.isArray(variant.imageFields) && req.files && Array.isArray(req.files)) {
         for (const field of variant.imageFields) {
           const file = req.files.find(f => f.fieldname === field);
           if (file) {
@@ -2441,7 +2458,10 @@ export const createProductFull = async (req, res) => {
     });
   } catch (err) {
     console.error("Create product full error:", err);
-    res.status(500).json({ success: false, message: "Server error" });
+    res.status(500).json({ 
+      success: false, 
+      message: err.message || "Server error while creating product" 
+    });
   }
 };
 

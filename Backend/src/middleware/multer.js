@@ -2,13 +2,21 @@ import multer from 'multer';
 
 // File filter
 const fileFilter = (req, file, cb) => {
-    // Accept images and PDFs
-    const allowedMimes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp', 'application/pdf'];
+    // Accept standard web images, mobile camera formats (heic/heif), and PDFs
+    const allowedMimes = [
+        'image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp',
+        'image/heic', 'image/heif', 'image/heic-sequence', 'image/heif-sequence',
+        'application/octet-stream', // Some mobile browsers send HEIC/camera blobs as octet-stream
+        'application/pdf'
+    ];
     
-    if (allowedMimes.includes(file.mimetype)) {
+    // Also check extension if mimetype is ambiguous (like application/octet-stream)
+    const isImageExt = /\.(jpe?g|png|gif|webp|heic|heif|pdf)$/i.test(file.originalname || '');
+
+    if (allowedMimes.includes(file.mimetype) || isImageExt) {
         cb(null, true);
     } else {
-        cb(new Error('Invalid file type. Only images (jpg, jpeg, png, gif, webp) and PDF files are allowed.'), false);
+        cb(new Error('Invalid file type. Only images (jpg, jpeg, png, gif, webp, heic) and PDF files are allowed.'), false);
     }
 };
 
