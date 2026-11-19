@@ -15,7 +15,16 @@ function getAiClient() {
   return aiClient;
 }
 
+let cachedCategoryOptions = null;
+let categoryCacheTimestamp = 0;
+const CATEGORY_CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes cache
+
 async function getCategoryOptions() {
+  const now = Date.now();
+  if (cachedCategoryOptions && (now - categoryCacheTimestamp) < CATEGORY_CACHE_TTL_MS) {
+    return cachedCategoryOptions;
+  }
+
   const categories = await Category.find({ isActive: true })
     .select("_id name parentId level allowedGenders isTriable description prompts promptFront promptBack promptCloseUp")
     .lean();
@@ -24,7 +33,7 @@ async function getCategoryOptions() {
     categories.map((category) => [String(category._id), category])
   );
 
-  return categories.map((category) => ({
+  const formatted = categories.map((category) => ({
     id: String(category._id),
     name: category.name,
     level: category.level,
@@ -41,6 +50,10 @@ async function getCategoryOptions() {
     allowedGenders: category.allowedGenders || [],
     isTriable: Boolean(category.isTriable),
   }));
+
+  cachedCategoryOptions = formatted;
+  categoryCacheTimestamp = now;
+  return formatted;
 }
 
 function normalizeString(str) {
@@ -123,6 +136,9 @@ function resolveAndValidateProduct(product, categoryOptions) {
 
   // 1b. Substring or inclusion match for category
   if (!category && product.category) {
+
+
+    
     const normP = normalizeString(product.category);
     category = level0Categories.find((c) => {
       const normC = normalizeString(c.name);
@@ -361,8 +377,10 @@ OUTPUT FORMAT (JSON ONLY, NO MARKDOWN, NO OTHER TEXT):
   const candidateModels = [
     process.env.GEMINI_MODEL,
     "gemini-flash-lite-latest",
-    "gemini-3.5-flash-lite",
     "gemini-3.1-flash-lite",
+    "gemini-3.5-flash-lite",
+    "gemini-flash-latest",
+    "gemini-2.5-flash",
     "gemini-3.5-flash",
     "gemini-3.8-flash",
   ].filter(Boolean);
@@ -375,14 +393,14 @@ OUTPUT FORMAT (JSON ONLY, NO MARKDOWN, NO OTHER TEXT):
   for (let i = 0; i < modelPool.length; i++) {
     const model = modelPool[i];
     try {
-      // 25-second per-model attempt timeout to accommodate mobile network transfers and vision processing
+      // 10-second per-model attempt timeout to fail fast to working fallbacks
       const attemptPromise = ai.models.generateContent({
         model,
         ...requestPayload,
       });
 
       const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error(`Timeout: ${model} took longer than 25000ms`)), 25000);
+        setTimeout(() => reject(new Error(`Timeout: ${model} took longer than 10000ms`)), 10000);
       });
 
       response = await Promise.race([attemptPromise, timeoutPromise]);
@@ -402,7 +420,7 @@ OUTPUT FORMAT (JSON ONLY, NO MARKDOWN, NO OTHER TEXT):
       console.warn(`[Gemini AI] Model ${model} failed (${err.message}). ${i < modelPool.length - 1 ? `Retrying with ${modelPool[i + 1]}...` : "No more fallback models."}`);
 
       if (isTransient && i < modelPool.length - 1) {
-        const delay = 400 + Math.floor(Math.random() * 400);
+        const delay = 250 + Math.floor(Math.random() * 200);
         await new Promise((resolve) => setTimeout(resolve, delay));
       }
     }
