@@ -2379,7 +2379,11 @@ export const createProductFull = async (req, res) => {
       const cleanColor = variantColor.name.replace(/\s+/g, '').toUpperCase();
       const sellingPrice = isNaN(Number(variant.price)) ? 0 : Number(variant.price);
       const variantMrp = (variant.mrp && !isNaN(Number(variant.mrp)) && Number(variant.mrp) > 0) ? Number(variant.mrp) : sellingPrice;
-      const variantDiscount = isNaN(Number(variant.discount)) ? 0 : Number(variant.discount);
+      let variantDiscount = isNaN(Number(variant.discount)) ? 0 : Math.round(Number(variant.discount));
+      if (variantMrp > 0 && sellingPrice > 0 && sellingPrice < variantMrp && (!variantDiscount || variantDiscount <= 0)) {
+        variantDiscount = Math.round(((variantMrp - sellingPrice) / variantMrp) * 100);
+      }
+      variantDiscount = Math.max(0, Math.min(100, variantDiscount));
       
       const finalImages = [];
       const pushNormalizedImage = (img) => {
@@ -2486,8 +2490,20 @@ export const analyzeProductAi = async (req, res) => {
     let imageInput = null;
     let mimeType = 'image/jpeg';
 
+    const resolveMimeType = (fileObj) => {
+      let mType = fileObj?.mimetype || 'image/jpeg';
+      if (!mType || mType === 'application/octet-stream') {
+        const ext = (fileObj?.originalname || '').toLowerCase();
+        if (ext.endsWith('.png')) mType = 'image/png';
+        else if (ext.endsWith('.webp')) mType = 'image/webp';
+        else if (ext.endsWith('.heic') || ext.endsWith('.heif')) mType = 'image/heic';
+        else mType = 'image/jpeg';
+      }
+      return mType;
+    };
+
     if (Array.isArray(files) && files.length > 0) {
-      const buffers = files.filter(f => f.buffer).map(f => ({ buffer: f.buffer, mimetype: f.mimetype }));
+      const buffers = files.filter(f => f.buffer).map(f => ({ buffer: f.buffer, mimetype: resolveMimeType(f) }));
       if (buffers.length > 1) {
         imageInput = buffers;
       } else if (buffers.length === 1) {
@@ -2496,7 +2512,7 @@ export const analyzeProductAi = async (req, res) => {
       }
     } else if (imageFile && imageFile.buffer) {
       imageInput = imageFile.buffer;
-      mimeType = imageFile.mimetype || 'image/jpeg';
+      mimeType = resolveMimeType(imageFile);
     } else if (req.body.image && typeof req.body.image === 'string') {
       imageInput = req.body.image;
       if (req.body.mimeType) mimeType = req.body.mimeType;

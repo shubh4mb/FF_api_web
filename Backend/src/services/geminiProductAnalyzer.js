@@ -261,6 +261,27 @@ function normalizeSingleImage(img, fallbackMime = "image/jpeg") {
   }
 
   if (!base64) return null;
+
+  // Normalize ambiguous or non-image mime types (e.g. application/octet-stream from mobile browsers/iPhone HEIC)
+  if (!mimeType || mimeType === "application/octet-stream" || !mimeType.startsWith("image/")) {
+    try {
+      const header = Buffer.from(base64.slice(0, 32), "base64");
+      if (header.length >= 3 && header[0] === 0xff && header[1] === 0xd8 && header[2] === 0xff) {
+        mimeType = "image/jpeg";
+      } else if (header.length >= 4 && header[0] === 0x89 && header[1] === 0x50 && header[2] === 0x4e && header[3] === 0x47) {
+        mimeType = "image/png";
+      } else if (header.length >= 12 && header.toString("ascii", 0, 4) === "RIFF" && header.toString("ascii", 8, 12) === "WEBP") {
+        mimeType = "image/webp";
+      } else if (header.length >= 12 && header.toString("ascii", 4, 8) === "ftyp") {
+        mimeType = "image/heic";
+      } else {
+        mimeType = "image/jpeg";
+      }
+    } catch {
+      mimeType = "image/jpeg";
+    }
+  }
+
   return { base64, mimeType };
 }
 

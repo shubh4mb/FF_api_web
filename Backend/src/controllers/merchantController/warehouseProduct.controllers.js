@@ -272,7 +272,7 @@ export const createWarehouseProductFull = asyncHandler(async (req, res) => {
         stock: isNaN(Number(sizeObj.stock)) ? 0 : Number(sizeObj.stock),
         mrp: isNaN(Number(variant.mrp)) ? 0 : Number(variant.mrp),
         price: isNaN(Number(variant.price)) ? 0 : Number(variant.price),
-        discount: isNaN(Number(variant.discount)) ? 0 : Number(variant.discount),
+        discount: isNaN(Number(variant.discount)) ? 0 : Math.max(0, Math.min(100, Math.round(Number(variant.discount)))),
         images: finalImages
       });
 
