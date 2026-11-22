@@ -403,26 +403,68 @@ stays a text box. There is no state in which the form displays a size it would n
 
 ### 8.3 Verification
 
+**Static checks**
+
 | Check | Result |
 |---|---|
 | `MerchantModule`: `npx tsc -b --noEmit` | clean |
 | `MerchantModule`: `npm run build` | clean |
-| `MerchantModule`: `npx eslint` on the five touched files | 37 errors, all pre-existing `no-explicit-any`; **identical count to `HEAD`** (29/27/8 before and after), and 0 in the two new files |
-| `MerchantModule`: `npm test` | 11 passed |
+| `MerchantModule`: `npx eslint` on the five touched files | 64 errors, all pre-existing `no-explicit-any`; **identical counts to `HEAD`** (29/27/8), and 0 in the two new files |
+| `MerchantModule`: `npm test` | 14 passed |
 | `FF_api_web/Backend`: `npm test` | 5 passed |
-| `FF_api_web/Backend`: `node --check` on both edited files | clean |
 
-**Not done: the flow-level `/verify` walk.** `Backend/.env` does not exist in this clone, so the API cannot
-start and the merchant login cannot be reached. The six flows to walk once it can:
+**Flow walk (`/verify`), 2026-11-22.** Run against the real backend and the real merchant UI, on a
+**local** MongoDB (`127.0.0.1:27018/ff_verify`) seeded with a merchant, a category and one product carrying
+the raw legacy size `30-23 cm`. The Atlas URI in `Backend/.env` was overridden on the command line and never
+connected to. No Cloudinary writes (image bytes were stripped from the request in the browser, so the forms
+submitted for real with an empty image array).
 
-1. **M-SIZE-1** Add Product, Lettered → `M`, stock 5 → saves, stored `M`.
-2. **M-SIZE-2** Add Product, Numerical → `32` → saves, stored `32`. *(this is the reported bug)*
-3. **M-SIZE-3** Add Product, Custom → `30-23 cm` → saves, stored `30-23CM`, `productCode` ends `-30-23CM`.
-4. **M-SIZE-4** Add Product, two sizes `30-23 cm` and `30-23cm` → rejected with the duplicate message, and
-   **no** product or variant row is created.
-5. **M-SIZE-5** Edit a product created in the merchant app with size `30-23 cm` → opens in Custom showing
-   `30-23CM`; change only the price, save → **size unchanged**. *(the §3 data-loss bug)*
-6. **M-SIZE-6** Bulk CSV with sizes `M`, `32`, `30-23 cm` → all three accepted, all three visible in the
-   preview grid with editable stock.
+| Flow | Route | Result |
+|---|---|---|
+| **M-SIZE-1** lettered `M` | API | ✅ stored `M` |
+| **M-SIZE-2** numerical `32` | **merchant web, full form** | ✅ stored `32`, `productCode` ends `-32` |
+| **M-SIZE-3** custom `30-23 cm` | **merchant web, full form** | ✅ stored `30-23CM`; the field normalised to `30-23CM` on blur |
+| **M-SIZE-4** `30-23 cm` + `30-23cm` in one product | API | ✅ 400 with the duplicate message, **0 rows created** — the half-created product is gone |
+| **M-SIZE-5** edit the legacy app product | **merchant web** | ✅ opened in Custom showing `30-23 cm`; price 999 → 949; **size survived** as `30-23CM` |
+| **M-SIZE-6** CSV with `M`, `32`, `30-23 cm` | **merchant web** | ✅ parsed, **All Valid**, all three in the preview grid with editable stock — then blocked by an unrelated backend bug, §9 |
+| extra: `M; DROP TABLE`, blank size | API | ✅ 400, 0 rows |
+| extra: stored `size` equals the `productCode` token, every new row | DB | ✅ true |
 
-Then the §5.4 query, to find products whose sizes an earlier edit already overwrote.
+**The walk found a defect the tests did not.** Switching Size type to *Numerical* turned every row into a
+text box pre-filled with `FS`, `S`, `M` — the "never hide a value" rule firing on a deliberate mode change.
+Data-safe, but plainly wrong: the merchant asked for a 28-36 dropdown. Fixed with `sizeFitsMode`: an
+explicit mode change clears values the new dropdown cannot show, while values arriving from the server still
+fall back to free text. That is the distinction that matters, and it is now three tests.
+
+---
+
+## 9. Unrelated bugs this walk exposed
+
+Neither is caused by the size change. Both were found while verifying it, and are recorded here rather than
+fixed, per `AGENTS.md`: *note them, finish the task, and raise them.*
+
+### 9.1 🔴 CSV bulk upload is completely broken, for every merchant
+
+[`product.controllers.js:2228`](../../Backend/src/controllers/merchantController/product.controllers.js#L2228)
+— `bulkUploadProducts` ends with:
+
+```js
+const product = new Product({ ...,  variants });
+await product.save();
+```
+
+`Product` is **not imported in this file and does not exist**. Every CSV import fails with
+`{"success":false,"message":"Failed to upload any products","errors":[{"error":"Product is not defined"}]}`.
+
+Verified unrelated to sizes with a control request carrying only the letter size `M` — identical failure.
+
+It is not a typo fix. `new Product({ variants: [...] })` is the **old nested-variant schema**; the
+database is flat (`ProductFlat`, one document per colour × size with its own `productCode`). The block has to
+be rewritten the way `createProductFull` does it. The client is fine — it builds and sends a correct payload.
+
+### 9.2 🟡 React key warning in the bulk upload preview
+
+[`BulkUploadProducts.tsx:688`](../../../MerchantModule/src/pages/products/BulkUploadProducts.tsx#L688) —
+`parsedProducts.map` returns a bare `<>` fragment with the `key` on the inner `<tr>`, so the list child has
+no key. Cosmetic, present on `HEAD` before this change, but it is console noise that will mask a real warning
+during the next `/verify`. Fix: `<React.Fragment key={idx}>`.
