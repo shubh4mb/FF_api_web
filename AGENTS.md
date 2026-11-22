@@ -110,10 +110,6 @@ Ranked, with detail in `DESIGN.md` §7:
    (`clean_database.js`, `clear_redis.js`) and a committed DB backup directory that needs a PII check.
 7. **Offers and coupons share one model with four contradictory flags.**
    `docs/reports/coupons-and-offers.md`.
-8. **CSV bulk upload is dead.** `bulkUploadProducts` builds `new Product({ variants })` — a model that is
-   not imported and does not exist, against the old nested schema. Every import returns "Product is not
-   defined". Needs rewriting onto `ProductFlat` the way `createProductFull` does.
-   `docs/reports/numeric-size-variants-bug.md` §9.1.
 
 Do not "fix" these opportunistically mid-feature. Note them, finish the task, and raise them.
 

@@ -2225,24 +2225,83 @@ export const bulkUploadProducts = async (req, res) => {
           };
         });
 
-        const product = new Product({
-          name: p.name,
-          merchantId: req.merchantId,
-          brandId: brand._id,
-          categoryId: category._id,
-          subCategoryId,
-          gender: p.gender,
-          soldBy: p.soldBy || soldBy,
-          styleName: p.styleName || "",
-          description: p.description || "",
-          tags: p.tags || [],
-          isTriable: p.isTriable !== undefined ? p.isTriable : true,
-          isActive: p.isActive !== undefined ? p.isActive : true,
-          variants
-        });
+        // The database is flat: one ProductFlat document per colour x size, each
+        // with its own productCode. This used to build `new Product({ variants })`
+        // against the old nested schema, with `Product` neither imported nor
+        // existing, so every import failed with "Product is not defined".
+        // Same code scheme as createProductFull, so a product gets the same
+        // shape whichever way it is added.
+        const cleanShop = merchant.shopName
+          ? merchant.shopName.replace(/[^a-zA-Z]/g, '').slice(0, 4).toUpperCase()
+          : "SH";
+        const merchantPrefix = `${cleanShop}-${merchant._id.toString().slice(-4).toUpperCase()}`;
+        const brandPrefix = (brand.name || "FFF").slice(0, 3).toUpperCase();
+        const catPrefix = category.name.slice(0, 2).toUpperCase();
+        const baseProductCode = `${merchantPrefix}-${brandPrefix}-${catPrefix}-${Math.floor(1000 + Math.random() * 9000)}`;
+        const styleGroupId = new mongoose.Types.ObjectId().toString();
 
-        await product.save();
-        createdProducts.push(product);
+        const docs = [];
+        for (const variant of variants) {
+          const colorName = variant.color?.name || 'Standard';
+          const cleanColor = colorName.replace(/\s+/g, '').toUpperCase();
+          const seenSizes = new Set();
+
+          for (const sizeInfo of (variant.sizes || [])) {
+            const size = normalizeSize(sizeInfo.size);
+            if (!isValidSize(size)) {
+              throw new Error(`${colorName}: "${sizeInfo.size ?? ''}" is not a usable size. Use letters, digits, "-", "." or "/" — up to ${MAX_SIZE_LENGTH} characters (e.g. M, 32, 30-23 cm).`);
+            }
+            if (seenSizes.has(size)) {
+              throw new Error(`${colorName}: size "${size}" is listed twice. Spacing and capitalisation are ignored, so "30-23 cm" and "30-23cm" are the same size.`);
+            }
+            seenSizes.add(size);
+
+            docs.push(new ProductFlat({
+              styleGroupId,
+              productCode: `${baseProductCode}-${cleanColor}-${size}`,
+              name: p.name,
+              description: p.description || "",
+              styleName: p.styleName || "",
+              soldBy: p.soldBy || soldBy,
+              merchantId: req.merchantId,
+              brandId: brand._id,
+              categoryId: category._id,
+              subCategoryId,
+              gender: p.gender,
+              tags: p.tags || [],
+              isTriable: p.isTriable !== undefined ? p.isTriable : true,
+              // Deliberately ignores the CSV's "Is Active" column: a bulk import
+              // must go through the same approval as createProductFull, which
+              // also forces false. Changing this lets a merchant self-publish.
+              isActive: false,
+              color: variant.color,
+              size,
+              stock: sizeInfo.stock,
+              mrp: variant.mrp,
+              price: variant.price,
+              discount: Math.max(0, Math.min(100, Math.round(variant.discount || 0))),
+              images: variant.images || [],
+            }));
+          }
+        }
+
+        if (docs.length === 0) {
+          throw new Error("Product has no sizes.");
+        }
+
+        // All or nothing per product, so a failure halfway cannot leave rows the
+        // merchant can neither see nor re-import.
+        try {
+          await ProductFlat.insertMany(docs, { ordered: true });
+        } catch (writeErr) {
+          await ProductFlat.deleteMany({ _id: { $in: docs.map(d => d._id) } });
+          if (writeErr?.code === 11000 || writeErr?.writeErrors?.some(e => e?.err?.code === 11000)) {
+            throw new Error("One of these colour and size combinations already exists. Check for a duplicate colour + size row.");
+          }
+          throw writeErr;
+        }
+
+        createdProducts.push({ name: p.name, styleGroupId, variantCount: docs.length });
       } catch (err) {
         errors.push({ name: p.name || `Product at index ${index}`, error: err.message });
       }

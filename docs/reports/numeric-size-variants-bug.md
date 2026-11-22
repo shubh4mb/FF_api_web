@@ -443,7 +443,7 @@ fall back to free text. That is the distinction that matters, and it is now thre
 Neither is caused by the size change. Both were found while verifying it, and are recorded here rather than
 fixed, per `AGENTS.md`: *note them, finish the task, and raise them.*
 
-### 9.1 🔴 CSV bulk upload is completely broken, for every merchant
+### 9.1 ✅ CSV bulk upload was completely broken, for every merchant — fixed 2026-11-22
 
 [`product.controllers.js:2228`](../../Backend/src/controllers/merchantController/product.controllers.js#L2228)
 — `bulkUploadProducts` ends with:
@@ -458,9 +458,26 @@ await product.save();
 
 Verified unrelated to sizes with a control request carrying only the letter size `M` — identical failure.
 
-It is not a typo fix. `new Product({ variants: [...] })` is the **old nested-variant schema**; the
-database is flat (`ProductFlat`, one document per colour × size with its own `productCode`). The block has to
-be rewritten the way `createProductFull` does it. The client is fine — it builds and sends a correct payload.
+It was not a typo fix. `new Product({ variants: [...] })` is the **old nested-variant schema**; the database
+is flat (`ProductFlat`, one document per colour × size with its own `productCode`). The client was fine
+throughout — it built and sent a correct payload.
+
+**Fixed:** the persistence block now builds one `ProductFlat` per colour × size, with the same
+`productCode` scheme, size normalisation, duplicate rejection and all-or-nothing `insertMany` as
+`createProductFull`. Everything around it (category, subcategory, brand, gender validation) was already
+correct and is untouched.
+
+Two behaviours worth knowing:
+
+- **Imported products arrive `isActive: false`**, matching `createProductFull`, which forces the same. The
+  CSV's `Is Active` column is now ignored — honouring it would let a merchant self-publish and skip
+  approval. The on-page instructions say so. One line to change if that is not the intent.
+- A product that fails mid-import rolls back **its own** rows; other products in the same CSV still import,
+  and the per-product error is returned as before.
+
+Verified: mixed `M` / `32` / `30-23 cm` imports through the real page (3 rows, one `styleGroupId`, each
+`productCode` ending in its size); a two-colour product groups into one style with distinct codes;
+duplicate spellings and `<script>` are rejected with **0 rows left behind**.
 
 ### 9.2 🟡 React key warning in the bulk upload preview
 
