@@ -1,0 +1,22 @@
+#!/usr/bin/env sh
+# FlashFits commit message gate:  type(scope): description
+# Rules: FF_api_web/docs/ecosystem/PRINCIPLES.md
+MSG_FILE="$1"
+FIRST=$(head -n1 "$MSG_FILE")
+
+# Allow merges, reverts and fixups through untouched.
+case "$FIRST" in
+  Merge*|Revert*|fixup!*|squash!*) exit 0 ;;
+esac
+
+if ! printf '%s' "$FIRST" | grep -qE '^(feat|fix|docs|refactor|test|chore|perf)(\([a-z0-9._/-]+\))?: .{3,}'; then
+  printf '\033[31m✗ bad commit message\033[0m\n\n'
+  printf '  got:      %s\n\n' "$FIRST"
+  printf '  expected: type(scope): description\n'
+  printf '  types:    feat fix docs refactor test chore perf\n\n'
+  printf '  examples: fix(offers): recompute discount against kept items\n'
+  printf '            feat(earnings): custom date range for rider earnings\n'
+  printf '            docs(backend): document the settlement helper\n'
+  exit 1
+fi
+exit 0

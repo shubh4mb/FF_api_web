@@ -1,0 +1,30 @@
+#!/usr/bin/env sh
+# FlashFits pre-push gate: the expensive checks, once per push.
+# Install once per clone:  git config core.hooksPath .githooks
+set -e
+REPO_ROOT=$(git rev-parse --show-toplevel); cd "$REPO_ROOT"
+FAIL=0
+echo "→ FlashFits pre-push (full lint + typecheck + tests)"
+
+has_script_in() { node -e "p=require(require('path').resolve('$1','package.json')).scripts||{};process.exit(p['$2']?0:1)" 2>/dev/null; }
+
+# Every package in the repo, not just the changed ones.
+for pj in $(find . -name package.json -not -path '*/node_modules/*' -maxdepth 4 | sort); do
+  d=$(dirname "$pj")
+  [ -d "$d/node_modules" ] || { printf '  \033[33m! %s: node_modules missing, skipped\033[0m\n' "$d"; continue; }
+  echo "  → $d"
+  BAD=0
+  if has_script_in "$d" lint; then ( cd "$d" && npm run --silent lint ) || BAD=1; fi
+  if [ -f "$d/tsconfig.json" ]; then ( cd "$d" && npx --no-install tsc --noEmit ) || BAD=1; fi
+  if has_script_in "$d" test; then ( cd "$d" && npm run --silent test ) || BAD=1; fi
+  if [ "$BAD" -ne 0 ]; then
+    if [ -f .githooks/strict ]; then printf '  \033[31m✗ %s failed\033[0m\n' "$d"; FAIL=1
+    else printf '  \033[33m! %s failed (warning only — create .githooks/strict to enforce)\033[0m\n' "$d"; fi
+  fi
+done
+
+if [ "$FAIL" -ne 0 ]; then
+  printf '\n\033[31m✗ pre-push failed\033[0m\n'
+  exit 1
+fi
+printf '\n\033[32m✓ pre-push passed\033[0m\n'
