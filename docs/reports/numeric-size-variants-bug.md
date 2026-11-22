@@ -1,7 +1,8 @@
 # Bug report: merchants cannot add numeric size variants (e.g. "30-23 cm")
 
 **Last Updated:** 2026-11-22
-**Status:** diagnosed, **not fixed**. The fix is a product decision — see §5.
+**Status:** **fixed** on 2026-11-22 — Option A (free text) approved. See §8 for what shipped.
+One step is outstanding and needs a human: the production data check in §5.4.
 **Reported as:** "Merchants are not able to add products which have size variants of numerical values like
 30-23 cm. It was working before and became faulty during the latest changes."
 
@@ -169,6 +170,10 @@ Also: `sizeInfo.size.replace(...)` has **no null guard**, so a size row arriving
 
 ## 5. Recommended fix
 
+> **Superseded in part by §8.** §5.1 proposed a `<datalist>`; the approved fix keeps the dropdown behind a
+> size-type selector instead. §5.3 (backend hardening) and §5.4 (data repair) still read as written — §5.3 is
+> done, §5.4 is not.
+
 The product decision is: **should the web page allow any size text, or a curated list?** The rest of the
 system (mobile app, Add Variant, database) already allows anything, so the web page is the outlier and
 should match it.
@@ -269,3 +274,155 @@ the size → assert the size is unchanged.
 `30-23 cm` in the **web** UI, confirm it appears in the customer app with that size, then edit its price on
 the web and confirm the size survives. The cross-surface check is the whole point — this bug exists precisely
 because the three size inputs were never compared against each other.
+
+---
+
+## 7. Decision brief for approval (plain language)
+
+Written for partners/stakeholders, not engineers. The question being approved is narrow: **what may a
+merchant type into the "Size" field on the web dashboard?**
+
+### 7.1 What's true today
+
+Size is **already free text everywhere except two screens.** It is not a decision we are making for the
+first time; it is a decision that was made in four places and contradicted in two.
+
+| Where a merchant enters a size | What it accepts today | Numeric sizes? |
+|---|---|---|
+| Merchant mobile app → Add Product | free text, hint "S, M, 32" | ✅ works |
+| Merchant mobile app → Add Variant | free text, hint "e.g. M, 34" | ✅ works |
+| Merchant web → Add Variant | free text | ✅ works |
+| Merchant web → **Add Product** | dropdown, 8 fixed options | ❌ **blocked** |
+| Merchant web → **Edit Product** | dropdown, 8 fixed options | ❌ **blocked + destroys data** |
+| Merchant web → **Bulk CSV upload** | 6 letter sizes only | ❌ **row rejected** |
+| The database | plain text, no restriction | ✅ accepts anything |
+
+So the four green rows and the database agree with each other. The three red rows are the outlier. That is
+what "the web page is the outlier" means: we are not opening something up, we are removing a restriction that
+one team added on one screen and that nothing else in the product shares.
+
+### 7.2 The two options
+
+**Option A — free text (recommended).** The merchant types the size: `M`, `32`, `30-23 cm`, `UK 8`,
+`7.5 inch`. The list of common sizes stays, as suggestions that drop down when the field is tapped — so a
+clothing merchant still picks `M` in one tap and nothing gets slower for them.
+
+- Unblocks the reported problem immediately, on all three screens.
+- Matches the mobile app, the database, and the existing Add Variant screen — one rule everywhere.
+- No data migration, and no risk to existing products.
+- Any future category — footwear, kids, home textiles, accessories, anything measured in cm or inches —
+  needs no code change.
+- **Honest downside:** typos and near-duplicates become possible (`XL`, `xl`, `X L`; `30-23cm` vs
+  `30-23 cm`). This matters for how sizes group on a product page and for any future "filter by size"
+  feature. Mitigated cheaply by trimming spaces and upper-casing on save, which the backend already does for
+  one purpose and should do for both.
+
+**Option B — a curated list extended with numeric sizes.** Keep the dropdown; add numbers (28–46) and a set
+of cm ranges.
+
+- Cleaner data, no typos, easy to filter on later.
+- **But:** every size shape that doesn't exist in the list needs a developer and a release. Footwear, kids'
+  ages, bust–waist–hip, inches, "one size" — each becomes a ticket.
+- It does not actually solve the reported case unless we can list every measurement in advance, and for
+  measurement-based sizing (`30-23 cm`) we cannot.
+- It leaves the mobile app, Add Variant and the database still accepting anything, so merchants keep getting
+  different answers on different screens. That inconsistency is precisely how this bug reached production
+  unnoticed.
+
+### 7.3 Recommendation
+
+**Option A**, keeping the suggestion list. The risk is close to zero because the database and four of six
+entry points already work this way; only the web UI relaxes.
+
+If size filtering or size-based analytics becomes a priority later, the right fix is normalising on save and
+in reporting — not restricting what merchants may sell.
+
+### 7.4 Not part of this decision
+
+Two items in this report are defects, not product choices, and should be fixed under either option:
+
+1. **Edit Product silently rewrites existing numeric sizes** (§3). A merchant editing a price loses their
+   sizes, with no warning. This is data loss and it is happening now.
+2. **Backend `productCode` collision leaves half-created products** (§4). The merchant sees an unexplained
+   failure and cannot retry.
+
+
+---
+
+## 8. What shipped (2026-11-22)
+
+Option A approved: **free text, with a size-type selector so the dropdown convenience is kept**, plus
+normalisation on save. Two commits — `FF_api_web` and `MerchantModule`.
+
+### 8.1 Backend (`FF_api_web`)
+
+| File | Change |
+|---|---|
+| `Backend/src/helperFns/sizeNormalizer.js` | **new.** `normalizeSize` (strip all whitespace, upper-case), `isValidSize` (shape check, not a vocabulary), `MAX_SIZE_LENGTH`. The one place a size is normalised. |
+| `Backend/src/helperFns/sizeNormalizer.test.js` | **new.** 5 tests, `node --test`, zero dependencies. |
+| `Backend/src/models/productFlat.model.js` | `size` gets `set: normalizeSize`. |
+| `Backend/src/controllers/merchantController/product.controllers.js` | `createProductFull`: normalise and validate every size **before** any write, upload or brand auto-create; reject duplicates and unusable shapes with a message naming the colour; replace the per-size `save()` loop with one `insertMany` that is rolled back on failure; return **409** with an explanation on a uniqueness collision instead of a bare 500. |
+| `Backend/src/utils/validators/product.validator.js` | the dead `size` enum (`XS…XXL`) replaced by a shape pattern. It never ran, but it was the same rule that broke the web form, and the next person to wire it up would have re-introduced the bug. |
+| `Backend/package.json` | `npm test` → `node --test "src/**/*.test.js"`. |
+
+**Why the setter on the model and not in the controller:** there are **nine** places that create a
+`ProductFlat` (merchant web, merchant app, bulk CSV, admin, warehouse, Telegram bot, three variant paths),
+each with its own hand-rolled `cleanSize`. One of them stored the whitespace-stripped value and the rest
+stored it raw — which is how the stored `size` and the `productCode` built from it came to disagree. A setter
+on the field covers all nine without any of them having to remember, and it is the smallest diff that
+actually closes the bug class. The guard `typeof value === "string"` matters: Mongoose runs setters on query
+filters too, and the customer-facing size filter passes `RegExp` values
+(`userControllers/product.controllers.js:1065`).
+
+**Side effect to know about:** sizes are now stored upper-cased with internal spaces removed, so
+`30-23 cm` is stored as `30-23CM`. The customer size filter is a case-insensitive regex, so browse is
+unaffected. Existing rows are untouched — see §5.4.
+
+### 8.2 Merchant web (`MerchantModule`)
+
+| File | Change |
+|---|---|
+| `src/utils/size.ts` | **new.** Mirrors the backend normaliser, plus the vocabularies (`LETTER_SIZES`, `NUMERIC_SIZES` = 28–36) and `deriveSizeMode`. |
+| `src/utils/size.test.ts` | **new.** 11 Vitest tests, including the data-loss guard. |
+| `src/components/Products/SizeField.tsx` | **new.** `SizeModeSelector` (per product) and `SizeField` (per row). |
+| `src/pages/products/AddNewProduct.tsx` | the hardcoded `<select>` → `<SizeField>`; size-type selector in the section header; mode derived when sizes are copied from a catalog or base product. |
+| `src/pages/products/EditProductPage.tsx` | same, with the mode derived from the sizes the product already has. |
+| `src/pages/products/BulkUploadProducts.tsx` | `VALID_SIZES` hard reject → `isValidSize` shape check; the preview grid now shows the common sizes **plus whatever the CSV actually supplied**, so a numeric size is visible and editable instead of silently absent; CSV template header is `Size (e.g. M, 32, 30-23 cm)` (the old header is still accepted on import). |
+| `package.json` | `npm test` → `vitest run`; `npm run test:watch`. |
+
+**How the merchant sees it.** One "Size type" selector above the size rows:
+
+- **Lettered (S, M, XL)** — `FS XS S M L XL XXL FREE`, the previous behaviour.
+- **Numerical (28–36)** — the usual Indian waist/bust run.
+- **Custom / other** — a free text box: `30-23 cm`, `28-29`, `UK 8`, `7.5 inch`.
+
+**The data-loss fix falls out of the design, not a special case.** A row whose current value is not in the
+chosen dropdown *always* renders as a text box. So a product carrying `30-23CM` from the merchant app opens
+in Custom mode showing its real value, and even if the merchant switches the selector to Lettered, that row
+stays a text box. There is no state in which the form displays a size it would not save back.
+
+### 8.3 Verification
+
+| Check | Result |
+|---|---|
+| `MerchantModule`: `npx tsc -b --noEmit` | clean |
+| `MerchantModule`: `npm run build` | clean |
+| `MerchantModule`: `npx eslint` on the five touched files | 37 errors, all pre-existing `no-explicit-any`; **identical count to `HEAD`** (29/27/8 before and after), and 0 in the two new files |
+| `MerchantModule`: `npm test` | 11 passed |
+| `FF_api_web/Backend`: `npm test` | 5 passed |
+| `FF_api_web/Backend`: `node --check` on both edited files | clean |
+
+**Not done: the flow-level `/verify` walk.** `Backend/.env` does not exist in this clone, so the API cannot
+start and the merchant login cannot be reached. The six flows to walk once it can:
+
+1. **M-SIZE-1** Add Product, Lettered → `M`, stock 5 → saves, stored `M`.
+2. **M-SIZE-2** Add Product, Numerical → `32` → saves, stored `32`. *(this is the reported bug)*
+3. **M-SIZE-3** Add Product, Custom → `30-23 cm` → saves, stored `30-23CM`, `productCode` ends `-30-23CM`.
+4. **M-SIZE-4** Add Product, two sizes `30-23 cm` and `30-23cm` → rejected with the duplicate message, and
+   **no** product or variant row is created.
+5. **M-SIZE-5** Edit a product created in the merchant app with size `30-23 cm` → opens in Custom showing
+   `30-23CM`; change only the price, save → **size unchanged**. *(the §3 data-loss bug)*
+6. **M-SIZE-6** Bulk CSV with sizes `M`, `32`, `30-23 cm` → all three accepted, all three visible in the
+   preview grid with editable stock.
+
+Then the §5.4 query, to find products whose sizes an earlier edit already overwrote.

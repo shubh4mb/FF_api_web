@@ -3,8 +3,16 @@
 **Last Updated:** 2026-11-21
 **Applies to:** all five FlashFits repositories.
 
-**Current state: there are zero tests and zero test infrastructure in all five repos.** Verified — no
-`*.test.*`, no `*.spec.*`, no test runner configured anywhere.
+**Current state (2026-11-22): the first two suites exist; the three Expo repos still have none.**
+
+| Repo | Runner | Suites |
+|---|---|---|
+| `FF_api_web` (Backend) | `node --test` (stdlib, no install) — `npm test` | `src/helperFns/sizeNormalizer.test.js` |
+| `MerchantModule` | Vitest — `npm test` | `src/utils/size.test.ts` |
+| `FF_api_web` (admin panel), `FlashFitsv2`, `FlashFits-Delivery-App`, `MerchantApp` | none yet | — |
+
+Both arrived with the numeric-size fix, which is the policy below working as intended: a bug was found, so
+the code it was in got its tests.
 
 That fact sets the policy. A 95%-coverage gate on a codebase with no tests is a gate that gets disabled in
 week one. So:
@@ -20,7 +28,7 @@ Chosen so that each repo uses the runner its existing tooling already implies. N
 
 | Repo | Unit + integration | E2E | Why |
 |---|---|---|---|
-| `FF_api_web` (Backend) | **Vitest** + `supertest` + `mongodb-memory-server` | — | Vitest runs native ESM, which the backend is (`"type": "module"`). Jest needs babel for this. |
+| `FF_api_web` (Backend) | **`node --test`** for pure helpers; **Vitest** + `supertest` + `mongodb-memory-server` once the first route or DB test is written | — | `node --test` is in the standard library, runs native ESM, and needs no install — the backend has no `node_modules` on a fresh clone and a pure-function test should not be the thing that requires one. Vitest arrives with the first test that needs supertest or an in-memory Mongo; both runners discover `*.test.js`, so migrating a file means changing its imports, nothing else. |
 | `FF_api_web` (admin panel) | **Vitest** + `@testing-library/react` | **Playwright** | Vite is already the build tool; Vitest shares its config and transform pipeline. Zero extra config. |
 | `MerchantModule` | **Vitest** + `@testing-library/react` | **Playwright** | same |
 | `FlashFitsv2` | **jest-expo** + `@testing-library/react-native` | **Maestro** | `jest-expo` is what Expo prescribes and keeps working across SDK upgrades. |

@@ -67,9 +67,9 @@ npm run build
 git config core.hooksPath .githooks
 ```
 
-There is **no test runner configured yet.** Adding one is the first task of any feature that needs tests —
-see `docs/ecosystem/TESTING.md` for the chosen stack (Vitest + supertest + mongodb-memory-server for the
-backend, Vitest + Testing Library for the admin panel).
+The backend runs its unit tests on **`node --test`** (standard library, no install): `npm test` from
+`Backend/`. Vitest + supertest + mongodb-memory-server arrive with the first route or DB test; the admin
+panel has no runner yet. See `docs/ecosystem/TESTING.md`.
 
 ## Layout
 

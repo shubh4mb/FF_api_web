@@ -26,7 +26,7 @@ Docs mirror the code tree: `docs/<path>/README.md` documents `<path>/`.
 
 ## Analysis reports
 
-Awaiting decisions; none has been acted on. Index: [reports/README.md](reports/README.md).
+Awaiting decisions, except the numeric-size bug, which is fixed. Index: [reports/README.md](reports/README.md).
 
 | | |
 |---|---|
@@ -35,7 +35,7 @@ Awaiting decisions; none has been acted on. Index: [reports/README.md](reports/R
 | [reports/earnings-and-payouts.md](reports/earnings-and-payouts.md) | merchant and rider earnings visibility and filters |
 | [reports/server-driven-campaigns.md](reports/server-driven-campaigns.md) | campaigns from the admin panel without a release |
 | [reports/push-broadcast.md](reports/push-broadcast.md) | broadcasts and event notifications |
-| [reports/numeric-size-variants-bug.md](reports/numeric-size-variants-bug.md) | numeric size variants blocked on the merchant **web** app (diagnosed) |
+| [reports/numeric-size-variants-bug.md](reports/numeric-size-variants-bug.md) | numeric size variants blocked on the merchant **web** app (**fixed** 2026-11-22, §8) |
 
 ## Code map
 

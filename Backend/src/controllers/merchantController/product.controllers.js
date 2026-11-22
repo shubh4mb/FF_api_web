@@ -10,6 +10,7 @@ import { analyzeProductImage } from '../../services/geminiProductAnalyzer.js';
 import { generateColorVariantId } from '../../utils/variantAdapter.js';
 import { resolveCategoryHierarchy } from '../../helperFns/categoryHelper.js';
 import { buildFlexibleSearchRegex } from '../../helperFns/searchHelper.js';
+import { normalizeSize, isValidSize, MAX_SIZE_LENGTH } from '../../helperFns/sizeNormalizer.js';
 
 const safeParse = (value) => {
   if (!value) return value;
@@ -2313,6 +2314,36 @@ export const createProductFull = async (req, res) => {
       return res.status(400).json({ success: false, message: "Missing required variants" });
     }
 
+    // Normalise and check every size BEFORE anything is created. Sizes are free
+    // text, so two spellings of one size used to reach the unique productCode
+    // index and fail there, mid-way through a non-transactional save loop —
+    // leaving a half-created product. Fail here and nothing has been written,
+    // no image has been uploaded and no brand has been auto-created.
+    for (const variant of variants) {
+      const variantLabel = variant?.color?.name || 'variant';
+      const sizes = Array.isArray(variant?.sizes) ? variant.sizes : [];
+      if (!sizes.length) {
+        return res.status(400).json({ success: false, message: `${variantLabel}: at least one size is required.` });
+      }
+      const seen = new Set();
+      for (const sizeInfo of sizes) {
+        sizeInfo.size = normalizeSize(sizeInfo.size);
+        if (!isValidSize(sizeInfo.size)) {
+          return res.status(400).json({
+            success: false,
+            message: `${variantLabel}: "${sizeInfo.size ?? ''}" is not a usable size. Use letters, digits, "-", "." or "/" — up to ${MAX_SIZE_LENGTH} characters (e.g. M, 32, 30-23 cm).`
+          });
+        }
+        if (seen.has(sizeInfo.size)) {
+          return res.status(400).json({
+            success: false,
+            message: `${variantLabel}: size "${sizeInfo.size}" is listed twice. Spacing and capitalisation are ignored, so "30-23 cm" and "30-23cm" are the same size.`
+          });
+        }
+        seen.add(sizeInfo.size);
+      }
+    }
+
     const finalName = name ? name.trim() : (styleName ? styleName.trim() : "New Product");
     if (!gender || (Array.isArray(gender) && gender.length === 0)) {
       gender = ['MEN', 'WOMEN'];
@@ -2373,7 +2404,7 @@ export const createProductFull = async (req, res) => {
       styleGroupId = new mongoose.Types.ObjectId().toString();
     }
 
-    const createdDocs = [];
+    const docsToCreate = [];
     for (const variant of variants) {
       const variantColor = (variant.color && variant.color.name) ? variant.color : { name: 'Standard', hex: '#111827' };
       const cleanColor = variantColor.name.replace(/\s+/g, '').toUpperCase();
@@ -2450,10 +2481,26 @@ export const createProductFull = async (req, res) => {
           images: finalImages,
         });
 
-        await newDoc.save();
-        createdDocs.push(newDoc);
+        docsToCreate.push(newDoc);
       }
     }
+
+    // All or nothing. A partial insert used to leave variants the merchant
+    // could neither see nor re-create, because the retry hit the rows that did
+    // get through.
+    try {
+      await ProductFlat.insertMany(docsToCreate, { ordered: true });
+    } catch (writeErr) {
+      await ProductFlat.deleteMany({ _id: { $in: docsToCreate.map(d => d._id) } });
+      if (writeErr?.code === 11000 || writeErr?.writeErrors?.some(e => e?.err?.code === 11000)) {
+        return res.status(409).json({
+          success: false,
+          message: "One of these colour and size combinations already exists for this product. Check for a duplicate size, or a Size SKU already used on another product."
+        });
+      }
+      throw writeErr;
+    }
+
     return res.status(201).json({ 
       success: true, 
       message: "Product created with variants successfully", 

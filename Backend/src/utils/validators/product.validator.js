@@ -26,7 +26,11 @@ export const productSchema = Joi.object({
 
   variants: Joi.array().items(
     Joi.object({
-      size: Joi.string().valid('XS', 'S', 'M', 'L', 'XL', 'XXL').optional(),
+      // Sizes are free text ("M", "32", "30-23 cm") — shape only, no vocabulary.
+      // The enum that used to be here never ran (its only caller deletes `size`
+      // before validating) but it is exactly the rule that broke the merchant
+      // web form. See docs/reports/numeric-size-variants-bug.md.
+      size: Joi.string().trim().max(20).pattern(/^[A-Za-z0-9][A-Za-z0-9./\s-]*$/).optional(),
       color: Joi.object({
         name: Joi.string().optional(),
         hex: Joi.string().pattern(/^#([0-9A-F]{3}){1,2}$/i).optional()

@@ -43,7 +43,7 @@ means five edits. If a third client needs the same helper, that is the signal to
 ## Analysis reports
 
 Point-in-time investigations. Each states what was read, what was found, and what is recommended. None of
-them has been acted on.
+them has been acted on, except the numeric-size bug, which is fixed.
 
 | Report | Subject |
 |---|---|
@@ -52,7 +52,7 @@ them has been acted on.
 | [earnings-and-payouts.md](../reports/earnings-and-payouts.md) | Merchant and rider earnings visibility, filters, the IST/UTC bug |
 | [server-driven-campaigns.md](../reports/server-driven-campaigns.md) | Changing app sections and themes from the admin panel without a release |
 | [push-broadcast.md](../reports/push-broadcast.md) | Broadcast and event-driven notifications |
-| [numeric-size-variants-bug.md](../reports/numeric-size-variants-bug.md) | Numeric size variants (e.g. "30-23 cm") blocked on the merchant web app |
+| [numeric-size-variants-bug.md](../reports/numeric-size-variants-bug.md) | Numeric size variants (e.g. "30-23 cm") blocked on the merchant web app — **fixed**, and sizes are now normalised on save |
 | [../security-findings.md](../security-findings.md) | **Read this one first.** Unauthenticated Socket.IO access, offer exploits |
 
 ---
@@ -75,6 +75,7 @@ banned because they already mean something else somewhere in the system.
 | **Offer** | A discount that **applies automatically** when the cart qualifies | — |
 | **Coupon** | A discount the customer applies **with a code** | voucher, promo (and never "offer") |
 | **Zip cover** | The sealed bag items travel in, with a security seal ID | packaging, bag |
+| **Size** | Free text: `M`, `32`, `30-23 cm`. Normalised on every write by `helperFns/sizeNormalizer.js` (whitespace stripped, upper-cased), so the stored value equals the token `productCode` is built from. Never add a size enum — see [numeric-size-variants-bug.md](../reports/numeric-size-variants-bug.md) | — |
 | **Zone** | The geographic dispatch unit riders and orders are matched within | area, region |
 | **Hub** / **warehouse** | FlashFits-operated stock locations. Distinct models | depot, store (a store is a merchant) |
 

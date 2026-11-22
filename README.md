@@ -24,14 +24,16 @@ cd ../website/FFmanagement && npm install && npm run dev
 |---|---|
 | `npm run dev` (Backend) | nodemon on `index.js` |
 | `npm start` (Backend) | production start |
+| `npm test` | unit tests (`node --test`, no install needed) |
 | `npm run test:k6` | load test (needs `k6`) |
 | `npm run test:redis` | redis suite |
 | `npm run whatsapp:connect` | pair the WhatsApp order-alert client |
 | `npm run dev` / `build` / `lint` (admin) | Vite |
 | `bash .githooks/test-hooks.sh` | self-check the git hooks |
 
-**There is no unit/integration test runner configured yet.** The chosen stack is Vitest + supertest +
-mongodb-memory-server — see [docs/ecosystem/TESTING.md](docs/ecosystem/TESTING.md).
+**Unit tests run on `node --test`** (standard library, nothing to install): `npm test` from `Backend/`.
+Vitest + supertest + mongodb-memory-server arrive with the first route or DB test; the admin panel has no
+runner yet — see [docs/ecosystem/TESTING.md](docs/ecosystem/TESTING.md).
 
 ## Where things are
 

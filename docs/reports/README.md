@@ -3,7 +3,8 @@
 Point-in-time investigations into specific questions. Each states what was read, what was found, and what is
 recommended.
 
-**None of these has been acted on.** They are written to be decided on, not applied.
+**None of these has been acted on, except `numeric-size-variants-bug.md`, which is fixed (§8).** The rest
+are written to be decided on, not applied.
 
 | Report | Question it answers |
 |---|---|
@@ -12,7 +13,7 @@ recommended.
 | [earnings-and-payouts.md](earnings-and-payouts.md) | What should merchants and riders be able to see about their money, and what is wrong today? |
 | [server-driven-campaigns.md](server-driven-campaigns.md) | Can we run a Christmas sale from the admin panel without an app release? |
 | [push-broadcast.md](push-broadcast.md) | How should broadcasts and event notifications work? |
-| [numeric-size-variants-bug.md](numeric-size-variants-bug.md) | Why can't merchants add sizes like "30-23 cm"? Is it the app or the web? |
+| [numeric-size-variants-bug.md](numeric-size-variants-bug.md) | Why can't merchants add sizes like "30-23 cm"? Is it the app or the web? **Fixed — §8 is what shipped.** |
 | [../security-findings.md](../security-findings.md) | **Read first.** What is currently exposed. |
 
 ## Reading order, if you only read some
