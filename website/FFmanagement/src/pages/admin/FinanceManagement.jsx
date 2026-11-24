@@ -24,7 +24,8 @@ import {
   AlertCircle,
   Paperclip,
   FileText,
-  ExternalLink
+  ExternalLink,
+  Trash2
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
@@ -77,6 +78,14 @@ export default function FinanceManagement() {
   const [isPartnerModalOpen, setIsPartnerModalOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [receiptFile, setReceiptFile] = useState(null);
+  const [settlementModal, setSettlementModal] = useState({
+    isOpen: false,
+    entryId: null,
+    splitId: null,
+    partnerName: '',
+    shareAmount: 0,
+    paidAmount: 0,
+  });
 
   // New Entry Form State
   const [entryForm, setEntryForm] = useState({
@@ -128,8 +137,9 @@ export default function FinanceManagement() {
       if (dateFilter.start) params.startDate = dateFilter.start;
       if (dateFilter.end) params.endDate = dateFilter.end;
       const res = await api.get('/admin/finance/overview', { params });
-      if (res.data?.success) {
-        setOverview(res.data.data);
+      const data = res?.data !== undefined ? res.data : res;
+      if (res?.success || data?.totalExpense !== undefined) {
+        setOverview(data);
       }
     } catch (err) {
       console.error(err);
@@ -139,13 +149,22 @@ export default function FinanceManagement() {
   const fetchPartners = async () => {
     try {
       const res = await api.get('/admin/finance/partners');
-      if (res.data?.success) {
-        const fetched = res.data.data;
+      // axiosInstance response interceptor returns response.data directly!
+      // So res is already { success: true, data: [...] }
+      const fetched = Array.isArray(res?.data)
+        ? res.data
+        : Array.isArray(res)
+        ? res
+        : Array.isArray(res?.data?.data)
+        ? res.data.data
+        : [];
+      if (fetched.length > 0 || res?.success) {
         setPartners(fetched);
         // Pre-select all active partners for default split
         setEntryForm((prev) => ({
           ...prev,
-          selectedPartnerIds: fetched.map((p) => p._id)
+          selectedPartnerIds: fetched.map((p) => p._id),
+          paidByPartner: prev.paidByPartner || fetched[0]?._id || ''
         }));
       }
     } catch (err) {
@@ -166,15 +185,22 @@ export default function FinanceManagement() {
       if (dateFilter.end) params.endDate = dateFilter.end;
 
       const res = await api.get('/admin/finance/entries', { params });
-      if (res.data?.success) {
-        setEntries(res.data.data);
-        if (res.data.pagination) {
-          setPagination((prev) => ({
-            ...prev,
-            total: res.data.pagination.total,
-            totalPages: res.data.pagination.totalPages
-          }));
-        }
+      const entriesData = Array.isArray(res?.data)
+        ? res.data
+        : Array.isArray(res)
+        ? res
+        : Array.isArray(res?.data?.data)
+        ? res.data.data
+        : [];
+      const paginationData = res?.pagination || res?.data?.pagination;
+
+      setEntries(entriesData);
+      if (paginationData) {
+        setPagination((prev) => ({
+          ...prev,
+          total: paginationData.total,
+          totalPages: paginationData.totalPages
+        }));
       }
     } catch (err) {
       console.error(err);
@@ -256,7 +282,7 @@ export default function FinanceManagement() {
       const res = await api.post('/admin/finance/entries', formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
-      if (res.data?.success) {
+      if (res?.success || res?.data?.success) {
         toast.success('Finance entry added!');
         setIsEntryModalOpen(false);
         setReceiptFile(null);
@@ -265,7 +291,7 @@ export default function FinanceManagement() {
       }
     } catch (err) {
       console.error(err);
-      toast.error(err.response?.data?.message || 'Failed to save entry');
+      toast.error(err.response?.data?.message || err.message || 'Failed to save entry');
     } finally {
       setSubmitting(false);
     }
@@ -280,7 +306,7 @@ export default function FinanceManagement() {
     try {
       setSubmitting(true);
       const res = await api.post('/admin/finance/partners', partnerForm);
-      if (res.data?.success) {
+      if (res?.success || res?.data?.success) {
         toast.success(`Partner ${partnerForm.name} added!`);
         setIsPartnerModalOpen(false);
         setPartnerForm({ name: '', phone: '', upiId: '', notes: '' });
@@ -288,26 +314,117 @@ export default function FinanceManagement() {
         fetchOverview();
       }
     } catch (err) {
-      toast.error(err.response?.data?.message || 'Failed to add partner');
+      toast.error(err.response?.data?.message || err.message || 'Failed to add partner');
     } finally {
       setSubmitting(false);
     }
   };
 
-  const handleToggleSettlement = async (entryId, splitId, currentStatus) => {
+  const handleDeletePartner = async (partnerId, partnerName) => {
+    if (!window.confirm(`Are you sure you want to remove partner "${partnerName}"?`)) {
+      return;
+    }
+    try {
+      const res = await api.delete(`/admin/finance/partners/${partnerId}`);
+      if (res?.success || res?.data?.success) {
+        toast.success(`Partner ${partnerName} removed`);
+        fetchPartners();
+        fetchOverview();
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.message || err.message || 'Failed to delete partner');
+    }
+  };
+
+  const handleDeleteEntry = async (entryId, title) => {
+    if (!window.confirm(`Are you sure you want to delete entry "${title}"?`)) {
+      return;
+    }
+    try {
+      const res = await api.delete(`/admin/finance/entries/${entryId}`);
+      if (res?.success || res?.data?.success) {
+        toast.success(`Entry "${title}" deleted`);
+        fetchEntries();
+        fetchOverview();
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.message || err.message || 'Failed to delete entry');
+    }
+  };
+
+  const handleOpenSettlementModal = (entry, split) => {
+    const currentPaid = split.paidAmount !== undefined
+      ? split.paidAmount
+      : (split.isSettled ? split.shareAmount : 0);
+    setSettlementModal({
+      isOpen: true,
+      entryId: entry._id,
+      splitId: split._id,
+      partnerName: split.partnerName,
+      shareAmount: split.shareAmount,
+      paidAmount: currentPaid,
+    });
+  };
+
+  const handleSaveSettlement = async (e) => {
+    e.preventDefault();
+    const { entryId, splitId, shareAmount, paidAmount } = settlementModal;
+    const numPaid = Math.max(0, Math.min(Number(paidAmount) || 0, shareAmount));
+    const isFullyPaid = numPaid >= shareAmount;
+
     try {
       const res = await api.patch(
         `/admin/finance/entries/${entryId}/splits/${splitId}/settle`,
-        { isSettled: !currentStatus }
+        {
+          paidAmount: numPaid,
+          isSettled: isFullyPaid
+        }
       );
-      if (res.data?.success) {
-        toast.success(!currentStatus ? 'Marked as Settled' : 'Marked as Pending');
+      if (res?.success || res?.data?.success) {
+        toast.success(
+          isFullyPaid
+            ? `Marked as Fully Settled (₹${numPaid})`
+            : numPaid > 0
+            ? `Updated Partial Payment: ₹${numPaid} / ₹${shareAmount}`
+            : 'Marked as Unpaid'
+        );
+        setEntries((prev) =>
+          prev.map((e) => {
+            if (e._id === entryId) {
+              const updatedSplits = e.splits.map((s) =>
+                s._id === splitId
+                  ? { ...s, paidAmount: numPaid, isSettled: isFullyPaid }
+                  : s
+              );
+              return { ...e, splits: updatedSplits };
+            }
+            return e;
+          })
+        );
+        fetchOverview();
+        setSettlementModal((prev) => ({ ...prev, isOpen: false }));
+      }
+    } catch (err) {
+      toast.error('Failed to update settlement amount');
+    }
+  };
+
+  const handleToggleSettlement = async (entryId, splitId, currentStatus, split) => {
+    try {
+      const targetStatus = !currentStatus;
+      const targetPaid = targetStatus ? (split?.shareAmount || 0) : 0;
+      const res = await api.patch(
+        `/admin/finance/entries/${entryId}/splits/${splitId}/settle`,
+        { isSettled: targetStatus, paidAmount: targetPaid }
+      );
+      if (res?.success || res?.data?.success) {
+        toast.success(targetStatus ? 'Marked as Settled' : 'Marked as Pending');
         // Update local entries state
         setEntries((prev) =>
           prev.map((e) => {
             if (e._id === entryId) {
               const updatedSplits = e.splits.map((s) =>
-                s._id === splitId ? { ...s, isSettled: !currentStatus } : s
+                s._id === splitId ? { ...s, isSettled: targetStatus, paidAmount: targetPaid } : s
               );
               return { ...e, splits: updatedSplits };
             }
@@ -647,6 +764,7 @@ export default function FinanceManagement() {
                     <th className="py-3 px-4">Paid By</th>
                     <th className="py-3 px-4">Receipt</th>
                     <th className="py-3 px-4">Partner Splits & Status</th>
+                    <th className="py-3 px-4 text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 text-slate-700">
@@ -718,41 +836,74 @@ export default function FinanceManagement() {
                       <td className="py-3 px-4">
                         {entry.isSplit && entry.splits && entry.splits.length > 0 ? (
                           <div className="flex flex-wrap gap-1.5 max-w-md">
-                            {entry.splits.map((split) => (
-                              <button
-                                key={split._id}
-                                onClick={() =>
-                                  handleToggleSettlement(entry._id, split._id, split.isSettled)
-                                }
-                                title={`Click to toggle settlement for ${split.partnerName}`}
-                                className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-medium border transition cursor-pointer ${
-                                  split.isSettled
-                                    ? 'bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100'
-                                    : 'bg-amber-50 border-amber-200 text-amber-700 hover:bg-amber-100'
-                                }`}
-                              >
-                                {split.isSettled ? (
-                                  <CheckCircle2 size={11} className="text-emerald-600" />
-                                ) : (
-                                  <Clock size={11} className="text-amber-500" />
-                                )}
-                                <span>{split.partnerName}:</span>
-                                <span className="font-bold">₹{split.shareAmount}</span>
-                                <span className="text-[9px] opacity-75">
-                                  ({split.isSettled ? 'Paid' : 'Unpaid'})
-                                </span>
-                              </button>
-                            ))}
+                            {entry.splits.map((split) => {
+                              const share = split.shareAmount || 0;
+                              const paid = split.paidAmount !== undefined
+                                ? split.paidAmount
+                                : (split.isSettled ? share : 0);
+                              const isFull = split.isSettled || paid >= share;
+                              const isPartial = !isFull && paid > 0;
+                              const isUnpaid = paid === 0;
+
+                              return (
+                                <button
+                                  key={split._id}
+                                  onClick={() => handleOpenSettlementModal(entry, split)}
+                                  title={`Click to adjust payment amount for ${split.partnerName}`}
+                                  className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-medium border transition cursor-pointer ${
+                                    isFull
+                                      ? 'bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100'
+                                      : isPartial
+                                      ? 'bg-amber-50 border-amber-300 text-amber-800 hover:bg-amber-100'
+                                      : 'bg-rose-50 border-rose-200 text-rose-700 hover:bg-rose-100'
+                                  }`}
+                                >
+                                  {isFull ? (
+                                    <CheckCircle2 size={11} className="text-emerald-600" />
+                                  ) : isPartial ? (
+                                    <Clock size={11} className="text-amber-600" />
+                                  ) : (
+                                    <Clock size={11} className="text-rose-500" />
+                                  )}
+                                  <span>{split.partnerName}:</span>
+                                  {isPartial ? (
+                                    <>
+                                      <span className="font-bold">₹{paid}</span>
+                                      <span className="text-[9px] opacity-75">/ ₹{share}</span>
+                                      <span className="text-[9px] font-bold text-amber-900 bg-amber-100 px-1 rounded">
+                                        ₹{share - paid} left
+                                      </span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <span className="font-bold">₹{share}</span>
+                                      <span className="text-[9px] opacity-75">
+                                        ({isFull ? 'Paid' : 'Unpaid'})
+                                      </span>
+                                    </>
+                                  )}
+                                </button>
+                              );
+                            })}
                           </div>
                         ) : (
                           <span className="text-slate-400 text-[11px]">No Split</span>
                         )}
                       </td>
+                      <td className="py-3 px-4 whitespace-nowrap text-right">
+                        <button
+                          onClick={() => handleDeleteEntry(entry._id, entry.title)}
+                          title="Delete Entry"
+                          className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </td>
                     </tr>
                   ))}
                   {entries.length === 0 && (
                     <tr>
-                      <td colSpan={7} className="text-center py-8 text-slate-400">
+                      <td colSpan={9} className="text-center py-8 text-slate-400">
                         No finance entries recorded yet. Click "Record Entry / Split" above!
                       </td>
                     </tr>
@@ -810,7 +961,14 @@ export default function FinanceManagement() {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               {partners.map((p) => (
-                <div key={p._id} className="p-4 rounded-xl border border-slate-200 bg-slate-50/50">
+                <div key={p._id} className="p-4 rounded-xl border border-slate-200 bg-slate-50/50 relative group">
+                  <button
+                    onClick={() => handleDeletePartner(p._id, p.name)}
+                    title={`Delete ${p.name}`}
+                    className="absolute top-3 right-3 p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition"
+                  >
+                    <Trash2 size={15} />
+                  </button>
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-full bg-indigo-100 text-indigo-700 font-black text-sm flex items-center justify-center">
                       {p.name.charAt(0).toUpperCase()}
@@ -1230,6 +1388,115 @@ export default function FinanceManagement() {
                   className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold transition disabled:opacity-50"
                 >
                   {submitting ? 'Adding...' : 'Add Partner'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: UPDATE PARTNER SETTLEMENT (FULL OR PARTIAL) */}
+      {settlementModal.isOpen && (
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-sm w-full p-6 shadow-2xl border border-slate-200">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-4">
+              <div>
+                <h3 className="text-base font-bold text-slate-900">
+                  Update Payment for {settlementModal.partnerName}
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Total Assigned Share: <span className="font-bold text-slate-800">₹{settlementModal.shareAmount}</span>
+                </p>
+              </div>
+              <button
+                onClick={() => setSettlementModal((prev) => ({ ...prev, isOpen: false }))}
+                className="text-slate-400 hover:text-slate-600 p-1"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveSettlement} className="space-y-4 text-xs">
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">
+                  Amount Received So Far (₹)
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  max={settlementModal.shareAmount}
+                  step="any"
+                  required
+                  value={settlementModal.paidAmount}
+                  onChange={(e) =>
+                    setSettlementModal((prev) => ({
+                      ...prev,
+                      paidAmount: e.target.value,
+                    }))
+                  }
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-500 text-sm font-bold text-slate-900"
+                />
+              </div>
+
+              {/* Quick Preset Buttons */}
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() =>
+                    setSettlementModal((prev) => ({
+                      ...prev,
+                      paidAmount: 0,
+                    }))
+                  }
+                  className="flex-1 py-1.5 px-2 bg-slate-100 hover:bg-slate-200 rounded-lg text-slate-700 font-medium"
+                >
+                  Unpaid (₹0)
+                </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setSettlementModal((prev) => ({
+                      ...prev,
+                      paidAmount: prev.shareAmount,
+                    }))
+                  }
+                  className="flex-1 py-1.5 px-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-lg font-bold"
+                >
+                  Full (₹{settlementModal.shareAmount})
+                </button>
+              </div>
+
+              {/* Status Preview */}
+              <div className="p-3 rounded-xl bg-slate-50 border border-slate-100 space-y-1">
+                <div className="flex justify-between text-slate-500">
+                  <span>Paid:</span>
+                  <span className="font-bold text-slate-900">₹{Number(settlementModal.paidAmount) || 0}</span>
+                </div>
+                <div className="flex justify-between text-slate-500">
+                  <span>Remaining / Due:</span>
+                  <span className={`font-bold ${
+                    Math.max(0, settlementModal.shareAmount - (Number(settlementModal.paidAmount) || 0)) > 0
+                      ? 'text-rose-600'
+                      : 'text-emerald-600'
+                  }`}>
+                    ₹{Math.max(0, settlementModal.shareAmount - (Number(settlementModal.paidAmount) || 0))}
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setSettlementModal((prev) => ({ ...prev, isOpen: false }))}
+                  className="px-3.5 py-1.5 border border-slate-200 rounded-xl text-slate-600 hover:bg-slate-50 font-medium"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold transition shadow-sm"
+                >
+                  Save Payment
                 </button>
               </div>
             </form>

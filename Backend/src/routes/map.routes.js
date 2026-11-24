@@ -3,6 +3,13 @@ import https from 'https';
 
 const router = express.Router();
 
+// Allow map tiles to be embedded cross-origin from WebViews (about:blank) and frontend origins
+router.use((req, res, next) => {
+  res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  next();
+});
+
 // Allowed subdomains and styles to prevent open proxying
 const ALLOWED_STYLES = new Set([
   'voyager',
@@ -52,15 +59,20 @@ const handleTileRequest = (req, res) => {
       timeout: 8000
     },
     (cartoRes) => {
-      if (cartoRes.statusCode !== 200) {
-        res.status(cartoRes.statusCode || 502);
-      } else {
-        res.status(200);
-      }
+      const statusCode = cartoRes.statusCode || 502;
+      res.status(statusCode);
+
+      // Allow cross-origin loading from WebViews (about:blank) and web dashboards despite Helmet's default same-origin CORP
+      res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+      res.setHeader('Access-Control-Allow-Origin', '*');
 
       // Relay essential caching & content headers
       res.setHeader('Content-Type', cartoRes.headers['content-type'] || 'image/png');
-      res.setHeader('Cache-Control', 'public, max-age=604800, immutable'); // Cache in app/browser for 7 days
+      if (statusCode === 200) {
+        res.setHeader('Cache-Control', 'public, max-age=604800, immutable'); // Cache in app/browser for 7 days
+      } else {
+        res.setHeader('Cache-Control', 'no-store');
+      }
       if (cartoRes.headers['etag']) {
         res.setHeader('ETag', cartoRes.headers['etag']);
       }

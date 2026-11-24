@@ -105,6 +105,48 @@ export const updatePartner = async (req, res) => {
   }
 };
 
+/**
+ * Delete partner
+ */
+export const deletePartner = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const partner = await Partner.findById(id);
+    if (!partner) {
+      return res.status(404).json({ success: false, message: 'Partner not found' });
+    }
+
+    // Check if partner is used in any finance entries
+    const inUse = await FinanceEntry.findOne({
+      $or: [
+        { paidByPartner: id },
+        { 'splits.partner': id },
+      ],
+    });
+
+    if (inUse) {
+      return res.status(400).json({
+        success: false,
+        message: 'Cannot delete partner because they have associated financial records or splits. You can mark them inactive instead.',
+      });
+    }
+
+    await Partner.findByIdAndDelete(id);
+
+    return res.status(200).json({
+      success: true,
+      message: 'Partner deleted successfully',
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to delete partner',
+      error: error.message,
+    });
+  }
+};
+
 // ── FINANCE ENTRIES (INCOME / EXPENSE) ──
 
 /**
@@ -272,6 +314,7 @@ export const createFinanceEntry = async (req, res) => {
               partner: pDoc._id,
               partnerName: pDoc.name,
               shareAmount: equalShare,
+              paidAmount: isPayer ? equalShare : 0,
               isSettled: Boolean(isPayer),
               settledAt: isPayer ? new Date() : null,
               settlementNotes: isPayer ? 'Paid directly during expense creation' : '',
@@ -286,11 +329,16 @@ export const createFinanceEntry = async (req, res) => {
           if (pDoc) {
             const share = Number(item.shareAmount) || 0;
             const isPayer = resolvedPaidByPartner && resolvedPaidByPartner.toString() === pDoc._id.toString();
-            const settled = item.isSettled !== undefined ? Boolean(item.isSettled) : Boolean(isPayer);
+            let paidAmount = item.paidAmount !== undefined ? Number(item.paidAmount) : (isPayer ? share : 0);
+            const settled = item.isSettled !== undefined ? Boolean(item.isSettled) : (paidAmount >= share);
+            if (settled && paidAmount < share) {
+              paidAmount = share;
+            }
             finalSplits.push({
               partner: pDoc._id,
               partnerName: pDoc.name,
               shareAmount: share,
+              paidAmount: paidAmount,
               isSettled: settled,
               settledAt: settled ? new Date() : null,
               settlementNotes: item.settlementNotes || (isPayer ? 'Paid directly during expense creation' : ''),
@@ -431,7 +479,7 @@ export const deleteFinanceEntry = async (req, res) => {
 export const toggleSplitSettlement = async (req, res) => {
   try {
     const { entryId, splitId } = req.params;
-    const { isSettled, settlementNotes } = req.body;
+    const { isSettled, paidAmount, settlementNotes } = req.body;
 
     const entry = await FinanceEntry.findById(entryId);
     if (!entry) {
@@ -443,9 +491,24 @@ export const toggleSplitSettlement = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Split item not found in entry' });
     }
 
-    const targetStatus = isSettled !== undefined ? Boolean(isSettled) : !splitItem.isSettled;
-    splitItem.isSettled = targetStatus;
-    splitItem.settledAt = targetStatus ? new Date() : null;
+    if (paidAmount !== undefined) {
+      const numPaid = Math.max(0, Math.min(Number(paidAmount), splitItem.shareAmount));
+      splitItem.paidAmount = numPaid;
+      splitItem.isSettled = numPaid >= splitItem.shareAmount;
+      splitItem.settledAt = splitItem.isSettled ? new Date() : null;
+    } else if (isSettled !== undefined) {
+      const targetStatus = Boolean(isSettled);
+      splitItem.isSettled = targetStatus;
+      splitItem.paidAmount = targetStatus ? splitItem.shareAmount : 0;
+      splitItem.settledAt = targetStatus ? new Date() : null;
+    } else {
+      // Toggle
+      const targetStatus = !splitItem.isSettled;
+      splitItem.isSettled = targetStatus;
+      splitItem.paidAmount = targetStatus ? splitItem.shareAmount : 0;
+      splitItem.settledAt = targetStatus ? new Date() : null;
+    }
+
     if (settlementNotes !== undefined) {
       splitItem.settlementNotes = settlementNotes;
     }
@@ -454,7 +517,7 @@ export const toggleSplitSettlement = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      message: `Split marked as ${targetStatus ? 'Settled' : 'Unsettled'}`,
+      message: `Split updated successfully`,
       data: splitItem,
     });
   } catch (error) {
@@ -551,11 +614,9 @@ export const getFinanceOverview = async (req, res) => {
           entry.splits.forEach((split) => {
             if (split.partner && split.partner.toString() === pIdStr) {
               totalAssignedShare += split.shareAmount;
-              if (split.isSettled) {
-                totalSettledShare += split.shareAmount;
-              } else {
-                pendingOwedShare += split.shareAmount;
-              }
+              const paid = split.paidAmount !== undefined ? split.paidAmount : (split.isSettled ? split.shareAmount : 0);
+              totalSettledShare += paid;
+              pendingOwedShare += Math.max(0, split.shareAmount - paid);
             }
           });
         }

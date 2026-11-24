@@ -5,6 +5,7 @@ import {
   getPartners,
   createPartner,
   updatePartner,
+  deletePartner,
   getFinanceEntries,
   createFinanceEntry,
   updateFinanceEntry,
@@ -22,6 +23,7 @@ router.use(verifyAdmin);
 router.get('/partners', getPartners);
 router.post('/partners', createPartner);
 router.put('/partners/:id', updatePartner);
+router.delete('/partners/:id', deletePartner);
 
 // Finance Overview / Analytics
 router.get('/overview', getFinanceOverview);
