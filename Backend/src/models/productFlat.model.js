@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import crypto from 'crypto';
+import { normalizeSize } from '../helperFns/sizeNormalizer.js';
 
 const productFlatSchema = new mongoose.Schema({
   name: { type: String, default: 'New Product' },
@@ -105,7 +106,10 @@ const productFlatSchema = new mongoose.Schema({
     name: { type: String, required: true },
     hex: { type: String }
   },
-  size: { type: String, required: true },
+  // Free text by design: "M", "32", "30-23 cm". Normalised on every write by
+  // the one shared normaliser, so the stored value always equals the token
+  // productCode is built from. See helperFns/sizeNormalizer.js.
+  size: { type: String, required: true, set: normalizeSize },
   merchantSizeCode: { type: String, required: false },
   stock: { type: Number, default: 0 },
   reservedStock: { type: Number, default: 0 },

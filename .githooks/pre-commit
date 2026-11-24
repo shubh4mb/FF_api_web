@@ -1,0 +1,131 @@
+#!/usr/bin/env sh
+# FlashFits pre-commit gate.
+# Install once per clone:  git config core.hooksPath .githooks
+#
+# Blocks on things that are objectively broken (secrets, lint, types, tests).
+# Warns on judgement calls. A hook that blocks spuriously gets bypassed with
+# --no-verify, and then it protects nothing.
+#
+# Rules: ../FF_api_web/docs/ecosystem/PRINCIPLES.md
+set -e
+
+REPO_ROOT=$(git rev-parse --show-toplevel)
+cd "$REPO_ROOT"
+
+STAGED=$(git diff --cached --name-only --diff-filter=ACM)
+[ -z "$STAGED" ] && exit 0
+
+FAIL=0
+warn() { printf '  \033[33m! %s\033[0m\n' "$1"; }
+die()  { printf '  \033[31m✗ %s\033[0m\n' "$1"; FAIL=1; }
+ok()   { printf '  \033[32m✓ %s\033[0m\n' "$1"; }
+
+echo "→ FlashFits pre-commit"
+
+# ─────────────────────────────────────────────────────────────
+# 1. Secrets — block. Cheapest check, highest consequence.
+# ─────────────────────────────────────────────────────────────
+SECRETS=$(echo "$STAGED" | grep -Ei '(^|/)\.env($|\.)|\.pem$|\.jks$|\.keystore$|\.p12$|\.mobileprovision$|credentials|serviceAccount.*\.json$|google-services\.json$|GoogleService-Info\.plist$' || true)
+if [ -n "$SECRETS" ]; then
+  die "refusing to commit possible secrets:"
+  echo "$SECRETS" | sed 's/^/      /'
+  echo "      If one of these is genuinely safe, add it to .gitignore or commit with --no-verify and say why."
+fi
+
+# ─────────────────────────────────────────────────────────────
+# 2. Large files — block. Keeps the repo clonable.
+# ─────────────────────────────────────────────────────────────
+for f in $STAGED; do
+  [ -f "$f" ] || continue
+  SIZE=$(wc -c < "$f" 2>/dev/null || echo 0)
+  if [ "$SIZE" -gt 2097152 ]; then
+    die "$f is $((SIZE / 1024))KB (>2MB). Use Cloudinary or git-lfs."
+  fi
+done
+
+# ─────────────────────────────────────────────────────────────
+# 3. Backend-specific warnings
+# ─────────────────────────────────────────────────────────────
+BACKEND=$(echo "$STAGED" | grep -E '^Backend/src/|^src/' || true)
+if [ -n "$BACKEND" ]; then
+  # UTC day boundaries — the IST bug class. See docs/ecosystem/README.md "Time".
+  if git diff --cached -U0 -- $BACKEND 2>/dev/null | grep -E '^\+' | grep -q 'T00:00:00\.000Z\|T23:59:59\.999Z'; then
+    warn "a hardcoded UTC day boundary was added. The business runs on IST —"
+    warn "use getDayStartIST/getWeekBounds from helperFns/weeklyPayoutHelper.js"
+  fi
+  # Stray debug logging.
+  ADDED_LOGS=$(git diff --cached -U0 -- $BACKEND 2>/dev/null | grep -cE '^\+.*console\.log' || true)
+  [ "${ADDED_LOGS:-0}" -gt 0 ] && warn "$ADDED_LOGS console.log added — prefer the pino logger"
+fi
+
+# ─────────────────────────────────────────────────────────────
+# 4. Lint + typecheck + tests, per package that changed.
+#    Discovers packages by package.json so this one file works in
+#    every repo, including FF_api_web's Backend/ + website/ split.
+#
+#    These BLOCK only once the repo has opted in by creating
+#    .githooks/strict — because no repo has a clean lint baseline
+#    yet, and a hook that blocks every commit gets disabled with
+#    --no-verify, after which it protects nothing.
+#
+#    Flip it on per repo the day its baseline is green:
+#        touch .githooks/strict && git add .githooks/strict
+# ─────────────────────────────────────────────────────────────
+if [ -f .githooks/strict ]; then
+  soft() { die "$1"; }
+  MODE="strict"
+else
+  soft() { warn "$1 (warning only — create .githooks/strict to enforce)"; }
+  MODE="lenient"
+fi
+PKG_DIRS=""
+for f in $STAGED; do
+  d=$(dirname "$f")
+  while [ "$d" != "." ] && [ "$d" != "/" ]; do
+    [ -f "$d/package.json" ] && { PKG_DIRS="$PKG_DIRS $d"; break; }
+    d=$(dirname "$d")
+  done
+  [ -f "./package.json" ] && [ "$d" = "." ] && PKG_DIRS="$PKG_DIRS ."
+done
+PKG_DIRS=$(echo "$PKG_DIRS" | tr ' ' '\n' | sort -u | grep -v '^$' || true)
+
+has_script_in() { node -e "p=require(require('path').resolve('$1','package.json')).scripts||{};process.exit(p['$2']?0:1)" 2>/dev/null; }
+
+for d in $PKG_DIRS; do
+  [ -d "$d/node_modules" ] || { warn "$d: node_modules missing, skipping checks (run npm install)"; continue; }
+  echo "  → $d ($MODE)"
+  if has_script_in "$d" lint; then
+    ( cd "$d" && npm run --silent lint ) || soft "$d: lint failed"
+  else
+    warn "$d: no lint script"
+  fi
+  if [ -f "$d/tsconfig.json" ]; then
+    ( cd "$d" && npx --no-install tsc --noEmit ) || soft "$d: typecheck failed"
+  fi
+  if has_script_in "$d" test; then
+    ( cd "$d" && npm run --silent test ) || soft "$d: tests failed"
+  else
+    warn "$d: no test script — see docs/ecosystem/TESTING.md"
+  fi
+done
+
+# ─────────────────────────────────────────────────────────────
+# 5. Docs mirror — warn. docs/<path>/ should move with <path>/.
+# ─────────────────────────────────────────────────────────────
+if [ -d docs ]; then
+  TOUCHED_DOCS=$(echo "$STAGED" | grep -E '^docs/' || true)
+  TOUCHED_CODE=$(echo "$STAGED" | grep -vE '^docs/|\.md$|^\.githooks/' || true)
+  if [ -n "$TOUCHED_CODE" ] && [ -z "$TOUCHED_DOCS" ]; then
+    warn "code changed but no docs/ change — docs mirror the code tree and move with it"
+    echo "$TOUCHED_CODE" | sed 's|^|      → docs/|' | sed 's|/[^/]*$|/README.md|' | sort -u | head -5 | sed 's/^/  /'
+  fi
+fi
+
+# ─────────────────────────────────────────────────────────────
+echo
+if [ "$FAIL" -ne 0 ]; then
+  printf '\033[31m✗ pre-commit failed\033[0m — fix the above, or --no-verify with a reason.\n'
+  exit 1
+fi
+printf '\033[32m✓ pre-commit passed\033[0m\n'
+exit 0
